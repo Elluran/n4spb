@@ -6,7 +6,7 @@
 // Based on the Commons photos in docs/research/lada2106-2026.md (white Lada 1600 in Cuba front / rear, red 2106 at Kurfuerstendamm, blue 2106 rear, the worn red 2106 in Saint Petersburg).
 // Car frame: forward +Z, origin on the ground midway between the axles, +X = the car's LEFT. Real size 4.17 x 1.61 x 1.40 m, wheelbase 2.42 m, 1035 kg.
 // OLD LOOK: matt, chalky paint (roofs / bonnet / boot sun-faded, the lower body dirty), no gloss, a body that leans more than the coupe (set() scales pitch / roll by 1.25 / 1.3).
-// NO badges: the grille emblem plate and the boot plate stay plain. NO flags, no sirens.
+// NO badges: the grille emblem plate and the boot plate stay plain; the only logo is the Bibliotechka decal on the roof (the red coupe has the same). NO flags, no sirens.
 // Z-FIGHTING: decals stand 1.2-1.6 cm proud, every other part keeps >= 1 cm from its neighbours' faces (same rules as traffic/models.js).
 import * as THREE from 'three';
 import { TessellateModifier } from 'three/addons/modifiers/TessellateModifier.js';
@@ -14,6 +14,7 @@ import { VB } from '../../traffic/vb.js';
 import { TYRE, archPts, extrudeSide, extrudeGlass, insetPoly, bodyTint } from '../../traffic/mk.js';
 import { createLadaCockpit, EYE } from './lada2106/cockpit.js';
 import { plateTexture, glowTexture, beamTexture } from './lada2106/parts.js';
+import { createRoofLogo } from '../model.js';
 
 export const SPEC_LADA = {
   name: 'lada2106',
@@ -214,6 +215,8 @@ export function createLadaModel(ctx, { plate = ['Е 106 КХ', '78'] } = {}) {
   // ---- plates (a plain Russian plate: no flag, no emblem)
   const pTex = plateTexture(plate[0], plate[1]);
   const plateMat = mat.toon('#ffffff', { map: pTex, paint: 0, name: 'drive-plate' });
+  // ---- the Bibliotechka logo on the roof (like the red coupe's): flat on the roof slab, the top of the icon pointing forward
+  const roofLogo = createRoofLogo(ctx, root, { w: 0.78, y: H, z: (zr0 + zr1) / 2 });
   const pf = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.113), plateMat); pf.position.set(0, 0.375, front + 0.018); root.add(pf);
   const pr = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.113), plateMat); pr.position.set(0, 0.605, rz - 0.022); pr.rotation.y = Math.PI; root.add(pr);
 
@@ -232,7 +235,7 @@ export function createLadaModel(ctx, { plate = ['Е 106 КХ', '78'] } = {}) {
 
   const night = ctx.shared.uNight;
   let flameK = 0, inside = false;
-  const outer = [body, glass, lampH, lampT, steerWheel, pf, pr];
+  const outer = [body, glass, lampH, lampT, steerWheel, roofLogo, pf, pr];
   const api = {
     spec: S, root, wheels, steerWheel, driver, flames, glow, headMat, tailMat, body, glass, cockpit, exhaust: S.exhaust,
     /** pose: x y z yaw (rotY) pitchUp roll; steer in -1..1 (+ = left); roll the wheels by `spin` radians since the last call; brake / boost / lights 0..1 */

@@ -30,19 +30,52 @@ export function createHandling(ctx, tuning = null) {
     if (S.kind === 'walk' && S.item && !S.item.sticky && S.y > 0.03 && S.y <= 0.3) return S.y;
     return 0.03;
   }
-  /** the car may not be here: outside the map, in the river (the bridge deck is a floor), over an escalator shaft, inside a building footprint */
-  function blocked(x, z) {
-    if (!L.inPlay(x, z)) return true;                  // the play area is a union of rectangles (layout.js inPlay): the empty notches are outside the map too
+  /** terrain the car may not enter: the river (the bridge deck is a floor), an escalator shaft, a building footprint */
+  function solidBlocked(x, z) {
     if (!(deck && deck(x, z) !== null) && L.heightAt(x, z) < -1) return true;
     if (ph.inHole(x, z, 0.2)) return true;
     return L.insideBuilding(x, z);
   }
+  /** the car may not be here: outside the map (the play area is a union of rectangles, layout.js inPlay: the empty notches are outside the map too) or on forbidden terrain */
+  function blocked(x, z) { return !L.inPlay(x, z) || solidBlocked(x, z); }
+  // The map edge is a SOFT wall for the car (edgePush): the car's origin stays at least EDGE_M inside the play area, EDGE_M being the radius of its footprint, so no corner can ever
+  // cross the edge whatever the heading. A hard footprint test froze the car as soon as steering turned a corner over the edge (a pose that is itself blocked refuses every move,
+  // and a standing car cannot turn): it stuck at the edge all the time. Without L.clampToPlay (the unit-test stubs) the edge stays a hard test.
+  const softEdge = typeof L.clampToPlay === 'function';
+  const EDGE_M = Math.hypot(Math.max(T.hf, T.hr), T.hw) + 0.15;
+  const footBlocked = softEdge ? solidBlocked : blocked;
+  const FOOT = [[T.hf, T.hw], [T.hf, -T.hw], [-T.hr, T.hw], [-T.hr, -T.hw], [0, T.hw], [0, -T.hw], [T.hf, 0], [-T.hr, 0]];
   const carBlocked = (x, z, sy, cy) => {
     if (blocked(x, z)) return true;
-    const fx = sy, fz = cy, lx = cy, lz = -sy, hf = T.hf, hr = T.hr, hw = T.hw;
-    for (const [a, b] of [[hf, hw], [hf, -hw], [-hr, hw], [-hr, -hw], [0, hw], [0, -hw], [hf, 0], [-hr, 0]]) if (blocked(x + fx * a + lx * b, z + fz * a + lz * b)) return true;
+    for (const [a, b] of FOOT) if (footBlocked(x + sy * a + cy * b, z + cy * a - sy * b)) return true;
     return false;
   };
+  /** how many of the nine footprint points (centre + eight) are blocked: a car that is embedded (steered into a wall, nudged into a footprint) may move as long as that number does not grow */
+  const blockedPoints = (x, z, sy, cy) => {
+    let n = blocked(x, z) ? 1 : 0;
+    for (const [a, b] of FOOT) if (footBlocked(x + sy * a + cy * b, z + cy * a - sy * b)) n++;
+    return n;
+  };
+  /** keep the origin EDGE_M inside the play area: the position slides to the nearest allowed point, the velocity loses its outward part (a 10 % bounce), the tangential part is kept (the car slides along
+   *  the edge) and a nose that points into the edge is swung along it (a yaw torque, like the contact torque of a real hit; the grip model would otherwise scrub the whole sideways slide away) */
+  function edgePush(h) {
+    if (!softEdge) return;
+    const p = L.clampToPlay(car.x, car.z, EDGE_M);
+    if (p[0] === car.x && p[1] === car.z) return;
+    let wx = car.x - p[0], wz = car.z - p[1]; const wl = Math.hypot(wx, wz);
+    car.x = p[0]; car.z = p[1];
+    if (!(wl > 1e-6)) return;
+    wx /= wl; wz /= wl;
+    const vn = car.vx * wx + car.vz * wz;
+    if (vn > 0) { car.vx -= wx * vn * 1.1; car.vz -= wz * vn * 1.1; if (vn > 4) car.events.push({ type: 'hit', v: vn * 0.45 }); }
+    const tx = car.vx - wx * (car.vx * wx + car.vz * wz), tz = car.vz - wz * (car.vx * wx + car.vz * wz), tl = Math.hypot(tx, tz);
+    if (tl < 1.5 || !(h > 0)) return;                                   // (nearly) head-on or standing: the car just stops, the player reverses out
+    const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw);
+    if (fx * wx + fz * wz < 0.02 && vn <= 0) return;                    // the nose already points along or away from the edge
+    const sg = fx * tx + fz * tz >= 0 ? 1 : -1, ux = sg * tx / tl, uz = sg * tz / tl;      // the way along the edge the car travels (nose or tail first)
+    const d = Math.atan2(-(fx * uz - fz * ux), fx * ux + fz * uz);     // the yaw change that points the nose (or the tail) along it
+    car.impactSpin += (clamp(3 * d, -2.2, 2.2) - car.impactSpin) * Math.min(1, 12 * h);
+  }
 
   const car = {
     x: 0, z: 0, y: 0.03, yaw: 0, vx: 0, vz: 0, steer: 0, pitch: 0, roll: 0, spin: 0, wheelSpin: 0,
@@ -109,13 +142,18 @@ export function createHandling(ctx, tuning = null) {
     // ---- move: terrain refusals first (axis by axis, so the car slides along the river wall), then the solids
     let nx = car.x + car.vx * h, nz = car.z + car.vz * h;
     if (carBlocked(nx, nz, sy, cy)) {
-      if (!carBlocked(nx, car.z, sy, cy)) { nz = car.z; car.vz *= 0.5; }
-      else if (!carBlocked(car.x, nz, sy, cy)) { nx = car.x; car.vx *= 0.5; }
+      // a pose that is blocked already (the steering swung a corner into a wall, the river, a footprint) must be able to get out: any move that does not make it worse is allowed
+      const here = blockedPoints(car.x, car.z, sy, cy), ok = (x, z) => here > 0 ? blockedPoints(x, z, sy, cy) <= here : !carBlocked(x, z, sy, cy);
+      if (ok(nx, nz)) { /* the move is allowed: it frees the car or keeps it where it was */ }
+      else if (ok(nx, car.z)) { nz = car.z; car.vz *= 0.5; }
+      else if (ok(car.x, nz)) { nx = car.x; car.vx *= 0.5; }
       else { nx = car.x; nz = car.z; const v = Math.hypot(car.vx, car.vz); if (v > 3) car.events.push({ type: 'hit', v: v * 0.6 }); car.vx *= -0.2; car.vz *= -0.2; }
     }
     car.x = nx; car.z = nz;
+    edgePush(h);
     car.y = groundAt(car.x, car.z);
     collide(car);
+    edgePush(h);
     car.odo += Math.hypot(car.vx, car.vz) * h;
     car.spin += (car.vx * sy + car.vz * cy) * h / SPEC.R;
   }

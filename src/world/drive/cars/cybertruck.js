@@ -1,5 +1,5 @@
 // drive/cars/cybertruck.js - the drivable TAXI CYBERTRUCK: an angular stainless-steel-style electric pickup in the livery of an ordinary taxi of this scene
-// (taxi yellow body, black-and-white checker band along the doors, a roof lamp with the word ТАКСИ; NO company logo, NO badge, no beacon, no siren).
+// (taxi yellow body, black-and-white checker band along the doors, a roof lamp with the word ТАКСИ and the Bibliotechka logo on the roof like the red coupe's; NO other company logo, NO badge, no beacon, no siren).
 // It is a sibling of drive/model.js (the red coupe): the same car frame (forward +Z, origin on the ground midway between the axles, +X = the car's LEFT), the same model API
 // (root, wheels, steerWheel, driver, flames, glow, headMat, tailMat, body, glass, cockpit, set(p), setView(inside)), built with the traffic module's vertex-colour builder.
 // SHAPE (docs/research/cybertruck-2026.md, Commons photos "2024 Tesla Cybertruck Foundation Series IMG 0629" side, "front 9.7.24", "rear 9.7.24", "front left / rear left (Greenwich)", "Both Doors Open"):
@@ -17,6 +17,7 @@ import { TYRE, insetPoly } from '../../traffic/mk.js';
 import { hullGeo, sym, extrudeZY, CAB, roofY, roofHW, sideHW, MIRROR } from './cybertruck/geo.js';
 import { createTruckCockpit } from './cybertruck/interior.js';
 import { plateTexture, roofLampTexture, glowTexture, beamTexture } from './cybertruck/textures.js';
+import { createRoofLogo } from '../model.js';
 
 export const SPEC_TRUCK = {
   W: 2.03, R: 0.43, tw: 0.285, track: 1.76, yb: 0.40, wb: 3.80, front: 2.63, rear: -3.05,
@@ -134,7 +135,7 @@ export function createTruckModel(ctx, { livery = 'yellow', plate = ['Т 250 ТТ
   for (let k = 0; k < 16; k++) { const a = k * Math.PI * 2 / 16; WV.box(0.028, 0.075, 0.07, '#3a3c42', [tw / 2 - 0.004, Math.cos(a) * R * 0.92, Math.sin(a) * R * 0.92], [a, 0, 0]); }
   const wheelGeo = WV.build(), wheelMat = mat.toon('#ffffff', { vertexColors: true, paint: 0.02, name: 'drive-wheel' });
 
-  const zl = -0.30, tilt = Math.atan(0.1102);
+  const zl = 0.02, tilt = Math.atan(0.1102);                                   // the roof lamp sits forward on the roof: the Bibliotechka logo lies behind it
   V.box(0.40, 0.03, 0.14, BLACK, [0, roofY(zl) + 0.015, zl], [-tilt, 0, 0]);                                  // the foot of the roof lamp (part of the body mesh: one draw call less)
 
   // ================================================================================== meshes
@@ -161,6 +162,8 @@ export function createTruckModel(ctx, { livery = 'yellow', plate = ['Т 250 ТТ
   const roofLamp = new THREE.Mesh(lampGeo, roofMat); roofLamp.name = 'drive-truck-roof-lamp';
   roofLamp.position.set(0, roofY(zl) + 0.03 + 0.065, zl); roofLamp.rotation.set(-tilt, 0, 0);
   root.add(roofLamp);
+  // ---- the Bibliotechka logo on the roof (like the red coupe's), behind the roof lamp, lying on the roof plane; the damage module bends it with the roof
+  const roofLogo = createRoofLogo(ctx, root, { w: 0.62, y: roofY(-0.58), z: -0.58, tilt });
 
   // ---- the cockpit set for camera mode 2 (interior.js): hidden until setView(true)
   const cockpit = createTruckCockpit(ctx, S, PAINT);
@@ -197,7 +200,7 @@ export function createTruckModel(ctx, { livery = 'yellow', plate = ['Т 250 ТТ
   // damage (drive/damage.js) bends only the body mesh: the roof lamp follows the sagging roof (read from the body's bounding box, which damage.sync recomputes) and falls off when it is crushed
   body.geometry.computeBoundingBox();
   const topY = body.geometry.boundingBox.max.y, lampY0 = roofLamp.position.y;
-  const outer = [body, glass, lampH, lampT, roofLamp, pf, pr];
+  const outer = [body, glass, lampH, lampT, roofLamp, roofLogo, pf, pr];
   const api = {
     root, wheels, steerWheel, driver, flames, glow, headMat, tailMat, body, glass, cockpit, roofLamp, spec: S,
     /** pose: x y z yaw (rotY) pitchUp roll; steer in -1..1 (+ = left); roll the wheels by `spin` radians since the last call; brake / boost / lights 0..1 */

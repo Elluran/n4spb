@@ -103,3 +103,8 @@ Full `npm run roads` completed with exit 0: furniture strict failures 0 after
 existing allowances; surface residuals 992 within 2170; ribbon walls 6 within 10
 and surface triangles 848 within 1000. This used the shared working tree during
 concurrent region work; no road generators were changed in this checkpoint.
+
+
+## The edge of the map (strip build)
+
+The edge of the play union is a soft wall for the car, not a footprint test: see `edgePush` in `drive/handling.js` and section 5 of [STRIP.md](STRIP.md). `tools/drive-edge-test.mjs` (npm run edge) drives the coupe, the taxi pickup and the Zhiguli into the real strip border from random points and headings (footprint never outside, always able to escape, a glancing hit keeps its speed), `tools/drive-edge-real.mjs` (npm run edgereal) does the same on real streets in the browser.

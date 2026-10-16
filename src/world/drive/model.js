@@ -19,6 +19,22 @@ export const SPEC = {
 const RED = '#dd2230', RED_DK = '#a8141f', BLACK = '#17191d', SILVER = '#d6dae0';
 export const PAINT_RED = RED;
 
+export const LOGO_URL = './assets/bibliotechka.png';
+const _logoTextures = new Map();
+/** One shared logo texture per url (the three garage cars carry the same decal). */
+export function sharedLogoTexture(url = LOGO_URL) { let t = _logoTextures.get(url); if (!t) _logoTextures.set(url, (t = logoTexture(url))); return t; }
+/**
+ * The Bibliotechka roof decal of the other garage cars (the coupe builds its own below): a flat `drive-logo` plane lying on the roof, the top of the icon pointing forward. `y` is the roof surface
+ * at `z` (the decal stands 1.4 cm proud), `tilt` the fall of a sloping roof to the rear in radians. drive/damage.js treats every `drive-logo` mesh that is a direct child of the car root as a
+ * rigid decal that follows the crushed roof and disappears with it, so the caller only adds the returned mesh to its `outer` list (hidden in the cockpit view).
+ */
+export function createRoofLogo(ctx, root, { w = 0.8, x = 0, y, z, tilt = 0, url = LOGO_URL }) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w), ctx.mat.toon('#ffffff', { map: sharedLogoTexture(url), alphaTest: 0.5, side: 'double', polygonOffset: -2, paint: 0.0, name: 'drive-logo' }));
+  m.rotation.order = 'XYZ'; m.rotation.set(-Math.PI / 2 - tilt, 0, Math.PI);          // lie flat (normal up, leaning back with the roof), then turn the icon so its top points forward
+  m.position.set(x, y + 0.014, z); m.name = 'drive-logo'; root.add(m);
+  return m;
+}
+
 /** the logo as a rounded app icon on a canvas texture (the PNG is drawn as soon as it has loaded) */
 function logoTexture(url) {
   const S = 384, cv = document.createElement('canvas'); cv.width = cv.height = S;
