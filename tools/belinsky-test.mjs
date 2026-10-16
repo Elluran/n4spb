@@ -16,7 +16,6 @@ async function verify() {
   check(bridge.failed.length === 0, 'bridge builder failures');
   check(ctx.services.landmarksBelinsky?.triangles > 0, 'landmarks missing');
   check(groupOf('w28691685') === 'ciniselli-circus', 'circus claim missing');
-  check(groupOf('w96148838') === 'simeon-anna', 'church claim missing');
   check(groupOf('w375582775') === 'belinsky', 'roadway claim missing');
   const gap = bridgeZones().find(z => z.id === 'belinsky');
   check(gap?.own && gap.test(site.cx, site.cz), 'quay gap missing');

@@ -22,12 +22,13 @@
 // Sources: docs/research/transport.md section 6 (red-white-grey one-section cars), the tram route 3 of 2026 (the stretch Sadovaya - Gostiny Dvor - Italyanskaya - Mikhailovsky Castle - Letny Sad).
 import { ARCH, ROUTE_BY_REF } from './fleetdata.js';
 
-// terminals in map metres (track ends of the strip data, within 90 m). Route 3 runs on two different OSM ways, one per direction (the north twin of the southbound track lies outside the strip), so each direction is a line of its own:
-// 3a northbound Sadovaya - Apraksin Dvor - Gostiny Dvor - Italyanskaya - Mikhailovsky Castle - Letny Sad (2723 m, 4 stops), 3b southbound from the Mikhailovsky Castle back to Sadovaya (2008 m, 3 stops). Part of the rails (z > 290,
-// x -1777..-1456) lies in the void south of the data: the trams are born there, invisible. The builder prints '3b ... 1766 m short' / '3a ... 3 m short': expected, the terminals are within 90 m of a track end.
+// terminals in map metres: the track ends of the strip data, which are clipped at the data extent (tools/strip-data-clip.mjs). The strip holds two tram networks:
+// route 3 (Sadovaya - Apraksin Dvor - Gostiny Dvor - Italyanskaya - Mikhailovsky Castle - Letny Sad, both directions, from the Letny Sad end at the north edge to the Sadovaya end at the west edge of W1) and
+// the Marata / Ligovsky pair of routes 43 and 49, run from the north edge to the south edge. The northbound way of the second network is cut at (90, 583) in the data: the builder prints '43/49a: ... 1137 m short'
+// and that network runs southbound only (expected).
 export const TRAM_LINES = [
-  { refs: ['3'], a: [-1220, -1566], b: [-1777, 552], headway: 190 },
-  { refs: ['3'], a: [-891, -972], b: [-1777, 552], headway: 190 },
+  { refs: ['3'], a: [-924, -1118], b: [-1456, 280], headway: 190 },
+  { refs: ['43', '49'], a: [-175, -523], b: [197, 1178], headway: 300 },
 ];
 const V_MAX = 11, V_MIN = 3.2, A_MAX = 0.95, B_SERVICE = 1.15, B_EMERGENCY = 4.2, LAT = 0.9;
 const hyp = Math.hypot;

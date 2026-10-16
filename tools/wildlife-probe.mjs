@@ -1,7 +1,7 @@
 import './wildlife-pre.mjs';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
-const root = 'D:/git2/agi-fun-tests/102_3d_piter';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const THREE = await import('three');
 const { createContext } = await import(pathToFileURL(path.join(root, 'src/core/ctx.js')).href);
 const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);

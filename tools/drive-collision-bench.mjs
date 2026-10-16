@@ -8,7 +8,7 @@ import { createHandling } from '../src/world/drive/handling.js';
 const refIndex = process.argv.indexOf('--baseline-ref');
 const modes = [['current',createHandling]];
 if (refIndex >= 0) {
-  let src=execFileSync('git',['show',`${process.argv[refIndex+1]}:102_3d_piter/src/world/drive/handling.js`],{encoding:'utf8'});
+  let src=execFileSync('git',['show',`${process.argv[refIndex+1]}:src/world/drive/handling.js`],{encoding:'utf8'});
   src=src.replace("'./model.js'",JSON.stringify(pathToFileURL(path.resolve('src/world/drive/model.js')).href));
   modes.unshift(['before',(await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'))).createHandling]);
 }
