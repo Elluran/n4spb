@@ -107,7 +107,7 @@ The revision is the first 20 hex digits of a sha256 over every `*.js` under `src
 the page then silently rebuilds everything procedurally (minutes of load, gigabytes of heap) and only prints `[baked]` in the console. After the last edit: re-bake, then `node tools/bake-manifest-check.mjs` must print `RESULT: OK` before anything is deployed.
 `tools/` and `docs/` are not hashed.
 
-Measured strip bake (2026-10-16, revision 325179c6b6e810149b4e): **63 files, 50.7 MiB gzip** (full city: 538 files, 450 MiB). Largest products: city-base meta 8.0 MiB, field-dtex 6.6 MiB, three nav graphs 3.7 MiB each, the 23 city-base regions 0.3-1.4 MiB each. The streamer cuts the strip into 48 regions of 640 m; 18 of them are awaited before the first frame at the hero pose, the rest stream in while walking or driving.
+Measured strip bake (2026-10-16, revision 67dc8314d0f73f796934): **63 files, 50.7 MiB gzip** (full city: 538 files, 450 MiB). Largest products: city-base meta 8.0 MiB, field-dtex 6.6 MiB, three nav graphs 3.7 MiB each, the 23 city-base regions 0.3-1.4 MiB each. The streamer cuts the strip into 48 regions of 640 m; 18 of them are awaited before the first frame at the hero pose, the rest stream in while walking or driving.
 Measured on an RTX 3090 Ti (headless Edge, 1280 x 720, local server without compression, new profile): intro ready after 26.2 s at high and 25.0 s at medium through a sub-path (full city: 43 s with its bake), JS heap 1.16 GB after load, walking 52 fps and driving 57 fps at medium (the display is vsync-limited), 0 console errors. The source tree that is downloaded is 16 MB raw (about 4 MB gzip on a compressing host).
 The full city bake was 450 MiB in 538 files.
 
