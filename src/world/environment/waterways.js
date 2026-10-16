@@ -13,12 +13,16 @@
 // WHERE A WATERWAY LEAVES THE STRIP (docs/STRIP.md, tools/strip-data-clip.mjs): RIVER / WATER are clipped to the extent grown by DATA_MARGIN (600 m). The cut edge of a CANAL polygon (Fontanka, Moika, Griboedov Canal,
 // Swan Canal) is no clip line of the extent, so it is a bank like any other: the reach beyond the extent is walled and ends in a wall across the water (an invented dead end, no open slit; nothing here continues a canal
 // by hand). The NEVA is different: its cut edges (the border of the data) are no banks, and the real OSM polygons of the Neva upstream (data/east-water.js) and downstream (neva-downstream.js) continue the water from there
-// out to the horizon ring of far.js (FAR_WIN), with a plain granite wall along their shores (farBanks()): the river reaches the horizon on both sides of the strip.
+// out to the horizon ring of far.js (FAR_WIN), with a plain granite wall along their shores (farBanks()): the river reaches the horizon on both sides of the strip. The Malaya Neva (neva-malaya.js), which the data of the
+// strip does not hold at all, joins the Neva inside the data region: its ring is a third scenery source that is drawn there too (FAR_SOURCES inData), and the mouth edge that it shares with the data polygon of the Neva is an open join.
+// The dead-end walls make the two banks of a canal ONE chain: bank.caps lists the arclengths of those walls, so that quay.js can still tell the banks apart (one descent per site and bank). The seam x = -2670 of the removed
+// southern rectangles is a clip line too (_clipLines), since the clipped data still holds the Griboedov Canal pieces that meet there.
 // Water levels (street = 0): docs/research/west-canals-bridges.md section 2.5 (Fontanka -3.2, Griboedov -2.9, Moika -3.0, Winter Canal -3.1, Neva -3.4).
 import { RIVER, WATER, EXTENT_RECTS } from '../data/city.js';
 import { EAST_WATER, EAST_WATER_BOUNDS } from '../data/east-water.js';
 
 import { NEVA_DOWNSTREAM } from './neva-downstream.js';
+import { NEVA_MALAYA } from './neva-malaya.js';
 
 // ---- the Neva scenery beyond the data. tools/strip-data-clip.mjs clips RIVER / WATER to the extent grown by DATA_MARGIN: the data region is DATA_RECTS. Beyond it the real OSM polygons of the Neva continue the river:
 // upstream (north-east) the 'Нева' polygon of data/east-water.js, downstream (west) the ring of the Bolshaya Neva of neva-downstream.js. They are drawn outside DATA_RECTS and inside FAR_WIN, the box round Vosstaniya Square
@@ -30,6 +34,9 @@ export const FAR_WIN = { x0: FAR_C[0] - FAR_R, x1: FAR_C[0] + FAR_R, z0: FAR_C[1
 const FAR_SOURCES = [
   { name: 'neva-up', rings: EAST_WATER.filter((p) => p.name === 'Нева').map((p) => p.o), box: EAST_WATER_BOUNDS },      // box: the clip box of the bake: its edges are no banks
   { name: 'neva-down', rings: [NEVA_DOWNSTREAM], box: null },
+  // the Malaya Neva (neva-malaya.js) joins the Neva INSIDE the data region (the mouth edge is the closing edge of the data polygon of the Neva), where no data polygon holds it: `inData` = it is drawn there too (water and
+  // shore walls; only clipped to FAR_WIN), and the mouth edge, which both rings share, is an open join (no wall on either side)
+  { name: 'neva-malaya', rings: [NEVA_MALAYA], box: null, inData: true },
 ];
 const keyOf = (r) => r.key || null;
 
@@ -93,6 +100,7 @@ const ringArea = (o) => { let a = 0; for (let i = 0; i < o.length; i += 2) { con
 const _clipLines = (() => {                                  // axis-parallel lines of the EXTENT rectangle borders
   const set = new Map();
   for (const r of EXTENT_RECTS) { set.set('x' + r.x0, ['x', r.x0]); set.set('x' + r.x1, ['x', r.x1]); set.set('z' + r.z0, ['z', r.z0]); set.set('z' + r.z1, ['z', r.z1]); }
+  set.set('x-2670', ['x', -2670]);                           // the seam of the removed S rectangles of the whole-city project: the clipped data still holds the Griboedov Canal polygon pieces 5:1 / 5:2 that meet at it (a clip line of the full city, not of the strip's EXTENT_RECTS)
   return [...set.values()];
 })();
 const _dataLines = (() => {                                  // axis-parallel lines of the DATA_RECTS borders
@@ -118,11 +126,11 @@ function slabIn(ax, az, bx, bz, r) {
   }
   return [t0, t1];
 }
-/** the parts [t0, t1] of the segment a -> b that lie inside FAR_WIN and outside every rectangle of the data region (the scenery banks start exactly where the data banks stop) */
-function farParts(ax, az, bx, bz) {
+/** the parts [t0, t1] of the segment a -> b that lie inside FAR_WIN and outside every rectangle of the data region (the scenery banks start exactly where the data banks stop); inData: the data region does not cut (a source that is drawn inside it) */
+function farParts(ax, az, bx, bz, inData = false) {
   const w = slabIn(ax, az, bx, bz, FAR_WIN); if (!w) return [];
   let parts = [w];
-  for (const r of DATA_RECTS) {
+  for (const r of inData ? [] : DATA_RECTS) {
     const s = slabIn(ax, az, bx, bz, r); if (!s) continue;
     const next = [];
     for (const [t0, t1] of parts) { if (s[1] <= t0 || s[0] >= t1) { next.push([t0, t1]); continue; } if (s[0] > t0) next.push([t0, s[0]]); if (s[1] < t1) next.push([s[1], t1]); }
@@ -131,14 +139,28 @@ function farParts(ax, az, bx, bz) {
   const l = Math.hypot(bx - ax, bz - az);
   return parts.filter(([t0, t1]) => (t1 - t0) * l > 0.05);
 }
-/** the shore chains of a scenery ring (water on the left of travel): the edges outside the data region and inside the window, not on the clip box of the source */
-function farChains(o, box) {
+/** the ring o (flat) clipped to the rectangle r, Sutherland-Hodgman: exact for a ring that crosses a border twice (the Malaya Neva at the west border of FAR_WIN) */
+function clipRingToRect(o, r) {
+  let P = []; for (let i = 0; i < o.length; i += 2) P.push([o[i], o[i + 1]]);
+  for (const [k, v, keepAbove] of [[0, r.x0, true], [0, r.x1, false], [1, r.z0, true], [1, r.z1, false]]) {
+    const Q = [], inside = (p) => (keepAbove ? p[k] >= v : p[k] <= v);
+    for (let i = 0; i < P.length; i++) {
+      const a = P[i], b = P[(i + 1) % P.length];
+      if (inside(a)) Q.push(a);
+      if (inside(a) !== inside(b)) { const t = (v - a[k]) / (b[k] - a[k]), c = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; c[k] = v; Q.push(c); }
+    }
+    P = Q;
+  }
+  return P.flat();
+}
+/** the shore chains of a scenery ring (water on the left of travel): the edges outside the data region (inData: also inside it) and inside the window, not on the clip box of the source and not (inData) on an edge of a data polygon (an open join: isJoin) */
+function farChains(o, box, inData = false, isJoin = null) {
   const n = o.length / 2, area = ringArea(o), onBox = (x, z) => box && (x <= box.x0 + 0.5 || x >= box.x1 - 0.5 || z <= box.z0 + 0.5 || z >= box.z1 - 0.5);
   const chains = []; let cur = null;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n, ax = o[i * 2], az = o[i * 2 + 1], bx = o[j * 2], bz = o[j * 2 + 1];
-    if (Math.hypot(bx - ax, bz - az) < 0.05 || (onBox(ax, az) && onBox(bx, bz))) continue;
-    for (const [t0, t1] of farParts(ax, az, bx, bz)) {
+    if (Math.hypot(bx - ax, bz - az) < 0.05 || (onBox(ax, az) && onBox(bx, bz)) || (isJoin && isJoin(ax, az, bx, bz))) continue;
+    for (const [t0, t1] of farParts(ax, az, bx, bz, inData)) {
       const sx = ax + (bx - ax) * t0, sz = az + (bz - az) * t0, ex = ax + (bx - ax) * t1, ez = az + (bz - az) * t1;
       if (cur && Math.hypot(cur[cur.length - 1][0] - sx, cur[cur.length - 1][1] - sz) < 0.2) cur.push([ex, ez]);
       else { cur = [[sx, sz], [ex, ez]]; chains.push(cur); }
@@ -201,11 +223,21 @@ function build() {
     const dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz) || 1, nx = -dz / l * 1.5, nz = dx / l * 1.5, mx = (ax + bx) / 2, mz = (az + bz) / 2;
     return wetAt(mx + nx, mz + nz) && wetAt(mx - nx, mz - nz);
   }
+  // OPEN JOIN with a scenery ring that is drawn inside the data region (FAR_SOURCES inData: the Malaya Neva): an edge of a data polygon of the Neva that coincides with an edge of such a ring is water on both sides, no bank;
+  // the same edge of the scenery ring is no bank either (joinsData)
+  const joinEdges = [];
+  for (const src of FAR_SOURCES) if (src.inData) for (const o of src.rings) for (let i = 0; i < o.length / 2; i++) { const j = (i + 1) % (o.length / 2); joinEdges.push([o[i * 2], o[i * 2 + 1], o[j * 2], o[j * 2 + 1]]); }
+  const sameEdge = (ax, az, bx, bz, e) => segDist(ax, az, e[0], e[1], e[2], e[3]) < SEAM_TOL && segDist(bx, bz, e[0], e[1], e[2], e[3]) < SEAM_TOL;
+  function onFarJoin(ax, az, bx, bz) { return joinEdges.some((e) => sameEdge(ax, az, bx, bz, e)); }
+  function joinsData(ax, az, bx, bz) {
+    for (const g of rings) { if (g.key !== 'neva') continue; for (let i = 0; i < g.n; i++) { const j = (i + 1) % g.n; if (sameEdge(ax, az, bx, bz, [g.o[i * 2], g.o[i * 2 + 1], g.o[j * 2], g.o[j * 2 + 1]])) return true; } }
+    return false;
+  }
   // real edges -> chains with the water on the LEFT of travel (normalised)
   const chains = [];
   for (let gi = 0; gi < rings.length; gi++) {
     const g = rings[gi], { o, n } = g, flags = [];
-    for (let i = 0; i < n; i++) { const j = (i + 1) % n; const ax = o[i * 2], az = o[i * 2 + 1], bx = o[j * 2], bz = o[j * 2 + 1]; flags.push(isForcedBank(ax, az, bx, bz) || (Math.hypot(bx - ax, bz - az) > 0.05 && !onClipLine(ax, az, bx, bz) && !(g.key === 'neva' && onDataLine(ax, az, bx, bz)) && !coincides(gi, ax, az, bx, bz) && !insideSame(gi, ax, az, bx, bz))); }
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n; const ax = o[i * 2], az = o[i * 2 + 1], bx = o[j * 2], bz = o[j * 2 + 1]; flags.push(isForcedBank(ax, az, bx, bz) || (Math.hypot(bx - ax, bz - az) > 0.05 && !onClipLine(ax, az, bx, bz) && !(g.key === 'neva' && (onDataLine(ax, az, bx, bz) || onFarJoin(ax, az, bx, bz))) && !coincides(gi, ax, az, bx, bz) && !insideSame(gi, ax, az, bx, bz))); }
     if (flags.every(Boolean)) {
       const pts = []; for (let i = 0; i < n; i++) pts.push([o[i * 2], o[i * 2 + 1]]); pts.push(pts[0]);
       chains.push({ key: g.key, pts: g.waterLeft ? pts : pts.reverse(), closed: true });
@@ -238,14 +270,16 @@ function build() {
   }
   // the Neva scenery beyond the data (FAR_SOURCES): a plain granite wall + parapet along the shores, drawn by quay.js outside the data region (the data banks rule inside it)
   const farBanks = [];
-  for (const src of FAR_SOURCES) src.rings.forEach((o, ri) => farChains(o, src.box).forEach((P, k) => farBanks.push({ id: src.name + '.' + ri + '.' + k, name: src.name + '.' + ri + '.' + k, key: 'neva', pts: P, closed: false, landSide: -1, len: chainLen(P), w: WATERWAYS.neva, far: true })));
+  for (const src of FAR_SOURCES) src.rings.forEach((o, ri) => farChains(o, src.box, !!src.inData, src.inData ? joinsData : null).forEach((P, k) => farBanks.push({ id: src.name + '.' + ri + '.' + k, name: src.name + '.' + ri + '.' + k, key: 'neva', pts: P, closed: false, landSide: -1, len: chainLen(P), w: WATERWAYS.neva, far: true })));
   const banks = [];
-  stitched.filter((c) => c.pts.length >= 2 && chainLen(c.pts) > 2).forEach((c, i) => banks.push({ id: c.key + '#' + i, name: c.key + '#' + i, key: c.key, pts: c.pts, closed: c.closed, landSide: -1, len: chainLen(c.pts), w: WATERWAYS[c.key] }));
+  // caps: the arclengths (middle) of the dead-end walls on the border of the data region (the cut edge of a canal polygon, see the header): the bank chain goes on behind one with the OTHER bank of the canal (what the full city holds as two chains)
+  const capsOf = (pts) => { const out = []; let s = 0; for (let i = 0; i + 1 < pts.length; i++) { const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); if (l > 0.05 && onDataLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1])) out.push(s + l / 2); s += l; } return out; };
+  stitched.filter((c) => c.pts.length >= 2 && chainLen(c.pts) > 2).forEach((c, i) => banks.push({ id: c.key + '#' + i, name: c.key + '#' + i, key: c.key, pts: c.pts, closed: c.closed, landSide: -1, len: chainLen(c.pts), w: WATERWAYS[c.key], caps: c.key === 'neva' ? [] : capsOf(c.pts) }));
   // water pieces: every data ring (outer) + plugs; the real Neva polygons beyond the data (clipped against the extents by the builders)
   const pieces = [];
   for (const g of rings) pieces.push({ id: g.id, key: g.key, o: g.o, kind: g.kind, box: g.box });
   // the Neva scenery: the real OSM polygons beyond the data (river.js waterCuts subtracts the data region and clips the rest to FAR_WIN)
-  for (const src of FAR_SOURCES) src.rings.forEach((o, ri) => pieces.push({ id: src.name + '.' + ri, key: 'neva', o, kind: 'far', box: boxOf(o), excludeData: true }));
+  for (const src of FAR_SOURCES) src.rings.forEach((o, ri) => { const q = src.inData ? clipRingToRect(o, FAR_WIN) : o; pieces.push({ id: src.name + '.' + ri, key: 'neva', o: q, kind: 'far', box: boxOf(q), excludeData: !src.inData }); });      // (inData: drawn inside the data region too, so clipped to the window here, not by river.js)
   return { rings, banks, farBanks, pieces };
 }
 export function waterGeo() { return _built || (_built = build()); }
@@ -336,7 +370,7 @@ export function slopeRuns() {
       for (let i = 1; i < P.length; i++) S.push(S[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
       const total = S[S.length - 1];
       let i = 0, cur = null;
-      const flush = (s1) => { if (cur && s1 - cur > 3) _runs.push(makeRun(reach, bank, P, S, cur, s1)); cur = null; };
+      const flush = (s1) => { if (cur !== null && s1 - cur > 3) _runs.push(makeRun(reach, bank, P, S, cur, s1)); cur = null; };
       for (let s = 0; s <= total + 1e-6; s += 0.5) {
         while (i + 2 < S.length && S[i + 1] < s) i++;
         const a = P[i], b = P[i + 1], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, t = Math.min(1, Math.max(0, (s - S[i]) / ((S[i + 1] - S[i]) || 1)));

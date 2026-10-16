@@ -637,9 +637,20 @@ export function buildQuay(ctx, root) {
     if (key !== 'fontanka' && key !== 'moat' && !bank.far) {
       const pre = frames(bank, null), pf = pre.fr, ps = pre.seg, ptotal = pf[pf.length - 1].s;
       const siteList = (sitesOf[key] || []).slice().sort((a, b) => (a.src === 'steps' ? 0 : 1) - (b.src === 'steps' ? 0 : 1));
-      for (const site of siteList) {
+      // The dead-end walls at the data margin (bank.caps, waterways.js) stitch the two banks of a canal into ONE chain; the planner treats each STRETCH between two walls as a chain of its own, as it was when every bank was
+      // one: a pier / steps site within 28 m of both banks (the canals are about 19 m wide) gets a descent on each bank (the nearest point of each stretch), and the stretches go in the order of the full city's chains
+      // (the last first: the stitched chain starts on the other bank).
+      const caps = bank.caps || [], secOf = (s) => { let k = 0; while (k < caps.length && caps[k] < s) k++; return k; };
+      const bestsOf = (site, sec) => {
         let best = null;
-        for (let i = 0; i + 1 < pf.length; i++) { const sg = ps[i], a = pf[i], t = Math.max(0, Math.min(sg.len, (site.x - a.x) * sg.tx + (site.z - a.z) * sg.tz)), d = Math.hypot(a.x + sg.tx * t - site.x, a.z + sg.tz * t - site.z); if (!best || d < best.d) best = { d, s: a.s + t }; }
+        for (let i = 0; i + 1 < pf.length; i++) {
+          const sg = ps[i], a = pf[i], t = Math.max(0, Math.min(sg.len, (site.x - a.x) * sg.tx + (site.z - a.z) * sg.tz)), d = Math.hypot(a.x + sg.tx * t - site.x, a.z + sg.tz * t - site.z);
+          if (secOf(a.s + t) === sec && (!best || d < best.d)) best = { d, s: a.s + t };
+        }
+        return best;
+      };
+      for (let sec = caps.length; sec >= 0; sec--) for (const site of siteList) {
+        const best = bestsOf(site, sec);
         if (!best || best.d > 28) continue;
         const why = {};
         const Wd = descentWidth(key, site), drop = DS.topY - (lvl(key) + 0.22), N = Math.max(6, Math.ceil(drop / DS.rise)), rise = drop / N, flight = N * DS.run, end = DS.gateB + flight + DS.low;

@@ -40,7 +40,7 @@ export const MODULES = [
   'landmarksH',   // Admiralty, Alexander Garden, Senate Square, St Isaac's Cathedral
   'landmarksI',   // Winter Palace + Hermitage
   'landmarksJ',   // St Isaac's Cathedral + square, Mariinsky Palace
-  'landmarksBelinsky', // Ciniselli Circus and Church of Simeon and Anna
+  'landmarksBelinsky', // Ciniselli Circus
   'landmarksK',   // Church of the Saviour on Blood, Mikhailovsky Garden, Russian Museum
   'landmarksCastle', // Engineering (Mikhailovsky) Castle and the Peter I monument
   'landmarksOktyabrsky', // Bolshoy Concert Hall Oktyabrsky on Ligovsky Prospekt
@@ -131,7 +131,7 @@ function setProgress(frac, label) {
 const LABELS = {
   environment: 'земля, набережные и деревья', streets: 'улицы, мостовые и провода', city: 'городские кварталы', rail: 'пути, платформы и поезда', landmarksA: 'Московский вокзал · площадь Восстания',
   landmarksNorth: 'Подписные Издания · дома улицы Маяковского',
-  landmarksBelinsky: 'Цирк Чинизелли · Симеон и Анна',
+  landmarksBelinsky: 'Цирк Чинизелли',
   landmarksB: 'Невский проспект', landmarksC: 'Фонтанка · Аничков мост', landmarksD: 'Владимирский собор · библиотека', landmarksE: 'Гостиный Двор · площадь Островского', landmarksF: 'Казанский собор', landmarksG: 'Дворцовая площадь · Главный штаб', landmarksH: 'Адмиралтейство · Сенатская площадь', landmarksI: 'Зимний дворец · Эрмитаж', landmarksJ: 'Исаакиевский собор', landmarksK: 'Спас на Крови · Михайловский сад', landmarksCastle: 'Михайловский замок', bridges: 'мосты', metro: 'метрополитен', props: 'скамейки, урны и киоски', traffic: 'машины, автобусы и троллейбусы',
   landmarksOktyabrsky: 'БКЗ «Октябрьский»',
   people: 'прохожие и туристы', wildlife: 'голуби, чайки и вороны', drive: 'красная машина',
@@ -250,7 +250,7 @@ async function goToView(v) {
   try {
     if (ctx.regions) { showToast('Загрузка места…'); await ctx.regions.ensureAt(v.x, v.z); }
     if (ctx.drive?.active) ctx.drive.place(v.x, v.z, v.yaw); else player.setPose(v.x, v.z, v.yaw, v.pitch);
-    showToast(v.label);
+    showToast(v.label); areaName = areaAt(v.x, v.z);      // the place label keeps its 3.8 s: the area toast fires only when the player walks into a different area
   } catch (e) { console.error('[travel]', e); showToast('Не удалось загрузить место. Попробуйте ещё раз.'); }
   finally { ctx.travelPending = false; }
 }

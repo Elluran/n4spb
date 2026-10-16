@@ -24,7 +24,7 @@ export async function run() {
     same(original.crosswalks, nav.crosswalks, label + ' crosswalks');
     if (original.comp.length !== nav.comp.length) throw new Error(label + ' comp length'); for (let i = 0; i < original.comp.length; i++) if (original.comp[i] !== nav.comp[i]) throw new Error(label + ' comp ' + i);
     if (original.main !== nav.main) throw new Error(label + ' main');
-    same([...original.longK].sort(), [...nav.longK].sort(), label + ' longK'); same(original.bridge.nodes, nav.bridge.nodes, label + ' bridge nodes');
+    if (!original.longK || !original.longK.size || !nav.longK) throw new Error(label + ' no long-bridge chain (nav.longK: the Palace Bridge pavements)'); same([...original.longK].sort((p, q) => p - q), [...nav.longK].sort((p, q) => p - q), label + ' longK'); same(original.bridge.nodes, nav.bridge.nodes, label + ' bridge nodes');
     same(original.entrances, nav.entrances, label + ' entrances'); same(original.benches, nav.benches, label + ' benches'); same(original.stops, nav.stops, label + ' stops'); same(original.spots, nav.spots, label + ' spots');
     { const a = strip(original.stats, old), b = strip(nav.stats, old), bad = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k])); if (bad.length) throw new Error(label + ' stats differ: ' + bad.map((k) => k + '=' + JSON.stringify(a[k]) + ' vs ' + JSON.stringify(b[k])).join('; ')); }
     const ids = original.comp.map((c, i) => (c === original.main ? i : -1)).filter((i) => i >= 0);

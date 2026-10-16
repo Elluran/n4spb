@@ -6,7 +6,7 @@ import { bakedData } from '../core/baked-world.js';
 // radius are drawn), driven by a fixed-step agent simulation (people/sim.js) on a routing graph built from the streets / city / landmarks / rail / metro services (people/nav.js, station.js).
 // Population plan: people/scenes.js + vignettes.js.  Interface between the halves: people/contract.js.
 // THE WEST (Gostiny Dvor - Nevsky - the Admiralty, Palace Square, the gardens, the canals; docs/research/west-life-furniture.md): the routing graph covers the new pavements, squares, sett fields, the
-// bridge decks (pavement bands of bridges/sites.js, at deck height), the open arcade of Gostiny Dvor, the three Winter Palace gateways, the Admiralty gate, the Kazan colonnade (stylobate included) and
+// bridge decks (pavement bands of bridges/sites.js, at deck height; the first 170 m of the Palace Bridge: a chain of nodes on each pavement, nav.longs / nav.longK), the open arcade of Gostiny Dvor, the three Winter Palace gateways, the Admiralty gate, the Kazan colonnade (stylobate included) and
 // keeps off the steps / stylobates / plinths / fountain rims / stair descents of the landmark modules (their walk boxes are keep-out obstacles); the zone field (zones.js) puts the tourist-centre crowd
 // (Kazan bridge 26 per 10 m, Kazan, Palace Square, Gostiny Dvor, the gardens) on top of the east table; people/west.js scripts ~25 places from the landmark services (guided groups with umbrellas, the
 // Column ring, the Hermitage queue, buskers, painters, weddings, vendors at the kiosks, couples at the canal descents ...); people/metrolife.js puts passengers on the platforms of Gostiny Dvor,

@@ -413,7 +413,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
   // preferring the busy zones, so the avenue is as dense around the player as the research says (8-14 people per 10 m of pavement) with ~1200 people on the whole map.
   // A group (pair / family / tour) moves as a unit. Nobody is placed within 110 m (the 'visible' radius is 75 m).
   const allIds = []; for (const [c, arr] of compNodes) if (bigComps.has(c)) for (const id of arr) { const k = N.k[id]; if (k === 's' || k === 'a' || k === 'p') allIds.push(id); }
-  const FAR2 = 270 * 270, placed = new Map();
+  const FAR2 = 270 * 270, placed = new Map(), longK = nav.longK && nav.longK.size ? nav.longK : null;
   /** agents within the 3 x 3 hash cells (7.5 m square) of (x, z) plus the ones recycled to the same cell during this micro step */
   const localCount = (x, z) => { const cx = Math.floor(x / HC), cz = Math.floor(z / HC); let n = placed.get(cellHash(cx, cz)) || 0; for (let q = heads[cellHash(cx, cz)]; q >= 0; q = nexts[q]) { const b = agents[q]; if (b.cx === cx && b.cz === cz) n++; } for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let q = heads[cellHash(cx + dx, cz + dz)]; q >= 0; q = nexts[q]) { const b = agents[q]; if (b.cx === cx + dx && b.cz === cz + dz) n += 0.5; } return n; };
   /** mass: place anywhere 6-250 m around the camera (start / teleport); otherwise 60-290 m and never in view */
@@ -422,7 +422,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     let best = -1, tot = 0; const lo = mass ? 6 : 60, hi = mass ? 250 : 290, ids = [], ws = [], zOwn = ownZone(a);
     for (let k = 0, kn = mass ? 26 : 14; k < kn; k++) {              // candidate points on the annulus around the camera, snapped to the nearest pavement node (more tries at a teleport: an avenue between quiet side streets fills only a few per cent of the disc)
       const r = lo + (hi - lo) * Math.pow(R(), mass ? 0.85 : 1), ang = R() * TAU, px = camPos.x + Math.sin(ang) * r, pz = camPos.z + Math.cos(ang) * r;
-      const id = nav.nearestNode(px, pz, 9, (q) => { const kq = N.k[q]; return (kq === 's' || kq === 'a' || kq === 'p') && nav.mainOK(q); }); if (id < 0) continue;
+      const id = nav.nearestNode(px, pz, 9, (q) => { const kq = N.k[q]; return (kq === 's' || kq === 'a' || kq === 'p' || (kq === 'k' && longK && longK.has(q))) && nav.mainOK(q); }); if (id < 0) continue;      // (the pavements of the long Neva bridge count: the deck is 255 m long)
       const dx = N.x[id] - camPos.x, dz = N.z[id] - camPos.z, d = hyp(dx, dz);
       if (mass ? (d < 6 || d > 250) : (d < 60 || d > 290 || (d < 110 && visible(N.x[id], N.z[id])))) continue;
       if (localCount(N.x[id], N.z[id]) >= 5 || crowdedAt(N.x[id], N.z[id], 0, zOwn)) continue;      // never pile people up: at most 5 within 2.5 m (a move inside the walker's own zone does not fill it)
@@ -512,6 +512,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     if (!a.trX) { a.trX = new Float32Array(64).fill(a.x); a.trZ = new Float32Array(64).fill(a.z); a.trY = new Float32Array(64).fill(a.yaw); a.trH = 0; }
     a.trH = (a.trH + 1) & 63; a.trX[a.trH] = a.x; a.trZ[a.trH] = a.z; a.trY[a.trH] = a.yaw;
   };
+  const hasLong = !!(nav.longs && nav.longs.length);
   /** pairs / families: the follower walks where its leader walked 0.4 s ago (always a valid place, also across a zebra) shifted sideways */
   const stepFollower = (a, t, dt) => {
     const l = a.leader;
@@ -526,7 +527,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     const own = l.crossIdx < 0 && nav.fastCover(a.x, a.z) > -0.1 ? nav.crosswalkAt(a.x, a.z, 0.8) : -1, cross = l.crossIdx >= 0 || own >= 0, sd = cross ? a.side * 0.4 : a.side; a.crossIdx = l.crossIdx >= 0 ? l.crossIdx : own;
     let tx = bx - fz * sd - fx * (moving ? 0 : a.back * 0.5), tz = bz + fx * sd - fz * (moving ? 0 : a.back * 0.5);
     if (!moving && a.arc) { const aa = l.yaw + Math.PI + a.arc.ang; tx = l.x + Math.sin(aa) * a.arc.rad; tz = l.z + Math.cos(aa) * a.arc.rad; if (!nav.walkable(tx, tz) || nav.cover(tx, tz) > -0.5) { tx = bx - fz * sd; tz = bz + fx * sd; } }
-    if (!cross && (a.sideT > 0 || !nav.walkable(tx, tz) || nav.cover(tx, tz) > -0.3 || nav.deepAt(tx, tz) || (nav.fenceNear(tx, tz) && nav.segBlocked(bx, bz, tx, tz)))) { tx = bx; tz = bz; }       // (a side place across a guard rail from the leader's trail is no place)
+    if (!cross && (a.sideT > 0 || !nav.walkable(tx, tz) || nav.cover(tx, tz) > -0.3 || nav.deepAt(tx, tz) || (hasLong && nav.longDeck(bx, bz, 0.3)) || nav.obstDist(tx, tz, 0.6) < 0.3 || (nav.fenceNear(tx, tz) && nav.segBlocked(bx, bz, tx, tz)))) { tx = bx; tz = bz; }       // (a side place across a guard rail from the leader's trail, or against a wall / a post, is no place: the follower pins itself on it; on the 1.2 m lane of a long bridge pavement a party walks in single file)
     // a guard rail between the follower and its place (the leader went through a gate, the follower lags on the other side of the rail): head for the newest point of the leader's trail
     // that it can reach in a straight line, i.e. retrace the leader's way through the gate
     if (!cross && nav.fenceNear(a.x, a.z) && nav.segBlocked(a.x, a.z, tx, tz, 0.03)) { for (let q = 1; q < 48; q++) { const j = (i - q + 64) & 63; if (!nav.segBlocked(a.x, a.z, l.trX[j], l.trZ[j], 0.03)) { tx = l.trX[j]; tz = l.trZ[j]; break; } } }
@@ -536,7 +537,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     if ((d > 7 || a.stuck > 60) && !visible(a.x, a.z) && !cross && nav.cover(bx, bz) < -0.5) { a.x = bx; a.z = bz; a.stuck = 0; a.blk = 0; }
     turnAndGo(a, dt, dx, dz, v, cross);
     if (d < 0.4 && !moving) { const toL = a.arc ? Math.atan2(l.x - a.x, l.z - a.z) : l.yaw, dy = wrap(toL - a.yaw); a.yaw += clamp(dy, -2.5 * dt, 2.5 * dt); }
-    groundY(a, l.y);
+    groundY(a, longK && a.x < -600 && nav.longDeck(a.x, a.z) ? nav.surfaceY(a.x, a.z, l.y) : l.y);
   };
   // children in the dry fountain
   const stepPlay = (a, t, dt) => {

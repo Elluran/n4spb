@@ -105,11 +105,12 @@ export const ROUTES = [
   { n: '2', t: 'Лигово' }, { n: '10', t: 'Крестовский остров' }, { n: '15', t: 'Улица Жуковского' }, { n: '22', t: 'Двинская улица' }, { n: '26', t: 'Московский вокзал' },
   { n: '46', t: 'Летний сад' }, { n: '49', t: 'Улица Ломоносова' }, { n: '70', t: 'Канонерский остров' }, { n: '71', t: 'Канонерский остров' }, { n: '74', t: 'БКЗ «Октябрьский»' },
   { n: '76', t: 'БКЗ «Октябрьский»' }, { n: '105', t: 'Ковенский переулок' }, { n: '141', t: 'Московский вокзал' }, { n: '225', t: 'Пять углов' }, { n: '290', t: 'Владимирская площадь' },
-  // trams of the Petrograd side (2026: 3 площадь Репина - площадь Ленина over the Trinity and Sampsonievsky bridges; 6 and 40 over the Tuchkov Bridge, Kronverksky pr., ul. Kuibysheva and the
-  // Sampsonievsky Bridge): the two boards of a route are its two termini (a = towards the first terminus of traffic/trams.js TRAM_LINES, b = the other way)
+  // trams of the strip (2026: 3 площадь Репина - площадь Ленина over Gostiny Dvor and the Italyanskaya; 43 and 49 on ulitsa Marata / Ligovsky pr., OSM TRAM_ROUTES: 43 ulitsa Marata - Tramvainy park 1,
+  // 49 ulitsa Marata - ulitsa Yuriya Gagarina): the two boards of a route are its two termini (a = towards the first terminus of traffic/trams.js TRAM_LINES, b = the other way). The Marata line runs
+  // southbound only (see TRAM_LINES), so only the b boards are drawn; the a rows keep the index layout
   { n: '3', t: 'Площадь Ленина', tram: true, way: 'a' }, { n: '3', t: 'Площадь Репина', tram: true, way: 'b' },
-  { n: '6', t: 'Площадь Ленина', tram: true, way: 'a' }, { n: '6', t: 'Улица Кораблестроителей', tram: true, way: 'b' },
-  { n: '40', t: 'Тихорецкий проспект', tram: true, way: 'a' }, { n: '40', t: 'Детская улица', tram: true, way: 'b' },
+  { n: '43', t: 'Улица Марата', tram: true, way: 'a' }, { n: '43', t: 'Трамвайный парк № 1', tram: true, way: 'b' },
+  { n: '49', t: 'Улица Марата', tram: true, way: 'a' }, { n: '49', t: 'Улица Юрия Гагарина', tram: true, way: 'b' },
   // Vasilievsky Island (2026-10-09; docs/research/vo-roster-metro.md 3.3 / 3.4, OSM route relations of the 2026 mapper state [L]): APPENDED, so every older index stays; the termini are the ones
   // the dossier names (the loops 41 42 151 152 168 220 show the western terminus ulitsa Korablestroiteley); the random route picks of the older districts draw from LEGACY_ROUTES only
   { n: '9', t: 'Морская набережная', trolley: true, isl: true }, { n: '12', t: 'Смольный', trolley: true, isl: true },       // (12 since 30 Oct 2023: Korablestroiteley - Smolny; this entry wins ROUTE_BY_REF over the old board)
@@ -117,7 +118,6 @@ export const ROUTES = [
   { n: '100', t: 'Балтийский вокзал', isl: true }, { n: '128', t: 'Аптекарская набережная', isl: true }, { n: '151', t: 'Улица Кораблестроителей', isl: true }, { n: '152', t: 'Улица Кораблестроителей', isl: true },
   { n: '158', t: 'Морской вокзал', isl: true }, { n: '168', t: 'Улица Кораблестроителей', isl: true }, { n: '220', t: 'Улица Кораблестроителей', isl: true }, { n: '230', t: 'Пискарёвка', isl: true },
   { n: '249', t: 'Ручьи', isl: true }, { n: '261', t: 'Морская набережная', isl: true }, { n: '262', t: 'Улица Константина Заслонова', isl: true }, { n: '275', t: 'Станция метро «Василеостровская»', isl: true },
-  { n: 'T1', t: 'Музей городского транспорта', tram: true, way: 'a', isl: true }, { n: 'T1', t: 'Музей городского транспорта', tram: true, way: 'b', isl: true },
 ];
 /** index of the first Vasilievsky Island board: the vehicles of the older districts pick their (random) route among the entries before it only */
 export const LEGACY_ROUTES = ROUTES.findIndex((r) => r.isl);

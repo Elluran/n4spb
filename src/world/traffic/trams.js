@@ -24,8 +24,9 @@ import { ARCH, ROUTE_BY_REF } from './fleetdata.js';
 
 // terminals in map metres: the track ends of the strip data, which are clipped at the data extent (tools/strip-data-clip.mjs). The strip holds two tram networks:
 // route 3 (Sadovaya - Apraksin Dvor - Gostiny Dvor - Italyanskaya - Mikhailovsky Castle - Letny Sad, both directions, from the Letny Sad end at the north edge to the Sadovaya end at the west edge of W1) and
-// the Marata / Ligovsky pair of routes 43 and 49, run from the north edge to the south edge. The northbound way of the second network is cut at (90, 583) in the data: the builder prints '43/49a: ... 1137 m short'
-// and that network runs southbound only (expected).
+// the Marata / Ligovsky pair of routes 43 and 49, run from the north edge to the south edge. In the OSM data the northbound track of the second network merges into the southbound pair at (76, 597)
+// with no turn-compatible link onwards (the northward continuation is ~180 degrees away from the arriving heading), so no northbound route exists: the builder prints '43/49a: ... 1137 m short'
+// and that line runs southbound only (expected; the trams are born at the north end, drive south and leave at the south edge). The ways are not clipped there.
 export const TRAM_LINES = [
   { refs: ['3'], a: [-924, -1118], b: [-1456, 280], headway: 190 },
   { refs: ['43', '49'], a: [-175, -523], b: [197, 1178], headway: 300 },

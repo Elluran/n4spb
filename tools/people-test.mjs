@@ -115,6 +115,9 @@ const REGIONS = [['Kazan garden r30', -1469, -285, 30], ['Kazan colonnade r35', 
 let tourLeg = -1, legN = 0, legAcc = null; const legs = [];
 const gTest = sim.nav.passageTests && sim.nav.passageTests['gostiny-gallery'], cTest = sim.nav.passageTests && sim.nav.passageTests['kazan-colonnade']; let galN = 0, colN = 0; const metroFlow = {}; let ugN = 0; const bhist = {}; const secPrev = []; const regAcc = REGIONS.map(() => 0); let regN = 0;
 const sampleOn = ctx.services.bridges && ctx.services.bridges.deckY;
+const PB = (sim.nav.longs || []).find((q) => q.id === 'palace') || null;           // the Palace Bridge (nav.longs): who stands / walks on its deck (counted every second; the carriageway between the pavement bands is a violation)
+const pb = { n: 0, steps: 0, max: 0, seen: new Set(), scenes: {}, bins: new Array(8).fill(0), carriage: 0, outside: 0, yMin: 9, yMax: -9, jumps: 0, jumpF: 0, jumpT: new Array(10).fill(0) };
+const onPB = (x, z, m = 0.5) => { if (!PB) return false; const dx = x - PB.ax, dz = z - PB.az, u = dx * PB.ux + dz * PB.uz, v = -dx * PB.uz + dz * PB.ux; return u > -2 && u < PB.len + 2 && Math.abs(v) <= PB.hw + m; };
 const nearSq = (x, z) => Math.hypot(x - 592, z - 165) < 70, lenina = (x, z) => { const g = L.toGrid(x, z); return g.u > -400 && g.u < 0 && P.nav && sim.nav.zones.dNev(x, z) < 25; };
 for (let i = 1; i <= steps; i++) {
   t = i * dt; ctx.time = t; ctx.shared.uTime.value = t;
@@ -127,7 +130,7 @@ for (let i = 1; i <= steps; i++) {
     if (!Number.isFinite(a.x) || !Number.isFinite(a.z) || !Number.isFinite(a.yaw) || !Number.isFinite(a.speed)) { viol.nan++; if (viol.nan < 6) console.log(`  NaN agent ${k} scene=${a.scene} kind=${a.kind} t=${t.toFixed(1)} x=${a.x} z=${a.z} yaw=${a.yaw} speed=${a.speed} leader=${!!a.leader} goal=${a.goal && a.goal.type}`); return; }
     if (!a.hidden && !p.hidden) {
       const d = Math.hypot(a.x - p.x, a.z - p.z), kindChange = a.kind !== p.kind || (!!a.seat !== p.seat) || ((a.recycled | 0) + (a.leader ? (a.leader.recycled | 0) : 0)) !== p.rec || sim.mass > 0 || a.kind === 'approach' || p.kind === 'approach';
-      if (d > 0.8 && !kindChange) { viol.jump++; if (viol.jump < 8) console.log(`  jump ${d.toFixed(2)} m agent ${k} ${a.kind} (${a.x.toFixed(1)},${a.z.toFixed(1)}) t=${t.toFixed(1)} scene=${a.scene}`); }
+      if (d > 0.8 && !kindChange) { viol.jump++; if (onPB(a.x, a.z, 3)) { pb.jumps++; if (a.leader) pb.jumpF++; pb.jumpT[Math.min(9, Math.floor(t / (MIN * 6)))]++; if (pb.jumps < 5) console.log(`  jump ON THE PALACE BRIDGE ${d.toFixed(2)} m agent ${k} ${a.kind} (${a.x.toFixed(1)},${a.z.toFixed(1)}) t=${t.toFixed(1)} scene=${a.scene} leader=${!!a.leader}`); } if (viol.jump < 8) console.log(`  jump ${d.toFixed(2)} m agent ${k} ${a.kind} (${a.x.toFixed(1)},${a.z.toFixed(1)}) t=${t.toFixed(1)} scene=${a.scene}`); }
       let dy = a.yaw - p.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       if (Math.abs(dy) > 0.9 && !kindChange && d < 0.8) { viol.turn++; if (viol.turn < 6) console.log(`  turn ${dy.toFixed(2)} agent ${k} ${a.kind} t=${t.toFixed(1)}`); }
       p.dyaw = dy;
@@ -146,7 +149,7 @@ for (let i = 1; i <= steps; i++) {
   });
   if (PLX) for (const a of sim.agents) if (!a.hidden) { const d = Math.hypot(a.x - PLX[0], a.z - PLX[1]); if (d < playerMin) playerMin = d; if (d < 1.2) playerNear++; }
   if (i % 10 === 0) {                                              // once per second: containment, density
-    let hid = 0, n = 0, sq = 0, ln = 0, pl = 0;
+    let hid = 0, n = 0, sq = 0, ln = 0, pl = 0, pbNow = 0;
     sim.agents.forEach((a, k) => {
       if (a.hidden) { hid++; return; }
       if (a.ug) { ugN++; if (!(a.y < -10 && a.y > -100) || !Number.isFinite(a.x)) viol.ugbad = (viol.ugbad || 0) + 1; return; }
@@ -165,8 +168,10 @@ for (let i = 1; i <= steps; i++) {
         if (Number.isFinite(gh) && gh < -0.6 && a.x < 400 && dk == null && !(sim.nav.onDeck && sim.nav.onDeck(a.x, a.z, 0.3))) { viol.deep++; if (viol.deep < 10) console.log(`  below street level ${gh.toFixed(2)} agent ${k} ${a.kind} (${a.x.toFixed(1)},${a.z.toFixed(1)}) scene=${a.scene}`); }
       }
       if (cov > 0.06 && a.y < 0.7 && /* a platform / deck above a road is no carriageway */ sim.nav.crosswalkAt(a.x, a.z, 0.8) < 0) { viol.road++; if (viol.road < 8) console.log(`  on carriageway agent ${k} ${a.kind} cover ${cov.toFixed(2)} (${a.x.toFixed(1)},${a.z.toFixed(1)}) t=${t.toFixed(0)} scene=${a.scene} cross=${a.crossIdx} inAsph=${a.inAsph} leader=${!!a.leader} rt=${a.rt ? a.rt.x[a.rt.seg].toFixed(1) + ',' + a.rt.z[a.rt.seg].toFixed(1) + '>' + a.rt.x[Math.min(a.rt.seg + 1, a.rt.n - 1)].toFixed(1) + ',' + a.rt.z[Math.min(a.rt.seg + 1, a.rt.n - 1)].toFixed(1) : '-'}`); }
+      if (PB) { const dx = a.x - PB.ax, dz = a.z - PB.az, u = dx * PB.ux + dz * PB.uz, v = -dx * PB.uz + dz * PB.ux; if (u > -2 && u < PB.len + 2 && Math.abs(v) <= PB.hw + 0.5) { pbNow++; pb.seen.add(k); pb.scenes[a.scene] = (pb.scenes[a.scene] || 0) + 1; pb.bins[Math.max(0, Math.min(7, Math.floor(u / 25)))]++; pb.yMin = Math.min(pb.yMin, a.y); pb.yMax = Math.max(pb.yMax, a.y); if (Math.abs(v) < PB.v0 - 0.3 && sim.nav.crosswalkAt(a.x, a.z, 0.8) < 0) pb.carriage++; if (!L.inPlay(a.x, a.z, -1.5)) pb.outside++; } }
       if (nearSq(a.x, a.z)) sq++; if (lenina(a.x, a.z)) ln++; if (L.areaAt && a.x > L.WORLD.play.x0 && a.x < L.WORLD.play.x1 && a.z > L.WORLD.play.z0 && a.z < L.WORLD.play.z1) pl++;
     });
+    pb.n += pbNow; pb.steps++; pb.max = Math.max(pb.max, pbNow);
     regN++; if (legs.length) legs[legs.length - 1].n++;
     viol.hiddenMax = Math.max(viol.hiddenMax, hid); densAcc.square += sq; densAcc.lenina += ln; densAcc.play += pl; densAcc.n++;
     if (sim.agents.length !== N0) fail('head count changed');
@@ -180,6 +185,7 @@ progress.forEach((p, k) => { const a = sim.agents[k]; if (p.d >= 3 && a.kind ===
 if (args.includes('--night')) console.log('night: hidden at the end', sim.agents.filter((a) => a.hidden).length, 'of', N0);
 if (PLX) { console.log('player at', PLX.join(','), 'closest approach', playerMin.toFixed(2), 'm; agent-steps within 1.2 m', playerNear); if (playerMin < 0.4 && !TOUR) fail('somebody walked into the player (' + playerMin.toFixed(2) + ' m)'); }
 if (viol.building) console.log('building violations by scene@cell:', Object.entries(bhist).sort((p, q) => q[1] - p[1]).slice(0, 14).map((e) => e.join('=')).join(' | '));
+if (PB) { console.log(`Palace Bridge deck (u -2 .. ${PB.len.toFixed(0)} m, |v| <= ${PB.hw}): mean ${(pb.n / Math.max(1, pb.steps)).toFixed(1)} people, max ${pb.max}, distinct ${pb.seen.size}; per 25 m of u (samples) ${pb.bins.join(' ')}; position jumps on it ${pb.jumps} (${pb.jumpF} of followers; per tenth of the run ${pb.jumpT.join(' ')}), on the carriageway ${pb.carriage}, outside the play area ${pb.outside}; y ${pb.yMin.toFixed(2)} .. ${pb.yMax.toFixed(2)}; by scene ${JSON.stringify(pb.scenes)}`); if (pb.carriage) fail(pb.carriage + ' samples on the Palace Bridge carriageway'); if (pb.outside) fail(pb.outside + ' samples beyond the play border on the Palace Bridge'); }
 console.log('metro platform people (underground, mean visible):', ugN / Math.max(1, regN));
 console.log('violations', JSON.stringify(viol), 'stuck walkers (no 3 m in 3 min):', stuck);
 console.log('mean people: visible in play area', (densAcc.play / densAcc.n).toFixed(0), 'within 70 m of the obelisk', (densAcc.square / densAcc.n).toFixed(0), 'on Nevsky Mayakovskaya - Vosstaniya (400 m x both pavements)', (densAcc.lenina / densAcc.n).toFixed(0), '= per 10 m of pavement', (densAcc.lenina / densAcc.n / 80).toFixed(1));

@@ -150,7 +150,7 @@ docs/                 the guides (below)
 
 ### Developer tools
 
-`npm install` first. `npm run check` (headless build of every kept module with its triangle budget), `node tools/layout-test.mjs` (`npm run layout`), `node tools/smoke.mjs` (walk, fly, land on a roof, fps; ends with `RESULT: OK`), `node tools/under-test.mjs`,
+`npm install` first. `npm run check` (headless build of every kept module with its triangle budget), `node tools/layout-test.mjs` (`npm run layout`), `node tools/smoke.mjs` (walk, fly, land on a roof, fps; ends with `RESULT: OK`),
 `node tools/physics-test.mjs`, `node tools/metro-test.mjs` (walks in through every door, rides in real time, climbs out), `node tools/drive-test.mjs`, `node tools/people-test.mjs`, `node tools/traffic-test.mjs`, `node tools/wildlife-test.mjs`, `node tools/audio-test.mjs`,
 the audits `npm run roads | markings | walls | labels | facade | wires | paving`, `node tools/shot.mjs --cams "hero;x,z,yaw,pitch;x,y,z,yaw,pitch" --out shots/a` (headless GPU screenshots), `node tools/zfight.mjs` (z-fighting finder),
 `node tools/tour.mjs` (scripted screenshots; `--set splash` rewrites the loading-screen images), `npm run bake` / `npm run bakecheck` / `npm run bakedcheck` (the shipping bake and its gates, see STRIP.md).

@@ -1,5 +1,5 @@
 // Fontanka 3 (Ciniselli Circus). Exterior landmark fitted to the mapped parcel.
-// (The Church of Simeon and Anna lies beyond the Nevsky strip's data extent and is not built.)
+// (The Church of Simeon and Anna is not built here: it stands in the scenery margin, about 116 m past the play edge, and is left to the generic city.)
 // User photo references (2026-10-04) govern colour, silhouette and ornament.
 // Circus dome diameter: circus.spb.ru/about.html (49.7 m). No live show posters.
 import * as THREE from 'three';

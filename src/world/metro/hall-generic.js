@@ -62,9 +62,9 @@ export function buildGenericHall(ctx, M, S, cfg) {
   const sign = tex.draw(768, 256, (g, w, h) => {
     g.fillStyle = '#1d4e9b'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.fillRect(8, 8, w - 16, 4); g.fillRect(8, h - 12, w - 16, 4);
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
-    tex.fitText(g, 'Выход временно закрыт', w / 2, 78, w - 50, 66, '"Rubik","Noto Sans",sans-serif', 700);
-    tex.fitText(g, 'Эта часть города будет открыта позже.', w / 2, 152, w - 50, 42, '"Rubik","Noto Sans",sans-serif', 500);
-    g.globalAlpha = 0.8; tex.fitText(g, 'Exit closed. This part of the city opens later.', w / 2, 212, w - 50, 30, '"Rubik","Noto Sans",sans-serif', 400);
+    tex.fitText(g, 'Выход закрыт', w / 2, 78, w - 50, 66, '"Rubik","Noto Sans",sans-serif', 700);
+    tex.fitText(g, 'Эта станция за пределами карты.', w / 2, 152, w - 50, 42, '"Rubik","Noto Sans",sans-serif', 500);
+    g.globalAlpha = 0.8; tex.fitText(g, 'Exit closed. This station is outside the map.', w / 2, 212, w - 50, 30, '"Rubik","Noto Sans",sans-serif', 400);
   }, { key: 'gen-closed-sign' });
   k.plane(2.8, 0.93, M.board(sign, 1.0), [0, FY + 4.35, -PZ + 0.3], [0, 0, 0]);
   S.col(-EDGE, EDGE, FY - 1, FY + 12, -PZ - 0.2, -PZ + 0.1);

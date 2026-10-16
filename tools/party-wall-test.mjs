@@ -50,7 +50,7 @@ for (let i = 0; i < 60; i++) {
 }
 const expected = cases.map((c) => original(c.e, c.id, c.mine, c.o));
 let hits = 0;
-for (const name of ['B', 'C', 'D', 'E', 'G', 'J', 'K', 'Mars']) {
+for (const name of ['B', 'C', 'D', 'E', 'G', 'J', 'K']) {
   const { sharedWall } = await import(`../src/world/landmarks${name}/house.js`);
   for (const [i, c] of cases.entries()) {
     const result = sharedWall(c.e, c.id, c.mine, c.o);

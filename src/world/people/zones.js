@@ -108,6 +108,11 @@ export function makeZones(L, roads, stationFrame, ex = {}) {
   HOT.push(
     [-712, -757, 2.2, 22], [-737, -824, 2.0, 22], [-737, -842, 1.2, 16], [-690, -790, 0.7, 40], [-778, -948, 1.0, 16],
   );
+  // ---- the PALACE BRIDGE (bridges/palace.js; the first ~170 m of the 255 m deck lie in the play area, the pavements carry the 'k' chains of people/nav.js nav.longs): the bank end (the lattice has to reach the
+  //      pavements of the bridge head, or the chains hang in a stub of the pavement graph) and the stretches of the deck where people stop to look at the Neva. The deck weights are ~0.12-0.25 (the full-city table had 0.35-0.65 on a 255 m deck: the lanes of the pavements are 1.15 m wide between the barrier kerb and the lamp standards, and the strip has fewer pavements to share the crowd).
+  HOT.push(
+    [-2345, -883, 0.45, 26], [-2366, -922, 0.05, 26], [-2380, -950, 0.1, 30], [-2412, -992, 0.12, 28],
+  );
   // the hot spots in a 32 m grid (every cell lists the spots whose 3 sigma box touches it): zoneW is called ~10^6 times while the lattice is built
   const HG = 32, hgrid = new Map(), HK = (cx, cz) => cx * 8192 + cz;
   HOT.forEach((h, i) => { const r = 3 * h[3]; for (let cx = Math.floor((h[0] - r) / HG); cx <= Math.floor((h[0] + r) / HG); cx++) for (let cz = Math.floor((h[1] - r) / HG); cz <= Math.floor((h[1] + r) / HG); cz++) { const k = HK(cx, cz); let a = hgrid.get(k); if (!a) hgrid.set(k, (a = [])); a.push(i); } });

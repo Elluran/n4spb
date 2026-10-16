@@ -36,7 +36,7 @@ the Petrograd monuments and Petrovsky, Krestovsky, Yelagin, Kamenny and Botanica
 
 * **Buildings that a dropped module used to claim become ordinary generic `city` buildings.** This is intended, in particular for the 120 m scenery margin around the play area.
 * Bridges outside the extent, water outside it and the whole island / Petrograd / south-west data are gone; `src/world/data/east-water.js` (far Neva scenery) stays.
-* The docs, tools and reference data of the dropped areas were deleted with them (`docs/EAST.md`, `NORTH.md`, `VO-*`, `ISLANDS*`, `PETRO-*`, `MARS-BRIEF.md`, `SW-BRIEF.md`, `SOUTH-EXTENSION.md`, `WEST-*`, `SEVKABEL-CULTURE.md`, `INTEGRATION.md`, the island / VO json in `docs/reference/`, the 127 `tools/landmarks<Dropped>-*` tools, `islands*`, `yelagin-*`, `kamenny-*`, `petrovsky-*`, `krestovsky-*`, `vo-*`, `gaps-*` ...).
+* The docs, tools and reference data of the dropped areas were deleted with them (`docs/EAST.md`, `NORTH.md`, `VO-*`, `ISLANDS*`, `PETRO-*`, `MARS-BRIEF.md`, `SW-BRIEF.md`, `SOUTH-EXTENSION.md`, `WEST-*`, `SEVKABEL-CULTURE.md`, `INTEGRATION.md`, the island / VO json in `docs/reference/`, the 127 `tools/landmarks<Dropped>-*` tools, `islands*`, `yelagin-*`, `kamenny-*`, `petrovsky-*`, `krestovsky-*`, `vo-*`, `gaps-*` ..., and later the dev tools that imported deleted modules: `props-vo*`, `props-petro`, `props-islands`, `props-audit-vo|petro`, `props-harbour-probe*`, `environment-{islands-probe,petro-water,karpovka-west,vo-seal,vo-walk,vo-water}`, `traffic-vo-*`, `traffic-decks`, `water-rings`).
   `docs/research/` and `docs/images/` of the original project were never copied here: references to them in the older docs are historical.
 
 ## 3. How the data was clipped
@@ -57,7 +57,7 @@ Exactly **seven stations** (all with real halls, vestibules, escalators and tunn
 Nevsky Prospekt (2) and Admiralteyskaya (5). The four transfers between them are internal (Vosstaniya - Mayakovskaya, Vladimirskaya - Dostoevskaya, Gostiny Dvor - Nevsky Prospekt); Admiralteyskaya has none.
 
 **Line ends ("option C").** Each line keeps exactly one out-of-strip neighbour per end as a `built: false` station served by the existing generic hall, which relabels itself with the neighbour's name and acts as the terminus
-(doors stay open, the exit shows "Выход временно закрыт", the player can board the opposite track and ride back). The lines are therefore
+(doors stay open, the exit shows "Выход закрыт / Эта станция за пределами карты", the player can board the opposite track and ride back). The lines are therefore
 
 | Line | Stations (real halls in capitals) |
 |---|---|

@@ -8,6 +8,7 @@
 //                the Winter Palace front, portrait painters (landmarksG.spots.painters), the Hermitage ticket queue in the Great Courtyard, the police pair.
 //   Gardens:     Alexander Garden fountain, Admiralty garden couples, St Isaac's (the crowd anchors of landmarksJ + pigeon feeders), the Catherine garden (chess players on the benches, the artists at the
 //                monument), the Horseman, wedding parties (Alexander Garden fountain, Horseman, Palace Bridge landing).
+//   Bridges:     the Palace Bridge (nav.longs, deck height): tourists at the railing of both pavements; the walkers of the generic crowd use the same pavements (the 'k' chains of nav.js).
 //   Streets:     Gostiny Dvor (shoppers in the arcade, the metro stairs, the excursion tout), vendors with customers at the kiosks / carts of the props module, couples at the canal descents, the cosplay group.
 // Nobody carries a flag (guides: a plain coloured umbrella); no sounds.
 import { makeSpec } from './chars.js';
@@ -94,6 +95,20 @@ export function makeHelpers(ctx, nav, sim, S, H, scale = 1) {
     const out0 = toWorld(s, 0, v + side), c0 = toWorld(s, 0, v), face = Math.atan2(out0.x - c0.x, out0.z - c0.z);
     return crowd(list, scene, { yaw: () => face, gest: o.gest || [G.WATCH, G.PHOTO, G.PHOTO, G.SELFIE, G.POINT, G.PHONE, G.NONE], jit: 0.6 });
   };
+  /** people at the railing of a long bridge deck (nav.longs: the Palace Bridge): side -1 / +1, u range in metres from the first bank (south) end, looking outward; only inside the play area */
+  const railing = (id, side, k, u0, u1, scene, o = {}) => {
+    const s = (nav.longs || []).find((q) => q.id === id); if (!s) return [];
+    const list = [];
+    for (let t = 0; t < k * 14 && list.length < k; t++) {
+      const u = Math.max(4, u0) + R() * (Math.min(s.len - 4, u1) - Math.max(4, u0));
+      for (let inset = 0.45; inset < Math.min(1.5, s.v1 - s.v0 - 0.3); inset += 0.12) {                 // as close to the railing as the colliders allow
+        const v = side * (s.v1 - inset), x = s.ax + s.ux * u - s.uz * v, z = s.az + s.uz * u + s.ux * v; if (!nav.inPlay(x, z, 0) || !free(x, z, 0.26)) continue;
+        if (!list.some((p) => dist(p[0], p[1], x, z) < (o.sp ?? 1.6))) list.push([x, z]); break;
+      }
+    }
+    const face = Math.atan2(-s.uz * side, s.ux * side);
+    return crowd(list, scene, { yaw: () => face, gest: o.gest || GW, jit: 0.5, dur: [60, 500] });
+  };
   const stairNear = (key, x, z, rmax = 60) => { let best = null, bd = rmax; for (const q of (sv.environment && sv.environment.quay && sv.environment.quay.allStairs) || []) { if (key && q.key !== key) continue; const d = dist(q.x, q.z, x, z); if (d < bd) { bd = d; best = q; } } return best; };
   /** a queue that starts at the top of a descent (x, z) and runs inland along the stair axis */
   const queueAt = (q, k, scene) => {                                  // a crowd waiting round the top landing of a descent (the flight and the landing are keep-outs: the people stand on the quay beside it)
@@ -107,14 +122,14 @@ export function makeHelpers(ctx, nav, sim, S, H, scale = 1) {
     standNear(br, q[0], q[1], plan.yaw, [G.POSE, G.WAVE, G.POSE], 1e6); standNear(gr, q[0] + Math.cos(plan.yaw) * 0.8, q[1] - Math.sin(plan.yaw) * 0.8, plan.yaw, [G.POSE, G.NONE, G.POSE], 1e6); br.standG = [G.POSE, G.WAVE, G.POSE]; gr.standG = [G.POSE, G.NONE]; count('wedding-w'); count('wedding-w');
     plan.pos.forEach((p, i) => { const b = mk({ role: i === 0 ? 'walk' : 'guest' }, scene + '-wedding', P.P_STROLL); standNear(b, p[0], p[1], lookAt(p[0], p[1], q[0], q[1]), i === 0 ? [G.PHOTO] : [G.TALK, G.PHONE, G.WAVE, G.NONE], rr(100, 500)); b.standG = i === 0 ? [G.PHOTO] : [G.TALK, G.PHONE, G.WAVE, G.NONE]; count('wedding-w'); });
   }
-  return { n, pick, standNear, freeNear, roleOf, spots, crowd, couple, guided, show, parapet, stairNear, queueAt, wedding, TOUR_MIX };
+  return { n, pick, standNear, freeNear, roleOf, spots, crowd, couple, guided, show, parapet, railing, stairNear, queueAt, wedding, TOUR_MIX };
 }
 
 export function addWest(ctx, nav, sim, S, H) {
   const { R, rr, count } = S, N = nav.N, P = S.P, sv = ctx.services;
   const { mk, fixed, free, lookAt, dist, openSpot, arcPlan } = H;
   const hh = makeHelpers(ctx, nav, sim, S, H, (S.west && S.west.scale) || 1);
-  const { n, pick, standNear, freeNear, roleOf, spots, crowd, couple, guided, show, parapet, stairNear, queueAt, wedding } = hh;
+  const { n, pick, standNear, freeNear, roleOf, spots, crowd, couple, guided, show, parapet, railing, stairNear, queueAt, wedding } = hh;
   const out = { places: {}, failed: [] };
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   out.ms = {};
@@ -244,6 +259,9 @@ export function addWest(ctx, nav, sim, S, H) {
     wedding(h.x, h.z, 'horseman', (h.ring || 13) + 4, 28);
   });
   place('weddings', () => { wedding(-2335, -495, 'alex', 11, 22); const q = stairNear('neva', -2407, -822, 40); if (q) wedding(q.x - q.tx * 3, q.z - q.tz * 3, 'palacebridge', 0, 14); });
+
+  // the Palace Bridge (nav.longs; everybody at deck height): tourists at the railing of both pavements looking at the Neva, the Admiralty and the Peter and Paul Fortress (the deck runs on past the play border)
+  place('palace-railing', () => { for (const side of [1, -1]) railing('palace', side, Math.max(1, Math.round(n(5))), 30, 150, 'palace-railing'); });
 
   // ============================================================================== STREETS
   place('gostiny', () => {

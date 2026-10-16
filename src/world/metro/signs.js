@@ -246,15 +246,18 @@ function paintScheme(g, W, H, o, FONT) {
 }
 
 // ------------------------------------------------------------------ network map
-const MAP_W = 2048, MAP_H = 1536, SX = 1.55, MAP_OX = 10;
-const MAP_ROWS = { 3: { y: 300, up: true, room: 350, pivot: 'mayakovskaya', px: 466, dx: 62 }, 2: { y: 560, up: true, room: 310, pivot: 'nevsky', px: 404, dx: -44 }, 1: { y: 800, up: false, room: 310, pivot: 'vosstaniya', px: 466, dx: 48 },
-  5: { y: 1060, up: false, room: 282, pivot: 'admiralteyskaya', px: 370, dx: 62 }, 4: { y: 1300, up: false, room: 277, pivot: 'dostoevskaya', px: 520, dx: 72 } };
-/** [x, y] of every station on the 2048 x 1536 network map canvas (a strip layout, stretched to the canvas; the rows are pivoted on a built station so that the interchanges line up) */
+const MAP_W = 2048, MAP_H = 1536, SX = 4.7, MAP_OX = 10;
+const MAP_ROWS = { 3: { y: 300, up: true, room: 350, pivot: 'mayakovskaya', px: 186, dx: 62 }, 2: { y: 560, up: true, room: 310, pivot: 'nevsky', px: 124, dx: -38, dxL: -20 }, 1: { y: 800, up: false, room: 310, pivot: 'vosstaniya', px: 186, dx: 48 },
+  5: { y: 1060, up: false, room: 282, pivot: 'admiralteyskaya', px: 90, dx: 62 }, 4: { y: 1300, up: false, room: 277, pivot: 'dostoevskaya', px: 234, dx: 72 } };
+// Strip layout (3-4 stations per line): SX 4.7 and px counted from the left margin spread the rows over x ~140..1450 of the canvas (the legend column starts at 1730; the rotated labels end by ~1620).
+// The interchange columns stay vertical: Mayakovskaya = Vosstaniya (px 186), Gostiny Dvor = Nevsky (px 124 = 186 - dx of row 3), Vladimirskaya = Dostoevskaya (px 234 = 186 + dx of row 1).
+// Row 2 has its own left step `dxL` (Sennaya, right of the pivot) so that neither label of Sennaya / Gorkovskaya crosses a vertical connector. Checked in node with estimated label rectangles: no overlaps.
+/** [x, y] of every station on the 2048 x 1536 network map canvas (the rows are pivoted on a built station so that the interchanges line up) */
 export function networkMapXY() {
   const xy = {};
   for (const line of Object.keys(MAP_ROWS)) {
     const L = lineStations(line), c = MAP_ROWS[line], p = c.pivot ? L.findIndex((s) => s.id === c.pivot) : 0;
-    L.forEach((s, i) => { xy[s.id] = [MAP_OX + (c.pivot ? c.px + (i - p) * c.dx : c.x0 + i * c.dx) * SX, c.y]; });
+    L.forEach((s, i) => { xy[s.id] = [MAP_OX + (c.pivot ? c.px + (i - p) * (i < p && c.dxL !== undefined ? c.dxL : c.dx) : c.x0 + i * c.dx) * SX, c.y]; });
   }
   return xy;
 }

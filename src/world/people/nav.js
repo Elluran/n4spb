@@ -4,7 +4,7 @@
 //   * the routing graph: nodes on the generated pavement centrelines (streets.sidewalks, every ~3 m), the mapped footways (streets.paths), a LATTICE of open-space nodes
 //     (3 m) on every walkable cell near the avenue / the hot spots (pavements, squares, forecourts: this is what makes the Petersburg pavements one connected network, the
 //     sidewalk strips alone are broken at every junction mouth), the zebra crossings (streets.crosswalks: one edge kerb to kerb, flagged with the crossing index so that the
-//     simulation can wait for pedState), the Anichkov Bridge pavements, and connectors to the building entrances, benches, bus stops, metro doors and photo spots.
+//     simulation can wait for pedState), the Anichkov Bridge pavements, the pavements of the Palace Bridge (nav.longs: a node chain per pavement, joined to the Palace Embankment), and connectors to the building entrances, benches, bus stops, metro doors and photo spots.
 //     The station (hall, forecourt, gates, apron, platforms with ramps) is added by station.js through the same node / edge helpers.
 //   * obstacle colliders: the static colliders of ctx.physics (trunks, lamp posts, benches, columns, bollards, shelters, walls ...) in a grid, with the same resolution maths as
 //     core/physics.js (pushOut) so that an NPC is blocked by exactly what blocks the player (the big platform decks are no obstacles, they are floors).
@@ -88,6 +88,28 @@ export function buildNav(ctx, cfg = {}) {
   // plaza / plank band (the asphalt band of a road bridge is a carriageway like any other: the streets cover decides, people cross it on the zebras)
   const WLIFT = { asphalt: 0, pave: 0.12, lpave: 0.15, sett: 0.02, plaza: 0.1, plank: 0, slab: 0 }, WEST_X = -600;
   const bdY = svc.bridges && svc.bridges.deckY;
+  // the LONG Neva bridge of the strip: the Palace Bridge (bridges/palace.js, 255 m; the first ~175 m lie inside the play area) is no site of bridges/sites.js: its axis comes from services.bridges.spans
+  // ({ id, a, b, hw }), the pavement band |v| (barrier kerb .. railing) from LBAND below (the band of the full-city people/petroarea.js; the other long bridges of that list lie outside the strip).
+  // nav.longs = [{ id, ax, az, ux, uz, len, hw, v0, v1 }]
+  const LBAND = { palace: [11.3, 13.85] }, longs = [];
+  for (const s of ((svc.bridges && svc.bridges.spans) || [])) {
+    const b = LBAND[s.id]; if (!b || !s.a || !s.b) continue;
+    const dx = s.b.x - s.a.x, dz = s.b.z - s.a.z, len = hyp(dx, dz); if (!(len > 5)) continue; const m = s.hw + 3;
+    longs.push({ id: s.id, ax: s.a.x, az: s.a.z, ux: dx / len, uz: dz / len, len, hw: s.hw, v0: b[0], v1: b[1], x0: Math.min(s.a.x, s.b.x) - m, x1: Math.max(s.a.x, s.b.x) + m, z0: Math.min(s.a.z, s.b.z) - m, z1: Math.max(s.a.z, s.b.z) + m });
+  }
+  nav.longs = longs;
+  const LD = { s: null, u: 0, v: 0 };
+  /** the long deck under (x, z): LD = { s, u, v } (a shared record) or null; pad widens the deck sideways */
+  const longDeck = (x, z, pad = 0.3) => {
+    for (let i = 0; i < longs.length; i++) {
+      const s = longs[i]; if (x < s.x0 || x > s.x1 || z < s.z0 || z > s.z1) continue;
+      const dx = x - s.ax, dz = z - s.az, u = dx * s.ux + dz * s.uz; if (u < -1 || u > s.len + 1) continue;
+      const v = -dx * s.uz + dz * s.ux; if (v > s.hw + pad || v < -s.hw - pad) continue;
+      LD.s = s; LD.u = u; LD.v = v; return LD;
+    }
+    return null;
+  };
+  nav.longDeck = longDeck;
   const westDeck = (x, z) => {
     if (x > WEST_X) return null;
     const y = bdY ? bdY(x, z) : null;
@@ -97,6 +119,10 @@ export function buildNav(ctx, cfg = {}) {
         let kind = 'pave'; for (const zz of s.zones) if (q.v >= zz[0] && q.v <= zz[1]) { kind = zz[2]; break; }
         return { s, kind, y, foot: s.kind === 'foot' };
       }
+    }
+    if (longs.length) {
+      const d = longDeck(x, z);
+      if (d && y !== null && y !== undefined && Number.isFinite(y)) { const s = d.s, av = Math.abs(d.v); return { s, kind: av >= s.v0 && av <= s.v1 ? 'lpave' : 'asphalt', y, foot: false, long: true }; }
     }
     return null;
   };
@@ -114,10 +140,27 @@ export function buildNav(ctx, cfg = {}) {
   /** the two granite pavements of the bridge deck (3 m each, outside the roadway |v| < 15.95 and its kerb) */
   const deckPave = (x, z, m = 0) => { const q = bridgeUV(x, z), v = Math.abs(q.v); return Math.abs(q.u) < 29.3 && v > 16.25 + m && v < 18.65 - m; };
   nav.onDeck = onDeck; nav.bridgeUV = bridgeUV; nav.deckPave = deckPave;
+  // the walking corridor of a long-bridge pavement: from the barrier kerb (v0 = 11.3) to the axes of the lamp standards on the railing line (|v| 13.15 - 13.3, r 0.28; the railing cores themselves are no obstacles, see below):
+  // a walker pushed outward past a lamp axis is pinned between the lamp and the deck edge, so the pavement beyond v0 + LANE_W = 13.0 is no ground (nav.blocked) and no place for a follower (nav.deepAt);
+  // the chain of nodes runs at v0 + LANE_C, in the middle of the corridor
+  const LANE_W = 1.7, LANE_C = 0.8;
+  const offLane = (x, z) => { const d = longDeck(x, z, 0); return !!d && d.u > 3 && Math.abs(d.v) > d.s.v0 + LANE_W; };          // (u > 3: the first lamp stands at u 4; the pavement stubs of the bank run into the deck head)
   // deep ground anywhere in the west (a quay edge without a parapet, a moat, a basin): the side-by-side place of a FOLLOWER must not lie there (sim.js stepFollower)
   const deepMemoW = new Map();
-  nav.deepAt = (x, z) => { if (x > WEST_X) return false; const k = Math.round(x * 2) * 16384 + Math.round(z * 2); let v = deepMemoW.get(k); if (v === undefined) { const h = ctx.physics.groundHeight(x, z, 0.6, false); v = Number.isFinite(h) && h < -0.9 && !westDeck(x, z) && !onDeck(x, z, 0.3) ? 1 : 0; deepMemoW.set(k, v); } return v === 1; };
-  nav.blocked = (x, z) => blockedPoly(x, z) || (water(x, z) && !onDeck(x, z, 0.3));
+  nav.deepAt = (x, z) => { if (x > WEST_X) return false; if (longs.length && offLane(x, z)) return true; const k = Math.round(x * 2) * 16384 + Math.round(z * 2); let v = deepMemoW.get(k); if (v === undefined) { const h = ctx.physics.groundHeight(x, z, 0.6, false); v = Number.isFinite(h) && h < -0.9 && !westDeck(x, z) && !onDeck(x, z, 0.3) ? 1 : 0; deepMemoW.set(k, v); } return v === 1; };
+  // beside the long bridge (within 40 m of the deck) the ground can lie far below the street without the water polygon covering it (the bank sliver between the deck edge and the water at the bridge head, the quay
+  // descents beside it, the rim outside the railing): no standing place (the centre and the corners of the half-metre cell are probed: no walkable sliver at an open edge)
+  const deepMemoB = new Map();
+  const nearLong = (x, z, m) => {
+    for (let i = 0; i < longs.length; i++) { const s = longs[i], dx = x - s.ax, dz = z - s.az, u = dx * s.ux + dz * s.uz; if (u < -m || u > s.len + m) continue; const v = -dx * s.uz + dz * s.ux; if (v < s.hw + m && v > -s.hw - m) return true; }
+    return false;
+  };
+  const deepB = (x, z) => {
+    if (!nearLong(x, z, 40)) return false; if (offLane(x, z)) return true; const qx = Math.round(x * 2), qz = Math.round(z * 2), k = qx * 16384 + qz; let v = deepMemoB.get(k);
+    if (v === undefined) { v = 0; for (const [ox, oz] of [[0, 0], [0.25, 0.25], [-0.25, 0.25], [0.25, -0.25], [-0.25, -0.25]]) { const px = qx / 2 + ox, pz = qz / 2 + oz, h = ctx.physics.groundHeight(px, pz, 0.6, false); if (Number.isFinite(h) && h < -0.9 && !westDeck(px, pz)) { v = 1; break; } } deepMemoB.set(k, v); }
+    return v === 1;
+  };
+  nav.blocked = longs.length ? (x, z) => blockedPoly(x, z) || (water(x, z) && !onDeck(x, z, 0.3)) || (x < WEST_X && deepB(x, z)) : (x, z) => blockedPoly(x, z) || (water(x, z) && !onDeck(x, z, 0.3));
 
   mark('water+deck');
   // ------------------------------------------------------------------ carriageways and zebra corridors
@@ -140,7 +183,9 @@ export function buildNav(ctx, cfg = {}) {
   };
   const ringHasP = (o, x, z) => { let ins = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const a = o[i], b = o[j]; if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) ins = !ins; } return ins; };
   nav.fastCover = fastCover;
-  const covAt = (x, z) => (net && net.grid ? fastCover(x, z) : net && net.cover ? net.cover(x, z, NOP) : (L.isOnRoad(x, z, 0.1) ? 1 : -5));
+  const covBase = (x, z) => (net && net.grid ? fastCover(x, z) : net && net.cover ? net.cover(x, z, NOP) : (L.isOnRoad(x, z, 0.1) ? 1 : -5));
+  // on a long bridge the whole deck between the barrier kerbs is the carriageway (the streets cover leaves the tram / median strip of a deck open)
+  const covAt = longs.length ? (x, z) => { if (x > WEST_X) return covBase(x, z); const d = longDeck(x, z); if (!d) return covBase(x, z); const c = covBase(x, z), m = d.s.v0 - 0.3 - Math.abs(d.v); return m > c ? m : c; } : covBase;
   const onAsphalt = (x, z, m = 0.12) => covAt(x, z) > -m;
   // OSM maps a zebra over a two-carriageway street as two collinear halves that meet in the middle of the asphalt (Nevsky has no refuge): merge such pairs into ONE crossing
   let cws;
@@ -218,7 +263,11 @@ export function buildNav(ctx, cfg = {}) {
   /** a guard rail / chain collider (streets/barriers.js, `fence`) lies in the 6 m cell of (x, z): the cheap pre-test of the walkers' lateral offsets (sim.js: lane, follower side) before they ask segBlocked */
   nav.fenceNear = (x, z) => fenceCells.has(cellKey(Math.floor(x / OC), Math.floor(z / OC)));
   let nKeep = 0;
-  for (const it of ctx.physics.items) {
+  // on a long bridge the colliders are measured from the deck: the piers / abutments below it are no obstacles, the lamp standards, barrier kerbs and railings ON it are
+  const deckBase = (it) => { const d = longDeck(it.cx, it.cz, 6); if (!d || !bdY) return 0; const s = d.s, u = clamp(d.u, 0, s.len), v = clamp(d.v, -s.hw, s.hw), y = bdY(s.ax + s.ux * u - s.uz * v, s.az + s.uz * u + s.ux * v); return y !== null && Number.isFinite(y) ? y : 0; };
+  for (const it0 of ctx.physics.items) {
+    let it = it0;
+    if (longs.length && it0.cx < WEST_X && (it0.type === 'cyl' || it0.type === 'box')) { const yb = deckBase(it0); if (yb > 0.3) { if (it0.y1 <= yb + 0.3) continue; it = { ...it0, y0: it0.y0 - yb, y1: it0.y1 - yb }; } }
     const west = it.cx < WEST_X;
     if (it.type === 'cyl') { if ((it.y1 <= 0.45 && !(west && it.r >= 0.9 && it.y1 > 0.2)) || it.y0 >= 1.7) continue; addObst({ t: 0, cx: it.cx, cz: it.cz, r: it.r }, it.cx - it.r, it.cx + it.r, it.cz - it.r, it.cz + it.r); }
     else if (west && it.type === 'walk' && it.y0 < 0.6 && (it.top >= 0.25 || (it.top <= -0.25 && it.top >= -3.7)) && !(it.top <= 0.46 && it.top > 0 && inColonnade(it.cx, it.cz, 41.5, 58.5))) {
@@ -434,7 +483,7 @@ export function buildNav(ctx, cfg = {}) {
         const x = gx * LS + 0.37 * Math.sin(gz * 12.9898) , z = gz * LS + 0.37 * Math.sin(gx * 78.233);     // a small fixed jitter breaks the regular rows
         const zw = zoneW(x, z); if (zw < LMIN) continue;
         if (x < WEST_X && zw < 0.55 && ((gx + gz) & 1)) continue;                                         // quiet parts of the west: a checkerboard (the diagonal edges still join it)
-        if (inBuilding(x, z) || blockedPoly(x, z) || water(x, z)) continue;
+        if (inBuilding(x, z) || blockedPoly(x, z) || water(x, z) || (longs.length && x < WEST_X && longDeck(x, z))) continue;      // (the long bridge gets explicit pavement chains)
         { const c = covAt(x, z); if (c > -0.5 || (c <= -49 && !nearSw(x, z, 5.5) && !inArea(x, z) && !deckWalk(x, z) && !inPark(x, z) && !inPassage(x, z) && !area.walk(x, z))) continue; }
         if (nav.obstDist(x, z, 0.6) < 0.42) continue;
         if (x < WEST_X) { const h = ctx.physics.groundHeight(x, z, 0.6, false); if (Number.isFinite(h) && (h < -0.3 || h > 0.5) && !deckWalk(x, z)) continue; }   // steps / stairs down / sunk areas are not street level
@@ -519,10 +568,11 @@ export function buildNav(ctx, cfg = {}) {
 
   // ------------------------------------------------------------------ attach a point to the main graph with a short edge; returns the new node id or -1
   const attach = (x, z, y, kind, maxD = 14, crowd = 0.35) => {
-    if (!walkable(x, z) || nav.obstDist(x, z, 0.6) < 0.3) return -1;
+    if (!walkable(x, z) || nav.blocked(x, z) || nav.obstDist(x, z, 0.6) < 0.3) return -1;          // (blocked: the railing rim of the long bridge and the deep ground beside it are no standing place)
     const cand = []; near(x, z, maxD, (j, d) => { if (mainOK(j) && N.k[j] !== 'c') cand.push([j, d]); }); cand.sort((p, q) => p[1] - q[1]);
     let id = -1, k = 0;
     let tried = 0;
+    if (longs.length && x < WEST_X && nav.surfaceY && longDeck(x, z)) y = nav.surfaceY(x, z, y);          // an access node (bench, stop, photo spot) on a long bridge stands at deck height
     for (const [j] of cand) {
       if (k >= 2 || tried++ > 8) break;
       if (edgeOK(x, z, N.x[j], N.z[j]) && (N.k[j] !== 'a' || segFree(x, z, N.x[j], N.z[j], crowd))) { if (id < 0) { id = addNode(x, z, y, kind); gridAdd(id); comp[id] = main; } addEdge(id, j, 0, -1, 0, 1.0); k++; }
@@ -533,9 +583,9 @@ export function buildNav(ctx, cfg = {}) {
   const gridNode = (x, z, y, kind, g = -1) => { const id = addNode(x, z, y, kind, g); gridAdd(id); comp[id] = main; return id; };
 
   mark('components');
-  if (FINAL) {                                                    // the Anichkov chains and the node heights are in the bake
+  if (FINAL) {                                                    // the Anichkov / long-bridge chains and the node heights are in the bake
     nav.bridge = { nodes: Array.from(cached.bridgeNodes) }; nav.stats.bridgeNodes = nav.bridge.nodes.length;
-    nav.stats.crossings = cached.stats.crossings; groupId = cached.groupId;
+    nav.longK = new Set(cached.longK || []); nav.stats.longDecks = cached.stats.longDecks ?? ''; nav.stats.crossings = cached.stats.crossings; groupId = cached.groupId;
   } else {
   // ------------------------------------------------------------------ the Anichkov Bridge: both pavements (granite slabs, 3 m wide) on the deck hump, joined to the streets at the abutments
   nav.bridge = { nodes: [] };
@@ -560,12 +610,37 @@ export function buildNav(ctx, cfg = {}) {
     // cross links on the deck are the zebra crossings of the streets (the bridge ways are part of the street graph)
   }
   nav.stats.bridgeNodes = nav.bridge.nodes.length;
+  // ------------------------------------------------------------------ the long Neva bridge (the Palace Bridge): a chain of nodes on each pavement, joined to the bank graph at the bank end.
+  // The chain stops at the edge of the play area (the deck runs on to the north-west, past the border): no walker is routed off the playable part
+  nav.longK = new Set(); nav.stats.longDecks = '';
+  for (const s of longs) {
+    const lanes = [-(s.v0 + LANE_C), s.v0 + LANE_C]; let joined = ''; const nn0 = N.x.length;
+    for (const v of lanes) {
+      const g = groupId++, ids = [], n = Math.max(2, Math.ceil(s.len / 3)); let prev = -1;
+      for (let i = 0; i <= n; i++) {
+        const u = s.len * i / n, x = s.ax + s.ux * u - s.uz * v, z = s.az + s.uz * u + s.ux * v;
+        if (!inPlay(x, z, 0)) { prev = -1; continue; }
+        if ((u < 0 || u > s.len) && rawWater(x, z)) continue;
+        if (inBuilding(x, z) || onAsphalt(x, z, 0.2)) { prev = -1; continue; }
+        const id = gridNode(x, z, PAVE, 'k', g); ids.push(id); nav.longK.add(id); if (prev >= 0) addEdge(prev, id, 0, -1, 0, 1.0); prev = id;
+      }
+      if (ids.length < 2) continue;
+      for (const [id, dir] of [[ids[0], -1], [ids[ids.length - 1], 1]]) {
+        // the bank end: the nearest pavement / lattice nodes beyond the deck end (within 18 m), nothing solid and no asphalt between (the far end lies at the play border: nothing there to join)
+        const cand = []; near(N.x[id], N.z[id], 18, (j, d) => { const kj = N.k[j]; if (kj === 'k' || kj === 'c' || nav.longK.has(j)) return; const along = ((N.x[j] - N.x[id]) * s.ux + (N.z[j] - N.z[id]) * s.uz) * dir; if (along > -3) cand.push([j, d + (mainOK(j) ? 0 : 6)]); }); cand.sort((p, q) => p[1] - q[1]);
+        let k = 0; for (const [j] of cand) { if (k >= 2) break; if (edgeOK(N.x[id], N.z[id], N.x[j], N.z[j], false, 1.2)) { addEdge(id, j, 0, -1, 0, 1.15); k++; } }
+        joined += k;
+      }
+    }
+    nav.stats.longDecks += s.id + ':' + (N.x.length - nn0) + '/' + joined + ' ';
+  }
   }
   nav.nodeY = (i) => N.y[i];
   /** the standing height at (x, z): the pavement 0.12 / the given y, or the humped deck of the Anichkov Bridge + 0.12 */
   // feet height from the REAL walkable surface: the humped Anichkov deck (landmarksC.bridge.deckY, + the 0.12 m granite pavement) first, then physics.groundHeight (walk boxes / ramps /
   // steps, roofs excluded) when it is raised above the terrain; otherwise the given y (pavement 0.12, hall 0.03 ...)
   nav.surfaceY = (x, z, y) => {
+    if (longs.length && x < WEST_X) { const wd = westDeck(x, z); if (wd && wd.long) return wd.y + (wd.foot ? 0.02 : WLIFT[wd.kind] || 0); }       // the long Neva bridge: the deck itself
     const dy = bridge && bridge.deckY ? bridge.deckY(x, z) : null;
     if (dy != null && Number.isFinite(dy)) { if (x < WEST_X) { const wd = westDeck(x, z); if (wd) return wd.y + (wd.foot ? 0 : WLIFT[wd.kind] || 0); } return dy + 0.12; }
     if (onDeck(x, z, 0.3)) { const h = ctx.physics.groundHeight(x, z, 2.0, false); return Number.isFinite(h) ? h + 0.12 : y; }
@@ -579,8 +654,8 @@ export function buildNav(ctx, cfg = {}) {
     N: { x: new Float64Array(N.x), z: new Float64Array(N.z), y: new Float64Array(N.y), k: N.k, g: new Float64Array(N.g) },
     edges: Object.fromEntries(['a', 'b', 'len', 'kind', 'cid', 'cost'].map(key => [key, E.columns[key].slice(0, E.length)])),
     cws, groupId, nSidewalk, nPolyEnd, latList: new Uint32Array(latList), final: 1,
-    comp: Int32Array.from(comp), compSize: Float64Array.from(compSize), nComp, main, bridgeNodes: Uint32Array.from(nav.bridge.nodes),
-    stats: { crossings: nav.stats.crossings },
+    comp: Int32Array.from(comp), compSize: Float64Array.from(compSize), nComp, main, bridgeNodes: Uint32Array.from(nav.bridge.nodes), longK: Uint32Array.from(nav.longK),
+    stats: { longDecks: nav.stats.longDecks, crossings: nav.stats.crossings },
     // the kerb-side test of the bridging crossings (below: covAt >= -3.5 for the pavement / lattice nodes) is a static property of the node
     kerbCov: (() => { const n = Math.min(N.x.length, nPolyEnd + latList.length + 1), a = new Uint8Array(n); for (let i = 0; i < n; i++) { const k = N.k[i]; if ((k === 'a' || k === 's') && covAt(N.x[i], N.z[i]) >= -3.5) a[i] = 1; } return a; })(),
   });

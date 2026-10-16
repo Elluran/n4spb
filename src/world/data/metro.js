@@ -26,7 +26,7 @@ export const LINES = {
 
 // Ordered along each line: [out-of-strip neighbour, the in-strip stations..., out-of-strip neighbour]. The map is cut down to one strip (Moscow station - Nevsky - Admiralteyskaya), so only
 // 7 stations are real halls; each line end keeps ONE neighbour (built: false) that is served by the shared generic hall and is the terminus of a ride: the train arrives with open doors,
-// the exit is closed ("Выход временно закрыт"), the rider can board the opposite track and ride back. The real HOPS to the neighbours stay in the table below (real run times).
+// the exit is closed ("Выход закрыт"), the rider can board the opposite track and ride back. The real HOPS to the neighbours stay in the table below (real run times).
 // type: pylon | column | closed | vault | shallow; depth in metres below the street (OSM / Wikipedia ru).
 const S = (id, name, nameEn, depth, type, extra = {}) => ({ id, name, nameEn, depth, type, built: false, ...extra });
 export const STATIONS = {

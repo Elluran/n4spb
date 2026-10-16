@@ -106,9 +106,11 @@ export function populate(ctx, nav, sim, opts = {}) {
   }
   // ---- photographers at the Klodt groups, the obelisk and the sights: couples photograph each other, singles shoot the horses
   {
-    const take = (type, k) => { const free = nav.spots.filter((p) => p.type === type && p.taken < 0 && keep(p.x, p.z)); free.sort(() => R() - 0.5); return free.slice(0, k); };
-    for (const [type, k, role] of [['plinth', n(38), 'tourist'], ['obelisk', n(14), 'tourist'], ['monument', n(6), 'tourist'], ['view', n(18), 'tourist']]) {
-      for (const p of take(type, k)) {
+    // `share` caps the part of a type's free spots this pass may take: the plinth count (n(38)) was calibrated for the 48 Klodt spots of the full city, the strip has the 22 of the Anichkov Bridge, and the scripted
+    // guests of the plinths (the guided Asian tour group, the photo couples: vignettes.js) need free spots that this pass must leave
+    const take = (type, k, share = 1) => { const free = nav.spots.filter((p) => p.type === type && p.taken < 0 && keep(p.x, p.z)); free.sort(() => R() - 0.5); return free.slice(0, Math.min(k, Math.floor(free.length * share))); };
+    for (const [type, k, role, share] of [['plinth', n(38), 'tourist', 0.6], ['obelisk', n(14), 'tourist'], ['monument', n(6), 'tourist'], ['view', n(18), 'tourist']]) {
+      for (const p of take(type, k, share)) {
         const a = sim.spawn(makeSpec(R, { role }), { prefs: P_TOURIST, scene: 'photo-' + type }); p.taken = a.i;
         sim.standAt(a, p.x, p.z, p.yaw, [G.PHOTO, G.PHOTO, G.SELFIE, G.PHONE, G.LOOKAROUND, G.POINT], rr(12, 80), { type: 'spot', p }); count('photo');
       }
