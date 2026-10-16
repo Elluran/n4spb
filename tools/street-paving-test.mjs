@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {PavingCoverage} from '../src/world/streets/paving.js';
 import {buildNet} from '../src/world/streets/net.js';
+import * as L from '../src/world/layout.js';
 import {buildWalks} from '../src/world/streets/walks.js';
 import {MB} from '../src/world/streets/util.js';
 const area=p=>Math.abs(p.reduce((s,a,i)=>{const b=p[(i+1)%p.length];return s+a[0]*b[1]-b[0]*a[1];},0)/2);
@@ -10,7 +11,7 @@ assert.equal(c.take([[0,0],[4,0],[4,4],[0,4]]).reduce((n,p)=>n+area(p),0),16);
 assert.equal(c.take([[2,-1],[6,-1],[6,3],[2,3]]).reduce((n,p)=>n+area(p),0),10);
 assert.equal(c.take([[1,1],[2,1],[2,2],[1,2]]).length,0);
 const meshes=Object.fromEntries(['slab','strip','paver','ramp','skirt','paint'].map(k=>[k,new MB(true)]));
-const net=buildNet();
+const net=buildNet(L);
 buildWalks(net,meshes);
 // pavement faces (slab / strip / paver) covering the point (x,z)
 const owners=(x,z)=>{let count=0;

@@ -20,9 +20,8 @@ import { buildClutter } from './clutter.js';
 
 export function buildDetails(ctx, { root, M, info, styles, owned, net }) {
   const out = { triangles: 0, entrances: [], report: {} };
-  const P = ctx.L.WORLD.play;
-  // the margin of the data (beyond the play area + 50 m) only gets walls / cornices / decks / colliders
-  const near = info.filter((r) => r.st.ob.cx > P.x0 - 50 && r.st.ob.cx < P.x1 + 50 && r.st.ob.cz > P.z0 - 50 && r.st.ob.cz < P.z1 + 50);
+  // the margin of the data (beyond the play area + 50 m; the play area is the union of the eight rectangles) only gets walls / cornices / decks / colliders
+  const near = info.filter((r) => ctx.L.inPlay(r.st.ob.cx, r.st.ob.cz, -50));
   const run = (name, fn) => {
     const started = performance.now();
     if (ctx.recordBake) console.log(`[city-detail] ${name} start`);

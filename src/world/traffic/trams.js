@@ -19,21 +19,15 @@
 //   * TRAM LANES (sim.js, net.onRails): a car lane of a carriageway with two or more lanes that lies on the rails of a route for most of its length is left to the trams: no cars are
 //     seeded or born on it and a car only turns into it when it has no other way (the tram lanes of the Tuchkov Bridge, pr. Dobrolyubova, Sadovaya: a queue of cars on the rails would
 //     hold the tram for minutes).
-// Sources: docs/research/transport.md section 6 (red-white-grey one-section cars), the tram routes of 2026 (3 pl. Repina - pl. Lenina over the Trinity and Sampsonievsky bridges; 6 and 40
-// from Vasilievsky Island over the Tuchkov Bridge, pr. Dobrolyubova, Kronverksky pr., ul. Kuibysheva and the Sampsonievsky Bridge; ul. Chapaeva and Bolshaya Monetnaya carry no regular
-// service, the rails of ul. Lva Tolstogo neither: no trams there).
+// Sources: docs/research/transport.md section 6 (red-white-grey one-section cars), the tram route 3 of 2026 (the stretch Sadovaya - Gostiny Dvor - Italyanskaya - Mikhailovsky Castle - Letny Sad).
 import { ARCH, ROUTE_BY_REF } from './fleetdata.js';
 
-// terminals in map metres (track ends at the data edge; within 90 m): a = the Vyborg end of the Sampsonievsky Bridge (towards pl. Lenina / Tikhoretsky pr.)
+// terminals in map metres (track ends of the strip data, within 90 m). Route 3 runs on two different OSM ways, one per direction (the north twin of the southbound track lies outside the strip), so each direction is a line of its own:
+// 3a northbound Sadovaya - Apraksin Dvor - Gostiny Dvor - Italyanskaya - Mikhailovsky Castle - Letny Sad (2723 m, 4 stops), 3b southbound from the Mikhailovsky Castle back to Sadovaya (2008 m, 3 stops). Part of the rails (z > 290,
+// x -1777..-1456) lies in the void south of the data: the trams are born there, invisible. The builder prints '3b ... 1766 m short' / '3a ... 3 m short': expected, the terminals are within 90 m of a track end.
 export const TRAM_LINES = [
-  { refs: ['3'], a: [-430, -2860], b: [-1456, 280], headway: 190 },           // b = Sadovaya ulitsa at Apraksin Dvor: the rails leave the data there for 95 m (the notch between two map rectangles)
-  { refs: ['3'], a: [-1530, 341], b: [-3390, 1508], headway: 190 },           // ... and come back: Sennaya ploshchad - Sadovaya - ploshchad Repina (b)
-  // Vasilievsky Island (2026-10-09): the rails run on over Sredny pr. to Gavan (route 6: Gavanskaya st. - Maly pr. - Nalichnaya st. - the Nalichny Bridge, the rails end at (-6530, -2295) on the Dekabristov Island side) and to
-  // Detskaya st. (route 40: 22-23 liniya - Kosaya liniya, the terminus loop of three track ends round (-5455, 645)); the two routes share the trunk Sampsonievsky Bridge - Tuchkov Bridge - Sredny pr. up to the 22-23 liniya junction.
-  // stopTol: the tram stops of the island are mapped on one of the two tracks of a double line (3.6 m apart): a stop within 4.3 m of the route serves it. The tourist T1 (a ring Vasileostrovskaya - Zverinskaya - Gorkovskaya - Dobrolyubova
-  // pr. from the museum, OSM relation 11921539, running days unknown) needs a turn-back loop in the middle of the network and is NOT run (its boards exist in fleetdata.ROUTES).
-  { refs: ['6'], a: [-430, -2860], b: [-6530, -2295], headway: 450, stopTol: 4.3 },
-  { refs: ['40'], a: [-430, -2860], b: [-5455, 645], headway: 450, stopTol: 4.3 },
+  { refs: ['3'], a: [-1220, -1566], b: [-1777, 552], headway: 190 },
+  { refs: ['3'], a: [-891, -972], b: [-1777, 552], headway: 190 },
 ];
 const V_MAX = 11, V_MIN = 3.2, A_MAX = 0.95, B_SERVICE = 1.15, B_EMERGENCY = 4.2, LAT = 0.9;
 const hyp = Math.hypot;

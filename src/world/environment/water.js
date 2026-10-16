@@ -9,12 +9,8 @@
 // outward: no giant triangles, the shader uses world positions) and clipped against the SAME convex pieces as the ground holes, so its edge IS the quay line.
 import * as THREE from 'three';
 import { axisFor } from './ground.js';
-import { subtractConvex, bucketCuts } from './clip.js';
-import { waterCuts, parkPonds, POND_Y, bridgeZones } from './river.js';
-import { inIslands } from './islands.js';      // (owner A) the ground of the round-2 islands outside every older play rectangle
-import { triangulateRing } from './clip.js';
-import { registerLOD, FAR_L_LOW, RANGE_AUDIT } from '../../core/spatial.js';
-import * as L from '../layout.js';
+import { bucketCuts } from './clip.js';
+import { waterCuts } from './river.js';
 import { WATERWAYS, BRIDGE_ZONES, BRIDGE_SHADES } from './waterways.js';
 import { DIST_ATLAS_GLSL, distanceUniforms } from './distance-atlas.js';
 
@@ -32,21 +28,9 @@ const LOOK = {
   griboedov: ['#1b3a52', '#2c5272', '#4a5a48', '#3a4232', '#21383e', 1.15],
   moika: ['#1b3a58', '#2b5478', '#4a5c52', '#3a4434', '#22393f', 1.1],
   'winter-canal': ['#1a3752', '#2a4f70', '#485a48', '#38402f', '#20363c', 1.2],
-  kryukov: ['#1b3a52', '#2c5272', '#4a5a48', '#3a4232', '#21383e', 1.15],
-  admiralty: ['#1d3a52', '#2d5270', '#4a5c4a', '#3a4432', '#22393f', 1.2],
-  'nh-inner': ['#1d3a52', '#2d5270', '#4a5c4a', '#3a4432', '#22393f', 1.2],
   moat: ['#1d3a52', '#2d5270', '#4a5c4a', '#3a4432', '#22393f', 1.3],
   'swan-canal': ['#1d3a52', '#2d5270', '#4a5c4a', '#3a4432', '#22393f', 1.2],
   neva: ['#17356e', '#26509a', '#3c6a88', '#3a4a52', '#22404e', 0.55],
-  // the Petrograd side: the Zhdanovka is a quiet arm of the Malaya Neva (the Neva blue, a little greener and choppier), the Kronverk moat a still green-brown ditch
-  zhdanovka: ['#1a3866', '#28508c', '#42665e', '#3a4a4a', '#22404a', 0.8],
-  karpovka: ['#1a3866', '#28508c', '#42665e', '#3a4a4a', '#22404a', 0.8],
-  'kronverk-moat': ['#1f3a4c', '#2f5266', '#4a5c48', '#3a4432', '#22393f', 1.2],
-  // Vasilievsky Island: the Smolenka is a murky green-brown canal river, Galerny Harbour and the Shkipersky canal the same, a little bluer, the Kovsh a still basin
-  // (close to the Neva / Zhdanovka palette: the Smolenka joins the Malaya Neva without a step and a hard colour edge at the join would show; only the shallows near the banks turn green)
-  smolenka: ['#1a3a68', '#2a5690', '#46685c', '#3a4a46', '#22404a', 0.85],
-  gavan: ['#1b3b66', '#2b5788', '#46685a', '#3a4a46', '#22404a', 0.9],
-  kovsh: ['#1b3b66', '#2b5788', '#46685a', '#3a4a46', '#22404a', 1.0],
 };
 
 export function waterMaterial(ctx, field, opts = {}) {
@@ -180,15 +164,12 @@ export function waterMaterial(ctx, field, opts = {}) {
 
 export function buildWater(ctx, root, field) {
   const T = ctx.THREE || THREE;
-  // the water reaches the horizon of the Gulf in the WEST (the ground plane stops at the data box: its grid has no cells west of it): cells growing x1.35 out to x -17.6 km (the camera far plane is 7 km)
-  const west = (xs0) => { const lo = [], far = -17600; let r = xs0[0], st = 48; while (r > far) { st = Math.min(st * 1.35, 400); r = Math.max(far, r - st); lo.push(r); } return [...lo.reverse(), ...xs0]; };
-  const all = waterCuts(), xs = west(axisFor(field.box.x0, field.box.x1)), zs = axisFor(field.box.z0, field.box.z1), nx = xs.length - 1;
+  const all = waterCuts(), xs = axisFor(field.box.x0, field.box.x1), zs = axisFor(field.box.z0, field.box.z1), nx = xs.length - 1;
   const out = { bodies: 0, triangles: 0, meshes: [] };
   for (const key of Object.keys(WATERWAYS)) {
     const cutsAll = all.filter((c) => c.key === key && c.kind !== 'slope'); if (!cutsAll.length) continue;
-    const cuts = cutsAll.filter((c) => !c.raw), buckets = bucketCuts(cuts, xs, zs), y = WATERWAYS[key].water, P = [];
+    const buckets = bucketCuts(cutsAll, xs, zs), y = WATERWAYS[key].water, P = [];
     let n = 0;
-    for (const c of cutsAll) { if (!c.raw) continue; const poly = c.poly; for (let q = 1; q + 1 < poly.length; q++) { for (const v of [poly[0], poly[q + 1], poly[q]]) P.push(v[0], y, v[1]); n++; } }      // the island's open water (Gulf, Neva Bay, Malaya Neva tail): the cut triangles themselves
     for (const [k, list] of buckets) {
       const j = Math.floor(k / nx), i = k - j * nx, xa = xs[i], xb = xs[i + 1], za = zs[j], zb = zs[j + 1];
       for (const c of list) {
@@ -210,61 +191,7 @@ export function buildWater(ctx, root, field) {
     m.name = 'env-water-' + key; m.receiveShadow = false; m.castShadow = false; m.frustumCulled = false; ctx.noBatch(m); ctx.noOutline(m); root.add(m);
     out.bodies++; out.triangles += n; out.meshes.push(m);
   }
-  // ---- park ponds (river.js parkPonds: Alexander Park, the Zoo): a still surface POND_Y below the lawn, an earth / grass rim that slopes 1.1 m inward to 0.25 m under the water (mitred strip along the outline and
-  // round the island), and a collider along the outer edge (nobody walks on the water)
-  const ponds = parkPonds();
-  const DECKS = bridgeZones().filter((zn) => zn.petro && zn.deck), deckAt = (x, z) => DECKS.some((zn) => zn.test(x, z, 0.6));
-  if (ponds.length) {
-    const pondMaterial = waterMaterial(ctx, field, { key: 'kronverk-moat', wallH: 0.4, zones: [], cut: false });
-    for (const pd of ponds) {
-      const P = [], RP = [], RN = [];
-      for (const tri of triangulateRing(pd.o, pd.h)) for (const v of [tri[0], tri[2], tri[1]]) P.push(v[0], POND_Y, v[1]);
-      const rings = [[pd.o, 1], ...pd.h.map((h) => [h, -1])];
-      for (const [o, sgn] of rings) {
-        const m = o.length / 2; let a2 = 0; for (let i = 0; i < m; i++) { const j = (i + 1) % m; a2 += o[i * 2] * o[j * 2 + 1] - o[j * 2] * o[i * 2 + 1]; }
-        const side = (a2 > 0 ? 1 : -1) * sgn, nrm = [];            // toward the water: the interior of the outline, the exterior of an island
-        for (let i = 0; i < m; i++) { const j = (i + 1) % m, dx = o[j * 2] - o[i * 2], dz = o[j * 2 + 1] - o[i * 2 + 1], l = Math.hypot(dx, dz) || 1; nrm.push([-dz / l * side, dx / l * side]); }
-        const low = [];
-        for (let i = 0; i < m; i++) { const a = nrm[(i + m - 1) % m], b = nrm[i]; let mx = a[0] + b[0], mz = a[1] + b[1]; const ml = Math.hypot(mx, mz) || 1; mx /= ml; mz /= ml; const k = Math.min(2.5, 1 / Math.max(0.3, mx * b[0] + mz * b[1])); low.push([o[i * 2] + mx * 1.1 * k, o[i * 2 + 1] + mz * 1.1 * k]); }
-        for (let i = 0; i < m; i++) {
-          const j = (i + 1) % m, n = nrm[i], A = [o[i * 2], 0.0, o[i * 2 + 1]], B = [o[j * 2], 0.0, o[j * 2 + 1]], C = [low[j][0], POND_Y - 0.25, low[j][1]], D = [low[i][0], POND_Y - 0.25, low[i][1]];
-          const quad = side > 0 ? [A, C, B, A, D, C] : [A, B, C, A, C, D];
-          for (const v of quad) { RP.push(v[0], v[1], v[2]); RN.push(n[0] * 0.45, 0.89, n[1] * 0.45); }
-          if (sgn > 0 && L.inPlay((A[0] + B[0]) / 2, (A[2] + B[2]) / 2, -30)) {
-            const dx = B[0] - A[0], dz = B[2] - A[2], l = Math.hypot(dx, dz);
-            if (l > 0.05) {
-              // (islands 2026-10-14) the outline collider is left out under the deck of a bridge (the island canals, the Yelagin channels: the decks cross water now and a 0.4 m box along the bank would stop the walker on the deck): the edge is cut
-              // into pieces outside the deck zones (+ 0.6 m). The older districts keep the whole box.
-              const mx = (A[0] + B[0]) / 2, mz = (A[2] + B[2]) / 2, rot = Math.atan2(-dz, dx);
-              if (!inIslands(mx, mz) && !inIslands(A[0], A[2]) && !inIslands(B[0], B[2])) ctx.physics.addBox(mx, mz, l + 0.3, 0.4, rot, -2, 1.25);
-              else {
-                const tx = dx / l, tz = dz / l, st = 0.5, n = Math.max(1, Math.ceil(l / st)); let a0 = null;
-                for (let q = 0; q <= n; q++) {
-                  const t = Math.min(l, q * st), x = A[0] + tx * t, z = A[2] + tz * t, free = !deckAt(x, z);
-                  if (free && a0 === null) a0 = t;
-                  if ((!free || q === n) && a0 !== null) { const t1 = free ? t : Math.max(a0, t - st); if (t1 - a0 > 0.05) { const c = (a0 + t1) / 2; ctx.physics.addBox(A[0] + tx * c, A[2] + tz * c, t1 - a0 + (a0 === 0 ? 0.15 : 0) + (t1 === l ? 0.15 : 0), 0.4, rot, -2, 1.25); } a0 = null; }
-                }
-              }
-            }
-          }
-        }
-      }
-    const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(P, 3));
-    const nor = new Float32Array(P.length); for (let q = 1; q < nor.length; q += 3) nor[q] = 1; g.setAttribute('normal', new T.BufferAttribute(nor, 3)); g.computeBoundingSphere();
-    const pm = new T.Mesh(g, pondMaterial);
-    // Transparent ripple water retains per-pond sorting, with conservative
-    // bounds for shader displacement. A distant park no longer draws city-wide.
-    g.boundingSphere.radius += 1;
-    pm.name = 'env-water-pond-' + pd.id; pm.receiveShadow = false; pm.castShadow = false; ctx.noBatch(pm); ctx.noOutline(pm); root.add(pm);
-    if (RANGE_AUDIT) { pm.updateWorldMatrix(true, false); registerLOD(pm, FAR_L_LOW); }      // (plan item 1a: a park pond is sub-pixel beyond ~2 km; it drew city-wide. ?lrange=0 = old)
-    const gr = new T.BufferGeometry(); gr.setAttribute('position', new T.Float32BufferAttribute(RP, 3)); gr.setAttribute('normal', new T.Float32BufferAttribute(RN, 3)); gr.computeBoundingSphere();
-    const rim = new T.Mesh(gr, ctx.mat.toon('#62803f', { paint: 0.05, side: 'double', name: 'env-pond-rim' })); rim.name = 'env-pond-rim'; rim.receiveShadow = true; rim.castShadow = false; ctx.noOutline(rim); root.add(rim);
-    out.triangles += P.length / 9 + RP.length / 9;
-    }
-    out.bodies += ponds.length; out.ponds = ponds.map((pd) => pd.osm);
-  }
   return out;
 }
 import { clipHalf } from './clip.js';
 const clipInside = (poly, a, b) => clipHalf(poly, a, b, true);
-void subtractConvex;

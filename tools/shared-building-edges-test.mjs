@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { BUILDINGS } from '../src/world/data/city.js';
 import * as L from '../src/world/layout.js';
 import { edgeStartLookup } from '../src/world/lib/edge-start-lookup.js';
-const names=['B','C','D','E','G','J','K','Mars','Yusupov','Kamennoostrovsky'];
+const names=['B','C','D','E','G','J','K'];             // the house builders of the strip's landmark modules
 const norm=s=>s.replaceAll('\r','');
 const kits=await Promise.all(names.map(n=>import(`../src/world/landmarks${n}/kit.js`)));
 const houses=await Promise.all(names.map(n=>import(`../src/world/landmarks${n}/house.js`)));
@@ -41,7 +41,8 @@ for(let k=0;k<houses.length;k++){
 assert(yes>0&&no>0,'fixtures exercise visible and fully touching party walls');
 assert.equal(createHash('sha256').update(JSON.stringify(BUILDINGS)).digest('hex'),beforeBuildings,'source fields unchanged');
 const digest=hash.digest('hex');
-const EXPECTED='62bd44ac196914b7396092001b658aadc87bfca5de1e34acc9955be934407d8d';
+// RE-RECORDED for the Nevsky strip (the data holds only the eight regions and the golden covers the seven house builders of the kept landmark modules; the full-city golden was 62bd44ac...)
+const EXPECTED='baf7ac27e4c8681a990aeeb936eed5b9b3fdc73532ce51fb616c081b2c5cb937';
 if(!process.argv.includes('--record')){
  assert.equal(digest,EXPECTED,'exact pre-change geometry/classification golden');
  const {buildingEdgesAt}=await import('../src/world/lib/building-edges.js');

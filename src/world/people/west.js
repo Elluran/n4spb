@@ -25,7 +25,7 @@ export function makeHelpers(ctx, nav, sim, S, H, scale = 1) {
   const n = (base) => S.n(base) * scale;
   const { mk, fixed, free, lookAt, dist, openSpot, arcPlan } = H;
   const pick = (a) => a[Math.floor(R() * a.length)];
-  const standNear = (a, x, z, yaw, gest, dur, y) => { sim.standAt(a, x, z, yaw, gest, dur, null, 0, y ?? (nav.area && nav.area.y(x, z)) ?? 0.12); fixed(a); return a; };
+  const standNear = (a, x, z, yaw, gest, dur, y) => { sim.standAt(a, x, z, yaw, gest, dur, null, 0, y ?? 0.12); fixed(a); return a; };
   const freeNear = (x, z, rmax = 10, clr = 0.5) => {                     // the nearest free walkable spot around (x, z), spiralling out
     if (free(x, z, clr)) return [x, z];
     for (let r = 1; r <= rmax; r += 1) for (let k = 0; k < 12; k++) { const a = (k / 12) * TAU + r * 0.7, px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r; if (free(px, pz, clr)) return [px, pz]; }

@@ -1,5 +1,7 @@
 # City module API (`src/world/city.js`, `src/world/city/**`)
 
+> **Strip cut.** The API below is unchanged, but the district grammar of the Petrograd side, Vasilievsky Island, Krestovsky and the islands (`district.js` zones, `VO_MIX`, `known-data.js` blocks VO / Petro / Mars / SW, the `tools/city-known-*` and `tools/city-petro-audit.mjs` generators) was removed together with the regions it served: the strip keeps only the OLD / W1 / N1 / W2a..e records (see [STRIP.md](STRIP.md)). The sections about those districts are history; `docs/research/` is not part of this repository.
+
 Owner: the CITY specialist. Draws every OSM building / part that no landmark module owns (`lib/claims.js`; claimed but unowned buildings are drawn in the normal grammar with a terracotta
 blockout colour; owned ones are skipped but still act as occluders for the neighbours' party walls). Heights are `L.heightOf(b)` (cornice height); mansards / roofs are added on top.
 

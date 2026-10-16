@@ -1,4 +1,3 @@
-import { inParadny } from './landmarksTauride/paradny-surface.js';
 // STATUS (streets specialist): DONE - network, asphalt / markings / zebras / lane arrows, kerbs + granite pavements, Nevsky chain bollards, Ligovsky / square guard rails, quay railing,
 //   lamps A / D / S / L / L2 (per street, streets/style.js), traffic lights with countdowns, name + house-number plates, bus stops, trolleybus wire network (spans, rosettes, arcs, frogs),
 //   lane graph + signal plan, parked slots, tram rails, passages, areas, services (docs/streets-api.md). No flags, no sounds.
@@ -12,28 +11,10 @@ import { inParadny } from './landmarksTauride/paradny-surface.js';
 //   a base that is not clear slides back along its arm, moves outward / to the nearest clear pavement, else is dropped (signals.js clearSpot, zebra poles, extras.js signs, lamps.js, wires.js, parking.js).
 //   MARKINGS / SIGNS / PLATES (2026-10-06): road markings by rule (streets/markings.js, docs/rules/ROAD-MARKINGS.md, audit tools/streets-markings-audit.mjs), GOST sign faces in one place (streets/signs.js),
 //   the city's standard name + number plates (streets/plates.js), the facade label registry ctx.services.labels (streets/labels.js, docs/rules/LABELS-API.md); docs/rules/SIGNS-AND-PLATES.md.
-//   PETROGRAD SIDE / SPIT (2026-10-06, docs/streets-api.md last section): REVIEWED DISTRICTS ARE FROZEN (streets/region.js isOpen; proof: tools/streets-signature.mjs): the rules of this round
-//   reach only the open districts: temporary bypass bridge dropped (net.js DROPPED), the tram reservation of Kronverksky pr. = a setts bed, no road (net.js tramReservation, extras.js), rails of
-//   claimed bridge tram ways left to the bridges module, asphalt strip patches + swallowed islands between merged carriageways (net.js buildStripPatches), chevron posts only on a drawn island,
-//   stops never on a carriageway / on the rails (stops.js fixStop), no plates on landmark houses, no footways inside claimed parks, pavements end at an off-road tram track, gap spans tried every 3 m.
+//   THE NEVSKY STRIP (n4spb): the extensions of the full city (Petrograd side, Vasilievsky Island, the islands of round 2: tram beds, steel yard rails, sight keep-clear zones, address plates of the sights, island corner patches,
+//   strip patches, slab medians, pier / water-ring clipping ...) were cut together with their districts; the eight regions that remain are the ones that were reviewed first and are drawn as they always were.
 //   EVERY district: no paving / steps ribbon over an open metro stair pit (streets/holes.js cutHoles: layout.GROUND_HOLES kind 'stairs' + 0.3 m; the carriageway is never cut).
-//   P6..P9 (the rest of Petrogradsky Island, open districts): a street under reconstruction is drawn finished (net.js restoreClosedCarriageways: Pionerskaya, both carriageways whole).
-//   VASILIEVSKY ISLAND (2026-10-07, docs/streets-api.md last section, docs/research/streets-vo.md): the TRAM network of the island (7 km of double track: the Sredny trunk flush in a wide asphalt roadway as in the photos, no centre line over
-//   the rails, the flush concrete-slab median of Nalichnaya ulitsa (net.js SLAB_MEDIAN, net.slabs), the depot yard on ballast with steel rails, tram stop signs 5.17) with TRAM CONTACT WIRES (wires.js: one wire per track hung from the
-//   cross-spans, 14 km, wires-test OK), pendant lamps on the spans of the old island, lamp families by district (M steel poles with cobra heads west of x -6000, D swan necks on the old island's prospects), the Lines come in pairs:
-//   the plate of a wall names the line of ITS side (streets/names.js), the standard address plate of the Oktyabrsky hall (plates.js ADDRESS_PLATES), Andreevsky boulevard's alley as block paving between granite kerbs,
-//   the three dropped construction roads (data/late-roads.js, appended after ROADS), nothing within 1.35 m of a rail axis (furn.js TRACK_CLEAR), kerb arcs inside another junction's asphalt dropped in every district.
-//   VASILIEVSKY ISLAND, SECOND PASS (2026-10-08, docs/research/vo-requests-streets.md "SECOND PASS"): the water rings of the sights (environment ownerWater(): the Academy sphinx stair, the Mining descents, the Rumyantsev apron, the
-//   Krusenstern stair, the Spit descent, the Shi-Tsza pit) and the island waters that are no RIVER record (islandWaterRings()) clip the pavements (bld.js grid() flag 2, walks.js planSide stations + skirts, waterclip.js cuts the
-//   footways / paving areas / skirts exactly at the owner rings), dead-end roads that run into the water are pulled back to the shore (net.js trimWaterEnds), the WHSD ramp over the Gulf ends on the shore (net.js clipAtSea),
-//   the trolleybus wires follow the humped Blagoveshchensky deck and hang from the bridge's own standards (wires.js), address plates of the sights (plates.js ADDRESS_PLATES, PLATES_ALLOWED), keep-clear zones of the
-//   sights for lamps / signs / masts (furn.js FURN_CLEAR), flower bowl on the pole instead of the one-sided basket (lamps.js S2), bus shelter glass off the frame (stops.js), open districts only. Finished 2026-10-09 (streets-2): the Sea Terminal's four claimed service deck ways carry no
-//   lanes (pedestrianOnly, below), the address plates hang only with their owner module in the build list and sit on the real wall planes (Naval Corps 17 on the pavilion block, 11th line 5 cm out, Sea Terminal u 98.2),
-//   FURN_CLEAR has the Sea Terminal NE deck, tools/roads-surface-audit.mjs probes the median strip towards its partner; proofs and numbers: docs/research/vo-requests-streets.md "SECOND PASS", docs/research/streets-vo.md section 4.
-//   THIRD PASS (streets-3, 2026-10-09, integration round B): plates of the Kirova / Gavan / Sevkabel / ModernVO sights (plates.js: PLATES_ALLOWED +27 ids, PLATES_BLOCK, ADDRESS_PLATES +12 rows, pole-mounted signs `pole` / `near`, type word
-//   «проток»), FURN_CLEAR 7 -> 27 rows (forecourts, stairs, metro doors), claimed rank-0 ground ways are no carriageway (w.noCover, net.cover / coverLocal skip them), the WHSD ramp ends 1.6 m before the Gulf shore (net.js SEA_BACK),
-//   167 cobra lamps on the service roads of the passenger port (lamps.js portRows), the asphalt band in front of the Kirov Palace (extras.js EXTRA_LOTS); proofs: docs/research/vo-requests-streets.md "THIRD PASS", streets-vo.md section 5.
-//   NOT DONE / NEXT: bus-lane pictogram, hatched islands, real steps, the Ligovsky median parking, the depot yard tracks have no contact wires, tram wires on the bridge decks (bridges), the boulevard fence of Bolshoy pr.
+//   NOT DONE / NEXT: bus-lane pictogram, hatched islands, real steps, the Ligovsky median parking, tram wires on the bridge decks (bridges), the boulevard fence of Bolshoy pr.
 // streets - everything a pedestrian or driver stands on except the raw ground (environment): asphalt, junction fillets, lane markings, zebra crossings,
 // granite kerbs, granite-slab pavements, mapped footways, the Nevsky chain bollards and guard rails, road furniture (flower-bowl lamps, traffic lights, signs,
 // navy street-name and house-number plates, bus / trolleybus stops), the trolleybus OVERHEAD WIRES (cross-spans on facade rosettes) and the road LOGIC (lane graph,
@@ -79,11 +60,6 @@ import { SHAFTS } from './data/metro.js';
 import { debugScene } from './streets/debug.js';
 import { setDecksEnabled, deckAt } from './streets/decks.js';
 import { cutHoles } from './streets/holes.js';
-import { cutWaters, cutIslandWaters } from './streets/waterclip.js';
-import { isOpen } from './streets/region.js';
-import { makePierTest, makePavedCut, buildIslands } from './streets/islands.js';
-import { ribbon } from './streets/paths.js';
-import { ASPHALT_TILE } from './streets/tex.js';
 
 export { ribbon } from './streets/paths.js';
 
@@ -103,21 +79,16 @@ export async function build(ctx) {
   const net = await roadPlan(ctx);
   if (ctx.recordBake && !ctx.bakeNavOnly) ctx.recordBake('street-kerbs', packKerbRuns(net));
   for (const w of net.ways) {
-    // the Paradny Quarter's pedestrian ways (landmarksTauride draws the surface; no lanes, no lamps, no parking)
-    w.pedestrianOnly = !!ctx.buildList?.includes('landmarksTauride') && w.rank === 0 && w.x.filter((x, i) => inParadny(x, w.z[i])).length > w.x.length * .6;
+    w.pedestrianOnly = false;
     // the Anichkov deck, its asphalt and kerbs belong to landmarksC once it draws them; the OSM living-street trace round the Palace Square stone field (w217399816 + spurs) belongs to landmarksG's paving (no raised kerb / dashes in the square)
     // service ways / living streets claimed by a landmark module (New Holland's park lanes, a courtyard a landmark paves): the landmark draws them, they carry no cars, lanes or furniture of ours
-    // (open districts: also the rank-0 SERVICE BRIDGE ways that a sight claims for its own deck / ramp: the four elevated service ways of the Sea Terminal (w452522613 / 20 / 10, w118994411: the module draws the NE deck and the NW
-    // ramp as decor, "no lane graph / lamp / marking output: cars would drive through the piers", docs/research/vo-requests-landmarksSeaTerminal.md streets 1); a claimed bridge of any other class keeps its lanes: the long bridges)
-    if (!w.pedestrianOnly && isOwned(owned, w.id) && (w.rank === 0 || w.hw === 'living_street') && (!w.bridge || (w.hw === 'service' && w.rank === 0 && isOpen(w.x[0], w.z[0])))) w.pedestrianOnly = true;
+    // (a claimed bridge keeps its lanes: the bridges module draws the deck, the cars drive over it)
+    if (isOwned(owned, w.id) && (w.rank === 0 || w.hw === 'living_street') && !w.bridge) w.pedestrianOnly = true;
     // the pedestrian decks of the bridges module (sites with ped: true, the Triple Bridge: sett decks closed to cars): the ways over them carry no lanes, signals, stop plates, zebras or signs
     if (!w.pedestrianOnly && w.x.filter((x, i) => { const d = deckAt(x, w.z[i]); return d && d.ped; }).length > w.x.length * 0.5) w.pedestrianOnly = true;
     // a tram reservation (net.js tramReservation: the emergency-access way between the two tracks of a paved tram bed) is no road: no cars, lanes, asphalt or furniture; extras.js draws the bed
     if (w.tramBed) w.pedestrianOnly = true;
     w.skipDraw = (isOwned(owned, w.id) && (!!w.bridge || w.hw === 'living_street')) || w.pedestrianOnly;
-    // a rank-0 service way on the ground that a sight CLAIMS (open districts: the Sevkabel yard lanes w559480717 / w559486264, ...) is paved by the module: it is no carriageway any more (net.cover / coverLocal ignore it:
-    // the module's pavers, gate pylons and walls may stand on its former corridor; vo-requests-landmarksSevkabel.md "-> streets" 0). Claimed bridge ways keep their cover (the decks carry cars), reviewed districts keep theirs.
-    w.noCover = !!(w.pedestrianOnly && !w.bridge && w.rank === 0 && isOwned(owned, w.id) && isOpen(w.x[0], w.z[0]));
   }
   const graph = buildLaneGraph(net);
   const stats = { tris: {}, ms: {} };
@@ -148,8 +119,6 @@ export async function build(ctx) {
     steps: mat.toon('#a8a39d', { polygonOffset: -1.5, paint: 0.04, name: 'pt-steps' }),
     area: mat.toon('#b9b3ad', { map: T.slab, polygonOffset: -1.3, paint: 0.05, name: 'pt-area' }),
     lot: mat.toon('#d9d6d0', { map: T.asphalt, polygonOffset: -1.9, paint: 0.05, name: 'pt-lot' }),
-    tramslab: mat.toon('#ffffff', { map: T.tramslab, polygonOffset: -2.0, paint: 0.05, name: 'pt-tramslab' }),        // the flush concrete median of Nalichnaya ulitsa (net.js SLAB_MEDIAN)
-    ballast: mat.toon('#ffffff', { map: T.ballast, polygonOffset: -1.9, paint: 0.05, name: 'pt-ballast' }),             // the depot yard tracks (extras.js buildTramRails)
   };
   const add = (b, material, o = {}) => {
     if (b.empty) return null;
@@ -196,8 +165,7 @@ export async function build(ctx) {
   stats.stopLines = buildStopLines(mkPlan, paint); lap('stopLines');
   stats.manholes = buildManholes(net, paint); lap('manholes');
   stats.paintTris = pmark; lapMs('markings+crossings');
-  const tslab = new MB(), ballast = new MB();
-  stats.tram = buildTramRails(net, paint, cobb, (id) => isOwned(owned, id), { slab: tslab, ballast }); stats.tramRails = buildTramRails.last;
+  stats.tram = buildTramRails(net, paint, cobb);
   const slab = new MB(true), paver = new MB(true), strip = new MB(true), ramp = new MB(), skirt = new MB(true);
   const SPG = new Map();                                                          // stops (9 m) and metro entrances (3.6 m) hashed in 12 m cells: nearStop is asked for every pavement sample
   for (const [x, z, r] of [...stops.map((s) => [s.x, s.z, 9]), ...entr.map((e) => [e[0], e[1], 3.6])]) { const k = Math.floor(x / 12) * 4096 + Math.floor(z / 12); let l = SPG.get(k); if (!l) SPG.set(k, (l = [])); l.push([x, z, r]); }
@@ -205,31 +173,25 @@ export async function build(ctx) {
   walks = buildWalks(net, { slab, paver, strip, ramp, skirt, paint }, { isOwned: (id) => isOwned(owned, id), nearStop });
   lapMs('walks');
   const foot = new MB(), steps = new MB();
-  const footX = { slab: new MB(true), paver: new MB(true), gravel: new MB(), asph: new MB(), curb: new MB(true) };
-  const pier = makePierTest((id) => isOwned(owned, id));                      // (claimed pier decks of the islands: no footway ribbon on them, islands.js)
-  pathLines = buildPaths(foot, steps, net, footX, (id) => isOwned(owned, id), pier, makePavedCut((m) => !ctx.buildList || ctx.buildList.includes(m)));
+  const footX = { slab: new MB(true), paver: new MB(true), gravel: new MB(), asph: new MB() };
+  pathLines = buildPaths(foot, steps, net, footX, (id) => isOwned(owned, id));
   stats.passages = buildPassages(brk);
   const areaB = { road: new MeshBuilder(), slab: new MeshBuilder(), paver: new MeshBuilder(), island: new MeshBuilder() }, areaSkirt = new MB(true), lots = new MeshBuilder();
-  stats.lots = buildLots(lots, ctx, net);
-  stats.islands = buildIslands({ lots, kerb, asph: footX.asph, ribbon, built: (m) => !ctx.buildList || ctx.buildList.includes(m), net, lines: pathLines, asphTile: ASPHALT_TILE });      // islands round 2: aprons with kerbs, the Kitchen ring path (islands.js)
+  stats.lots = buildLots(lots);
   stats.areas = buildAreas(areaB, AREAS, (id) => isOwned(owned, id), areaSkirt, net, inOwnedArea); lapMs('paths+areas');
 
   // no paving over an open metro stair pit (layout.GROUND_HOLES kind 'stairs' + 0.3 m: streets/holes.js): the WALKING surfaces are cut there (pavement bands, corner patches, ramps,
   // skirts, mapped footways and steps, paving areas, lots); the carriageway (asphalt, kerb, gutter, wear, paint) is never cut
-  const walking = [slab, paver, strip, ramp, skirt, foot, steps, footX.slab, footX.paver, footX.gravel, footX.asph, footX.curb, lots, areaB.slab, areaB.paver, areaB.island, areaSkirt];
+  const walking = [slab, paver, strip, ramp, skirt, foot, steps, footX.slab, footX.paver, footX.gravel, footX.asph, lots, areaB.slab, areaB.paver, areaB.island, areaSkirt];
   stats.holeCuts = walking.reduce((n, b) => n + cutHoles(b), 0);
-  // the same for the stair pits / descents / berths that the SIGHT modules cut into the quay (environment/waterways.js ownerWater(): the Academy sphinx stair, the Mining descents, the Rumyantsev apron ...): no pavement,
-  // footway, paving area or skirt over their water ring (the strips stop 0.45 m before it already: bld.js / walks.js planSide; open districts only; waterclip.js)
-  stats.waterCuts = walking.reduce((n, b) => n + cutWaters(b), 0);
-  stats.islandWaterCuts = [foot, steps, footX.slab, footX.paver, footX.gravel, footX.asph, footX.curb, lots, areaB.slab, areaB.paver, areaB.island, areaSkirt].reduce((n, b) => n + cutIslandWaters(b), 0);      // (mapped footways, steps, paving areas: half a ribbon over the Smolenka / the harbour bank)
   lapMs('holes');
 
-  add(asph, M.asphalt); add(cobb, M.cobble); add(serv, M.service); add(brk, M.brickRoad); add(tslab, M.tramslab); add(ballast, M.ballast);
+  add(asph, M.asphalt); add(cobb, M.cobble); add(serv, M.service); add(brk, M.brickRoad);
   add(kerb, M.kerb, { name: 'pt-kerb' });
   add(slab, M.slab); add(paver, M.paver); add(strip, M.strip); add(ramp, M.ramp); add(skirt, M.skirt);
   add(gut, M.gutter, { noOutline: true }); add(wear, M.wear, { noOutline: true }); add(redLane, M.busLane, { noOutline: true }); add(paint, M.paint, { noOutline: true });
   add(foot, M.foot); add(steps, M.steps);
-  add(footX.slab, M.footSlab); add(footX.paver, M.footPaver); add(footX.gravel, M.footGravel); add(footX.asph, M.footAsph); add(footX.curb, M.kerb, { name: 'pt-alley-kerb' });
+  add(footX.slab, M.footSlab); add(footX.paver, M.footPaver); add(footX.gravel, M.footGravel); add(footX.asph, M.footAsph);
   if (!lots.empty) { const m = new THREE.Mesh(lots.build(), M.lot); m.name = 'pt-lots'; m.receiveShadow = true; root.add(m); }
   for (const [k, mt] of [['road', M.service], ['slab', M.slab], ['paver', M.paver], ['island', M.paver]]) {
     const b = areaB[k]; if (b.empty) continue;

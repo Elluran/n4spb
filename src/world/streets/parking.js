@@ -1,7 +1,7 @@
-import { inParadny } from '../landmarksTauride/paradny-surface.js';
 // streets/parking.js - where cars can be parked: the parallel pockets along the kerbs of the side streets (net.js parkPolicy: OSM parkingLane tags + the paid-parking streets of
 // docs/research/transport.md section 8) and the PARKING polygons (lots packed with 2.5 x 5 m slots in rows). Pure data: [{ x, z, rotY, kind, road?, lot? }].
-// rotY: the direction the car FACES (model +Z). The traffic module decides how many slots are filled.
+// rotY: the direction the car FACES (model +Z). The traffic module decides how many slots are filled. Slots outside the data extent (the union of the strip's rectangles grown by 120 m,
+// layout.inExtent: the 70 m run-on of a main street past the clip line, net.js rawWays) are not planned: the traffic module would fill them with cars for nothing.
 import { PARKING } from '../data/city.js';
 import { wayAt } from './net.js';
 import * as L from '../layout.js';
@@ -71,7 +71,7 @@ export function planParking(net) {
       }
     }
   }
-  const result = slots.filter(s => !inParadny(s.x,s.z));
-  result.lines = lines.filter(p => !inParadny((p[0]+p[2])/2,(p[1]+p[3])/2));
+  const result = slots.filter((s) => L.inExtent(s.x, s.z));
+  result.lines = lines.filter((p) => L.inExtent((p[0] + p[2]) / 2, (p[1] + p[3]) / 2));
   return result;
 }

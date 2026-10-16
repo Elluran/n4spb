@@ -1,12 +1,14 @@
 # Санкт-Петербург — Builder Guide (read fully before writing code)
 
+> **n4spb note.** Written for the whole city; this repository is the Nevsky strip (Moscow Station -> Nevsky -> Admiralty, see [STRIP.md](STRIP.md)). The module contract, ctx API, datums, rules and verification steps apply unchanged. Sentences about the "first build" area (x -595..835) describe the OLD rectangle, which is now one of the eight play rectangles; `docs/research/` and `docs/images/` of the original project are not carried over.
+
 A walkable first-person **anime cel-shaded** Three.js scene of the centre of **Saint Petersburg** (Russia), the user's favourite city: the **Moscow Railway Station**
 (Московский вокзал, Konstantin Thon, 1851) with its platforms and **Vosstaniya Square** (the Hero City obelisk), **Nevsky Prospekt** from Vosstaniya to the **Anichkov Bridge**
 over the **Fontanka**, the side streets (Ligovsky, Marata, Mayakovskogo, Vladimirsky, Liteyny, Zhukovskogo ...) and a **metro** the player can enter, ride down 51-64 m on
 a 100+ m escalator, board a train on, and ride to the next station. **Realistic**, not fantasy: a summer day with tourists, locals, traffic (cars, buses, trolleybuses),
 trains. The engine, look and conventions come from the *Sakuragaoka Station* reference (git submodule `../sakuragaoka-station`, MIT) through the finished siblings
 `../100_3d_moscow_city` and `../101_3d_yakutsk` (Yakutsk is the direct ancestor: its modules are a **code library**, read them and copy what helps); the world content here is new.
-The scene is built on real OpenStreetMap footprints registered to the user's Yandex Maps screenshot (`docs/reference/yandex-center.png`, a private layout reference).
+The scene is built on real OpenStreetMap footprints registered to the user's Yandex Maps screenshot (a private layout reference that is not in this repository; `docs/reference/calibration.md`).
 Later the map will grow to the whole tourist centre: keep every module data-driven (read `data/city.js` / `layout.js`), never hard-code coordinates you could derive.
 
 Stack: plain ES modules, **three@0.170.0** (import map -> jsDelivr in the browser, `node_modules` in node / the screenshot tool). No build step.
@@ -113,13 +115,13 @@ Anichkov Bridge deck r5537267 (-441, -93)   54.6 x 37.9 m; Beloselsky-Belozersky
 National Library r3801087 (-334, -311) · Mariinsky hospital w60353337 (-102, -295) · Vladimirsky Cathedral w38611014 (-165, 470) + bell tower w38611013 (-155, 413) · Tolstoy House r1588827 (-517, 335)
 ```
 
-All from OpenStreetMap, baked by `tools/bake-osm.mjs` (`data/city.js` header explains every export; `docs/reference/DATA-REPORT.md` counts and gaps; `docs/research/osm-landmarks.md` + `docs/reference/landmarks.json` map names to ids).
+All from OpenStreetMap, baked once for the whole city by `tools/bake-osm.mjs` and then clipped to the strip by `tools/strip-data-*.mjs` (`data/city.js` header explains every export; `docs/reference/DATA-REPORT.md` counts and gaps of the un-stripped extract; see [STRIP.md](STRIP.md)).
 Counts: ~1500 building records (1280 outlines + 215 parts), ~4300 road ways (many are service / footways / arches), 3200 doors, 3700 POIs, 12 metro entrances, 24 trolleybus route records, 43 rail ways, 16 platforms.
 **Heights**: only 1.7 % of the buildings have a `height`, 66 % have `building:levels`, 32 % nothing: **use `L.heightOf(b)`** (era tables of `docs/research/architecture.md`: a 5-level rent house = 21 m cornice, 6 = 23.5 m cap) and never `levels * 3.3`.
 Landmarks get their real heights from the research docs. Door nodes lie exactly on facade edges: push things 2-5 cm out. OSM trees / lamps are sparse: scatter procedurally on `GREEN`, along the embankment, in courtyards and where the research says.
 `ROADS[].tunnel` is 1 also for building passages (arches) and metro underpasses; `layout.js` ignores them in its queries. **Nevsky is two one-way carriageways** (the obelisk island between them near the square).
 
-Yandex screenshot = the layout truth for the pattern of streets and buildings; `node tools/overlay.mjs` renders the blockout straight down at the same pixel scale and compares.
+The Yandex screenshot was the layout truth for the pattern of streets and buildings of the first build (it is not in this repository; `tools/overlay.mjs` that compared a top-down render with it was removed).
 
 ## 4. The facade shader (glass blocks)
 
@@ -194,10 +196,10 @@ Other modules must not draw below y = -0.5 (the Fontanka trench excepted) and mu
    `node tools/shot.mjs --only environment,streets,city,<module> --cams "hero;v2;x,z,yaw,pitch;x,y,z,yaw,pitch" --out shots/<module>/a --t 20` (4 numbers = walking eye height; 5 numbers = free camera; 6 = standing on the surface at or below y;
    names `hero`, `v1`..`v5`, `views`, `overview`, `aerial`, `top`; `--params "allcity=1"` ignores the claims). Then **look at every PNG with the Read tool** and fix what you see: floating / sunken objects, z-fighting, mirrored text,
    wrong scale, missing or inverted faces, harsh colours, clutter. Iterate; include close-ups (1-3 m), mid shots, the hero view and a high overview. Save into `shots/<module>/` only (git-ignored).
-4. `node tools/overlay.mjs` -> top-down render vs the Yandex screenshot; `node tools/smoke.mjs` -> walking, flying and landing on a roof; `node tools/under-test.mjs` -> the underground engine tests; `node tools/tour.mjs` -> the gallery.
+4. `node tools/smoke.mjs` -> walking, flying and landing on a roof; `node tools/under-test.mjs` -> the underground engine tests; `node tools/tour.mjs` -> a set of scripted screenshots (`--set splash` rewrites the loading-screen images).
 5. Research with **real photos**: the researchers saved ~800 photos in the scratchpad `refs/<topic>/` (the research docs list what each shows; the lead tells you the scratchpad path). Compare your render with them side by side. Download more from
    Wikimedia Commons (`https://commons.wikimedia.org/wiki/Special:FilePath/<File_name>?width=1200`, send a User-Agent header, ~1 request/s); never put photos in the repo.
-6. Regenerate the map only if needed: `node tools/fetch-osm.mjs && node tools/bake-osm.mjs` (the baked `data/city.js` is committed; the raw `data/osm-raw/` is git-ignored).
+6. The map data is committed (`src/world/data/city*.js`, already clipped to the strip). The OSM fetch tools and the raw data of the whole city are not part of this repository (`tools/bake-osm.mjs` / `osm-lib.mjs` still encode the full-city frame rectangles and would regenerate the wrong parts: see [STRIP.md](STRIP.md)).
 
 ## 10. Z-fighting (the user asked for it explicitly: treat it as a bug class)
 

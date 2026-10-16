@@ -9,7 +9,7 @@ import puppeteer from 'puppeteer-core';
 import { installFontTransport } from './font-transport.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.join(root, 'shots/perf-oct15'); fs.mkdirSync(output, { recursive: true });
-const server = spawn(process.execPath, ['tools/area-dev.mjs', 'landmarksKamennyDachasEast', '--port', '0'], { cwd: root, windowsHide: true });
+const server = spawn(process.execPath, ['tools/area-dev.mjs', 'landmarksH', '--port', '0'], { cwd: root, windowsHide: true });
 let browser;
 try {
   const url = await new Promise((resolve, reject) => {
@@ -25,7 +25,7 @@ try {
   const ready = () => page.waitForFunction("window.__areaPreview?.ready && getComputedStyle(document.querySelector('#intro')).visibility === 'hidden'", { timeout: 90000 });
   await page.goto(url); await ready();
   const first = await page.evaluate(() => ({ ...__areaPreview, frame: undefined, pose: __areaPreview.pose(), errors: __errors, playing: document.body.classList.contains('playing'), title: document.title }));
-  assert.deepEqual(first.modules, ['landmarksKamennyDachasEast']); assert.deepEqual(first.errors, []); assert(first.playing); assert(first.title);
+  assert.deepEqual(first.modules, ['landmarksH']); assert.deepEqual(first.errors, []); assert(first.playing); assert(first.title);
   const stableTime = await page.evaluate(() => performance.timeOrigin);
   for (let i = 0; i < 10; i++) fs.readFileSync(path.join(root, 'tools/area-preview.js'));
   await new Promise(resolve => setTimeout(resolve, 2000));

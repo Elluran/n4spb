@@ -6,25 +6,10 @@ import { wayAt, nearCrossing, pointAtS, mitres } from './net.js';
 import { prepLanes, latAt } from './lanes.js';
 import { ASPHALT_TILE } from './tex.js';
 import { deckAt } from './decks.js';
-import { isIsland } from './region.js';
 import { planMarkings, drawPlan, isBusLaneWay } from './markings.js';
 import { kerbBacking } from './walks.js';                // (walks.js imports this file too: both only use the other at call time)
 
 export const ROAD_Y = 0.03, WALK_Y = 0.12, KERB_H = 0.15, LIFT = 0.015, KERB_W = 0.2;
-/** ISLANDS ROUND 2 (region.js isIsland): a ribbon ends 0.3 m beyond its last vertex where the end is a DEAD end or the joint with the next way of the same class (a service way meets a service way, a street its
- *  continuation). The ends of two ribbons that meet at a node lie on two cross-lines that do not coincide where the way bends (a wedge of bare ground on the outside of the bend), and a ribbon that ends at its last
- *  vertex has no margin: the carriageway cross-section there lies ON the edge of the last quad (32-bit vertices, tools/roads-surface-audit.mjs 'carriageway' rows at the end of a dead end). The lap is coplanar
- *  asphalt of the same material: it is never seen, unless the ribbon would end in bare ground. */
-const END_LAP = 0.3;
-function endLaps(w) {
-  const lap = (k) => {
-    if (w.deck[k] || !isIsland(w.x[k], w.z[k])) return false;
-    if (k === 0 ? w.free0 : w.free1) return true;
-    const q = w.nodes.find((n) => n.k === k);
-    return !!q && q.node.inc.every((o) => o.w === w || ((o.w.rank === 0) === (w.rank === 0) && !o.w.skipDraw && !o.w.bridge));
-  };
-  return [w.n > 1 && lap(0), w.n > 1 && lap(w.n - 1)];
-}
 const WHITE = rgb('#e9e6dc'), YELLOW = rgb('#e3c64a'), GULLY = rgb('#2c2d30'), BUSLANE = rgb('#a05a46'), ZEBRA_RED = rgb('#7f4c47');
 export const WEST_X = -880;                                    // west of Sadovaya (the Fontanka-to-Admiralty part of the map): bus lanes painted red-brown, zebras red-brown / white
 
@@ -50,22 +35,12 @@ export function buildAsphalt(net, B, Bs) {                      // (every drivab
       const nx = -w.tz[i], nz = w.tx[i], m = w.mit[i];
       LP.push([w.x[i] - nx * w.hL[i] * m, w.z[i] - nz * w.hL[i] * m]); RP.push([w.x[i] + nx * w.hR[i] * m, w.z[i] + nz * w.hR[i] * m]);
     }
-    if (!w.bridge) {
-      const [l0, l1] = endLaps(w);
-      if (l0) { LP[0] = [LP[0][0] - w.tx[0] * END_LAP, LP[0][1] - w.tz[0] * END_LAP]; RP[0] = [RP[0][0] - w.tx[0] * END_LAP, RP[0][1] - w.tz[0] * END_LAP]; }
-      if (l1) { const e = w.n - 1; LP[e] = [LP[e][0] + w.tx[e] * END_LAP, LP[e][1] + w.tz[e] * END_LAP]; RP[e] = [RP[e][0] + w.tx[e] * END_LAP, RP[e][1] + w.tz[e] * END_LAP]; }
-    }
     const keep = w.n > 2 ? dpKeep([LP, RP], 0.03, (i) => w.deck[i] !== w.deck[i - 1] || w.deck[i] !== w.deck[i + 1], 40) : [true, true];
     for (let i = 0; i < w.n; i++) {
       if (!keep[i]) continue;
-      let [lx, lz] = LP[i], [rx, rz] = RP[i];
-      // (islands round 2, streets owner 2: the LAST quad of a way that ends on a deck is drawn when a corner of its end edge lies outside the deck polygon, and the end gets the lap of 0.3 m: the deck is entered 0.4 m
-      //  inside its edge and the polygon is narrower than the carriageway at a skew approach (Geslerovsky bridge, w1396803237 ends at (-2624.6, -4107.3): the cross-section ON the end line, 2.4 m right of the centre,
-      //  was bare ground). The deck lies above this asphalt.)
-      const endOpen = prev && w.deck[i] && prev[2] && !w.bridge && (i === w.n - 1 || prev[3] === 0) && isIsland(w.x[i], w.z[i]) && (!deckAt(lx, lz, 0) || !deckAt(rx, rz, 0));
-      if (endOpen && i === w.n - 1) { lx += w.tx[i] * END_LAP; lz += w.tz[i] * END_LAP; rx += w.tx[i] * END_LAP; rz += w.tz[i] * END_LAP; }
+      const [lx, lz] = LP[i], [rx, rz] = RP[i];
       const a = out.vert(lx, ROAD_Y, lz, lx / tile, lz / tile), b = out.vert(rx, ROAD_Y, rz, rx / tile, rz / tile);
-      if (prev && (!(w.deck[i] && prev[2]) || endOpen)) out.quad(prev[0], prev[1], b, a);       // the bridges module draws the deck: no asphalt between two deck vertices
+      if (prev && !(w.deck[i] && prev[2])) out.quad(prev[0], prev[1], b, a);       // the bridges module draws the deck: no asphalt between two deck vertices
       prev = [a, b, w.deck[i], i];
     }
   }
@@ -79,13 +54,6 @@ export function buildAsphalt(net, B, Bs) {                      // (every drivab
       if (last >= 0) out.tri(p, last, v);
       last = v;
     }
-  }
-  // the strip patches between two merged carriageways (net.js buildStripPatches: what fillMedians left open under 7.5 m), edge to edge, overlapping both ribbons by 0.35 m
-  for (const p of net.patches || []) {
-    if (p.ways.some((w) => w && w.skipDraw) || deckAt((p.poly[0][0] + p.poly[2][0]) / 2, (p.poly[0][1] + p.poly[2][1]) / 2)) continue;
-    const v = p.poly.map(([x, z]) => B.vert(x, ROAD_Y, z, x / T, z / T));
-    if (p.fan) { const c = B.vert(p.fan[0], ROAD_Y, p.fan[1], p.fan[0] / T, p.fan[1] / T); for (let i = 0; i < v.length; i++) B.tri(c, v[i], v[(i + 1) % v.length]); }      // (a swallowed traffic island: a fan round its middle)
-    else for (let i = 1; i + 1 < v.length; i++) B.tri(v[0], v[i], v[i + 1]);                                  // (a quad; the island patches of net.js islandPatch are convex n-gons)
   }
 }
 

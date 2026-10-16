@@ -14,7 +14,7 @@ for (let i = 0; i < args.length; i++) {
 }
 const selected = [...new Set([...modules, ...(options.with || '').split(',')].filter(Boolean))];
 if (!selected.length || selected.some(n => !/^[A-Za-z][A-Za-z0-9_-]*$/.test(n) || !fs.existsSync(path.join(root, 'src/world', n + '.js')))) {
-  console.error('Usage: npm run dev:area -- landmarksKamennyDachasEast [--with landmarksKamennyChurch] [--cam x,y,z,yaw,pitch] [--port 5177]');
+  console.error('Usage: npm run dev:area -- landmarksH [--with landmarksG] [--cam x,y,z,yaw,pitch] [--port 5177]');
   process.exit(1);
 }
 const params = new URLSearchParams({ only: selected.join(','), q: options.q || 'medium', t: '0', noroof: '1', areaPreview: '1' });

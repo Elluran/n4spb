@@ -3,7 +3,7 @@
 The core (`src/core/*`, `src/main.js`, `index.html`) can host a metro that lies **down to ~-70 m** below the street plane (y = 0): a vestibule at street level, a
 very long escalator (50-65 m deep stations, ~100-130 m of slope at 30 degrees), a station hall far below, a platform, a train that arrives, opens its doors,
 carries the player to the next station. The metro **content** is built by the `metro` module; this document is the contract between the two. A working,
-self-contained example is `src/world/undertest.js` (run it with `?only=undertest`); read it next to this file.
+self-contained example was `src/world/undertest.js` (`?only=undertest`, see the git history of 102_3d_piter); the live reference now is `src/world/metro.js`.
 
 Conventions: metres, +Y up, +X east, -Z north, +Z south. `rotY` is the three.js rotation about Y (0 faces +Z, +PI/2 faces +X). Camera yaw in **degrees**
 (0 = north/-Z, 90 = west) everywhere a pose is given to the player (`setPose`, `alight`, `?cam=`). A ride **frame** uses `rotY` in radians.
@@ -151,7 +151,7 @@ While riding physics, roofs and the ground are suspended, F is refused ("No flig
 function in `ctx.onUpdate((dt, t) => ...)`, never lags). In `?shot` renders the rider is still updated each frame (`dt = 0`). The schedule must be a function of `t`; to make a train wait for the
 player, add a constant `shift` that you change only while it is stationary (the test world does it when a rider boards: `trainState(t + shift)`).
 
-Ride sequence template (all of it in `undertest.js`): `interact` "Board" (enabled while the train is at the platform with doors open) -> `board()` -> doors close, the profile carries the
+Ride sequence template (all of it in `undertest.js` of the original project; in this repo see `src/world/metro/ride.js`): `interact` "Board" (enabled while the train is at the platform with doors open) -> `board()` -> doors close, the profile carries the
 frame 200 m in ~27 s -> at the next platform `interact` "Get off" (enabled while riding, at B, doors open) -> `alight({ x, y, z, yaw })` onto platform B.
 
 ## 6. Cameras, tests, screenshots

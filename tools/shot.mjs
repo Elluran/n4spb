@@ -8,7 +8,7 @@ import { bakedRevision } from './baked-revision.mjs';
 //            6 numbers (...,1) = WALKING player standing on the highest surface whose top is not above y (feet): "0.5,-60,150,90,0,1" stands on a platform at -60.
 //            yaw 0 = north(-Z), 90 = west, 180 = south, -90 = east.
 //            Names from layout.js: hero, v1..v5 (viewpoint keys 1..5), views (all five), overview (high, from the south),
-//            aerial (from the SE, high), top (straight down over the centre of the Yandex screenshot, for tools/overlay.mjs).
+//            aerial (from the SE, high), top (straight down over Vosstaniya Square).
 //   --fov    vertical field of view in degrees (default 62); --params "nofog=1&allcity=1" adds URL parameters
 //   --eval   JS expression evaluated in the page after the shots; its JSON result is printed
 //   --t      simulation time in seconds (animations are fast-forwarded deterministically)

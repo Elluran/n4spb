@@ -1,5 +1,7 @@
 # Agent brief — read this and `docs/DESIGN.md` before you write any code
 
+> **n4spb note.** This repository is the Nevsky-strip cut of `102_3d_piter` (what stays, what was dropped: [STRIP.md](STRIP.md)). The brief below was written for the whole city: only the modules listed in `src/main.js` exist here, the research dossiers (`docs/research/`), the photo references (`SP/refs`), the gallery (`docs/images/`) and the private Yandex screenshot were NOT carried over, and the sibling projects `../100_3d_moscow_city`, `../101_3d_yakutsk` are not part of this repository. The rules (ownership, road integrity, user content, performance) apply unchanged.
+
 You are one specialist in a team that builds **102_3d_piter**: a walkable first-person **anime cel-shaded** three.js scene of the centre of **Saint Petersburg** (Russia), starting with the
 **Moscow Railway Station** and Vosstaniya Square, then Nevsky Prospekt, the Fontanka and Anichkov Bridge, the side streets, and a **metro** the player can ride. It is the user's favourite city,
 visited by millions of tourists: the user wants it **very realistic** — a person who knows the city must recognise every place — in the style of the finished siblings `../100_3d_moscow_city`
@@ -36,11 +38,11 @@ serially; an isolated preview is not integration or performance evidence.
 2. The research documents of your topic in `docs/research/` — they cite Commons photos and say what the place really looks like, with modelling specs (hex colours, dimensions, counts):
    `station.md` (station, square, tracks, trains), `nevsky.md` (Nevsky block by block, street cross-section, lamps, wires), `fontanka.md` (river, quays, Anichkov Bridge, palaces, boats), `architecture.md` (14 building archetypes, heights),
    `metro.md` (network, stations, trains, tunnels), `transport.md` (22 vehicle archetypes), `people.md` (crowds, outfits, vignettes, spots), `streets.md` (furniture, surfaces, trees, signs, sky / light, shop names),
-   `osm-landmarks.md` + `docs/reference/landmarks.json` (names -> OSM ids), `docs/reference/DATA-REPORT.md` (the map data: counts, gaps, z-fighting audit).
+   `osm-landmarks.md` (names -> OSM ids), `docs/reference/DATA-REPORT.md` (the map data: counts, gaps, z-fighting audit; it describes the first, un-stripped extract).
 3. **The reference photos** the researchers downloaded: `SP/refs/<topic>/NN_*.jpg` with topics `station nevsky fontanka architecture metro transport people streets` (~700 photos; open them with the Read tool; each research doc lists what each
    file shows). More: Wikimedia Commons geosearch (`https://commons.wikimedia.org/w/api.php?action=query&list=geosearch&gscoord=59.931|30.36&gsradius=1000&gslimit=500&gsnamespace=6&format=json`), downloads via
    `curl -L -A "piter-anime-walk/1.0 (research; nepo7771@gmail.com)" "https://commons.wikimedia.org/wiki/Special:FilePath/<File_name>?width=1400" -o ...` (about one request per second). Photographs are references only, never in the repo.
-4. `docs/reference/yandex-center.png` (Yandex map, 0.934 m/px, local only) and `docs/reference/plan-overlay.png`.
+4. The private Yandex map screenshot the original extract was registered to (0.934 m/px, `calibration.md` in `docs/reference/`) is not in this repository.
 5. The Yakutsk and Moscow siblings are **code libraries**: `../101_3d_yakutsk/src/world/**` (environment ground / trees, streets with fillets and lane graph, city wall shader and archetypes, traffic lane-graph simulation,
    people rig and crowd, wildlife, props, landmarks) and `../100_3d_moscow_city/src/world/**` (rail + station + trains, boats, towers). Read and **copy what helps** into your own module folder and retune it for Petersburg
    (colours, proportions, species). Do not import across projects at runtime. **Use the LATEST Yakutsk code** (git log of 101_3d_yakutsk): e.g. commit fafd4c9 fixed road signs (`streets/furn.js panels.mount()`: sign face in front of the pole on a back plate with clamp bands, alphaTest corners; `props/ads.js` depth clearance) and made the ambulance siren silent.

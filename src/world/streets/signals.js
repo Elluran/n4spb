@@ -4,8 +4,7 @@
 import * as THREE from 'three';
 import { VB } from './vb.js';
 import { clamp } from './util.js';
-import { COL, hash2, poleClear, clearNear, nudgeClear, inMergedStrip } from './furn.js';
-import { isOpen } from './region.js';
+import { COL, hash2, poleClear, clearNear, nudgeClear } from './furn.js';
 import { WALK_Y, KERB_W } from './surface.js';
 import { groupState, pedGroupState, midState, midPed } from './lanegraph.js';
 import { buildPlates } from './plates.js';
@@ -243,7 +242,6 @@ export function buildSignals(ctx, net, graph, T, shared, opts = {}) {
 
   // red-white chevron plates on posts at the traffic islands (docs/research/streets.md summary 7, photos P08 P79 P84): one at each end of every island polygon
   out.islandPosts = 0;
-  const ringHas = (o, x, z) => { let ins = false; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const xi = o[i], zi = o[i + 1], xj = o[j], zj = o[j + 1]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) ins = !ins; } return ins; };
   for (const a of AREAS) {
     if (a.hw !== 'traffic_island') continue;
     for (const p of a.polys) {
@@ -253,16 +251,7 @@ export function buildSignals(ctx, net, graph, T, shared, opts = {}) {
       let cx = 0, cz = 0; for (let i = 0; i < o.length; i += 2) { cx += o[i]; cz += o[i + 1]; } cx /= o.length / 2; cz /= o.length / 2;
       for (const [x, z] of far) {
         let nx = x - cx, nz = z - cz; const l = Math.hypot(nx, nz) || 1; nx /= l; nz /= l;                   // pointing out of the island along its axis
-        let px = x - nx * 0.5, pz = z - nz * 0.5;
-        // ROAD CLEARANCE RULE (open districts, region.js): the post stands ON the island that is really drawn: inside its polygon, off the asphalt that carves it (paths.js capCarved) and off a
-        // strip that net.js fillMedians merged into one roadway. A tip that is not such a spot (a pointed or curved island, an island swallowed by the merged carriageways) slides towards the
-        // middle of the island in 0.5 m steps (40 % of the way at most), else the island gets no post at that end.
-        if (isOpen(px, pz)) {
-          const onIsland = (ax, az) => ringHas(o, ax, az) && net.cover(ax, az, {}) <= -0.3 && !inMergedStrip(net, ax, az);
-          let ok = false;
-          for (let d = 0.5; d <= Math.max(0.5, 0.4 * l) && !ok; d += 0.5) { px = x - nx * d; pz = z - nz * d; ok = onIsland(px, pz); }
-          if (!ok) continue;
-        }
+        const px = x - nx * 0.5, pz = z - nz * 0.5;
         post(px, pz, 1.7, 0.035); panels.mount(poles, chevTex, px, 0.15 + 1.35, pz, nx, nz, 0.4, 0.8, { pole: 0.035, kind: "plate" }); out.islandPosts++;
       }
     }

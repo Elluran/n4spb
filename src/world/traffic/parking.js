@@ -4,16 +4,10 @@
 //   * the fleet mix is the moving one (fleetdata.ARCH weights); vans in parallel bays and lots, trucks / minibuses never (they do not fit); 3 % of the cars are taxis (white + yellow stripe), 0.4 % police
 //   * irregular parking: lateral / longitudinal jitter, small yaw, 22 % of the lot cars are reversed in, ~10 % have a driver (+ a passenger) sitting inside
 //   * never on a tree trunk (environment.trees), inside a building (layout.insideBuilding) or on a bus stop / crossing. No yard cars (the courtyards stay clean, brief)
-//   * PETROGRAD SIDE / SPIT (the regions of traffic/region.js; the reviewed districts keep their cars): no car within 1.9 m of a tram track axis (a kerb bay beside the rails of Kronverksky pr. /
-//     ul. Kuibysheva would stand in the way of the trams), none in front of a courtyard archway (the mouths of the OSM `tunnel=building_passage` ways, 4.6 m) or of a gate a sight publishes
-//     (services.landmarks*.gates, 6 m), none on the private quay road of the judicial-quarter building site (NO_PARK_WAYS, 11 m); taxi ranks of three white taxis at the metro pavilions,
-//     tour coaches at the Spit, the Aurora and the fortress bridge where a quiet kerb exists (anchors from the services of the sights, never hard coordinates)
+//   * only the slots inside the data extent (L.inExtent): the OSM ways that stick out of the extent keep whole kerb pockets beyond it, nobody can see them
+//   * taxi ranks of white taxis at the squares and the Admiralteysky corner; tour coaches / double-decker / minibuses at the Palace Square, Isaac's Square, Kazanskaya st and Gostiny Dvor where a quiet kerb exists
 // Pure data in, plain records out (no three.js): { id, kind, x, z, rotY, c, s, color (hex), plate, driver, pax, taxi, police }
 import { ARCH, PALETTE, KINDS_W, pickW, TAXI_KINDS, TAXI_WHITE, PLATES_COUNT } from './fleetdata.js';
-import { ROADS } from '../data/city.js';
-import { inPetro } from './region.js';
-
-const NO_PARK_WAYS = new Set(['w114683957']);        // the private quay service road of the judicial-quarter site (docs/research/vladimir.md section 3)
 
 const hash = (str) => { let h = 2166136261; for (const ch of String(str)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0; return (h >>> 0) / 4294967296; };
 
@@ -73,26 +67,6 @@ export function planParked(ctx, st, opts = {}) {
     return false;
   };
   const onForbidden = (x, z, c, s, hl, hw) => { for (const [a, b] of [[0, 0], [hw, hl], [-hw, hl], [hw, -hl], [-hw, -hl]]) if (forbidden(x + a * c + b * s, z - a * s + b * c)) return true; return false; };
-  // ---- the rules of the Petrograd side / Spit (header): tram tracks, archway mouths, gates of the sights, the site road
-  const net = st.net, trackDist = net && net.trackDist ? (x, z) => net.trackDist(x, z) : null;
-  const keepOut = [];                                                   // [x, z, r]
-  for (const rd of ROADS) {
-    if (!rd.passage || !rd.pts || rd.pts.length < 4) continue;
-    for (const k of [0, rd.pts.length - 2]) { const x = rd.pts[k], z = rd.pts[k + 1]; if (inPetro(x, z, 30) && !L.insideBuilding(x, z, -0.6)) keepOut.push([x, z, 4.6]); }
-  }
-  for (const [name, sv] of Object.entries(ctx.services)) if (/^landmarks[A-Z]/.test(name) && sv && Array.isArray(sv.gates)) for (const g of sv.gates) if (g && typeof g.x === 'number' && inPetro(g.x, g.z, 30)) keepOut.push([g.x, g.z, 6]);
-  const noPark = (st.roads || []).filter((r) => NO_PARK_WAYS.has(r.id));
-  const nearWay = (x, z, d) => noPark.some((r) => { for (let i = 0; i + 1 < r.pts.length; i++) { const a = r.pts[i], b = r.pts[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz || 1e-9, u = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / l2)); if (Math.hypot(a[0] + dx * u - x, a[1] + dz * u - z) < d) return true; } return false; });
-  const KG = 16, kgrid = new Map(); for (const k of keepOut) { const key = Math.floor(k[0] / KG) * 4096 + Math.floor(k[1] / KG); (kgrid.get(key) || kgrid.set(key, []).get(key)).push(k); }
-  const petroStats = { tram: 0, gate: 0, site: 0 };
-  const petroBlocked = (x, z, c, s, hl, hw) => {
-    if (!inPetro(x, z, 0)) return false;
-    if (trackDist) for (const [a, b] of [[0, 0], [hw, hl], [-hw, hl], [hw, -hl], [-hw, -hl]]) { const d = trackDist(x + a * c + b * s, z - a * s + b * c); if (d !== null && d !== undefined && d < 1.9) { petroStats.tram++; return true; } }
-    const cx = Math.floor(x / KG), cz = Math.floor(z / KG);
-    for (let i = cx - 1; i <= cx + 1; i++) for (let j = cz - 1; j <= cz + 1; j++) for (const k of kgrid.get(i * 4096 + j) || []) if (Math.hypot(k[0] - x, k[1] - z) < k[2] + hl * 0.5) { petroStats.gate++; return true; }
-    if (noPark.length && nearWay(x, z, 11)) { petroStats.site++; return true; }
-    return false;
-  };
   // stops / crossings in a grid whose cell is at least the widest test radius: the 3 x 3 cells round a point hold every candidate within that radius
   const SC = Math.max(16, ...walkXs.map((p) => p[2] * 0.5 + 2.2), 6.5), sgrid = new Map(), skey = (x, z) => Math.floor(x / SC) * 65536 + Math.floor(z / SC);
   for (const p of stops) { const k = skey(p[0], p[1]); (sgrid.get(k) || sgrid.set(k, []).get(k)).push([p[0], p[1], 6.5]); }
@@ -117,7 +91,7 @@ export function planParked(ctx, st, opts = {}) {
     let x = slot.x + sC * along + cC * across, z = slot.z + cC * along - sC * across;
     // a car shorter than a bay sits nose-in: shift so that its nose is near the kerb (bays: slot centre is the middle of the 5 m)
     const c = Math.cos(rot), s = Math.sin(rot), hl = a.len / 2, hw = a.wid / 2;
-    if (onForbidden(x, z, c, s, hl, hw) || inBuilding(x, z, c, s, hl, hw) || hitsTree(x, z, c, s, hl, hw) || overlapsPlaced(x, z, c, s, hl, hw) || nearStop(x, z) || petroBlocked(x, z, c, s, hl, hw)) return null;
+    if (onForbidden(x, z, c, s, hl, hw) || inBuilding(x, z, c, s, hl, hw) || hitsTree(x, z, c, s, hl, hw) || overlapsPlaced(x, z, c, s, hl, hw) || nearStop(x, z)) return null;
     const taxi = force && force.taxi !== undefined ? force.taxi : TAXI_KINDS.includes(kind) && r() < (Math.hypot(slot.x - stn.x, slot.z - stn.z) < 170 ? 0.3 : 0.03);        // the taxis queue at the Moscow Station (transport.md section 3)
     const police = !taxi && !force && kind === 'liftback' && r() < 0.012;
     const car = {
@@ -133,11 +107,6 @@ export function planParked(ctx, st, opts = {}) {
   // the ordinary cars so that the bays are theirs
   const parallel = (st.parkedSlots || []).filter((q) => q.kind === 'parallel');
   const RANKS = [[-2215, -512, 5], [-1048, -50, 3], [-1566, -205, 3], [-2445, -118, 3], [-1890, -350, 2]];
-  // the Petrograd side: three white taxis at every metro pavilion (services.metro.entrances, the Gorkovskaya pavilion of landmarksKronverk, the Sportivnaya exits of landmarksVladimir)
-  { const SVC = ctx.services, seen = [], add = (x, z) => { if (typeof x !== 'number' || !inPetro(x, z) || seen.some((q) => Math.hypot(q[0] - x, q[1] - z) < 90)) return; seen.push([x, z]); RANKS.push([x, z, 3]); };
-    for (const e of (SVC.metro && SVC.metro.entrances) || []) if (e.kind !== 'pit') add(e.x, e.z);
-    { const m = SVC.landmarksKronverk && SVC.landmarksKronverk.metro; if (m) add(m.x, m.z); }
-    for (const e of (SVC.landmarksVladimir && SVC.landmarksVladimir.metroExits) || []) add(e.x, e.z); }
   let nTaxiRank = 0; const dbg = [], rankMissing = [];
   for (const [ax, az, n] of RANKS) {
     const cand = parallel.filter((q) => Math.hypot(q.x - ax, q.z - az) < 80).sort((a, b) => Math.hypot(a.x - ax, a.z - az) - Math.hypot(b.x - ax, b.z - az));
@@ -147,9 +116,6 @@ export function planParked(ctx, st, opts = {}) {
   }
   // ---- tour buses / coaches / minibuses at their pick-up points (west-life-furniture.md 3.5): Palace Square stops, Isaac's loop, Kazanskaya st, Gostiny Dvor, the Moika at the Pevchesky bridge; kerb of a quiet lane (rank 1-2), nose to tail
   const TOURS = [[-2480, -255, ['coach', 'coach', 'dd', 'minibus']], [-2455, -215, ['coach', 'minibus']], [-2500, -284, ['coach']], [-1566, -205, ['coach']], [-2000, -45, ['coach', 'coach']]];
-  // the Petrograd side / Spit: coaches wait where the tourists are (the photo spots the sights publish); a row is only placed on a quiet kerb (rank 1-2) within reach, else nothing
-  { const spot = (mod, re) => { const sv = ctx.services[mod], q = sv && (sv.photoSpots || []).find((p) => re.test(p.name || '')); return q && inPetro(q.x, q.z) ? q : null; };
-    for (const [mod, re, kinds] of [['landmarksStrelka', /Биржа из сквера/, ['coach', 'coach', 'minibus']], ['landmarksAurora', /Аврора/, ['coach', 'dd']], ['landmarksFortress', /Иоанновский мост/, ['coach', 'minibus']], ['landmarksKronverk', /Артиллерийский музей/, ['coach']]]) { const q = spot(mod, re); if (q) TOURS.push([q.x, q.z, kinds, 70]); } }
   // (Palace Square, the Palace Embankment and the Sadovaya / Nevsky stops carry no parked coaches: there the tour buses of sim.js stop at the bays and leave)
   const quiet = (st.lanes || []).filter((l) => l.rank >= 1 && l.rank <= 2 && !l.bridge && l.len >= 16 && l.idx === 0);
   const cover = st.net && st.net.cover ? (x, z) => st.net.cover(x, z, {}) : null;
@@ -202,17 +168,11 @@ export function planParked(ctx, st, opts = {}) {
     return o;
   };
   const jitter = { parallel: { yaw: 0.07, along: 1.2, across: 0.22 }, lot: { yaw: 0.07, along: 0.35, across: 0.26 } };
-  const filled = new Set();
   for (const slot of st.parkedSlots || []) {
+    if (!L.inExtent(slot.x, slot.z)) continue;
     if (r() > occ(slot)) continue;
-    if (addCar(slot, jitter[slot.kind] || jitter.lot)) filled.add(slot);
+    addCar(slot, jitter[slot.kind] || jitter.lot);
   }
-  // Vasilievsky Island: the paid zone "Vasilievsky" (08:00-20:00, since late 2023) is full on a summer afternoon - the kerbs of every line stand nose to tail. A second pass over the parallel bays the first pass left
-  // empty (blocked by a trunk / a house corner / the rails stay empty), with a random stream of its own so that the cars of the older districts are the ones the first pass drew
-  let nIsland = 0;
-  if (!opts.noIslandPass) { const rMain = r; r = ctx.rng('traffic-parked-vo');
-    for (const slot of st.parkedSlots || []) { if (slot.kind !== 'parallel' || filled.has(slot) || slot.x > -3300 || !inPetro(slot.x, slot.z)) continue; if (r() < 0.8 && addCar(slot, jitter.parallel)) nIsland++; }
-    r = rMain; }
   const nSlots = cars.length;
 
   // ---- yards: cars along the service roads, half on the kerb (courtyards of the panel blocks are full of cars)
@@ -242,5 +202,5 @@ export function planParked(ctx, st, opts = {}) {
       }
     }
   }
-  return { cars, stats: { slots: (st.parkedSlots || []).length, placed: nSlots, island: nIsland, yard: nYard, taxiRank: nTaxiRank, tour: nTour, petro: { cars: cars.filter((q) => inPetro(q.x, q.z)).length, skipped: petroStats, keepOut: keepOut.length }, dbg } };
+  return { cars, stats: { slots: (st.parkedSlots || []).length, placed: nSlots, yard: nYard, taxiRank: nTaxiRank, tour: nTour, dbg } };
 }

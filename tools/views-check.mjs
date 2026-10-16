@@ -1,8 +1,7 @@
-// tools/views-check.mjs - proves the island VIEWS of src/world/layout.js with the real street network: environment + streets + the 16 sight modules built headless (NODE_OPTIONS=--max-old-space-size=14000).
-// usage: node tools/views-check.mjs   per view with a `group`: off the roadway (streets net.cover), on land (ground height), not inside a collider, a free 6 m ahead, the HUD area name; RESULT: OK / FAIL
-// tools/landmarksAcademy-walk.mjs - headless walk probe of landmarksAcademy (no GPU; derived from landmarksOktyabrsky-walk.mjs): the Academy front pavement, the pier stair (pavement -> landing -> lowest tread -> back),
-// the guards (railing, benches, pedestals, lamp columns), the garden gates (two open west gates, closed east gates, the fence), the column, the statues, Trezzini Square (monument, hotel, railing).
-// usage: node tools/landmarksAcademy-walk.mjs
+// tools/views-check.mjs - proves HERO and every VIEWS pose of src/world/layout.js with the real street network and colliders: every static module of src/main.js MODULES (environment, streets, city, the landmarks, bridges, props)
+// built headless (NODE_OPTIONS=--max-old-space-size=14000); the dynamic modules (metro, traffic, people, wildlife, drive) are not needed.
+// usage: node tools/views-check.mjs [--fix]   per pose: inside the play area (10 m margin), off the roadway (streets net.cover), on land (ground height), not inside a collider, a free 6 m ahead, the HUD area name; RESULT: OK / FAIL
+// --fix prints the nearest passing pose (1 m grid, 30 m) for every failing one.
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -55,11 +54,9 @@ const sunDir = new THREE.Vector3(...L.SUN_DIR).normalize();
 const quality = { name: 'high', pixelRatio: 1, msaa: 4, shadowMap: 4096, shadowSize: 75, petals: 1 };
 const ctx = createContext({ scene, camera, renderer: null, audio: null, quality, sunDir });
 ctx.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight(), uniforms: {} };
-const MODS = ['Academy','Menshikov','Mining','Andrew','NavalCorps','Smolensky','SeaTerminal','Sevkabel','Kirova','Makarova','Sredny','Gavan','Pribaltiyskaya','MarineFacade','ModernVO','CentralSouth','Moskovsky','VictoryPark'];
-ctx.buildList = ['environment', 'streets', 'bridges', ...MODS.map((m) => 'landmarks' + m)];
-for (const m of ['environment', 'streets']) { const mod = await import(pathToFileURL(path.join(root, 'src/world/' + m + '.js')).href); await mod.build(ctx); }
-for (const m of MODS) { const mod = await import(pathToFileURL(path.join(root, 'src/world/landmarks' + m + '.js')).href); await mod.build(ctx); }
-await (await import(pathToFileURL(path.join(root,'src/world/bridges.js')).href)).build(ctx);
+const { mainModules, DYNAMIC } = await import(pathToFileURL(path.join(root, 'tools/modules-list.mjs')).href);
+ctx.buildList = mainModules();      // lib/claims.js: the owners of the landmark groups build, the city skips what they claim (as on the page)
+for (const m of ctx.buildList) { if (DYNAMIC.includes(m)) continue; const mod = await import(pathToFileURL(path.join(root, 'src/world/' + m + '.js')).href); await mod.build(ctx); }
 const net = ctx.services.streets && ctx.services.streets.net, ph = ctx.physics;
 const dir = (yaw) => { const b = -yaw * Math.PI / 180; return [Math.sin(b), -Math.cos(b)]; };
 const FIX = process.argv.includes('--fix');
@@ -69,6 +66,7 @@ function problems(v) {
   const cover = net && net.cover ? net.cover(v.x, v.z, {}) : null;
   if (cover === null) notes.push('NO streets net.cover');
   else if (cover > -0.6) notes.push(`on the roadway (cover ${cover.toFixed(2)})`);
+  if (!L.inPlay(v.x, v.z, 10)) notes.push('not 10 m inside the play area');
   const g = ph.groundHeight(v.x, v.z, 10, false);
   if (!Number.isFinite(g)) notes.push('no ground'); else if (g < -0.5 || g > 1.5) notes.push(`ground height ${g.toFixed(2)}`);
   const p = { x: v.x, z: v.z }; ph.resolve(p, 0.35, Number.isFinite(g) ? g : 0, 1.7);
@@ -80,8 +78,8 @@ function problems(v) {
   return { notes, g, cover, area };
 }
 let bad = 0, n = 0;
-for (const v of L.VIEWS) {
-  if (!v.group) continue; n++;
+for (const v of [{ key: 'HERO', label: 'start pose', ...L.HERO }, ...L.VIEWS]) {
+  n++;
   const r = problems(v), notes = r.notes;
   if (notes.length) bad++;
   console.log((notes.length ? 'FAIL ' : 'ok   ') + v.key.padEnd(24) + ` (${v.x}, ${v.z}) ${r.area} | ${v.label}` + (notes.length ? ' :: ' + notes.join('; ') : ` (ground ${r.g.toFixed(2)}, cover ${r.cover.toFixed(1)})`));
@@ -95,6 +93,6 @@ for (const v of L.VIEWS) {
     console.log(best ? `     fix: x: ${best.q.x}, z: ${best.q.z} (moved ${best.d.toFixed(1)} m)` : '     fix: none within 30 m');
   }
 }
-console.log(`${n} island views checked, ${bad} failing`);
+console.log(`${n} poses checked, ${bad} failing`);
 console.log(bad ? 'RESULT: FAIL' : 'RESULT: OK');
 process.exit(bad ? 1 : 0);

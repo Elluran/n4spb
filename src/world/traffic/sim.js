@@ -9,7 +9,7 @@
 //   * Junctions: every connector knows the connectors it crosses / merges with (polyline distance < 2.2 m). A car enters its connector only when no conflicting connector
 //     is occupied and, if it has to yield (left turn, side street, lower rank, id tie-break), no priority vehicle reaches its stop line within GAP_T seconds.
 //     A signalised junction only compares streams of the same signal group (the plan gives the groups exclusive greens, see streets-api.md).
-//     A LANE DROP (two lanes of one carriageway going straight on into the same lane: three lanes into two at the Vasilievsky end of the Tuchkov Bridge) is a zipper: the lane that fed the
+//     A LANE DROP (two lanes of one carriageway going straight on into the same lane: three lanes into two) is a zipper: the lane that fed the
 //     shared lane last waits while the head of the other lane stands at its line (before, the lane with the higher id starved and its queue grew across the bridge).
 //   * Routing: a car picks a connector when it enters a lane (weights: straight 1 / right .38 / left .32 x road rank), never one that leads to a dead end.
 //     Cars are born at the lane ends at the data edge (Poisson per source lane by road rank) and die at the sink ends: the network is an open system.
@@ -24,10 +24,9 @@
 //     collision net makes cars and trams see each other; opts.trams === false switches them off, opts.tramStops = the tram stop positions of the map.
 //   * OPEN WATER (opts.wet(x, z) -> true over a waterway without a deck, asked only OUTSIDE the play area: opts.inPlay): a lane that reaches the data edge over such water (a road cut by the
 //     extent in the middle of a river crossing) ends / begins on the last dry metre: cars leave and are born there, nobody drives on the water of the far scenery.
-import { ARCH, PALETTE, KINDS_W, pickW, TAXI_KINDS, TAXI_WHITE, ARTIC, PLATES_COUNT, TROLLEY_ROUTES, BUS_ROUTES, ROUTE_BY_REF } from './fleetdata.js';
+import { ARCH, PALETTE, KINDS_W, pickW, TAXI_KINDS, TAXI_WHITE, ARTIC, PLATES_COUNT, TROLLEY_ROUTES, BUS_ROUTES } from './fleetdata.js';
 import { buildWireIndex } from './wireindex.js';
 import { buildTramNet, createTrams } from './trams.js';
-import { inPetro, inIsland } from './region.js';
 
 export const DT = 1 / 15;
 const GAP_T = 3.8, S_LINE = 0.7, MICRO = 24;                      // MICRO: lanes shorter than this between two nodes of one junction cluster
@@ -41,7 +40,6 @@ const TAXI_SHARE = 0.14, POLICE_SHARE = 0.004, AMB_SHARE = 0.004;
 const BUS_MIX = [['bus', 46], ['artic', 16], ['midi', 22], ['dd', 9], ['coach', 4]];
 const TOUR_STOP = /Дворцовая площадь|Исаакиев|Гостиный двор|Казанск|Адмиралтейск|Конюшенн/;      // the pick-up points of the sightseeing buses / coaches (west-life-furniture.md 3.5): they stop at these bays only
 
-const R_TERMINAL = [ROUTE_BY_REF.get('A24'), ROUTE_BY_REF.get('A275')];       // the bus routes that end at the Vasileostrovskaya metro station (Vasilievsky Island): a longer layover at its stops
 const hyp = (a, b, c) => c === undefined ? Math.sqrt(a * a + b * b) : Math.sqrt(a * a + b * b + c * c);      // (round 4, 2026-10-16: Math.hypot allocates in V8; the same values for two or three arguments)
 const PROF = typeof process !== 'undefined' && !!process.env && !!process.env.SIM_PROF;
 
@@ -318,11 +316,7 @@ export function createSim(st, makeRng, opts = {}) {
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < l.n; i++) { x0 = Math.min(x0, l.xs[i]); x1 = Math.max(x1, l.xs[i]); z0 = Math.min(z0, l.zs[i]); z1 = Math.max(z1, l.zs[i]); }
     stopLanes.push({ l, x0: x0 - 9, x1: x1 + 9, z0: z0 - 9, z1: z1 + 9 });
   }
-  // a stop that only trams serve (streets flag tram: 1, no bus / trolleybus route; Petrograd side and Vasilievsky Island only, the old districts keep theirs): buses and trolleybuses drive past it
-  const tramOnly = (bs) => !!bs.tram && !(bs.routes && ((bs.routes.bus && bs.routes.bus.length) || (bs.routes.trolley && bs.routes.trolley.length))) && inPetro(bs.x, bs.z);
-  let nTramOnly = 0;
   for (const bs of st.busStops || []) {
-    if (tramOnly(bs)) { nTramOnly++; continue; }
     let best = null;
     for (const { l, x0, x1, z0, z1 } of stopLanes) {
       if (bs.x < x0 || bs.x > x1 || bs.z < z0 || bs.z > z1) continue;
@@ -339,7 +333,7 @@ export function createSim(st, makeRng, opts = {}) {
   for (const l of laneSeg.values()) l.bus.sort((a, b) => a.s - b.s);
 
   // ================================================================== simulation state
-  const sim = { segs, laneSeg, connSeg, DT, time: 0, vehicles: [], stats: { timing: tm, spawned: 0, despawned: 0, steps: 0, nConf, nCross, nConfLanes: sim_nCL, nZip, busStops: new Set(busLanes.flatMap((l) => l.bus.map((b) => b.id))).size, tramOnlyStops: nTramOnly, wired: sim_wired, dupLaneIds: nDups, badConnectors: nBadConns, activeLanes: 0, activeSegs: 0, regionJumps: 0 }, onCross: null, regional, radius: R_ON };
+  const sim = { segs, laneSeg, connSeg, DT, time: 0, vehicles: [], stats: { timing: tm, spawned: 0, despawned: 0, steps: 0, nConf, nCross, nConfLanes: sim_nCL, nZip, busStops: new Set(busLanes.flatMap((l) => l.bus.map((b) => b.id))).size, wired: sim_wired, dupLaneIds: nDups, badConnectors: nBadConns, activeLanes: 0, activeSegs: 0, regionJumps: 0 }, onCross: null, regional, radius: R_ON };
   let rng = null, nextId = 1, sources = [], pending = [];
   sim.stats.wetLanes = nWet;
   // trams: built lazily at the first reset (place / remove are defined below)
@@ -372,30 +366,19 @@ export function createSim(st, makeRng, opts = {}) {
     }
     return (c.busBad = bad);
   };
-  // Vasilievsky Island (docs/research/vo-roster-metro.md 3.1): the 8th / 9th line pair carries most of the buses (1 24 41 42 100 128 151 152 230 262 275), Universitetskaya emb. the Palace Bridge flow, the prospects the rest:
-  // buses are seeded, born and routed more often on these streets (the names exist on the island only; no other district changes)
-  const busWeight = (l) => { if (l.bw === undefined) { const nm = (l.lane && l.lane.name) || ''; l.bw = /^(8|9)-я линия В\.О\./.test(nm) ? 3 : /Университетская набережная/.test(nm) ? 1.7 : /(Средний|Большой|Малый) проспект В\.О\./.test(nm) ? 1.4 : 1; } return l.bw; };
-  // Vasilievsky Island: the avenues, lines and embankments are all wired / bus roads, so the density of the first pass put 20-38 buses within 450 m and convoys of 11-17 standing at the stops (tools/traffic-vo-queue.mjs;
-  // the old districts measure 13-16 and chains of 4-7): the public-transport share of the island lanes is scaled by ISL_PT and a bus skips ISL_SKIP of the island stops (nobody waits there), as a real one does
-  const ISL_PT = 0.5, ISL_SKIP = 45;
-  const islK = (l) => { if (l.isl === undefined) l.isl = inIsland(l.xs[0], l.zs[0]) || busWeight(l) > 1; return l.isl ? ISL_PT : 1; };
-  const stopHash = (bs) => { if (bs.h === undefined) { let h = 17; for (const ch of String(bs.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; bs.h = h; } return bs.h; };
-  const skipStop = (v, bs) => !(v.arch.tour || ((v.route === R_TERMINAL[0] || v.route === R_TERMINAL[1]) && /Василеостровская/.test(bs.name || ''))) && ((Math.imul(v.id, 73856093) ^ stopHash(bs)) >>> 0) % 100 < ISL_SKIP;
   // a lane is fine for a long vehicle when it leaves the data (the lane ends at the extent) or some exit that is not a bad corner leads on to a fine lane (looked ahead 3 lanes: a bus must not be led into a lane whose only exits are such corners)
   const busGood = (l, d, seen) => { if (!l.okConns.length) return l.lane.to === null; if (d <= 0) return true; seen.add(l); for (const c of l.okConns) { if (busBad(c)) continue; if (seen.has(c.to) || busGood(c.to, d - 1, seen)) return true; } return false; };
   const busOkLane = (l) => { if (l.busOk === undefined) l.busOk = busGood(l, 3, new Set()); return l.busOk; };
-  const HEAVY_BAN = /^w374845529$/;                                 // the ways of the Shkipersky bridge (landmarksGavan, vo-requests-landmarksGavan.md item 1)
   const choose = (v, seg) => {
     let cs = seg.okConns; if (!cs.length) return null;
     if (regional) { cs = cs.filter((c) => c.on); if (!cs.length) return null; }
     if (v.len >= 9 && cs.length) { const g = cs.filter((c) => !busBad(c) && busOkLane(c.to)); if (g.length) cs = g; }
-    if (cs.length && (v.len >= 9 || v.kind === 'truck')) { cs = cs.filter((c) => !HEAVY_BAN.test(String(c.to.lane.road))); if (!cs.length) return null; }   // (the Shkipersky bridge is rated 8 t: no bus, trolleybus or truck; the vehicle is removed at the lane end)
     if (v.trolley) {                                              // a trolleybus follows the wires: wired successors (kept in the bus lane when it can), else it rolls on under folded poles
       let w = cs.filter((c) => c.to.tw); if (w.length > 1 && w.some((c) => c.to.idx === 0)) w = w.filter((c) => c.to.idx === 0 || c.from.idx !== 0); if (w.length) cs = w;
     }
     if (cs.length > 1) { const main = cs.filter((c) => c.to.rank > 0); if (main.length) cs = main; }
     if (cs.length === 1) return cs[0];
-    let tot = 0; const w = cs.map((c) => { const x = (v.bus ? (c.turn === 'straight' ? 1 : 0.12) * (v.trolley ? 1 : busWeight(c.to)) : TURN_W[c.turn]) * (RANK_W[c.to.rank] ?? 0.2) *(!v.bus && !v.taxi && isBusLane(c.to) ? 0.08 : 1) * (c.to.tramLane ? 0.03 : 1) + 1e-4; tot += x; return x; });
+    let tot = 0; const w = cs.map((c) => { const x = (v.bus ? (c.turn === 'straight' ? 1 : 0.12) : TURN_W[c.turn]) * (RANK_W[c.to.rank] ?? 0.2) *(!v.bus && !v.taxi && isBusLane(c.to) ? 0.08 : 1) * (c.to.tramLane ? 0.03 : 1) + 1e-4; tot += x; return x; });
     let r = rng() * tot; for (let i = 0; i < cs.length; i++) { r -= w[i]; if (r <= 0) return cs[i]; }
     return cs[cs.length - 1];
   };
@@ -484,8 +467,8 @@ export function createSim(st, makeRng, opts = {}) {
       if (rng() < 0.9) {
         // (the bus lane carries a public-transport vehicle or a taxi every ~60 m, no private cars: west-life-furniture.md 3.1 / 3.4)
         const longOk = busOkLane(l);                                           // (no bus on a lane whose every exit is a corner a bus cannot take)
-        const trolley = longOk && l.tw && l.idx === 0 && rng() < (bl ? 0.42 : 0.075) * islK(l);
-        const bus = longOk && !trolley && (l.rank >= 3 || (l.rank >= 2 && busWeight(l) > 1)) && l.idx === 0 && rng() < (bl ? 0.45 : 0.04 * busWeight(l)) * islK(l);
+        const trolley = longOk && l.tw && l.idx === 0 && rng() < (bl ? 0.42 : 0.075);
+        const bus = longOk && !trolley && l.rank >= 3 && l.idx === 0 && rng() < (bl ? 0.45 : 0.04);
         const taxi = bl && !trolley && !bus;
         const kind = trolley ? (rng() < 0.55 ? 'trolley' : 'trolley2') : bus ? busKind() : taxi ? TAXI_KINDS[Math.floor(rng() * TAXI_KINDS.length)] : pickW(KINDS_W, rng);
         const v = mkVeh(kind, l, s, l.speed * 0.55, { taxi }); v.next = choose(v, l); v.die = sim.time + 30 + rng() * 330;
@@ -535,10 +518,10 @@ export function createSim(st, makeRng, opts = {}) {
         const mean = l.tramLane ? 0 : SPAWN_MEAN[l.rank];
         if (mean) {
           add(l, isBusLane(l) ? 60 : mean * busLaneShare(l) / densOf(l), isBusLane(l) ? 'taxi' : 'car');
-          if ((l.rank >= 3 || (l.rank >= 2 && busWeight(l) > 1)) && l.idx === 0) add(l, BUS_MEAN / busWeight(l) / islK(l), 'bus');
-          if (l.tw && l.idx === 0) add(l, TROLLEY_MEAN / islK(l), 'trolley');
+          if (l.rank >= 3 && l.idx === 0) add(l, BUS_MEAN, 'bus');
+          if (l.tw && l.idx === 0) add(l, TROLLEY_MEAN, 'trolley');
         }
-      } else if (l.twStart && l.lane.from !== null) add(l, TROLLEY_MEAN / islK(l), 'trolley');
+      } else if (l.twStart && l.lane.from !== null) add(l, TROLLEY_MEAN, 'trolley');
     }
     sim.stats.srcTrolley = sources.filter((q) => q.type === 'trolley').length; sim.stats.srcBus = sources.filter((q) => q.type === 'bus').length; sim.stats.srcCar = sources.filter((q) => q.type === 'car').length;
   }
@@ -734,7 +717,6 @@ export function createSim(st, makeRng, opts = {}) {
       // ---- bus stops
       if (v.bus && seg.bus.length) {
         for (const bs of seg.bus) {
-          if (!v.served.has(bs.id) && islK(seg) < 1 && skipStop(v, bs)) v.served.add(bs.id);
           if (v.served.has(bs.id) || (v.trolley ? bs.kind === 'bus' : bs.kind === 'trolley') || (v.arch.tour && !TOUR_STOP.test(bs.name || ''))) continue;
           const d = bs.s + 2.5 - front;
           if (d < -3) continue;
@@ -830,7 +812,7 @@ export function createSim(st, makeRng, opts = {}) {
         }
         // dwelling bus
         if (v.dwell > 0 || (v.at && v.v < 0.2 && v.holding)) {
-          if (v.dwell <= 0 && v.at) { v.dwell = v.arch.tour ? 28 + rng() * 22 : (v.route === R_TERMINAL[0] || v.route === R_TERMINAL[1]) && /Василеостровская/.test(v.at.name || '') ? 40 + rng() * 25 : 12 + rng() * 16; v.doorT = 0; }       // (24 and 275 end at Vasileostrovskaya: a layover)
+          if (v.dwell <= 0 && v.at) { v.dwell = v.arch.tour ? 28 + rng() * 22 : 12 + rng() * 16; v.doorT = 0; }
           if (v.dwell > 0) { v.dwell -= DT; v.door = Math.min(1, v.door + DT / 1.2); if (v.dwell <= 0) { v.served.add(v.at.id); v.at = null; } }
         } else v.door = Math.max(0, v.door - DT / 1.2);
         const a = accel(v, arr, i, time);

@@ -14,18 +14,13 @@
 // 0.03, platform ramps 0.1 -> 1.38, the bridge deck hump).
 import * as L from '../layout.js';
 import { AREAS, GREEN, FOUNTAINS } from '../data/city.js';
-import { TAURIDE_GARDEN } from '../landmarksTauride/terrain.js';
 import { makeZones } from './zones.js';
 import { makeFrame } from './frame.js';
 import { makeArea } from './area.js';
 import { addStation } from './station.js';
 import { createCrosswalkLookup } from './crosswalks.js';
-import { LBAND, inPetro, VO_SIGHTS } from './petroarea.js';       // pure data: the pavement bands of the long Neva bridges, the Petrograd side / Spit reach, the island sight services
-import { inVO } from './voarea.js';                               // Vasilievsky Island outline (lib/vo-island.js)
-import { inIsl, ISL_SIGHTS } from './isl2area.js';                // the islands of round 2 (Yelagin, Kamenny, Aptekarsky, Petrovsky, the Krestovsky stadium): outlines + the sight services
 import { FR as OKT_FR, W as OKT_W, FOYER_OPEN as OKT_OPEN } from '../landmarksOktyabrsky/frame.js';       // pure data: the glazed foyer of the Oktyabrsky hall (enterable for the player, a keep-out for the pedestrians)
-import { SITES, toUV as siteUV, toWorld as siteWorld } from '../bridges/sites.js';       // pure data: the deck frames and the pavement bands of the west bridges
-import { FOOT as NOVO_FOOT } from '../bridges/sites-vo2.js';     // pure data: the Novo-Andreevsky footbridge of the Smolenka (3.3 m wide, 34.8 m long)
+import { SITES, toUV as siteUV } from '../bridges/sites.js';       // pure data: the deck frames and the pavement bands of the west bridges
 import { PackedEdges, PackedAdjacency } from './packed-graph.js';
 import { PackedCellIndex } from './packed-cell-index.js';
 const hyp = (a, b) => Math.sqrt(a * a + b * b);      // (round 4, 2026-10-16: Math.hypot allocates in V8 (117 MB per 20 s of driving); every use in this file has two arguments)
@@ -43,12 +38,11 @@ export function buildNav(ctx, cfg = {}) {
   const nav = { stats: {} };
   const _t0 = (typeof process !== 'undefined' && process.cpuUsage && globalThis.__peopleCpu ? { now: () => { const u = process.cpuUsage(); return (u.user + u.system) / 1000; } } : (typeof performance !== 'undefined' ? performance : Date)), _tp = { last: _t0.now() }; nav.stats.ms = {};
   const mark = (k) => { const n = _t0.now(); nav.stats.ms[k] = Math.round(n - _tp.last); _tp.last = n; };
-  const PLAY = L.WORLD.play;
-  const inPlay = (x, z, m = 0) => x > PLAY.x0 - m && x < PLAY.x1 + m && z > PLAY.z0 - m && z < PLAY.z1 + m;
+  const inPlay = (x, z, m = 0) => L.inPlay(x, z, -m);                // the union of the play rectangles, grown by m metres
   const FR = makeFrame(lm.stationFrame);
   const marsOff = !!(cfg.mars && cfg.mars.off);
-  const area = marsOff ? { info: {}, catAt: () => 0, inGarden: () => false, inField: () => false, y: () => null, walk: () => false, veto: () => false, weight: () => 0, zone: () => -1 } : makeArea(ctx, L, st, { islBase: cfg.islBase ?? -1 });          // the Mars Field / Summer Garden / castle surfaces (area.js); islBase: the first zone index of the islands (people.js)
-  const Z = makeZones(L, st && st.roads, lm.stationFrame, marsOff ? {} : { area, sv: svc }), zoneW = Z.zoneW;
+  const area = marsOff ? { info: {}, catAt: () => 0, y: () => null, walk: () => false, weight: () => 0, zone: () => -1 } : makeArea(ctx, L, st);          // the castle surfaces (area.js)
+  const Z = makeZones(L, st && st.roads, lm.stationFrame, marsOff ? {} : { area }), zoneW = Z.zoneW;
   // station zone: the density factor of people.js DENSITY.station (0.35 within 'radius' m of the segments / rectangles, fading to 1 over 'fade' m)
   const SC = (cfg.station) || { factor: 1, radius: 0, fade: 1, segments: [], rects: [] }; nav.stationCfg = SC;
   const stationFactor = (x, z) => {
@@ -58,10 +52,7 @@ export function buildNav(ctx, cfg = {}) {
     const k = Math.max(0, Math.min(1, (d - SC.radius) / SC.fade)); return SC.factor + (1 - SC.factor) * k * k * (3 - 2 * k);
   };
   nav.stationFactor = stationFactor;
-  nav.taurideCfg = cfg.tauride || { factor: 1, maxPeople: Infinity };
-  nav.inTauride = (x, z) => x > 915 && x < 1500 && z > -1800 && z < -1250 &&
-    TAURIDE_GARDEN.some(p => ringHas(p.o, x, z) && !p.h.some(h => ringHas(h, x, z)));
-  nav.densityFactor = (x, z) => stationFactor(x, z) * (nav.inTauride(x, z) ? nav.taurideCfg.factor : 1);
+  nav.densityFactor = stationFactor;
   nav.inPlay = inPlay; nav.zoneW = (x, z) => zoneW(x, z) * nav.densityFactor(x, z); nav.PAVE = PAVE; nav.ROAD_Y = ROAD_Y; nav.frame = FR; nav.zones = Z; nav.area = area; nav.marsCfg = cfg.mars || { zones: [], scale: 1 }; nav.marsZone = area.zone;
 
   // ------------------------------------------------------------------ buildings (footprints, grid); interiors (the station hall) are walkable
@@ -74,15 +65,11 @@ export function buildNav(ctx, cfg = {}) {
     return false;
   };
   const interiors = [];                                           // [{ test(x, z) }] regions inside a footprint that are floor (the station hall)
-  // the stepped bases of the big monuments of the Spit / Universitetskaya embankment (services: monuments with r >= 3 m: the Rostral columns, the anchor, Lomonosov) are no ground: layout.insideBuilding
-  // knows their footprints, the footprint list of the routing does not (the sights own them)
-  const pDiscs = []; let pdX0 = 1e9, pdX1 = -1e9;
-  if (area.petro) for (const k of ['landmarksStrelka', 'landmarksUniversity', 'landmarksTroitskaya', 'landmarksAurora', 'landmarksKronverk', 'landmarksVladimir', 'landmarksFortress'].concat(area.petro.voZone0 >= 0 ? VO_SIGHTS : []).concat(area.isl ? ISL_SIGHTS : [])) for (const m of (svc[k] && svc[k].monuments) || []) if (m && m.r >= 3 && Number.isFinite(m.x) && Number.isFinite(m.z)) { pDiscs.push([m.x, m.z, m.r * m.r]); pdX0 = Math.min(pdX0, m.x - m.r); pdX1 = Math.max(pdX1, m.x + m.r); }
   // the Oktyabrsky Concert Hall foyer is ENTERABLE for the player (landmarksOktyabrsky/frame.js FOYER_OPEN: five open door groups): pedestrians stay outside (decision of the people owner, 2026-10-09): the volume behind
   // the glass wall (hall frame u FR.u0 .. FR.u1, v 2.5 .. 16.4) is a keep-out like a building, the door gaps lead nowhere for the routing
   const foyer = (svc.landmarksOktyabrsky && OKT_OPEN) ? (() => { const o = []; for (const [u, v] of [[OKT_FR.u0 - 0.6, OKT_FR.glassV - 0.5], [OKT_FR.u1 + 0.6, OKT_FR.glassV - 0.5], [OKT_FR.u1 + 0.6, 16.4], [OKT_FR.u0 - 0.6, 16.4]]) { const w = OKT_W(u, v); o.push(w.x, w.z); } return o; })() : null;
   nav.foyer = foyer;
-  const inBuilding = (x, z) => { if (foyer && x > 700 && x < 880 && ringHas(foyer, x, z)) return true; if (x > pdX0 && x < pdX1) for (let i = 0; i < pDiscs.length; i++) { const d = pDiscs[i], dx = x - d[0], dz = z - d[1]; if (dx * dx + dz * dz < d[2]) return true; } if (!rawInBuilding(x, z)) return false; for (let i = 0; i < interiors.length; i++) if (interiors[i](x, z)) return false; return true; };
+  const inBuilding = (x, z) => { if (foyer && x > 700 && x < 880 && ringHas(foyer, x, z)) return true; if (!rawInBuilding(x, z)) return false; for (let i = 0; i < interiors.length; i++) if (interiors[i](x, z)) return false; return true; };
   nav.inBuilding = inBuilding; nav.rawInBuilding = rawInBuilding; nav.interiors = interiors;
   const KC0 = { x: -1472.4, z: -269.7 }, KROT = -16.8 * Math.PI / 180, kcs = Math.cos(KROT), ksn = Math.sin(KROT);
   const inColonnade = (x, z, r0 = 44.3, r1 = 54.7) => { const dx = x - KC0.x, dz = z - KC0.z, mx = dx * kcs - dz * ksn, mz = dx * ksn + dz * kcs, r = hyp(mx, mz); if (r < r0 || r > r1) return false; const a = Math.atan2(Math.abs(mx), mz) * 180 / Math.PI; return a >= 19 && a <= 84; };
@@ -101,36 +88,6 @@ export function buildNav(ctx, cfg = {}) {
   // plaza / plank band (the asphalt band of a road bridge is a carriageway like any other: the streets cover decides, people cross it on the zebras)
   const WLIFT = { asphalt: 0, pave: 0.12, lpave: 0.15, sett: 0.02, plaza: 0.1, plank: 0, slab: 0 }, WEST_X = -600;
   const bdY = svc.bridges && svc.bridges.deckY;
-  // the LONG bridges of the Neva (bridges/troitsky.js, palace.js, long.js: Trinity 554 m, Palace, Birzhevoy, Tuchkov, Sampsonievsky, Zhdanovsky, Krasnogo Kursanta) are no sites of sites.js: their axes come
-  // from services.bridges.spans ({ id, a, b, hw }), the pavement band |v| (barrier kerb .. railing) from petroarea.js LBAND; the two timber bridges of the fortress (landmarksFortress.bridges: a, b, w) are
-  // footways with their own walk boxes (`own`: the height is read from the physics).  nav.longs = [{ id, ax, az, ux, uz, len, hw, v0, v1, ped, own }]
-  const petroOn = !marsOff && !!area.petro, longs = [];
-  const voOn = petroOn && area.petro.voZone0 >= 0;                                                       // Vasilievsky Island reach (people/voarea.js; ?vo=off switches it off)
-  const islOn = petroOn && !!area.isl;                                                                   // the islands of round 2 (people/isl2area.js; ?isl=off / ?petro=off switch them off)
-  const inReach = (x, z) => inPetro(x, z) || (voOn && inVO(x, z)) || (islOn && inIsl(x, z));             // the Petrograd side / Spit reach + the whole island + the islands of round 2
-  const ownGround = (x, z) => (voOn && inVO(x, z)) || (islOn && inIsl(x, z));                           // the new reaches (Vasilievsky Island, the islands of round 2): the stricter rules below apply there only
-  const belowStreet = (x, z) => { if (!ownGround(x, z)) return false; const h = ctx.physics.groundHeight(x, z, 0.6, false); return Number.isFinite(h) && h < -0.3; };       // the island: a descent / apron below the street is not a standing place for the generic crowd (the sights script their own people there)
-  const SIGHTS_NEW = (voOn ? VO_SIGHTS : []).concat(islOn ? ISL_SIGHTS : []);                            // the services of the sights of the new reaches (benches, photo spots, monument footprints)
-  if (petroOn) {
-    const add = (id, ax, az, bx, bz, hw, v0, v1, ped, own) => { const dx = bx - ax, dz = bz - az, len = hyp(dx, dz); if (!(len > 5)) return; const m = hw + 3; longs.push({ id, ax, az, ux: dx / len, uz: dz / len, len, hw, v0, v1, ped, own, x0: Math.min(ax, bx) - m, x1: Math.max(ax, bx) + m, z0: Math.min(az, bz) - m, z1: Math.max(az, bz) + m }); };
-    const extraSpans = voOn && NOVO_FOOT ? [{ id: 'novo-andreevsky', a: siteWorld(NOVO_FOOT, -NOVO_FOOT.len / 2, 0), b: siteWorld(NOVO_FOOT, NOVO_FOOT.len / 2, 0), hw: NOVO_FOOT.hw }] : [];          // (a footbridge: not in services.bridges.spans, a ped deck of its own)
-    for (const s of ((svc.bridges && svc.bridges.spans) || []).concat(extraSpans)) { const b = LBAND[s.id]; if (b && s.a && s.b) add(s.id, s.a.x, s.a.z, s.b.x, s.b.z, s.hw, b[0], b[1], b[2] === 'ped', false); }
-    for (const b of (svc.landmarksFortress && svc.landmarksFortress.bridges) || []) if (b.a && b.b) add(b.key || 'fortress-bridge', b.a[0], b.a[1], b.b[0], b.b[1], (b.w || 9) / 2, 0, (b.w || 9) / 2 - 0.5, true, true);
-  }
-  nav.longs = longs; nav.novoFoot = voOn ? NOVO_FOOT : null;
-  const LD = { s: null, u: 0, v: 0 };
-  /** the long deck under (x, z): LD = { s, u, v } (a shared record) or null; pad widens the deck sideways */
-  const longDeck = (x, z, pad = 0.3) => {
-    for (let i = 0; i < longs.length; i++) {
-      const s = longs[i]; if (x < s.x0 || x > s.x1 || z < s.z0 || z > s.z1) continue;
-      const dx = x - s.ax, dz = z - s.az, u = dx * s.ux + dz * s.uz; if (u < -1 || u > s.len + 1) continue;
-      const v = -dx * s.uz + dz * s.ux; if (v > s.hw + pad || v < -s.hw - pad) continue;
-      LD.s = s; LD.u = u; LD.v = v; return LD;
-    }
-    return null;
-  };
-  nav.longDeck = longDeck;
-  const ownY = (x, z) => { const h = ctx.physics.groundHeight(x, z, 4.0, false); return Number.isFinite(h) && h > -1 ? h : 0; };
   const westDeck = (x, z) => {
     if (x > WEST_X) return null;
     const y = bdY ? bdY(x, z) : null;
@@ -140,25 +97,15 @@ export function buildNav(ctx, cfg = {}) {
         let kind = 'pave'; for (const zz of s.zones) if (q.v >= zz[0] && q.v <= zz[1]) { kind = zz[2]; break; }
         return { s, kind, y, foot: s.kind === 'foot' };
       }
-      // the bridges of the islands of round 2 (Yelagin ponds + the three Yelagin bridges, Kamenny, Aptekarsky, Petrovsky): services.bridges.deckY answers over the whole deck; a deck above the ground is a walkable plank / pavement deck
-      // (the carriageway of a road deck is still asphalt for the cover test: people cross on the zebras only)
-      if (islOn && y > 0.08 && y < 5.5 && Number.isFinite(y) && inIsl(x, z)) { const h = ctx.physics.groundHeight(x, z, y + 0.6, false); if (Number.isFinite(h) && Math.abs(h - y) < 0.45) return { s: null, kind: 'plank', y, foot: true, long: true, isl: true }; }          // (a real walk surface at the deck height: the viaduct of the Betancourt bridge, 10 - 18 m up, is no deck for a pedestrian: the plaza under it stays on the ground)
-    }
-    if (longs.length) {
-      const d = longDeck(x, z);
-      if (d) { const s = d.s, av = Math.abs(d.v); if (s.own) return { s, kind: 'plank', y: ownY(x, z), foot: true, long: true }; if (y !== null && y !== undefined && Number.isFinite(y)) return { s, kind: s.ped ? 'slab' : av >= s.v0 && av <= s.v1 ? 'lpave' : 'asphalt', y, foot: false, long: true }; }
     }
     return null;
   };
   const deckWalk = (x, z) => { const d = westDeck(x, z); return !!d && (d.foot || d.kind !== 'asphalt'); };
   nav.westDeck = westDeck; nav.deckWalk = deckWalk;
-  /** in the Mars / Garden / castle reach (x -1480 .. -600, z -1745 .. -635): the ground under the point is a trench / the water / a descent (the quay stairs, the canal bank) and it is no bridge deck: no pavement node there */
-  const swBox = (x, z) => (x < -2900 && x > -3960 && z > -480 && z < 1420) || (x >= -2900 && x < -1650 && z > 150 && z < 1420);       // the south-west rectangles S1 .. S5
-  const deepGround = (x, z) => { if (x > WEST_X || !((x >= -1480 && z >= -1745 && z <= -635) || swBox(x, z) || (petroOn && inReach(x, z)))) return false;                    // (the Mars / Garden / castle reach: the pavement strips there run over the Neva quay and the canal descents)
+  /** in the castle / Mikhailovsky reach (x -1480 .. -600, z < -635): the ground under the point is a trench / the water / a descent (the quay stairs, the canal bank) and it is no bridge deck: no pavement node there */
+  const deepGround = (x, z) => { if (x > WEST_X || !(x >= -1480 && z <= -635)) return false;                    // (the pavement strips there run over the Neva quay and the canal descents)
     const h = ctx.physics.groundHeight(x, z, 0.6, false); return Number.isFinite(h) && h < -0.6 && !deckWalk(x, z); };
-  // south-west: over the canals / the Kovsh the footbridges of New Holland (walk boxes at y 0.04 over the water polygon) and the floating pier are decks, not water
-  const deckBox = (x, z) => { if (!swBox(x, z)) return false; if (area.inPier && area.inPier(x, z)) return true; const h = ctx.physics.groundHeight(x, z, 0.3, false); return Number.isFinite(h) && h > 0.02 && h < 1.2; };
-  const water = (x, z) => rawWater(x, z) && !westDeck(x, z) && !deckBox(x, z);
+  const water = (x, z) => rawWater(x, z) && !westDeck(x, z);
   // the Anichkov Bridge deck covers the river polygon: people walk on its pavements (a rectangle in the bridge frame)
   const bridge = svc.landmarksC && svc.landmarksC.bridge, bfr = bridge && bridge.frame;
   const bth = bfr ? bfr.theta : 14.2 * Math.PI / 180, bcx = bfr ? bfr.cx : -441.5, bcz = bfr ? bfr.cz : -91.8, bcu = Math.cos(bth), bsu = Math.sin(bth);
@@ -167,36 +114,10 @@ export function buildNav(ctx, cfg = {}) {
   /** the two granite pavements of the bridge deck (3 m each, outside the roadway |v| < 15.95 and its kerb) */
   const deckPave = (x, z, m = 0) => { const q = bridgeUV(x, z), v = Math.abs(q.v); return Math.abs(q.u) < 29.3 && v > 16.25 + m && v < 18.65 - m; };
   nav.onDeck = onDeck; nav.bridgeUV = bridgeUV; nav.deckPave = deckPave;
-  const deepMemo = new Map();
-  /** the Petrograd side / the Spit: the ground at (x, z) lies more than 0.9 m below the street and it is no bridge deck (a bank the water polygon does not cover, a descent, the lower beach) */
-  const deepP = (x, z) => {
-    if (!inReach(x, z)) return false; const qx = Math.round(x * 2), qz = Math.round(z * 2), k = qx * 16384 + qz; let v = deepMemo.get(k);
-    if (v === undefined) { v = 0; for (const [ox, oz] of [[0, 0], [0.25, 0.25], [-0.25, 0.25], [0.25, -0.25], [-0.25, -0.25]]) { const px = qx / 2 + ox, pz = qz / 2 + oz, h = ctx.physics.groundHeight(px, pz, 0.6, false); if (Number.isFinite(h) && h < -0.9 && !westDeck(px, pz)) { v = 1; break; } } deepMemo.set(k, v); }      // (the centre and the corners of the half-metre cell: no walkable sliver at an open quay edge)
-    return v === 1;
-  };
   // deep ground anywhere in the west (a quay edge without a parapet, a moat, a basin): the side-by-side place of a FOLLOWER must not lie there (sim.js stepFollower)
   const deepMemoW = new Map();
-  nav.deepAt = (x, z) => { if (x > WEST_X) return false; const k = Math.round(x * 2) * 16384 + Math.round(z * 2); let v = deepMemoW.get(k); if (v === undefined) { const h = ctx.physics.groundHeight(x, z, 0.6, false); v = Number.isFinite(h) && h < -0.9 && !westDeck(x, z) && !deckBox(x, z) && !onDeck(x, z, 0.3) ? 1 : 0; deepMemoW.set(k, v); } return v === 1; };
-  nav.blocked = petroOn ? (x, z) => blockedPoly(x, z) || (water(x, z) && !onDeck(x, z, 0.3)) || (x < WEST_X && deepP(x, z)) : (x, z) => blockedPoly(x, z) || (water(x, z) && !onDeck(x, z, 0.3));
-
-  // ------------------------------------------------------------------ the Smolensky cemetery (landmarksSmolensky: 10.5 k trunks, 3.9 k shrubs, 13 k plots as colliders)
-  // Walkers keep to the alleys the module draws (service `paths`: id, pts, w) and to its crowd discs (the Xenia plaza, the church portico ...): inside the GREEN polygon r2736670 only these are walkable ground
-  // (nav.walkable, the lattice), the trunks and the plot boxes are no routing obstacles (a mask, not 10 k nav obstacles); the fence runs (thin boxes, `fence`), the chapels and the church stay obstacles.
-  const cemPolys = voOn ? ((GREEN.find((g) => g.id === 'r2736670') || {}).polys || []).map((p) => ({ o: p.o, b: bboxOf(p.o) })) : [];
-  const inCem = (x, z) => { for (let i = 0; i < cemPolys.length; i++) { const p = cemPolys[i]; if (x < p.b[0] || x > p.b[1] || z < p.b[2] || z > p.b[3]) continue; if (ringHas(p.o, x, z)) return true; } return false; };
-  const cemSv = voOn ? (svc.landmarksSmolensky || {}) : {}, CG = new Map(), CGC = 8;
-  { for (const q of cemSv.paths || []) { if (!q.pts || q.pts.length < 2) continue; const hw = (q.w || 3) / 2 + 0.55; for (let i = 0; i + 1 < q.pts.length; i++) { const a = q.pts[i], b = q.pts[i + 1]; for (let cx = Math.floor((Math.min(a[0], b[0]) - hw) / CGC); cx <= Math.floor((Math.max(a[0], b[0]) + hw) / CGC); cx++) for (let cz = Math.floor((Math.min(a[1], b[1]) - hw) / CGC); cz <= Math.floor((Math.max(a[1], b[1]) + hw) / CGC); cz++) { const k = cellKey(cx, cz); let l = CG.get(k); if (!l) CG.set(k, (l = [])); l.push(a[0], a[1], b[0], b[1], hw); } } } }
-  const cemDiscs = (cemSv.crowd || []).filter((c) => Number.isFinite(c.x) && !(c.y !== undefined && Math.abs(c.y) > 0.5));
-  /** inside the cemetery polygon: on an alley of the module (half width + 0.55 m) or in a crowd disc */
-  const cemOK = (x, z) => {
-    const l = CG.get(cellKey(Math.floor(x / CGC), Math.floor(z / CGC)));
-    if (l) for (let i = 0; i < l.length; i += 5) { const ax = l[i], az = l[i + 1], dx = l[i + 2] - ax, dz = l[i + 3] - az, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), ex = x - ax - dx * t, ez = z - az - dz * t; if (ex * ex + ez * ez <= l[i + 4] * l[i + 4]) return true; }
-    for (let i = 0; i < cemDiscs.length; i++) { const c = cemDiscs[i], r = (c.r || 5) + 1; if ((x - c.x) * (x - c.x) + (z - c.z) * (z - c.z) <= r * r) return true; }
-    return false;
-  };
-  const smolSite = voOn ? SITES.find((q) => q.id === 'smolensky') : null;                                  // the Smolensky Bridge head lies inside the cemetery polygon: its approach (46 m of the deck axis) is street, not cemetery
-  const cemBlocked = cemPolys.length ? (x, z) => { if (!inCem(x, z) || cemOK(x, z)) return false; if (smolSite) { const q = siteUV(smolSite, x, z); if (Math.abs(q.u) < 52 && q.v > smolSite.v0 - 1 && q.v < smolSite.v1 + 1) return false; } return true; } : () => false;
-  nav.inCemetery = inCem; nav.cemOK = cemOK;
+  nav.deepAt = (x, z) => { if (x > WEST_X) return false; const k = Math.round(x * 2) * 16384 + Math.round(z * 2); let v = deepMemoW.get(k); if (v === undefined) { const h = ctx.physics.groundHeight(x, z, 0.6, false); v = Number.isFinite(h) && h < -0.9 && !westDeck(x, z) && !onDeck(x, z, 0.3) ? 1 : 0; deepMemoW.set(k, v); } return v === 1; };
+  nav.blocked = (x, z) => blockedPoly(x, z) || (water(x, z) && !onDeck(x, z, 0.3));
 
   mark('water+deck');
   // ------------------------------------------------------------------ carriageways and zebra corridors
@@ -219,11 +140,7 @@ export function buildNav(ctx, cfg = {}) {
   };
   const ringHasP = (o, x, z) => { let ins = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++) { const a = o[i], b = o[j]; if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) ins = !ins; } return ins; };
   nav.fastCover = fastCover;
-  // Zayachy Island has no carriageways (its service ways are the cobbled alleys of the fortress: people walk on them), neither have the two timber bridges of the fortress
-  const island = petroOn ? (x, z) => x < -1560 && x > -2400 && z > -2275 && z < -1690 && area.petro.catAt(x, z) >= 7 : null;
-  const covBase = (x, z) => (net && net.grid ? fastCover(x, z) : net && net.cover ? net.cover(x, z, NOP) : (L.isOnRoad(x, z, 0.1) ? 1 : -5));
-  // on a long bridge the whole deck between the barrier kerbs is the carriageway (the streets cover leaves the tram median of the Trinity Bridge open)
-  const covAt = petroOn ? (x, z) => { if (x > WEST_X) return covBase(x, z); if (island(x, z)) return -50; const d = longs.length ? longDeck(x, z) : null; if (!d) return covBase(x, z); if (d.s.own) return -50; const c = covBase(x, z); if (d.s.ped) return c; const m = d.s.v0 - 0.3 - Math.abs(d.v); return m > c ? m : c; } : covBase;
+  const covAt = (x, z) => (net && net.grid ? fastCover(x, z) : net && net.cover ? net.cover(x, z, NOP) : (L.isOnRoad(x, z, 0.1) ? 1 : -5));
   const onAsphalt = (x, z, m = 0.12) => covAt(x, z) > -m;
   // OSM maps a zebra over a two-carriageway street as two collinear halves that meet in the middle of the asphalt (Nevsky has no refuge): merge such pairs into ONE crossing
   let cws;
@@ -290,7 +207,7 @@ export function buildNav(ctx, cfg = {}) {
   /** index of the zebra corridor that contains (x,z) (|along| < w/2 + m, between the kerbs +- m), else -1 */
   const crosswalkAt = createCrosswalkLookup(cws);
   /** the pedestrian may stand here: not inside a building, not in a bed / the hill / water, and on asphalt only inside a zebra corridor (the bridge deck is a floor) */
-  const walkable = (x, z) => !inBuilding(x, z) && !blockedPoly(x, z) && !cemBlocked(x, z) && (onDeck(x, z, 0.3) ? (deckPave(x, z) || crosswalkAt(x, z, 0.5) >= 0) : (!water(x, z) && (!onAsphalt(x, z) || crosswalkAt(x, z, 0.5) >= 0)));
+  const walkable = (x, z) => !inBuilding(x, z) && !blockedPoly(x, z) && (onDeck(x, z, 0.3) ? (deckPave(x, z) || crosswalkAt(x, z, 0.5) >= 0) : (!water(x, z) && (!onAsphalt(x, z) || crosswalkAt(x, z, 0.5) >= 0)));
   nav.cover = (x, z) => (onDeck(x, z, 0) ? (deckPave(x, z) ? -3 : 1) : covAt(x, z));
   nav.onAsphalt = (x, z, m) => !onDeck(x, z, 0) && onAsphalt(x, z, m); nav.crosswalkAt = crosswalkAt; nav.walkable = walkable; nav.crosswalks = cws;
 
@@ -300,37 +217,24 @@ export function buildNav(ctx, cfg = {}) {
   const addObst = (o, x0, x1, z0, z1) => { const id = obst.length; obst.push(o); for (let cx = Math.floor((x0 - 0.7) / OC); cx <= Math.floor((x1 + 0.7) / OC); cx++) for (let cz = Math.floor((z0 - 0.7) / OC); cz <= Math.floor((z1 + 0.7) / OC); cz++) { const k = cellKey(cx, cz); let a = oGrid.get(k); if (!a) oGrid.set(k, (a = [])); a.push(id); if (o.fence) fenceCells.add(k); } };
   /** a guard rail / chain collider (streets/barriers.js, `fence`) lies in the 6 m cell of (x, z): the cheap pre-test of the walkers' lateral offsets (sim.js: lane, follower side) before they ask segBlocked */
   nav.fenceNear = (x, z) => fenceCells.has(cellKey(Math.floor(x / OC), Math.floor(z / OC)));
-  let nKeep = 0, nCem = 0;
-  // (the cemetery mask cemPolys / inCem / cemOK is defined above, before walkable: trunks, shrubs and plot boxes inside it are no routing obstacles)
-  // on a long bridge the colliders are measured from the deck: the piers / abutments below it are no obstacles, the lamp standards, barrier kerbs and railings ON it are
-  const deckBase = (it) => { const d = longDeck(it.cx, it.cz, 6); if (!d || d.s.own || !bdY) return 0; const s = d.s, u = clamp(d.u, 0, s.len), v = clamp(d.v, -s.hw, s.hw), y = bdY(s.ax + s.ux * u - s.uz * v, s.az + s.uz * u + s.ux * v); return y !== null && Number.isFinite(y) ? y : 0; };
-  for (const it0 of ctx.physics.items) {
-    let it = it0;
-    if (longs.length && it0.cx < WEST_X && (it0.type === 'cyl' || it0.type === 'box')) { const yb = deckBase(it0); if (yb > 0.3) { if (it0.y1 <= yb + 0.3) continue; it = { ...it0, y0: it0.y0 - yb, y1: it0.y1 - yb }; } }
+  let nKeep = 0;
+  for (const it of ctx.physics.items) {
     const west = it.cx < WEST_X;
-    if (cemPolys.length && (it.type === 'cyl' || (it.type === 'box' && !it.fence && Math.min(it.hw, it.hd) > 0.25 && Math.max(it.hw, it.hd) < 3)) && inCem(it.cx, it.cz)) { nCem++; continue; }
     if (it.type === 'cyl') { if ((it.y1 <= 0.45 && !(west && it.r >= 0.9 && it.y1 > 0.2)) || it.y0 >= 1.7) continue; addObst({ t: 0, cx: it.cx, cz: it.cz, r: it.r }, it.cx - it.r, it.cx + it.r, it.cz - it.r, it.cz + it.r); }
     else if (west && it.type === 'walk' && it.y0 < 0.6 && (it.top >= 0.25 || (it.top <= -0.25 && it.top >= -3.7)) && !(it.top <= 0.46 && it.top > 0 && inColonnade(it.cx, it.cz, 41.5, 58.5))) {
       // the steps, stylobates, plinths and podiums of the landmark modules (walk boxes above the pavement) and the stairs of the embankment descents (walk boxes below it): nobody walks there
       const ex = Math.abs(it.c) * it.hw + Math.abs(it.s) * it.hd, ez = Math.abs(it.s) * it.hw + Math.abs(it.c) * it.hd; nKeep++;
       addObst({ t: 1, cx: it.cx, cz: it.cz, hw: it.hw, hd: it.hd, c: it.c, s: it.s, wall: Math.max(it.hw, it.hd) >= 0.6, keep: true }, it.cx - ex, it.cx + ex, it.cz - ez, it.cz + ez);
     }
-    else if (petroOn && it.type === 'ramp' && it.cx < WEST_X && Math.max(it.yA, it.yB) > 0.5 && Math.max(it.yA, it.yB) < 3.6 && Math.min(it.yA, it.yB) > -0.3 && inReach(it.cx, it.cz) && !rawWater(it.cx, it.cz) && !longDeck(it.cx, it.cz, 6)) {
-      // a stair flight of a Petrograd sight on dry land (a walk ramp from the pavement up to a door): nobody walks through it
-      const ex = Math.abs(it.c) * it.hw + Math.abs(it.s) * it.hd, ez = Math.abs(it.s) * it.hw + Math.abs(it.c) * it.hd; nKeep++;
-      addObst({ t: 1, cx: it.cx, cz: it.cz, hw: it.hw, hd: it.hd, c: it.c, s: it.s, wall: true, keep: true }, it.cx - ex, it.cx + ex, it.cz - ez, it.cz + ez);
-    }
     else if (it.type === 'box' || (it.type === 'walk' && it.top > 0.5)) {
       if (it.type === 'box' && ((it.y1 <= 0.45 && !(west && it.y1 > 0.2 && Math.max(it.hw, it.hd) >= 0.6 && Math.min(it.hw, it.hd) >= 0.25)) || it.y0 >= 1.7)) continue;
       if (it.type === 'box' && it.y0 < -2.5 && it.y1 < 3.4 && Math.max(it.hw, it.hd) > 12) continue;       // the deep quay / bridge railing cores are handled by the water test
-      // (the stair flights of the Petrograd sights are obstacles too: a narrow walk box 0.5 - 3.6 m up on dry land, e.g. the two flights of the Academy of Sciences that run along the pavement)
-      const pst = petroOn && it.type === 'walk' && it.top < 3.6 && Math.min(it.hw, it.hd) < 1.2 && it.cx < WEST_X && inReach(it.cx, it.cz) && !rawWater(it.cx, it.cz) && !longDeck(it.cx, it.cz, 6);
-      if (it.type === 'walk' && !pst && (it.hw * it.hd > 14 || it.top > 0.95 || Math.max(it.hw, it.hd) > 4)) continue;   // platform decks, ramps, the bridge deck, stage floors: floors, not obstacles
+      if (it.type === 'walk' && (it.hw * it.hd > 14 || it.top > 0.95 || Math.max(it.hw, it.hd) > 4)) continue;   // platform decks, ramps, the bridge deck, stage floors: floors, not obstacles
       const ex = Math.abs(it.c) * it.hw + Math.abs(it.s) * it.hd, ez = Math.abs(it.s) * it.hw + Math.abs(it.c) * it.hd;
       addObst({ t: 1, cx: it.cx, cz: it.cz, hw: it.hw, hd: it.hd, c: it.c, s: it.s, wall: Math.max(it.hw, it.hd) >= 0.6 || !!it.fence, fence: !!it.fence }, it.cx - ex, it.cx + ex, it.cz - ez, it.cz + ez);          // (it.fence: a guard rail run, streets/barriers.js: always a wall for the routes)
     }
   }
-  nav.obstacles = obst.length; nav.keepOuts = nKeep; nav.stats.cemeteryMasked = nCem;
+  nav.obstacles = obst.length; nav.keepOuts = nKeep;
   const obstacleIndex = new PackedCellIndex(oGrid);
   /** push the circle (p.x, p.z, r) out of the static colliders (same maths as Physics.resolve); returns true when it moved */
   nav.pushOut = (p, r) => {
@@ -444,13 +348,11 @@ export function buildNav(ctx, cfg = {}) {
   }
   nSidewalk = N.x.length;
   // mapped footways (not steps)
-  const cemAlleys = new Set(((svc.landmarksSmolensky || {}).paths || []).map((q) => q.id));              // the alleys the cemetery module draws; the other mapped footways between the graves are not drawn: nobody walks there
   for (const s of (st && st.paths) || []) {
     if (s.hw === 'steps' || !s.pts || s.pts.length < 2) continue;
-    if (cemPolys.length && inCem(s.pts[0][0], s.pts[0][1]) && !cemAlleys.has(s.id)) continue;
     const g = groupId++; let prev = -1, accL = 0, lastp = null;
     for (let i = 0; i < s.pts.length; i++) {
-      const p = s.pts[i]; if (!inPlay(p[0], p[1], 8) || onAsphalt(p[0], p[1], 0.05) || inBuilding(p[0], p[1]) || blockedPoly(p[0], p[1]) || deepGround(p[0], p[1]) || (islOn && area.closed(p[0], p[1]))) { prev = -1; lastp = null; accL = 0; continue; }          // (islands: the garden footways of closed territory carry nobody)
+      const p = s.pts[i]; if (!inPlay(p[0], p[1], 8) || onAsphalt(p[0], p[1], 0.05) || inBuilding(p[0], p[1]) || blockedPoly(p[0], p[1]) || deepGround(p[0], p[1])) { prev = -1; lastp = null; accL = 0; continue; }
       if (lastp) accL += hyp(p[0] - lastp[0], p[1] - lastp[1]);
       if (prev < 0 || accL >= 3.0 || i === s.pts.length - 1) {
         const id = addNode(p[0], p[1], 0.04, 'p', g);
@@ -466,6 +368,10 @@ export function buildNav(ctx, cfg = {}) {
 
   // ------------------------------------------------------------------ the lattice: open-space nodes (3 m) near the avenue / hot spots, joined 8-ways when the mid points are free
   const LS = 2.0, LMIN = 0.16;
+  /** the ground of the west at (x, z) is a pit / a stair well / a trench (not a bridge deck): no standing place */
+  const pitAt = (x, z) => { if (x > WEST_X) return false; const h = ctx.physics.groundHeight(x, z, 0.6, false); return Number.isFinite(h) && h < -0.3 && !deckWalk(x, z); };
+  /** an edge over a pit (both nodes stand on the street, a point of the edge does not): sampled at 1/5 .. 4/5 */
+  const pitOnEdge = (ax, az, bx, bz) => { if (ax > WEST_X && bx > WEST_X) return false; for (let k = 1; k < 5; k++) if (pitAt(ax + (bx - ax) * k / 5, az + (bz - az) * k / 5)) return true; return false; };
   const lat = new Map(), latList = cached ? Array.from(cached.latList) : [];
   // the pavement strips (streets.sidewalks centrelines, kerb to facade) in a coarse grid: a lattice cell beyond the registered range of the road grid (the outer half of the wide Nevsky
   // pavements, arcades) is still pavement when a strip centreline passes within 5.5 m
@@ -506,8 +412,6 @@ export function buildNav(ctx, cfg = {}) {
     const T = svc.landmarksH && svc.landmarksH.tower, tx = T ? T.x : -2387, tz = T ? T.z : -565, R = 37.5 * Math.PI / 180, cr = Math.cos(R), sr = Math.sin(R), wb = (b) => [tx - sr * b, tz - cr * b];
     const a0 = wb(-15), b0 = wb(15); addPassage('admiralty-gate', a0[0], a0[1], b0[0], b0[1], 8.6);
   } catch (e) { console.error('[people] Admiralty gate failed:', e); }
-  // the six gates of the Peter and Paul Fortress (landmarksFortress.gates: vaulted passages through the ramparts, 4-5 m wide, 15-22 m long): floor inside the wall footprint
-  if (petroOn) try { for (const gt of (svc.landmarksFortress && svc.landmarksFortress.gates) || []) { if (!gt.outer || !gt.inner) continue; const dx = gt.inner[0] - gt.outer[0], dz = gt.inner[1] - gt.outer[1], l = hyp(dx, dz) || 1, e = 3; addPassage('fortress-' + (gt.key || nav.passages.length), gt.outer[0] - dx / l * e, gt.outer[1] - dz / l * e, gt.inner[0] + dx / l * e, gt.inner[1] + dz / l * e, Math.max(2.6, (gt.w || 4) - 0.5)); } } catch (e) { console.error('[people] fortress gates failed:', e); }
   // the Kazan colonnade: the covered promenade between the faces of the entablature (radius 44.3 .. 54.7 m round C = (-1472.4, -269.7) in the cathedral frame, angle 19 .. 84 deg from the south axis):
   // inside the OSM footprint, so an interior; its stylobate (walk boxes 0.15 / 0.30 / 0.45 m) is walkable, the columns are obstacles
   { const test = (x, z) => inColonnade(x, z, 41, 58.5) && rawInBuilding(x, z); interiors.push(test); passTests.push(test); nav.passageTests['kazan-colonnade'] = test; nav.passages.push({ name: 'kazan-colonnade', ax: KC0.x, az: KC0.z, bx: KC0.x, bz: KC0.z, w: 10.4 }); }
@@ -519,7 +423,7 @@ export function buildNav(ctx, cfg = {}) {
   {
     if (!cached) {
     const tLat = Date.now();
-    for (const rc of (L.WORLD.rects && L.WORLD.rects.length ? L.WORLD.rects : [PLAY])) {
+    for (const rc of L.WORLD.rects) {
       const gx0 = Math.ceil(rc.x0 / LS), gx1 = Math.floor(rc.x1 / LS), gz0 = Math.ceil(rc.z0 / LS), gz1 = Math.floor(rc.z1 / LS);
       const BL = 6;                                                                                        // 12 m blocks: a block whose centre / corner weights are all far below the threshold has no cell above it
       for (let bx = Math.floor(gx0 / BL); bx <= Math.floor(gx1 / BL); bx++) for (let bz = Math.floor(gz0 / BL); bz <= Math.floor(gz1 / BL); bz++) {
@@ -530,12 +434,11 @@ export function buildNav(ctx, cfg = {}) {
         const x = gx * LS + 0.37 * Math.sin(gz * 12.9898) , z = gz * LS + 0.37 * Math.sin(gx * 78.233);     // a small fixed jitter breaks the regular rows
         const zw = zoneW(x, z); if (zw < LMIN) continue;
         if (x < WEST_X && zw < 0.55 && ((gx + gz) & 1)) continue;                                         // quiet parts of the west: a checkerboard (the diagonal edges still join it)
-        if (inBuilding(x, z) || blockedPoly(x, z) || water(x, z) || area.veto(x, z) || cemBlocked(x, z) || (longs.length && x < WEST_X && longDeck(x, z))) continue;      // (the long bridges get explicit pavement chains)
+        if (inBuilding(x, z) || blockedPoly(x, z) || water(x, z)) continue;
         { const c = covAt(x, z); if (c > -0.5 || (c <= -49 && !nearSw(x, z, 5.5) && !inArea(x, z) && !deckWalk(x, z) && !inPark(x, z) && !inPassage(x, z) && !area.walk(x, z))) continue; }
         if (nav.obstDist(x, z, 0.6) < 0.42) continue;
-        if (ownGround(x, z) && (inBuilding(x + 0.4, z) || inBuilding(x - 0.4, z) || inBuilding(x, z + 0.4) || inBuilding(x, z - 0.4) || belowStreet(x + 1.5, z) || belowStreet(x - 1.5, z) || belowStreet(x, z + 1.5) || belowStreet(x, z - 1.5))) continue;     // the island: no lattice node on the rim of a footprint (a walker drifts 0.1-0.3 m: a tip of a ruin put a pram inside it)
         if (x < WEST_X) { const h = ctx.physics.groundHeight(x, z, 0.6, false); if (Number.isFinite(h) && (h < -0.3 || h > 0.5) && !deckWalk(x, z)) continue; }   // steps / stairs down / sunk areas are not street level
-        const id = addNode(x, z, area.y(x, z) ?? ((islOn && inIsl(x, z) && !nearSw(x, z, 5.5) && !inArea(x, z)) ? 0.02 : PAVE), 'a', 5000 + gx * 7919 + gz); lat.set((gx + 4096) * 8192 + gz + 4096, id); latList.push(id);          // (the islands: an open-space node away from every pavement / paved area stands on the lawn, not 12 cm above it)
+        const id = addNode(x, z, PAVE, 'a', 5000 + gx * 7919 + gz); lat.set((gx + 4096) * 8192 + gz + 4096, id); latList.push(id);
         }
       }
     }
@@ -546,8 +449,9 @@ export function buildNav(ctx, cfg = {}) {
         const dx = LDX[q], dz = LDZ[q];
         const j = lat.get((gx + dx + 4096) * 8192 + gz + dz + 4096); if (j === undefined) continue;
         const mx = (N.x[id] + N.x[j]) / 2, mz = (N.z[id] + N.z[j]) / 2;
-        if (inBuilding(mx, mz) || covAt(mx, mz) > -0.25 || blockedPoly(mx, mz) || area.veto(mx, mz) || cemBlocked(mx, mz) || nav.segBlocked(N.x[id], N.z[id], N.x[j], N.z[j])) continue;
+        if (inBuilding(mx, mz) || covAt(mx, mz) > -0.25 || blockedPoly(mx, mz) || nav.segBlocked(N.x[id], N.z[id], N.x[j], N.z[j])) continue;
         if (nav.obstDist(mx, mz, 0.5) < 0.32) continue;
+        if (pitOnEdge(N.x[id], N.z[id], N.x[j], N.z[j])) continue;
         addEdge(id, j, 0, -1, 0, dx && dz ? 1.22 : 1.18);
       }
     }
@@ -566,7 +470,7 @@ export function buildNav(ctx, cfg = {}) {
   // polyline nodes (pavement strips, footways) are joined to the lattice (2 nearest nodes within 4.6 m) and strips that touch each other are joined (3.2 m, ends 6.5 m)
   for (let i = 0; i < nPolyEnd; i++) {
     const cand = []; near(N.x[i], N.z[i], 4.6, (j, d) => { if (j >= nPolyEnd) cand.push([j, d]); }); cand.sort((p, q) => p[1] - q[1]);
-    let k = 0; for (const [j] of cand) { if (k >= 2) break; if (edgeOK(N.x[i], N.z[i], N.x[j], N.z[j], false, 1.7)) { addEdge(i, j, 0, -1, 0, 1.15); k++; } }
+    let k = 0; for (const [j] of cand) { if (k >= 2) break; if (edgeOK(N.x[i], N.z[i], N.x[j], N.z[j], false, 1.7) && !pitOnEdge(N.x[i], N.z[i], N.x[j], N.z[j])) { addEdge(i, j, 0, -1, 0, 1.15); k++; } }
   }
   const degree = (i) => adj[i].length;
   for (let i = 0; i < nPolyEnd; i++) {
@@ -619,7 +523,6 @@ export function buildNav(ctx, cfg = {}) {
     const cand = []; near(x, z, maxD, (j, d) => { if (mainOK(j) && N.k[j] !== 'c') cand.push([j, d]); }); cand.sort((p, q) => p[1] - q[1]);
     let id = -1, k = 0;
     let tried = 0;
-    if (longs.length && x < WEST_X && nav.surfaceY && longDeck(x, z)) y = nav.surfaceY(x, z, y);          // an access node (bench, stop, photo spot) on a long bridge stands at deck height
     for (const [j] of cand) {
       if (k >= 2 || tried++ > 8) break;
       if (edgeOK(x, z, N.x[j], N.z[j]) && (N.k[j] !== 'a' || segFree(x, z, N.x[j], N.z[j], crowd))) { if (id < 0) { id = addNode(x, z, y, kind); gridAdd(id); comp[id] = main; } addEdge(id, j, 0, -1, 0, 1.0); k++; }
@@ -630,9 +533,9 @@ export function buildNav(ctx, cfg = {}) {
   const gridNode = (x, z, y, kind, g = -1) => { const id = addNode(x, z, y, kind, g); gridAdd(id); comp[id] = main; return id; };
 
   mark('components');
-  if (FINAL) {                                                    // the Anichkov / long-bridge / fortress-gate chains and the node heights are in the bake
+  if (FINAL) {                                                    // the Anichkov chains and the node heights are in the bake
     nav.bridge = { nodes: Array.from(cached.bridgeNodes) }; nav.stats.bridgeNodes = nav.bridge.nodes.length;
-    nav.longK = new Set(cached.longK); nav.stats.longDecks = cached.stats.longDecks; nav.stats.fortGates = cached.stats.fortGates; nav.stats.crossings = cached.stats.crossings; groupId = cached.groupId;
+    nav.stats.crossings = cached.stats.crossings; groupId = cached.groupId;
   } else {
   // ------------------------------------------------------------------ the Anichkov Bridge: both pavements (granite slabs, 3 m wide) on the deck hump, joined to the streets at the abutments
   nav.bridge = { nodes: [] };
@@ -657,51 +560,14 @@ export function buildNav(ctx, cfg = {}) {
     // cross links on the deck are the zebra crossings of the streets (the bridge ways are part of the street graph)
   }
   nav.stats.bridgeNodes = nav.bridge.nodes.length;
-  // ------------------------------------------------------------------ the long Neva bridges: a chain of nodes on each pavement (a single / triple chain on a footbridge), joined to the bank graph at both ends
-  nav.longK = new Set(); nav.stats.longDecks = '';
-  for (const s of longs) {
-    const lanes = s.ped ? (s.hw > 8 ? [0, -s.hw * 0.5, s.hw * 0.5] : [0]) : [-(s.v0 + s.v1) / 2, (s.v0 + s.v1) / 2]; let joined = ''; const nn0 = N.x.length;
-    for (const v of lanes) {
-      const U0 = s.own ? -5 : 0, U1 = s.own ? s.len + 5 : s.len, g = groupId++, ids = [], n = Math.max(2, Math.ceil((U1 - U0) / 3)); let prev = -1;      // (a fortress footbridge: a few metres over the bank at both ends)
-      for (let i = 0; i <= n; i++) {
-        const u = U0 + (U1 - U0) * i / n, x = s.ax + s.ux * u - s.uz * v, z = s.az + s.uz * u + s.ux * v;
-        if ((u < 0 || u > s.len) && rawWater(x, z)) continue;
-        if (inBuilding(x, z) || (!s.ped && onAsphalt(x, z, 0.2))) { prev = -1; continue; }
-        const id = gridNode(x, z, PAVE, 'k', g); ids.push(id); nav.longK.add(id); if (prev >= 0) addEdge(prev, id, 0, -1, 0, 1.0); prev = id;
-      }
-      if (ids.length < 2) continue;
-      for (const [id, dir] of [[ids[0], -1], [ids[ids.length - 1], 1]]) {
-        // the bank end: the nearest pavement / lattice nodes beyond the deck end (within 18 m), nothing solid and no asphalt between
-        const cand = []; near(N.x[id], N.z[id], 18, (j, d) => { const kj = N.k[j]; if (kj === 'k' || kj === 'c' || nav.longK.has(j)) return; const along = ((N.x[j] - N.x[id]) * s.ux + (N.z[j] - N.z[id]) * s.uz) * dir; if (along > -3) cand.push([j, d + (mainOK(j) ? 0 : 6)]); }); cand.sort((p, q) => p[1] - q[1]);
-        let k = 0; for (const [j] of cand) { if (k >= 2) break; if (edgeOK(N.x[id], N.z[id], N.x[j], N.z[j], false, 1.2)) { addEdge(id, j, 0, -1, 0, 1.15); k++; } }
-        joined += k;
-      }
-    }
-    nav.stats.longDecks += s.id + ':' + (N.x.length - nn0) + '/' + joined + ' ';
-  }
-  // ------------------------------------------------------------------ the gates of the Peter and Paul Fortress (landmarksFortress.gates: the only ways through the ramparts): a chain along each passage
-  nav.stats.fortGates = '';
-  if (petroOn) for (const gt of (svc.landmarksFortress && svc.landmarksFortress.gates) || []) {
-    if (!gt.outer || !gt.inner) continue;
-    const dx = gt.inner[0] - gt.outer[0], dz = gt.inner[1] - gt.outer[1], l = hyp(dx, dz) || 1, ux = dx / l, uz = dz / l, E0 = 7, n = Math.ceil((l + 2 * E0) / 2), g = groupId++, ids = []; let prev = -1, ok = 0;
-    for (let i = 0; i <= n; i++) {
-      const t = -E0 + (l + 2 * E0) * i / n, x = gt.outer[0] + ux * t, z = gt.outer[1] + uz * t;
-      if (inBuilding(x, z) || water(x, z) || nav.obstDist(x, z, 0.5) < 0.3) { prev = -1; continue; }
-      const id = gridNode(x, z, area.y(x, z) ?? PAVE, 'p', g); ids.push(id); if (prev >= 0 && !nav.segBlocked(N.x[prev], N.z[prev], x, z)) { addEdge(prev, id, 0, -1, 0, 1.0); ok++; } prev = id;
-    }
-    let joins = 0;
-    for (const id of ids) { const cand = []; near(N.x[id], N.z[id], 5, (j, d) => { if (j !== id && N.g[j] !== g && N.k[j] !== 'c') cand.push([j, d]); }); cand.sort((p, q) => p[1] - q[1]); let k = 0; for (const [j] of cand) { if (k >= 2) break; if (edgeOK(N.x[id], N.z[id], N.x[j], N.z[j], false, 1.0)) { addEdge(id, j, 0, -1, 0, 1.1); k++; joins++; } } }
-    nav.stats.fortGates += (gt.key || '?') + ':' + ids.length + '/' + ok + '/' + joins + ' ';
-  }
   }
   nav.nodeY = (i) => N.y[i];
   /** the standing height at (x, z): the pavement 0.12 / the given y, or the humped deck of the Anichkov Bridge + 0.12 */
   // feet height from the REAL walkable surface: the humped Anichkov deck (landmarksC.bridge.deckY, + the 0.12 m granite pavement) first, then physics.groundHeight (walk boxes / ramps /
   // steps, roofs excluded) when it is raised above the terrain; otherwise the given y (pavement 0.12, hall 0.03 ...)
   nav.surfaceY = (x, z, y) => {
-    if (longs.length && x < WEST_X) { const wd = westDeck(x, z); if (wd && wd.long) return wd.y + (wd.foot ? 0.02 : WLIFT[wd.kind] || 0); }       // the long Neva bridges / the fortress footbridges: the deck itself
-    const dy =svc.northBridges?.deckY(x, z) ?? svc.landmarksTauride?.deckY(x, z) ?? svc.eastBridges?.deckY(x, z) ?? (bridge && bridge.deckY ? bridge.deckY(x, z) : null);
-    if (dy != null && Number.isFinite(dy)) { if (x < WEST_X) { const wd = westDeck(x, z); if (wd) return wd.y + (wd.foot ? 0 : WLIFT[wd.kind] || 0); } if (!(voOn && dy > 0.6 && x < -5000) && !(islOn && dy > 0.6 && inIsl(x, z))) return dy + 0.12; }      // (the island: the drivable WHSD viaduct, 1 - 11 m up, answers deckY over the pavements and footways that pass UNDER it: those stay on the ground, nobody walks the viaduct)
+    const dy = bridge && bridge.deckY ? bridge.deckY(x, z) : null;
+    if (dy != null && Number.isFinite(dy)) { if (x < WEST_X) { const wd = westDeck(x, z); if (wd) return wd.y + (wd.foot ? 0 : WLIFT[wd.kind] || 0); } return dy + 0.12; }
     if (onDeck(x, z, 0.3)) { const h = ctx.physics.groundHeight(x, z, 2.0, false); return Number.isFinite(h) ? h + 0.12 : y; }
     const h = ctx.physics.groundHeight(x, z, 2.0, false);
     return Number.isFinite(h) && h > 0.06 && h > y - 0.05 ? h + 0.02 : y;
@@ -713,8 +579,8 @@ export function buildNav(ctx, cfg = {}) {
     N: { x: new Float64Array(N.x), z: new Float64Array(N.z), y: new Float64Array(N.y), k: N.k, g: new Float64Array(N.g) },
     edges: Object.fromEntries(['a', 'b', 'len', 'kind', 'cid', 'cost'].map(key => [key, E.columns[key].slice(0, E.length)])),
     cws, groupId, nSidewalk, nPolyEnd, latList: new Uint32Array(latList), final: 1,
-    comp: Int32Array.from(comp), compSize: Float64Array.from(compSize), nComp, main, bridgeNodes: Uint32Array.from(nav.bridge.nodes), longK: Uint32Array.from(nav.longK),
-    stats: { longDecks: nav.stats.longDecks, fortGates: nav.stats.fortGates, crossings: nav.stats.crossings },
+    comp: Int32Array.from(comp), compSize: Float64Array.from(compSize), nComp, main, bridgeNodes: Uint32Array.from(nav.bridge.nodes),
+    stats: { crossings: nav.stats.crossings },
     // the kerb-side test of the bridging crossings (below: covAt >= -3.5 for the pavement / lattice nodes) is a static property of the node
     kerbCov: (() => { const n = Math.min(N.x.length, nPolyEnd + latList.length + 1), a = new Uint8Array(n); for (let i = 0; i < n; i++) { const k = N.k[i]; if ((k === 'a' || k === 's') && covAt(N.x[i], N.z[i]) >= -3.5) a[i] = 1; } return a; })(),
   });
@@ -731,7 +597,7 @@ export function buildNav(ctx, cfg = {}) {
     return node >= 0;
   };
   {
-    const all = ((svc.city && svc.city.entrances) || []).filter((e) => inPlay(e.x, e.z, -4) && zoneW(e.x, e.z) > 0.3 && !(area.closed && area.closed(e.x, e.z)));          // (the doors of closed territory, military yards / building sites of the island, are no goals)
+    const all = ((svc.city && svc.city.entrances) || []).filter((e) => inPlay(e.x, e.z, -4) && zoneW(e.x, e.z) > 0.3);
     let kept = 0;
     for (let i = 0; i < all.length && kept < 520; i++) { const e = all[i]; if (hash01(i * 31 + 7) > Math.min(1, 520 / Math.max(1, all.length) * 1.3)) continue; if (addDoor(e, 'door')) kept++; }
   }
@@ -755,24 +621,16 @@ export function buildNav(ctx, cfg = {}) {
     nav.benches.push(rec); return rec;
   };
   for (const b of [...(lm.benches || []), ...((svc.props && svc.props.benches) || [])]) nav.addBench(b);
-  // the benches of the Mars Field (landmarksMars, 61 white slat benches on the gravel) and of the castle square (landmarksCastle: positions only, they face the nearest footway / pavement): the gravel
-  // lies lower than the pavement, so the seat height follows area.y; a bench that props already registered is not added twice
+  // the benches of the castle square (landmarksCastle: positions only, they face the nearest footway / pavement): a bench that props already registered is not added twice
   try {
-    let nm = 0, nc = 0; const dup = (b) => nav.benches.some((q) => Math.abs(q.x - b.x) < 0.7 && Math.abs(q.z - b.z) < 0.7);
-    if (!marsOff) for (const b of (svc.landmarksMars && svc.landmarksMars.benches) || []) if (!dup(b) && nav.addBench({ ...b, y: area.y(b.x, b.z) ?? undefined, where: 'mars' })) nm++;
+    let nc = 0; const dup = (b) => nav.benches.some((q) => Math.abs(q.x - b.x) < 0.7 && Math.abs(q.z - b.z) < 0.7);
     for (const b of (marsOff ? [] : (svc.landmarksCastle && svc.landmarksCastle.benches) || [])) {
       if (dup(b)) continue; let tx = 0, tz = 1, bd = 12;
       for (let i = 0; i < N.x.length; i++) { const k = N.k[i]; if (k !== 's' && k !== 'p') continue; const d = hyp(N.x[i] - b.x, N.z[i] - b.z); if (d > 1.2 && d < bd) { bd = d; tx = N.x[i] - b.x; tz = N.z[i] - b.z; } }
       if (nav.addBench({ x: b.x, z: b.z, rotY: b.rotY ?? Math.atan2(tx, tz), len: b.len || 1.7, where: 'castle' })) nc++;
     }
-    // the benches of the four south-west sights (Mariinsky gardens, Yusupov garden, New Holland, Nikolsky garden)
-    let nsw = 0; if (!marsOff) for (const k of ['landmarksMariinsky', 'landmarksYusupov', 'landmarksNewHolland', 'landmarksNikolsky']) for (const b of (svc[k] && svc[k].benches) || []) if (!dup(b) && nav.addBench({ ...b, rotY: b.rotY ?? 0, y: area.y(b.x, b.z) ?? undefined, where: 'sw' })) nsw++;
-    nav.stats.swBenches = nsw;
-    // the benches of the Petrograd side / the Spit (the fortress, the Spit garden, Troitskaya Square ...)
-    let npb = 0; if (petroOn) for (const k of ['landmarksFortress', 'landmarksStrelka', 'landmarksTroitskaya', 'landmarksAurora', 'landmarksKronverk', 'landmarksUniversity', 'landmarksKamennoostrovsky', 'landmarksVladimir', 'landmarksKarpovka'].concat(SIGHTS_NEW)) for (const b of (svc[k] && svc[k].benches) || []) if (Number.isFinite(b.x) && !dup(b) && !(b.y !== undefined && Math.abs(b.y) > 0.5 && (VO_SIGHTS.includes(k) || ISL_SIGHTS.includes(k))) && nav.addBench({ ...b, rotY: b.rotY ?? 0, y: area.y(b.x, b.z) ?? undefined, where: 'petro' })) npb++;
-    nav.stats.petroBenches = npb;
-    nav.stats.marsBenches = nm; nav.stats.castleBenches = nc;
-  } catch (e) { console.error('[people] Mars / castle benches failed:', e); }
+    nav.stats.castleBenches = nc;
+  } catch (e) { console.error('[people] castle benches failed:', e); }
   // the benches that landmarksF draws itself (Kazan garden: benchPoints, Voronikhin square: vorBenches) are in nobody's bench list (props skips the OSM nodes there): the garden benches face the fountain
   // within 26 m of it, otherwise the garden axis (garden.js: model-frame rotation + the cathedral frame ROT = -16.8 deg about C0 = (-1472.4, -269.7))
   try {
@@ -798,7 +656,7 @@ export function buildNav(ctx, cfg = {}) {
   for (const s of (st && st.busStops) || []) {
     if (!inPlay(s.x, s.z, -6)) continue;
     const fx = Math.sin(s.rotY), fz = Math.cos(s.rotY), rx = Math.cos(s.rotY), rz = -Math.sin(s.rotY);
-    const spots = []; for (const [d, o] of [[-1.6, -0.6], [-1.6, 0.6], [-2.4, 0], [-1.0, 1.4], [-1.0, -1.4], [-2.8, 1.2], [-2.8, -1.2]]) { const x = s.x + fx * d + rx * o, z = s.z + fz * d + rz * o; if (walkable(x, z) && !(area.closed && area.closed(x, z)) && (!L.insideBuilding(x, z, 0) || inPassage(x, z))) spots.push({ x, z, taken: -1 }); }      // (the island: nobody waits on the closed side of a fence line)
+    const spots = []; for (const [d, o] of [[-1.6, -0.6], [-1.6, 0.6], [-2.4, 0], [-1.0, 1.4], [-1.0, -1.4], [-2.8, 1.2], [-2.8, -1.2]]) { const x = s.x + fx * d + rx * o, z = s.z + fz * d + rz * o; if (walkable(x, z) && (!L.insideBuilding(x, z, 0) || inPassage(x, z))) spots.push({ x, z, taken: -1 }); }
     if (!spots.length) continue;
     const node = attach(spots[0].x, spots[0].z, PAVE, 'b', 14, 0.3); if (node < 0) continue;
     nav.stops.push({ x: s.x, z: s.z, rotY: s.rotY, name: s.name, shelter: !!s.shelter, spots, node, w: zoneW(s.x, s.z) });
@@ -808,7 +666,7 @@ export function buildNav(ctx, cfg = {}) {
   mark('stops');
   // ------------------------------------------------------------------ open-space spots: photograph the monuments / sights (photoSpots, monuments, the Klodt groups)
   nav.spots = [];
-  const addSpot = (type, x, z, yaw, extra = {}) => { if (!walkable(x, z) || nav.obstDist(x, z, 1) < 0.5 || (cemPolys.length && type !== 'view' && inCem(x, z)) || belowStreet(x, z)) return false; const node = attach(x, z, PAVE, 'b', 16, 0.3); if (node < 0) return false; nav.spots.push({ type, x, z, yaw, node, taken: -1, w: zoneW(x, z), ...extra }); return true; };
+  const addSpot = (type, x, z, yaw, extra = {}) => { if (!walkable(x, z) || nav.obstDist(x, z, 1) < 0.5) return false; const node = attach(x, z, PAVE, 'b', 16, 0.3); if (node < 0) return false; nav.spots.push({ type, x, z, yaw, node, taken: -1, w: zoneW(x, z), ...extra }); return true; };
   nav.addSpot = addSpot;
   for (const m of lm.monuments || []) {
     if (m.id === 'peter-bust') continue;                                  // inside the hall: station.js
@@ -826,21 +684,6 @@ export function buildNav(ctx, cfg = {}) {
       addSpot('view', p.x + dx, p.z + dz, yaw, { name: p.name, clock: !!p.clock });
     }
   }
-  // the photo spots / statues of the Petrograd side and the Spit (the tourists of the generic crowd walk to them and photograph): street-level spots only; a spot without a view direction looks at the nearest monument
-  if (petroOn) try {
-    let np = 0;
-    for (const k of ['landmarksFortress', 'landmarksStrelka', 'landmarksUniversity', 'landmarksTroitskaya', 'landmarksAurora', 'landmarksKronverk', 'landmarksKamennoostrovsky', 'landmarksVladimir', 'landmarksKarpovka'].concat(SIGHTS_NEW)) {
-      const s = svc[k]; if (!s) continue;
-      for (const p of s.photoSpots || []) {
-        if (!Number.isFinite(p.x) || p.interior || p.y !== undefined || (p.pitch !== undefined && p.pitch < 0)) continue;
-        let yaw = (p.yaw || 0) * Math.PI / 180 + Math.PI;
-        if (!p.yaw) { let bd = 90, bm = null; for (const m of s.monuments || []) { const d = hyp(m.x - p.x, m.z - p.z); if (d > 2 && d < bd) { bd = d; bm = m; } } if (bm) yaw = Math.atan2(bm.x - p.x, bm.z - p.z); }
-        for (const [dx, dz] of [[0, 0], [2.4, 0.8], [-2.2, 1.4]]) if (addSpot('view', p.x + dx, p.z + dz, yaw, { name: p.name })) np++;
-      }
-      for (const m of s.monuments || []) { if (k === 'landmarksSmolensky' || !Number.isFinite(m.x) || !(m.h < 12) || !(m.r === undefined || (m.r > 0 && m.r < 6))) continue; const r0 = (m.r || 1) + 2.6; for (let q = 0; q < 6; q++) { const a = q / 6 * Math.PI * 2 + m.x * 0.01, x = m.x + Math.sin(a) * r0, z = m.z + Math.cos(a) * r0; if (addSpot('monument', x, z, Math.atan2(m.x - x, m.z - z), { tx: m.x, tz: m.z, th: m.h || 4, id: m.id })) np++; } }
-    }
-    nav.stats.petroSpots = np;
-  } catch (e) { console.error('[people] petro photo spots failed:', e); }
   nav.stats.spots = nav.spots.length;
 
   mark('spots');
@@ -870,7 +713,7 @@ export function buildNav(ctx, cfg = {}) {
       let lst = kept.get(key); if (!lst) kept.set(key, (lst = [])); if (lst.length >= 8 || lst.some((p) => hyp(p[0] - mx, p[1] - mz) < 28)) continue;
       // a straight street crossing: asphalt in the middle, nothing solid
       let ok = !nav.segBlocked(N.x[i], N.z[i], N.x[j], N.z[j]), onA = 0; const n = Math.ceil(d);
-      for (let q = 0; q <= n && ok; q++) { const x = N.x[i] + (N.x[j] - N.x[i]) * q / n, z = N.z[i] + (N.z[j] - N.z[i]) * q / n; if (inBuilding(x, z) || blockedPoly(x, z) || (water(x, z) && !onDeck(x, z, 0.3))) ok = false; else if (covAt(x, z) > -0.1) onA++; }
+      for (let q = 0; q <= n && ok; q++) { const x = N.x[i] + (N.x[j] - N.x[i]) * q / n, z = N.z[i] + (N.z[j] - N.z[i]) * q / n; if (inBuilding(x, z) || blockedPoly(x, z) || (water(x, z) && !onDeck(x, z, 0.3)) || pitAt(x, z)) ok = false; else if (covAt(x, z) > -0.1) onA++; }
       if (!ok || onA < 2) continue;
       const len = d, id = 'B' + nb++;
       cws.push({ i: cws.length, id, ids: [id], ax: N.x[i], az: N.z[i], bx: N.x[j], bz: N.z[j], len, ux: (N.x[j] - N.x[i]) / len, uz: (N.z[j] - N.z[i]) / len, x: mx, z: mz, w: 4.4, signalised: false, signal: null, road: null, virtual: true, na: i, nb: j, edge: -1, ea: 0, eb: 0 });

@@ -1,9 +1,7 @@
-// tools/environment-banks.mjs - walks a simulated player at the banks of the Mars Field reach (Swan Canal, Moika slope reach / garden quay, Fontanka north of the Moika source, Neva south bank x -1800..-800)
-// and pushes toward the water from the street side: the feet may never leave the street level (no fall into the trench / onto a slope), outside the bridge zones and the descents.
-// PETROGRAD SIDE (2026-10-06): every bank of the Petrograd-only data is probed too (Petrovskaya / Petrogradskaya / Mytninskaya / Makarova / Universitetskaya / Zhdanovskaya embankments, the natural slopes of the
-// Kronverk bank and moat, the Malaya Neva, the Bolshaya Nevka); the decks of that area are excluded by the real zone test of river.js bridgeZones(). Shores that a sight module draws itself (Zayachy Island,
-// the Spit descent, the Shi-Tsza stairs: waterways.js OWNER_BANK / OWNER_WATER) are not environment banks: their owners' walk probes cover them.
-// usage: node tools/environment-banks.mjs [--step 6] [--verbose] [--petro (only the Petrograd side)]
+// tools/environment-banks.mjs - walks a simulated player at EVERY bank piece of the strip that lies in the play area (Fontanka, Moika, Griboedov Canal, Winter Canal, Swan Canal slope banks, the Neva south bank) and pushes toward
+// the water from the street side: the feet may never leave the street level (no fall into the trench / onto a slope), outside the bridge zones and the descents. A second pass checks the SHORE COVERAGE: every edge of
+// a water polygon of the data with land on one side, inside the play area, must lie on a bank chain or in a bridge zone, and the ground just behind it must be land.
+// usage: node tools/environment-banks.mjs [--step 6] [--verbose] [--no-zones]
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -82,15 +80,11 @@ if (args.includes('--walk')) {                                    // --walk x0,z
   process.exit(0);
 }
 const env = ctx.services.environment, bridges = (env.quay.bridges || []).filter((zn) => !String(zn.id).startsWith('pz-'));
-const { petroAt, pointInFlat: pointInFlatW } = await import(pathToFileURL(path.join(root, 'src/world/environment/waterways.js')).href);
-const { inSouthPond } = await import(pathToFileURL(path.join(root, 'src/world/environment/south-ponds.js')).href);      // (islands 2026-10-14) a park pond is walled by its own rim collider and is no water flag: a probe that starts in a pond (the Lopukhinsky pond behind the Malaya Nevka quay) or a "trench" inside one is no hole
-const { bridgeZones, parkPonds } = await import(pathToFileURL(path.join(root, 'src/world/environment/river.js')).href);
-const inPond = (x, z) => inSouthPond(x, z) || parkPonds().some((q) => pointInFlatW(x, z, q.o));
-const petroZ = bridgeZones().filter((zn) => zn.petro), onlyPetro = args.includes('--petro');
+const { bridgeZones } = await import(pathToFileURL(path.join(root, 'src/world/environment/river.js')).href);
 const step = args.includes('--step') ? Number(args[args.indexOf('--step') + 1]) : 6;
-const inZone = (x, z, m = 3) => petroZ.some((zn) => zn.test(x, z, m)) || bridges.some((zn) => { const a = zn.axis * Math.PI / 180, ux = Math.sin(a), uz = -Math.cos(a), px = x - zn.c[0], pz = z - zn.c[1], u = px * ux + pz * uz, v = -px * uz + pz * ux; return Math.abs(u) <= zn.len / 2 + 14 + m && Math.abs(v) <= zn.w / 2 + m; });
+const inZone = (x, z, m = 3) => bridges.some((zn) => { const a = zn.axis * Math.PI / 180, ux = Math.sin(a), uz = -Math.cos(a), px = x - zn.c[0], pz = z - zn.c[1], u = px * ux + pz * uz, v = -px * uz + pz * ux; return Math.abs(u) <= zn.len / 2 + 14 + m && Math.abs(v) <= zn.w / 2 + m; });
 const nearStair = (x, z) => env.quay.allStairs.some((q) => Math.hypot(q.x - x, q.z - z) < 24);
-const region = (key, x, z) => (onlyPetro ? petroAt(x, z) : petroAt(x, z) || key === 'zhdanovka' || key === 'kronverk-moat') || !onlyPetro && (key === 'swan-canal') || key === 'kryukov' || key === 'admiralty' || key === 'moat' || (key === 'griboedov' && z > 100 && x < -1700) || (key === 'moika' && x < -2400) || (key === 'fontanka' && z > 900) || (key === 'neva' && x < -2900) || (key === 'moika' && x > -1300 && x < -700 && z < -940) || (key === 'fontanka' && z < -1040) || (key === 'neva' && x > -1800 && x < -800 && z < -1000);
+const region = (key, x, z) => L.inPlay(x, z, -2);      // every bank piece inside the play area
 let tested = 0, bad = 0; const per = {};
 for (const sg of env.quay.segments) {
   if (!region(sg.key, sg.ax, sg.az)) continue;
@@ -100,7 +94,7 @@ for (const sg of env.quay.segments) {
     if (inZone(x, z) || nearStair(x, z)) continue;
     const back = (sg.slope ? sg.slope + 3.2 : 3.0);
     const sx = x + sg.nx * back, sz = z + sg.nz * back, w = new Walker(sx, sz, 0);
-    if (L.inRiver(sx, sz) || L.waterwayAt(sx, sz) || inPond(sx, sz)) continue;
+    if (L.inRiver(sx, sz) || L.waterwayAt(sx, sz)) continue;
     if (inZone(sx, sz)) continue;
     // a start that lies on the far side of another wall / outside the street plate cannot be judged
     tested++; per[sg.key] = per[sg.key] || { n: 0, bad: 0 }; per[sg.key].n++;
@@ -119,7 +113,6 @@ console.log('bank probes', tested, 'failed', bad, JSON.stringify(per));
   const cell = 64, grid = new Map();
   for (const bk of g.banks) for (let i = 0; i + 1 < bk.pts.length; i++) { const a = bk.pts[i], c = bk.pts[i + 1]; for (let ix = Math.floor((Math.min(a[0], c[0]) - 2) / cell); ix <= Math.floor((Math.max(a[0], c[0]) + 2) / cell); ix++) for (let iz = Math.floor((Math.min(a[1], c[1]) - 2) / cell); iz <= Math.floor((Math.max(a[1], c[1]) + 2) / cell); iz++) { const k = ix + ',' + iz; let arr = grid.get(k); if (!arr) grid.set(k, (arr = [])); arr.push([a[0], a[1], c[0], c[1]]); } }
   const onBank = (x, z, tol = 0.8) => (grid.get(Math.floor(x / cell) + ',' + Math.floor(z / cell)) || []).some((e) => segD(x, z, e[0], e[1], e[2], e[3]) < tol);      // (tol 2.2 within 3 m of the end of a ring edge: a sample there lies beside the chain that continues round the corner / the mouth of a join, e.g. the Moika mouth at (-4386, 738))
-  const ownerRings = W.ownerBanks().map((w) => w.o), nearOwner = (x, z) => ownerRings.some((o) => { for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) if (segD(x, z, o[j], o[j + 1], o[i], o[i + 1]) < 3) return true; return false; });
   const CITY = await import(pathToFileURL(path.join(root, 'src/world/data/city.js')).href), clipX = [...new Set(CITY.EXTENT_RECTS.flatMap((r) => [r.x0, r.x1]))], clipZ = [...new Set(CITY.EXTENT_RECTS.flatMap((r) => [r.z0, r.z1]))];
   let holes = 0, checked = 0, zoneTested = 0, zoneBad = 0, dryTrench = 0;
   for (const r of g.rings) {
@@ -129,13 +122,12 @@ console.log('bank probes', tested, 'failed', bad, JSON.stringify(per));
       if (clipX.some((v) => Math.abs(ax - v) < 0.8 && Math.abs(bx - v) < 0.8) || clipZ.some((v) => Math.abs(az - v) < 0.8 && Math.abs(bz - v) < 0.8)) continue;      // an edge on a clip line of the bake is a seam, never shore
       for (let t = Math.min(0.5, 1.5 / l); t < 1; t += Math.max(0.2, 3 / l)) {
         const x = ax + (bx - ax) * t, z = az + (bz - az) * t, nx = -(bz - az) / l * 1.5, nz = (bx - ax) / l * 1.5;
-        if (!petroAt(x, z) && !(x < -2300 && x > -2600 && z < -1040 && z > -1300)) continue;                 // the Petrograd-only data + the Spit beside the Palace Bridge (it lies in an older extent rectangle)
         if (!L.inPlay(x, z, 3)) continue;
         if (!!L.waterwayAt(x + nx, z + nz) === !!L.waterwayAt(x - nx, z - nz)) continue;                  // water on both sides (a join) or land on both (a sliver)
         checked++;
         // TRENCH WITHOUT A WATER FLAG (2026-10-07): just behind the shore the layout must say land (street height); a trench there that is not water is a plug / tail polygon lying on land (other modules' navigation
         // reads it as a hole: the Spit corner beside the Palace Bridge)
-        { const dry = L.waterwayAt(x + nx, z + nz) ? -1 : 1; for (const d of [0.25, 0.6]) { const px = x + nx / 1.5 * dry * d, pz = z + nz / 1.5 * dry * d; if (!L.waterwayAt(px, pz) && Math.min(L.heightAt(px, pz), ph.heightAt(px, pz)) < -1 && !W.ownerWaterAt(px, pz, 1.2) && !W.slopeAt(px, pz) && !inPond(px, pz)) { dryTrench++; if (dryTrench <= 12) console.log("TRENCH WITHOUT A WATER FLAG", r.id, px.toFixed(1), pz.toFixed(1), "layout", L.heightAt(px, pz), "physics", ph.heightAt(px, pz)); break; } } }
+        { const dry = L.waterwayAt(x + nx, z + nz) ? -1 : 1; for (const d of [0.25, 0.6]) { const px = x + nx / 1.5 * dry * d, pz = z + nz / 1.5 * dry * d; if (!L.waterwayAt(px, pz) && Math.min(L.heightAt(px, pz), ph.heightAt(px, pz)) < -1 && !W.slopeAt(px, pz)) { dryTrench++; if (dryTrench <= 12) console.log("TRENCH WITHOUT A WATER FLAG", r.id, px.toFixed(1), pz.toFixed(1), "layout", L.heightAt(px, pz), "physics", ph.heightAt(px, pz)); break; } } }
         // ZONE WALK (2026-10-07): inside a bridge zone the bank is the bridge owner's (abutment, wing walls, deck). A walker crosses the shore point from the land side: on a deck or against a wall the feet stay at
         // street level; a drop into the trench is an open edge. (Found this way: the corner of the Spit beside the Palace Bridge north landing.)
         if (zonesBuilt && zonesAll.some((zn) => zn.test(x, z, 3))) {
@@ -151,7 +143,7 @@ console.log('bank probes', tested, 'failed', bad, JSON.stringify(per));
             break;
           }
         }
-        if (onBank(x, z, Math.min(t * l, (1 - t) * l) < 3 ? 2.2 : 0.8) || W.ownerWaterAt(x, z, 1.2) || nearOwner(x, z) || zonesAll.some((zn) => zn.test(x, z, 3))) continue;
+        if (onBank(x, z, Math.min(t * l, (1 - t) * l) < 3 ? 2.2 : 0.8) || zonesAll.some((zn) => zn.test(x, z, 3))) continue;
         holes++; if (holes <= 12) console.log('SHORE WITHOUT A BANK', r.id, x.toFixed(1), z.toFixed(1));
       }
     }

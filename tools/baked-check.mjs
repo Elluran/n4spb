@@ -44,8 +44,9 @@ const expression = `(async()=>{
  hydrated.dist.texture.dispose();hydrated.cls.texture.dispose();
  const initial=__regions.stats.initial,total=__regions.stats.total;
  if(initial>=total)throw Error('Initial load included all regions');
- await __regions.ensureAt(-465.1,-623);
- if(!__regions.readyAt(-465.1,-623))throw Error('Destination not ready');
+ // Teleport to the far end of the strip (Admiralty gate, W2c): well outside the initial 700 m ring around the start, so the streaming is really exercised.
+ await __regions.ensureAt(-2387,-565);
+ if(!__regions.readyAt(-2387,-565))throw Error('Destination not ready');
  await __regions.ensureAll();
  if(__regions.stats.loaded!==total)throw Error('Incomplete streaming');
  return {nodes:original.N.x.length,edges:original.E.length,routes:20,fieldSamples:1000,initial,total,loaded:__regions.stats.loaded,failures:ctx.services.baked.failures};

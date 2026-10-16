@@ -119,32 +119,6 @@ export function makeStreetTextures(ctx) {
     }
   }, { key: 'pt-cobble', repeat: [1, 1], anisotropy: 8 });
 
-  // ---- tram slabs (the flush concrete median of Nalichnaya ulitsa, photo Commons "Nalichnaya street(1).jpg"): grey concrete panels 2 x 3 m with dark joints and two lifting eyes each; 6 x 6 m tile
-  T.tramslab = ctx.tex.draw(256, 256, (g, w, h) => {
-    const r = rngOf(6203);
-    g.fillStyle = '#62635f'; g.fillRect(0, 0, w, h);
-    const cols = 3, rows = 2, bw = w / cols, bh = h / rows;
-    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-      const v = 0.95 + r() * 0.1;
-      g.fillStyle = `rgb(${Math.round(150 * v)},${Math.round(151 * v)},${Math.round(146 * v)})`; g.fillRect(i * bw + 1.6, j * bh + 1.6, bw - 3.2, bh - 3.2);
-      for (let q = 0; q < 170; q++) { g.fillStyle = r() < 0.5 ? 'rgba(60,60,56,0.10)' : 'rgba(255,255,250,0.10)'; g.fillRect(i * bw + r() * bw, j * bh + r() * bh, 1.6, 1.6); }
-      g.fillStyle = 'rgba(48,48,46,0.55)'; for (const [fx, fy] of [[0.22, 0.2], [0.78, 0.8]]) { g.beginPath(); g.arc(i * bw + bw * fx, j * bh + bh * fy, 2.2, 0, 6.3); g.fill(); }
-    }
-  }, { key: 'pt-tramslab', repeat: [1, 1], anisotropy: 8 });
-
-  // ---- ballast of the depot yard: grey-brown crushed stone with timber sleepers across (u across the 3 m strip: sleepers 2.4 m long, v along 3.6 m = 6 sleepers)
-  T.ballast = ctx.tex.draw(128, 256, (g, w, h) => {
-    const r = rngOf(7211);
-    g.fillStyle = '#6a665c'; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 2600; i++) { const x = r() * w, y = r() * h, v = r(); g.fillStyle = v < 0.4 ? 'rgba(40,38,34,0.30)' : v < 0.8 ? 'rgba(170,164,152,0.30)' : 'rgba(212,207,198,0.26)'; wrapped(w, h, x, y, 2, (xx, yy) => g.fillRect(xx, yy, 2 + (r() < 0.3 ? 1 : 0), 2)); }
-    for (let k = 0; k < 6; k++) {
-      const y = k * h / 6 + h / 12;
-      g.fillStyle = '#3b3027'; g.fillRect(13, y - 7, w - 26, 14);
-      g.fillStyle = 'rgba(210,190,160,0.14)'; g.fillRect(13, y - 6, w - 26, 3);
-      for (let q = 0; q < 14; q++) { g.fillStyle = 'rgba(20,14,10,0.28)'; g.fillRect(14 + r() * (w - 42), y - 5 + r() * 10, 6 + r() * 14, 1); }
-    }
-  }, { key: 'pt-ballast', repeat: [1, 1], anisotropy: 8 });
-
   // ---- kerb granite: 1 m stones along u, joint line at the tile edge
   T.kerb = ctx.tex.draw(128, 32, (g, w, h) => {
     const r = rngOf(771);

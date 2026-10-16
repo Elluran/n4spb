@@ -29,12 +29,12 @@ if (L.groupOf('r16492039') !== 'station') fail('parts of a claimed outline (cloc
 if (L.claimedBy('w28962850') !== 'metro') fail('the metro rotunda w28962850 must be claimed by metro');
 
 // ---- poses
-const B = L.WORLD.play, dir = (yaw) => { const b = -yaw * Math.PI / 180; return [Math.sin(b), -Math.cos(b)]; };
+const dir = (yaw) => { const b = -yaw * Math.PI / 180; return [Math.sin(b), -Math.cos(b)]; };
 function look(p, max = 250) { const [dx, dz] = dir(p.yaw); for (let d = 1; d < max; d += 0.5) { const b = L.buildingAt(p.x + dx * d, p.z + dz * d); if (b) return { d, b }; } return null; }
 const poses = [['HERO', L.HERO], ...L.VIEWS.map((v) => [v.key + ' ' + v.label, v])];
 for (const [name, p] of poses) {
   const r = look(p), road = L.isOnRoad(p.x, p.z, 0.5, { all: false }), inside = L.insideBuilding(p.x, p.z, 0.8);
-  const inPlay = p.x > B.x0 + 5 && p.x < B.x1 - 5 && p.z > B.z0 + 5 && p.z < B.z1 - 5;
+  const inPlay = L.inPlay(p.x, p.z, 5);      // the play area is a union of rectangles (WORLD.play is only its bounding box)
   if (inside) fail(`${name} (${p.x}, ${p.z}) is inside / next to a building`);
   if (road) fail(`${name} (${p.x}, ${p.z}) stands on a carriageway`);
   if (!inPlay) fail(`${name} (${p.x}, ${p.z}) is outside the play area`);
@@ -42,15 +42,14 @@ for (const [name, p] of poses) {
   notes.push(`${name.padEnd(34)} (${p.x}, ${p.z}) yaw ${p.yaw} pitch ${p.pitch} | ${L.areaAt(p.x, p.z)} | ahead: ${r ? `${r.d.toFixed(0)} m ${r.b.name || r.b.kind} ${r.b.id}` : 'open'}`);
 }
 if (JSON.stringify(L.HERO) !== JSON.stringify({ x: L.VIEWS[0].x, z: L.VIEWS[0].z, yaw: L.VIEWS[0].yaw, pitch: L.VIEWS[0].pitch })) notes.push('note: HERO differs from view 1');
-// 1-8 (centre, east), Shift+1-6 (central north), then the west: 9, 0, Shift+7-9 (no key twice)
-const WANT = [...Array(8)].map((_, i) => 'Digit' + (i + 1)).concat([...Array(6)].map((_, i) => 'ShiftDigit' + (i + 1)), ['Digit9', 'Digit0', 'ShiftDigit7', 'ShiftDigit8', 'ShiftDigit9', 'ShiftDigit0'], [...Array(7)].map((_, i) => 'AltDigit' + (i + 1)), ['AltDigit8', 'AltDigit9', 'AltDigit0', 'AltMinus'], [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map((d) => 'AltShiftDigit' + d), ['AltShiftMinus', 'AltShiftEqual'],
-  ['BracketLeft', 'BracketRight', 'Semicolon', 'Quote', 'Comma', 'Period', 'Slash', 'Backslash', 'Backquote'].map((c) => 'AltShift' + c));      // Vasilievsky Island: the nine free physical keys (main.js keeps the plain Backquote for the statistics panel)
+// the keyed views of the strip: 1..9, 0 (centre, west), Shift+1..9, Alt+1..5 (metro entrances, the castle); the rest are Places-list views (key Place.<id>), no key twice
+const WANT = [...Array(9)].map((_, i) => 'Digit' + (i + 1)).concat(['Digit0'], [...Array(9)].map((_, i) => 'ShiftDigit' + (i + 1)), [...Array(5)].map((_, i) => 'AltDigit' + (i + 1)));
 const keyed = L.VIEWS.filter((v) => !/^Place\./.test(v.key));
-if (keyed.length !== WANT.length || keyed.some((v, i) => v.key !== WANT[i])) fail('VIEWS must be 1-8, Shift+1-6 (central north), 9, 0, Shift+7-9 (west), Shift+0 (Muruzi), Alt+1-7 (Mars Field / Summer Garden / castle), Alt+8, 9, 0, minus (south-west), Alt+Shift+1-0, minus, equals (Petrograd side / Spit), Alt+Shift + [ ] ; quote comma period slash backslash backquote (Vasilievsky Island), then only Places-list views (key Place.<id>)');
+if (keyed.length !== WANT.length || keyed.some((v, i) => v.key !== WANT[i])) fail('VIEWS must be 1-9, 0, Shift+1-9, Alt+1-5 (in this order), then only Places-list views (key Place.<id>)');
 if (L.VIEWS.findIndex((v) => /^Place\./.test(v.key)) < keyed.length) fail('the Place.<id> views must come after every keyed view');
-// on the island the HUD names the place (not the generic city fallback); tools/views-check.mjs proves land / roadway / colliders with the real street network
+// the HUD names the place of every view (not the generic city fallback); tools/views-check.mjs proves land / roadway / colliders with the real street network
 for (const v of L.VIEWS) {
-  if (v.group && L.areaAt(v.x, v.z).startsWith('Санкт-Петербург')) fail(`${v.key} ${v.label}: the HUD area name is the generic fallback`);
+  if (L.areaAt(v.x, v.z).startsWith('Санкт-Петербург')) fail(`${v.key} ${v.label}: the HUD area name is the generic fallback`);
 }
 if (new Set(L.VIEWS.map((v) => v.key)).size !== L.VIEWS.length) fail('a VIEWS key is used twice');
 

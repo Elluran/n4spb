@@ -7,55 +7,22 @@
 // Kamennoostrovsky / Bolshoy pr.: 26 eclectic, 19 Art Nouveau, 21 neoclassical revival, 5 Stalinist, 3 constructivist, 7 modern), aurora-houses.json (Soviet blocks behind Petrovskaya
 // embankment), troitskaya-houses.json, Commons photos SP/refs/city-petro (Bolshoy pr. canyon in sand / tan / ochre, B. Pushkarskaya 30 / 38, Frenkel house, Makarova 8).
 //
+// STRIP (n4spb): the data holds only the first 8 rectangles, so no record is "new": districtOf is null, regionOf is null and the grammar of this file is dead code kept for its importers.
+//
 // ONLY records of the new regions get a district (districtOf -> 'petro' | 'vasil' | null): every record of the older regions keeps the generic mix, bit for bit
 // (tools/city-signature.mjs proves it). OSM gives almost no start_date here (0-7 per region), so the choice is made from the street (avenue / embankment / side street / edge),
 // the storey count, the kind, `building:architecture` where mapped, and a hash of the OUTLINE id (parts of one house share archetype and colour).
-import { BUILDINGS as O_OLD } from '../data/city-east.js';
-import { BUILDINGS as O_W1 } from '../data/city-w1.js';
-import { BUILDINGS as O_N1 } from '../data/city-n1.js';
-import { BUILDINGS as O_W2a } from '../data/city-w2a.js';
-import { BUILDINGS as O_W2b } from '../data/city-w2b.js';
-import { BUILDINGS as O_W2c } from '../data/city-w2c.js';
-import { BUILDINGS as O_W2d } from '../data/city-w2d.js';
-import { BUILDINGS as O_W2e } from '../data/city-w2e.js';
-import { BUILDINGS as O_E1 } from '../data/city-e1.js';
-import { BUILDINGS as O_N2 } from '../data/city-n2.js';
-import { BUILDINGS as O_N3 } from '../data/city-n3.js';
-import { BUILDINGS as O_M1 } from '../data/city-m1.js';
-import { BUILDINGS as O_M2 } from '../data/city-m2.js';
-import { BUILDINGS as O_M3 } from '../data/city-m3.js';
-import { BUILDINGS as O_M4 } from '../data/city-m4.js';
-import { BUILDINGS as O_M5 } from '../data/city-m5.js';
-import { BUILDINGS as O_M6 } from '../data/city-m6.js';
-import { BUILDINGS as O_M7 } from '../data/city-m7.js';
-import { BUILDINGS as O_S1 } from '../data/city-s1.js';
-import { BUILDINGS as O_S2 } from '../data/city-s2.js';
-import { BUILDINGS as O_S3 } from '../data/city-s3.js';
-import { BUILDINGS as O_S4 } from '../data/city-s4.js';
-import { BUILDINGS as O_S5 } from '../data/city-s5.js';
-import { BUILDINGS as F_V3 } from '../data/city-v3.js';          // the island rectangles V3..V12 (2026-10-07): the records of the VASILIEVSKY ISLAND GRAMMAR (isVoFresh below)
-import { BUILDINGS as F_V4 } from '../data/city-v4.js';
-import { BUILDINGS as F_V5 } from '../data/city-v5.js';
-import { BUILDINGS as F_V6 } from '../data/city-v6.js';
-import { BUILDINGS as F_V7 } from '../data/city-v7.js';
-import { BUILDINGS as F_V8 } from '../data/city-v8.js';
-import { BUILDINGS as F_V9 } from '../data/city-v9.js';
-import { BUILDINGS as F_V10 } from '../data/city-v10.js';
-import { BUILDINGS as F_V11 } from '../data/city-v11.js';
-import { BUILDINGS as F_V12 } from '../data/city-v12.js';
-import { GREEN, REGIONS } from '../data/city.js';
+import { BUILDINGS, GREEN, REGIONS } from '../data/city.js';
 import { hash01 } from '../lib/massing.js';
-import { inIsland } from '../lib/vo-island.js';      // the outline of the whole of Vasilievsky Island (V3..V12, 2026-10-07): every house of the island gets the 'vasil' district default, not only the north strip
 import { ARCH } from './wallmat.js';
 
-// THE FROZEN SET. The 23 rectangles of the bake that existed before the Petrograd-side extension (2026-10-06) keep the generic grammar bit for bit; their part files are named
-// here once and never change. EVERY OTHER record of data/city.js is "new": P1..P5, V1, V2, P6, and whatever rectangle the frame grows by later (P7..P9 were baked while this
-// was written) gets the district defaults with no edit of this file. (The first version listed the NEW part files instead: the houses of a new rectangle silently fell back to
-// the Nevsky mix until somebody added its name here.)
-export const OLD_REGIONS = ['OLD', 'W1', 'N1', 'W2a', 'W2b', 'W2c', 'W2d', 'W2e', 'E1', 'N2', 'N3', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7', 'S1', 'S2', 'S3', 'S4', 'S5'];
+// THE FROZEN SET. The strip keeps only the 8 rectangles of the first builds (OLD, W1, N1, W2a..W2e): every record of data/city.js is "old" and keeps the generic grammar bit for bit.
+// The Petrograd-side / Vasilievsky grammar below is not reachable in the strip (districtOf is null for every house); it stays, with the same exports, because archetypes.js, heights.js,
+// edges.js, walls.js and prep.js import it.
+export const OLD_REGIONS = ['OLD', 'W1', 'N1', 'W2a', 'W2b', 'W2c', 'W2d', 'W2e'];
 const oldIds = new Set();
-for (const list of [O_OLD, O_W1, O_N1, O_W2a, O_W2b, O_W2c, O_W2d, O_W2e, O_E1, O_N2, O_N3, O_M1, O_M2, O_M3, O_M4, O_M5, O_M6, O_M7, O_S1, O_S2, O_S3, O_S4, O_S5]) for (const b of list) oldIds.add(b.id);
-/** Regions that are not frozen, in bake order (read by tools/city-signature.mjs and tools/city-petro-audit.mjs). */
+for (const b of BUILDINGS) oldIds.add(b.id);
+/** Regions that are not frozen, in bake order (none in the strip; read by tools/city-signature.mjs and tools/city-petro-audit.mjs). */
 export const NEW_REGIONS = REGIONS.map((r) => r.name).filter((n) => !OLD_REGIONS.includes(n));
 const NEW_RECTS = REGIONS.filter((r) => !OLD_REGIONS.includes(r.name));
 /** Region name of a record that does NOT belong to a frozen part file (truthy), or null for every older record. The name is the first new extent rectangle that holds the centroid:
@@ -79,7 +46,7 @@ export function districtOf(b) {
   // generic mix. North of it (rectangle P7: the Nobel / Russky Dizel works, Vyborgskaya embankment; 21 of its 78 houses are `industrial`) the generic mix made factory
   // blocks tenements: they belong to the works zone of zoneOf.
   if (x > nevkaX(z) && z < -2200 && z > -3023) return null;
-  if (x < -2300 && z > malayaNeva(x)) return z < -560 || (x < -3300 && inIsland(x, z)) ? 'vasil' : null;   // west of x -3300 the island runs down to z +1550: the line z -560 only held at the Spit (lib/vo-island.js)
+  if (x < -2300 && z > malayaNeva(x)) return z < -560 ? 'vasil' : null;   // (the strip ends at x -3020: the outline of the island west of x -3300, lib/vo-island.js, never applied here)
   if (x > -2300 && z > -1640) return null;                          // south bank of the Neva
   return 'petro';
 }
@@ -88,10 +55,8 @@ export function districtOf(b) {
 // docs/research/vo-roster-architecture.md sections 4-6 (district table D02..D16, class weights per zone and storeys, palettes, features). It applies ONLY to the records of the island
 // rectangles V3..V12 ("fresh": the reviewed Spit / Makarova row V1, V2 and the Petrograd side keep their grammar bit for bit, tools/city-signature.mjs proves it). Zone = the street first
 // (the three prospects, the Neva embankments), then the district boxes (rotated ones are given in the grid of the island: u along the prospects, v along the Lines), then the Lines by u.
-const voIds = new Set();
-for (const list of [F_V3, F_V4, F_V5, F_V6, F_V7, F_V8, F_V9, F_V10, F_V11, F_V12]) for (const b of list) voIds.add(b.id);
-/** true for a record of the rectangles V3..V12 (outline, part or synthesised base of one): the island grammar applies. */
-export const isVoFresh = (b) => voIds.has(b._fillOf || b.id) || (!!b.parent && voIds.has(b.parent));
+/** true for a record of the island rectangles V3..V12 (outline, part or synthesised base of one): the island grammar applies. Those rectangles are not part of the strip: always false. */
+export const isVoFresh = (b) => false;
 const COS30 = 0.8660254, VO_X0 = -3382, VO_Z0 = -1009;           // origin of the island grid = Bolshoy pr. x Kadetskaya line; u runs WSW (bearing 240), v NNW (bearing 330)
 /** grid coordinates of the island: u along the prospects (west-south-west from the 1st Line), v along the Lines (0 = Bolshoy axis, ~498 Sredny, ~995 Maly, negative towards the Neva) */
 export const voGrid = (x, z) => [-COS30 * (x - VO_X0) + 0.5 * (z - VO_Z0), -0.5 * (x - VO_X0) - COS30 * (z - VO_Z0)];

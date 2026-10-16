@@ -2,10 +2,6 @@
 // Sources: docs/research/streets.md (sections 2, 3, 9: Nevsky = grey granite slabs + chain bollards + two-arm flower-bowl lamps; Ligovsky / Vosstaniya square = black guard
 // rails with flower boxes; side streets = small granite pavers, swan-neck lamps), nevsky.md, transport.md.
 import * as L from '../layout.js';
-import { inIsland } from '../lib/vo-island.js';
-
-/** west of this x the island is modern (Gavan workers' town and the land fill: Nalichnaya, Korablestroiteley, Kruzenshterna ...): lamp family 'M' */
-const MODERN_X = -6000;
 
 export const NEVSKY = 'Невский проспект';
 export const LIGOVSKY = 'Лиговский проспект';
@@ -43,8 +39,6 @@ export function barrierAt(w, x, z) {
 const WEST_LAMPS = new Map([
   ['Адмиралтейский проспект', 'S'], ['Адмиралтейский проезд', 'S'], ['Дворцовый проезд', 'S'], ['Дворцовая набережная', 'S'], ['Адмиралтейская набережная', 'S'], ['Дворцовая площадь', 'S'],
   ['Английская набережная', 'S'], ['Университетская набережная', 'S'], ['Конногвардейский бульвар', 'S'], ['Сенатская площадь', 'S'], ['Биржевая площадь', 'S'], ['набережная Лебяжьей канавки', 'S'],
-  // the Neva / Malaya Neva embankments of the Petrograd side and of Vasilievsky Island (2026-10-06): the same tall embankment standard as Dvortsovaya / Universitetskaya
-  ['Петровская набережная', 'S'], ['Петроградская набережная', 'S'], ['Мытнинская набережная', 'S'], ['набережная Макарова', 'S'],
   ['набережная реки Мойки', 'L'], ['набережная канала Грибоедова', 'L'], ['набережная Зимней канавки', 'L'], ['Исаакиевская площадь', 'L'], ['Казанская площадь', 'L'], ['Конюшенная площадь', 'L'],
   ['Большая Морская улица', 'D'], ['Малая Морская улица', 'D'], ['Гороховая улица', 'D'], ['Большая Конюшенная улица', 'D'], ['Казанская улица', 'D'], ['Итальянская улица', 'D'], ['Вознесенский проспект', 'D'],
   ['Почтамтская улица', 'D'], ['Почтамтский переулок', 'D'], ['улица Якубовича', 'D'], ['Царицынский проезд', 'D'], ['Миллионная улица', 'D'], ['Малая Конюшенная улица', 'D'], ['Михайловская улица', 'D'],
@@ -58,9 +52,6 @@ export function lampFamily(w) {
   if (n === LIGOVSKY || n === 'площадь Восстания' || n === 'Гончарная улица' || n === 'Суворовский проспект') return 'A';
   const west = WEST_LAMPS.get(n);
   if (west && w.rank >= 1) return west;
-  if (w.rank >= 1 && w.n && w.x[w.n >> 1] < MODERN_X && inIsland(w.x[w.n >> 1], w.z[w.n >> 1])) return 'M';        // the modern west of Vasilievsky Island (1970s - 2020s superblocks): steel poles with cobra heads
-  // the old island (Sredny, Maly, the Lines ...): the Nevsky flower-bowl pedestal lamp is Nevsky's alone; the streets get the slim swan neck 'D' (Bolshoy pr. keeps the black pedestal lamps of its boulevards)
-  if (w.rank >= 3 && w.n && n !== 'Большой проспект В.О.' && inIsland(w.x[w.n >> 1], w.z[w.n >> 1])) return 'D';
   if (w.rank >= 3) return 'A';
   if (w.rank >= 1) return 'D';
   return null;

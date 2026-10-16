@@ -34,17 +34,11 @@ export function makeMats(ctx) {
     // ---- hall: interior (dim: seen through the glass)
     parquet: sheet('parquet', A.parquet, { paint: 0, emissive: '#7a5426', emissiveIntensity: 0.55 }), wallIn: flat('wallIn', '#cfc8b4', { paint: 0.01, emissive: '#cfc7ad', emissiveIntensity: 0.55 }), ceilIn: flat('ceilIn', '#e0ddd2', { paint: 0.01, emissive: '#d6d2c4', emissiveIntensity: 0.5 }), colIn: flat('colIn', '#efede6', { paint: 0.01, emissive: '#4a4840', emissiveIntensity: 0.4 }),
     treadIn: flat('treadIn', '#b98343', { paint: 0.01, emissive: '#5a3a14', emissiveIntensity: 0.5 }), screen: flat('screen', '#1b2636', { paint: 0, emissive: '#2c5586', emissiveIntensity: 0.4 }),
-    // ---- monument and setting
-    verdi: T(W, { map: A.verdi, name: 'lmOkt-verdi', paint: 0.03, emissive: '#0b1c16', emissiveIntensity: 0.3 }),
-    verdiDark: T('#a6bdb4', { map: A.verdi, name: 'lmOkt-verdiDark', paint: 0.03, emissive: '#06120d', emissiveIntensity: 0.2 }),
-    granite: T(W, { map: A.graniteGrain, name: 'lmOkt-granite', paint: 0.04 }), graniteShade: flat('graniteShade', C.graniteShade, { paint: 0.04 }), slope: flat('slope', C.slope, { paint: 0.04 }), slabPlinth: T('#f2eee4', { map: A.graniteGrain, name: 'lmOkt-slabPlinth', paint: 0.04 }),
-    plaque: T(W, { map: A.plaque, name: 'lmOkt-plaque', paint: 0, alphaTest: 0.5, polygonOffset: -2 }), plaqueBody: flat('plaqueBody', '#3f8576', { paint: 0.02 }),
-    back: T(W, { map: A.back, name: 'lmOkt-back', paint: 0, alphaTest: 0.4, polygonOffset: -2 }),
-    begonia: T(W, { map: A.begonia, name: 'lmOkt-begonia', paint: 0.03, polygonOffset: -5 }), board: sheet('board', A.board, { paint: 0 }), boardRim: flat('boardRim', '#1d2220', { paint: 0.01 }),
-    octGranite: flat('octGranite', C.graniteOct, { paint: 0.05 }), bin: flat('bin', '#25282b', { paint: 0.02 }),
+    // ---- the October group
+    octGranite: flat('octGranite', C.graniteOct, { paint: 0.05 }),
   });
-  M.cutouts = new Set([M.plaque, M.back]);
-  M.decals = new Set([M.posters, M.begonia, M.paving, M.pavingRed, M.glassSide]);
+  M.cutouts = new Set();
+  M.decals = new Set([M.posters, M.paving, M.pavingRed, M.glassSide]);
   M.glassy = new Set([M.glass, M.reflect, M.doorGlass]);
   return M;
 }

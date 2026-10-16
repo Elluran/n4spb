@@ -1,14 +1,14 @@
 // metro.js — the Saint Petersburg metro (docs/METRO.md, docs/UNDERGROUND.md, docs/research/metro*.md).
 //
-//   stations   24 real halls: lines 1-5 (Vosstaniya, Vladimirskaya, Mayakovskaya, Dostoevskaya, west, Petrograd side, Vasilievsky Island, and since 2026-10-15 Pushkinskaya, Zvenigorodskaya, Tekhnolog 1/2,
-//              Chernyshevskaya, Pl. Al. Nevskogo 1/2, Ligovsky, the Sennaya hub) + passages + real tunnels (metro/links-*.js); every other station is served by the shared generic hall
-//   data       data/metro.js (+ data/metro-<node>.js via define(T)) and metro/net.js: stations, frames, HOPS, TRANSFERS; builders st-*.js / hub-*.js are called from here
+//   stations   7 real halls (Vosstaniya, Vladimirskaya, Mayakovskaya, Dostoevskaya, Gostiny Dvor, Nevsky Prospekt, Admiralteyskaya) + passages + two real tunnels (Vosstaniya - Vladimirskaya,
+//              Gostiny Dvor - Mayakovskaya); each line end is ONE out-of-strip neighbour station served by the shared generic hall (a terminus: data/metro.js STATIONS)
+//   data       data/metro.js and metro/net.js: stations, frames, HOPS, TRANSFERS; builders st-*.js are called from here
 //   ride       metro/ride.js: board by walking into an open door or [E]; the ride is a chain of legs to the end of the line, in REAL time, stopping at every station; get off at any stop; no map panel
 //   signs      metro/signs.js: hanging boards, line schemes, track bands, network map; the in-car strips are in metro/train.js
 // Publishes ctx.services.metro = { stations, entrances, network, ride(from, to) } (people use the entrances) and ctx.metro (debug, hubs, discs, ride controller).
 import * as THREE from 'three';
 import { recordCanvases, scheduleRelease, keepOutOfAtlas } from './metro/release.js';
-import { FRAMES, escGeom, roomGeom, SHAFT_LEN, DOORWAYS, PITS, SPORT_PITS, VO_PITS, WELLS, LINES, toWorld, toLocal, TAN } from './data/metro.js';
+import { FRAMES, escGeom, roomGeom, SHAFT_LEN, DOORWAYS, PITS, LINES, toWorld, toLocal } from './data/metro.js';
 import { Space, inPoly, clamp, smoothPath, extrudeZ, archHole, bezierPath, minRadius } from './metro/lib.js';
 import { buildRoom } from './metro/room.js';
 import { buildCorridor } from './metro/corridor.js';
@@ -29,24 +29,6 @@ import { buildAdmiralteyskaya } from './metro/st-adm.js';
 import { buildNevsky } from './metro/st-nevsky.js';
 import { buildGostiny } from './metro/st-gd.js';
 import { GDH } from './metro/hall-gd.js';
-import { buildGorkovskaya } from './metro/st-gork.js';
-import { buildPetrogradskaya } from './metro/st-petr.js';
-import { buildSportivnaya } from './metro/st-sport.js';
-import { buildChkalovskaya } from './metro/st-chk.js';
-import { buildVasileostrovskaya } from './metro/st-vo.js';
-import { buildGorny } from './metro/st-gorny.js';
-import { buildSportivnaya2 } from './metro/st-sport2.js';
-import { buildVoLinks } from './metro/links-vo.js';
-import { buildChernyshevskaya } from './metro/st-chernyshevskaya.js';
-import { buildNorthLinks } from './metro/links-north.js';
-import { buildVitebskyHub, buildZvenigorodskayaSadovayaLink } from './metro/hub-vitebsky.js';
-import { buildTekhnologHub } from './metro/hub-tekhnolog.js';
-import { buildTekhnologLinks } from './metro/links-tekhnolog.js';
-import { buildEastHub } from './metro/hub-east.js';
-import { buildEastLinks } from './metro/links-east.js';
-import { buildSennayaHub } from './metro/hub-sennaya.js';
-import { GORNY_SPASSKAYA_FULL } from './metro/links-south.js';
-import { SD_PITS } from './data/metro.js';
 import { addPolyColliders } from './lib/massing.js';
 
 export const OWNS_GROUPS = true;
@@ -84,7 +66,7 @@ function buildMetro(ctx) {
   const discs = DISCS; discs.length = 0;                                  // EVERY black disc (stubs.js registerDisc: not batched, userData.disc = { kind, c, n }); a ride hides those of its own track
   const esc = buildEscalator(ctx, M, S, { FY: V.y, zTop: g.zTop, zBottom: g.zBottom, shellStart: 12 });
   const vInfo = { openings: hall.openings, FY: V.y, TRK: PYLON.TRK, EDGE: PYLON.EDGE, PZ: PYLON.PZ, mouth: PYLON.PZ + 0.6, discNeg: PYLON.PZ + 0.6 + STUB_VISIBLE, discPos: PYLON.PZ + 0.6 + STUB_VISIBLE, activeRadius: 260 };
-  const vStubsN = () => { for (const m of hall.mouths) if (m.zs < 0) buildStub(ctx, M, S, m.sx * PYLON.TRK, m.zs * vInfo.mouth, m.zs, hall.BED, {}); };   // north end: the real tunnel to Chernyshevskaya (links-north.js) unless deferred under 'vosstaniya:-1'; the south end is the real tunnel to Vladimirskaya
+  const vStubsN = () => { for (const m of hall.mouths) if (m.zs < 0) buildStub(ctx, M, S, m.sx * PYLON.TRK, m.zs * vInfo.mouth, m.zs, hall.BED, {}); };   // north end: a black-disc stub (the real tunnel to Chernyshevskaya is outside the strip: a ride jumps into the generic tunnel); the south end is the real tunnel to Vladimirskaya
   // street: the rotunda
   const bs = ctx.L.groupMembers('vosstaniya-rotunda');
   const outline = bs.find((b) => b.id === 'w28962850'), drumB = bs.find((b) => b.id === 'w310869151');
@@ -126,7 +108,7 @@ function buildMetro(ctx) {
   const S2 = new Space(ctx, VL, { name: 'vladimirskaya' });
   const hall2 = buildPylonHall(ctx, M, S2, { id: 'vlad', FY: VL.y, name: 'Владимирская', hang: [{ z: -40, text: 'Выход в город', sub: 'Way out' }, { z: 40, text: 'Переход на «Достоевская»', sub: 'To Dostoyevskaya' }], endHole: { N: { halfW: 3.3, spring: 0.6 }, S: { halfW: 3.3, spring: 0.6 } },
     skin: { pylon: { plaster: '#f3efe6', marble: '#ece6da', vein: '#b9b0a0', plinth: '#3b3b40', corn: '#f8f4ea' }, track: { plaster: '#f3efe6', marble: '#ece6da', vein: '#b9b0a0', skirt: '#17171d', corn: '#f8f4ea' }, floor: '#4d4b52', sideFloor: '#58565d', letters: '#4a3a28' } });
-  const vlStubs = () => { for (const m of hall2.mouths) if (m.zs > 0) buildStub(ctx, M, S2, m.sx * TRK, m.zs * (PZ + 0.6), m.zs, hall2.BED, {}); };   // +z end: the real tunnel to Pushkinskaya (hub-vitebsky.js) when it is built, else these stubs
+  const vlStubs = () => { for (const m of hall2.mouths) if (m.zs > 0) buildStub(ctx, M, S2, m.sx * TRK, m.zs * (PZ + 0.6), m.zs, hall2.BED, {}); };   // +z end: black-disc stubs (the real tunnel to Pushkinskaya is outside the strip)
   const vInfo2 = { openings: hall2.openings, FY: VL.y, TRK, EDGE: PYLON.EDGE, PZ, mouth: PZ + 0.6, discNeg: PZ + 0.6 + STUB_VISIBLE, discPos: PZ + 0.6 + STUB_VISIBLE, activeRadius: 260 };
   // the escalator tube (3 lanes, hung on the room), the vestibule room, the bulkhead and the lower corridor to the hall
   const Se = new Space(ctx, rg.eframe, { name: 'vladimirskaya-esc' });
@@ -178,7 +160,7 @@ function buildMetro(ctx) {
   const S4 = new Space(ctx, DF, { name: 'dostoevskaya' });
   const hall4 = buildPylonHall(ctx, M, S4, { id: 'dost', FY: DF.y, name: 'Достоевская', nameEn: 'Dostoyevskaya', PZ: DPZ, zLow: dBottom, column: true, noMeander: true, hang: [{ z: -30, text: 'Выход в город', sub: 'Way out' }, { z: 40, text: 'Переход на «Владимирская»', sub: 'To Vladimirskaya' }], endHole: { S: { halfW: 3.3, spring: 0.6 } },
     skin: { pylon: { plaster: '#8c817a', marble: '#6e5f58', vein: '#a89c94', plinth: '#1b1b1b', corn: '#8c817a' }, track: { plaster: '#cfc7b4', marble: '#a9a08a', vein: '#7d7566', skirt: '#111114', corn: '#d8d0be' }, floor: '#6f6f72', sideFloor: '#6f6f72' } });
-  const earlyStubs = [];                                                   // stubs of ends that the east node (hub-east.js) may replace by real tunnels: deferred under their keys once X exists
+  const earlyStubs = [];                                                   // stubs that are built after the west stations and the Gostiny Dvor link (flushed under their keys, see X.deferStub)
   for (const m of hall4.mouths) { const go = () => buildStub(ctx, M, S4, m.sx * TRK, m.zs * (DPZ + 0.6), m.zs, hall4.BED, { visible: m.zs > 0 ? SHORT : STUB_VISIBLE }); if (m.zs > 0) earlyStubs.push(['dostoevskaya:1', go]); else go(); }
   const dInfo = { openings: hall4.openings, FY: DF.y, TRK, EDGE: PYLON.EDGE, PZ: DPZ, mouth: DPZ + 0.6, discNeg: DPZ + 0.6 + STUB_VISIBLE, discPos: DPZ + 0.6 + SHORT, activeRadius: 260 };
   const esc4 = buildEscalator(ctx, M, S4, { FY: DF.y, zTop: dTop, zBottom: dBottom, shellStart: 12 });
@@ -261,9 +243,9 @@ function buildMetro(ctx) {
   // ================================================================ the west stations (docs/research/metro-west.md): Admiralteyskaya (line 5), later Nevsky Prospekt (line 2) and Gostiny Dvor (line 3)
   const X = { debug, stations, rtOf, net, protos, toast, mkGroup, cor, CORR, SHORT, mSign: mSignMat, discs, realLinks, autoClear, buildStub, STUB_VISIBLE, addDisc,
     addVestZone: (id, inside, h = 8) => ctx.zones?.add({ id: id + '-vestibule', test: (x, y, z) => y > -1.2 && y < h && inside(x, z), showUnder: true, indoor: LOOK_VEST }) };
-  // ends of tunnels that get a REAL tunnel (metro/links-vo.js): the station builders defer their stubs there (X.deferStub), the stubs are built after the links for the ends that did not get one
-  const REAL_ENDS = new Set(['vasileostrovskaya:1', 'gostiny:-1', 'admiralteyskaya:-1', 'sportivnaya:1', 'gorny:1', 'chernyshevskaya:1', 'vosstaniya:-1', 'tekhnolog:-1', 'tekhnolog2:1', 'pushkinskaya:1', 'sennaya:-1', 'sadovaya:1']), deferred = {};
-  Object.assign(X, { realEnd: (key) => REAL_ENDS.has(key), deferStub: (key, fn) => { (deferred[key] ||= []).push(fn); } });
+  // stub ends that must be built after the real tunnels and the west stations (the discs of the real links are registered first): station builders defer them under 'station:end' (X.deferStub)
+  const deferred = {};
+  Object.assign(X, { deferStub: (key, fn) => { (deferred[key] ||= []).push(fn); } });
   for (const [key, fn] of earlyStubs) X.deferStub(key, fn);
   const west = {};
   try { west.adm = buildAdmiralteyskaya(ctx, M, X); } catch (e) { console.error('[metro] Admiralteyskaya failed', e); (ctx.errors ||= []).push(e); }
@@ -274,44 +256,18 @@ function buildMetro(ctx) {
     for (const sx of [-1, 1]) { addDisc(west.gd.S, sx * GDH.TRK, west.gd.rt.hall.mouth, 1, west.gd.hall.BED); addDisc(S3, sx * TRK, -(MD.PZ + 0.6), -1, hall3.BED); }
   } catch (e) { console.error('[metro] Gostiny Dvor failed', e); (ctx.errors ||= []).push(e); }
 
-  // ================================================================ the Petrograd side (docs/research/metro-petro.md): Gorkovskaya + Petrogradskaya (line 2), Sportivnaya + Chkalovskaya (line 5)
-  const petro = {}; X.petro = petro;
-  const petroOnly = typeof process !== 'undefined' && process.env && process.env.METRO_PETRO ? process.env.METRO_PETRO.split(',') : null;      // tools: METRO_PETRO=none | gork,chk ... builds a subset (triangle accounting)
-  const dbgBase = typeof location !== 'undefined' && /[?&]metrodbg=base/.test(location.search);               // debugging switch: ?metrodbg=base builds the metro as before the island round (no VO / Gorny / Sportivnaya-2, no real links)
-  if (dbgBase) REAL_ENDS.clear();
-  if (X.realEnd('vosstaniya:-1')) X.deferStub('vosstaniya:-1', vStubsN); else vStubsN();
-  for (const [id, fn] of [['gork', buildGorkovskaya], ['petr', buildPetrogradskaya], ['sport', buildSportivnaya], ['chk', buildChkalovskaya], ['vo', buildVasileostrovskaya], ['gorny', buildGorny], ['sport2', buildSportivnaya2], ['che', buildChernyshevskaya]]) { if (petroOnly && !petroOnly.includes(id)) continue; if (dbgBase && ['vo', 'gorny', 'sport2'].includes(id)) continue; try { petro[id] = fn(ctx, M, X); } catch (e) { console.error('[metro] Petrograd side: ' + id + ' failed', e); (ctx.errors ||= []).push(e); } }
-
-  // ---- the real tunnels under the island (L3 Vasileostrovskaya - Gostiny Dvor, L5 Admiralteyskaya - Sportivnaya)
-  // ---- the new interchange nodes of the 2026-10-15 round (docs/research/metro-south-*.md, metro-east.md): Pushkinskaya / Zvenigorodskaya, Tekhnologichesky Institut 1 / 2 (Chernyshevskaya is in the loop above)
-  let east = {};
-  try { east = buildEastHub(ctx, M, X); } catch (e) { console.error('[metro] east node failed', e); (ctx.errors ||= []).push(e); }
-  try { petro.vit = buildVitebskyHub(ctx, M, X); } catch (e) { console.error('[metro] Vitebsky node failed', e); (ctx.errors ||= []).push(e); } if (!realLinks['vladimirskaya>pushkinskaya']) vlStubs();
-  if (!dbgBase && (!petroOnly || petroOnly.includes('tekh'))) try { const th = buildTekhnologHub(ctx, M, X); if (th) { petro.tekhHub = th; petro.tekh = th.tekhnolog; petro.tekh2 = th.tekhnolog2; } } catch (e) { console.error('[metro] Tekhnologichesky Institut failed', e); (ctx.errors ||= []).push(e); }
-  // the Sennaya hub (metro/hub-sennaya.js): Sennaya Ploshchad (2), Sadovaya (5), Spasskaya (4), the three passages, the real tunnels L2 Nevsky - Sennaya, L5 Admiralteyskaya - Sadovaya,
-  // L4 Spasskaya - Dostoevskaya and the FULL L4 Gorny - Spasskaya (it replaces the partial link of links-vo.js); its own hall ends are deferred and flushed inside the hub
-  let hub = null;
-  if (!dbgBase && (!petroOnly || petroOnly.includes('sen'))) try { hub = buildSennayaHub(ctx, M, X); Object.assign(realLinks, hub.links.links); } catch (e) { console.error('[metro] Sennaya hub failed', e); (ctx.errors ||= []).push(e); }
-  const fullL4 = !!(GORNY_SPASSKAYA_FULL && hub && hub.links.links['gorny>spasskaya']);
-  try {
-    const lk = buildVoLinks(ctx, M, X, { vo: petro.vo, gd: west.gd, adm: west.adm, sport: petro.sport, gorny: fullL4 ? null : petro.gorny });
-    Object.assign(realLinks, lk.links);
-    if (hub) for (const k of hub.links.done) lk.done.add(k);                       // (gorny:1 among them: the deferred Gorny stubs stay away from the full L4 link)
-    // L1 Chernyshevskaya (+z end) <-> Vosstaniya (-z end)
-    if (X.realEnd('chernyshevskaya:1')) { const nk = buildNorthLinks(ctx, M, X, { che: petro.che }); Object.assign(realLinks, nk.links); for (const k of nk.done) lk.done.add(k); }
-    // Tekhnologichesky Institut <-> Pushkinskaya (line 1) and <-> Sennaya (line 2): built only when both ends exist
-    try { const tl = buildTekhnologLinks(ctx, M, X); Object.assign(realLinks, tl.links); for (const k of tl.done) lk.done.add(k); } catch (e) { console.error('[metro] Tekhnologichesky Institut links failed', e); (ctx.errors ||= []).push(e); }
-    if (petro.vit && petro.vit.sadovayaPending) { try { buildZvenigorodskayaSadovayaLink(ctx, M, X); } catch (e) { console.error('[metro] Zvenigorodskaya - Sadovaya link failed', e); } }
-    try { const ek = buildEastLinks(ctx, M, X, { east, mayak: stations.mayakovskaya, dost: stations.dostoevskaya }); Object.assign(realLinks, ek.links); for (const k of ek.done) lk.done.add(k); } catch (e) { console.error('[metro] east links failed', e); (ctx.errors ||= []).push(e); if (east.flushStubs) east.flushStubs(lk.done); }
-    for (const [key, fns] of Object.entries(deferred)) if (!lk.done.has(key)) for (const f of fns) { try { f(); } catch (e) { console.error('[metro] stub failed', e); } }
-  } catch (e) { console.error('[metro] real links failed', e); (ctx.errors ||= []).push(e); }
+  // ================================================================ the ends of the hall tunnels that have no real tunnel
+  // Vosstaniya N and Vladimirskaya S end in black-disc stubs (the real tunnels to the neighbour stations are not built: a ride leaves through the stub and jumps into the generic tunnel, ride.js);
+  // the deferred stubs (Mayakovskaya +z, Dostoevskaya +z) are flushed here
+  vStubsN(); vlStubs();
+  for (const fns of Object.values(deferred)) for (const f of fns) { try { f(); } catch (e) { console.error('[metro] stub failed', e); } }
 
   // ================================================================ the generic hall + tunnel
   const GF = GENERIC_FRAME;
   const SG = new Space(ctx, GF, { name: 'generic-hall' });
   const gh = buildGenericHall(ctx, M, SG, { FY: GF.y, line: '1' });
   const gInfo = { FY: GF.y, TRK: GEN.TRK, EDGE: GEN.EDGE, PZ: GEN.PZ, mouth: GEN.PZ + 0.6, discNeg: GEN.PZ + 0.6 + STUB_VISIBLE, discPos: GEN.PZ + 0.6 + STUB_VISIBLE, activeRadius: 260 };
-  const gdef = { ...net.lenina };                   // the generic hall starts as the next unbuilt station of line 1
+  const gdef = { ...net.pushkinskaya };                   // the generic hall starts as a neighbour terminus of line 1
   stations.generic = rtOf('generic', gdef, GF, gInfo, null, { generic: true, gh });
   stations.generic.platform = createPlatform(ctx, M, { id: 'generic', name: gdef.name, nameEn: gdef.nameEn, frame: GF, stock: 'baltiets', line: '1', idx: 7 }, gInfo, protos, { stocks: ['baltiets', 'neva', '717'] });
   const showGeneric = (def) => {
@@ -332,8 +288,8 @@ function buildMetro(ctx) {
   const mkSession = (id) => { const tr = makeTrain(ctx, M, protos(id)); tr.root.visible = false; tr.root.userData.undergroundOnly = true; ctx.add(tr.root); try { ctx.zones?.track?.(tr.root, 'under'); } catch (e) { /* headless */ } return tr; };
   let rideCtl = null;
   // ---- black discs during a ride: a leg hides EXACTLY the discs of the rider's own track: the discs its path passes (route.trace: the stub / tube at the end of the origin hall it leaves
-  // through, the real link in between, the stub / tube at the end of the destination hall it arrives through; every disc stands on its tube axis, addDisc / links-vo.js / stubs.js); every
-  // other disc stays. The free-end disc of a partial link (links-vo.js L4) stays drawn while the rider's car approaches (the cars ahead vanish into it) and is hidden the moment the front of
+  // through, the real link in between, the stub / tube at the end of the destination hall it arrives through; every disc stands on its tube axis, addDisc / stubs.js); every
+  // other disc stays. The free-end disc of a partial link (kind free; none is built in the strip) stays drawn while the rider's car approaches (the cars ahead vanish into it) and is hidden the moment the front of
   // the car reaches it (it would be a black wall the rider's car drives through). env.discState: for the tools.
   const discState = { route: null, hide: [], dyn: [] };
   const discLeg = (route) => {
@@ -441,7 +397,6 @@ function buildMetro(ctx) {
   let gdRoutes = null;
   // ---- exit routes (used by tests/metro-test.mjs: walk from the platform up the UP lane to the pavement): world waypoints [x, z]
   {
-    const dir = (x, z) => [x, z];
     const rev = (name) => debug.corridors.find((c) => c.name === name).pts.slice().reverse().filter((_, i, a) => i % 4 === 0 || i === a.length - 1).map((p) => [p[0], p[2]]);
     const roomRoute = (g, Efr, pre, platformSpot) => {
       const R = (x, z) => toWorld(g.frame, x, z), outPt = [g.door[0] - g.n[0] * 3.5, g.door[1] - g.n[1] * 3.5];
@@ -460,11 +415,7 @@ function buildMetro(ctx) {
     if (west.adm) debug.exits.admiralteyskaya = west.adm.exitRoute(debug);
     if (west.nev) Object.assign(debug.exits, west.nev.routes(debug));
     if (west.gd && west.nev) { gdRoutes = west.gd.routes(debug, west.nev); Object.assign(debug.exits, gdRoutes.exits); }
-    // the Petrograd side: ways out (platform -> pavement) and ways in (pavement -> platform)
     debug.entries = {};
-    for (const [id, st] of [['gork', 'gorkovskaya'], ['petr', 'petrogradskaya'], ['sport', 'sportivnaya'], ['chk', 'chkalovskaya'], ['vo', 'vasileostrovskaya'], ['gorny', 'gorny'], ['sport2', 'sportivnaya2'], ['che', 'chernyshevskaya'], ['tekh', 'tekhnolog'], ['tekh2', 'tekhnolog2']]) { const p = petro[id]; if (!p) continue; if (p.exitRoute) debug.exits[st] = p.exitRoute(debug); if (p.entryRoute) debug.entries[st] = p.entryRoute(debug); }
-    if (hub) for (const id of ['sennaya', 'sadovaya', 'spasskaya']) { const p = hub[id]; if (!p) continue; const ex = p.exitRoute && p.exitRoute(debug), en = p.entryRoute && p.entryRoute(debug); if (ex) debug.exits[id] = ex; if (en) debug.entries[id] = en; }
-    void dir;
   }
 
   // ---- transfer walks (tests): platform -> platform through the passages
@@ -480,18 +431,12 @@ function buildMetro(ctx) {
   }
 
   if (gdRoutes) Object.assign(debug.walks, gdRoutes.walks);
-  if (hub) Object.assign(debug.walks, hub.walks(debug));
-  if (petro.vit) petro.vit.register(debug);
-  for (const id of ['pan1', 'pan2', 'ligovsky']) { const p = east[id]; if (!p) continue; if (p.exitRoute) debug.exits[id] = p.exitRoute(debug); if (p.entryRoute) debug.entries[id] = p.entryRoute(debug); }
-  if (east.walks) Object.assign(debug.walks, east.walks(debug));
-  if (petro.tekhHub) Object.assign(debug.walks, petro.tekhHub.walks());
 
   // ---- surface signs: a plain blue "М" totem (white rounded box, blue letter) in front of every vestibule that has no pylon of its own
   // (the totem texture mSign is built at the top)
-  const OWNER_SVC = { vasileostrovskaya: 'landmarksAndrew', gorny: 'landmarksSredny', sportivnaya2: 'landmarksMakarova' }, totemOwned = (st) => !!(OWNER_SVC[st] && ctx.services && ctx.services[OWNER_SVC[st]] && ctx.services[OWNER_SVC[st]].metro && ctx.services[OWNER_SVC[st]].metro.signs);   // the pavilion owner draws the blue M himself
   const signs = new THREE.Group(); signs.name = 'metro-signs'; ctx.addStatic(signs); const ks = ctx.kit(signs);
   const totemSeen = new Set();
-  for (const d of DOORWAYS.filter((q) => q.station !== 'vosstaniya' && q.station !== 'gostiny' && q.station !== 'admiralteyskaya' && q.station !== 'nevsky' && !q.noTotem && !totemOwned(q.station) && !totemSeen.has(q.station) && totemSeen.add(q.station))) {
+  for (const d of DOORWAYS.filter((q) => q.station !== 'vosstaniya' && q.station !== 'gostiny' && q.station !== 'admiralteyskaya' && q.station !== 'nevsky' && !q.noTotem && !totemSeen.has(q.station) && totemSeen.add(q.station))) {
     const nx = Math.sin(d.rotY), nz = Math.cos(d.rotY), jx = -nz, jz = nx; let px = null, pz = null;
     for (const [o, l] of [[3.5, 3.2], [3.5, -3.2], [2.4, 3.9], [2.4, -3.9], [4.8, 3.2], [4.8, -3.2]]) { const x = d.x + nx * o + jx * l, z = d.z + nz * o + jz * l; if (!(ctx.L.isOnRoad && ctx.L.isOnRoad(x, z, 0.6)) && !(ctx.L.insideBuilding && ctx.L.insideBuilding(x, z, 0.5))) { px = x; pz = z; break; } }          // road integrity: never a pole on a carriageway
     if (px === null) continue;
@@ -502,19 +447,10 @@ function buildMetro(ctx) {
   // ---- services
   const entrances = DOORWAYS.map((d) => ({ id: d.id, x: d.x, z: d.z, rotY: d.rotY, station: d.station, kind: d.kind }));
   for (const p of PITS) entrances.push({ id: p.id, x: p.mouth[0], z: p.mouth[1], rotY: Math.atan2(-p.e[0], -p.e[1]), station: 'nevsky', kind: 'pit' });
-  for (const p of SPORT_PITS) entrances.push({ id: p.id, x: p.mouth[0], z: p.mouth[1], rotY: Math.atan2(-p.e[0], -p.e[1]), station: 'sportivnaya', kind: 'pit' });
-  for (const p of VO_PITS) entrances.push({ id: p.id, x: p.mouth[0], z: p.mouth[1], rotY: Math.atan2(-p.e[0], -p.e[1]), station: 'sportivnaya2', kind: 'pit' });
-  for (const p of SD_PITS) entrances.push({ id: p.id, x: p.mouth[0], z: p.mouth[1], rotY: Math.atan2(-p.e[0], -p.e[1]), station: 'sadovaya', kind: 'pit' });
-  // the interiors the metro draws inside the pavilions of Vasilievsky Island (the owners of the buildings read them: docs/research/vo-requests-metro.md): by building id
-  const pavilions = {};
-  if (petro.che && petro.che.pavilion) pavilions.w22999175 = petro.che.pavilion;
-  if (petro.vo && petro.vo.room) pavilions.w183122885 = { station: 'vasileostrovskaya', floor: petro.vo.FV, ceil: petro.vo.room.CEIL, poly: petro.vo.room.poly, doors: DOORWAYS.filter((d) => d.bldg === 'w183122885').map((d) => d.id), hole: 'vasileostrovskaya-shaft', podium: !!petro.vo.podium };
-  for (const [st, key] of [['gorny', 'gorny'], ['sport2', 'sportivnaya2']]) { const p = petro[st]; if (p && p.wells) for (const wr of Object.values(p.wells)) if (wr.room) pavilions[wr.w.bldg] = { station: key, floor: 0.05, ceil: wr.room.CEIL, poly: wr.room.poly, doors: DOORWAYS.filter((d) => d.bldg === wr.w.bldg).map((d) => d.id), hole: wr.w.id + '-hole' }; }
-  if (hub) for (const [id, b] of [['sennaya', 'w39036403'], ['spasskaya', 'w245455781']]) { const p = hub[id]; if (p && p.room) pavilions[b] = { station: id, floor: 0.05, ceil: p.room.CEIL, poly: p.room.poly, doors: DOORWAYS.filter((d) => d.bldg === b).map((d) => d.id), hole: id + '-shaft' }; }
   ctx.services.metro = {
-    stations: Object.values(stations).map((r) => ({ id: r.id, name: r.def.name, line: r.def.line, frame: r.frame })), entrances, network: NET, pavilions,
+    stations: Object.values(stations).map((r) => ({ id: r.id, name: r.def.name, line: r.def.line, frame: r.frame })), entrances, network: NET,
     ride: (from, to) => { const rt = stations[from]; return rt ? { from, to, seconds: NET.gameRideSeconds(rt.def.line, rt.def.idx, NET.BY_ID[to].idx) } : null; },
   };
-  ctx.metro = { debug, M, S, hall, esc, rot, vest, stations, ride: rideCtl, protos, showGeneric, sessionTrains, genericTunnel, env, GENERIC_FRAME, west, petro, east, hub, discs };
+  ctx.metro = { debug, M, S, hall, esc, rot, vest, stations, ride: rideCtl, protos, showGeneric, sessionTrains, genericTunnel, env, GENERIC_FRAME, west, discs };
   return M;
 }

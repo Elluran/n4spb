@@ -12,9 +12,9 @@
 // Beyond the data it continues as the street grid of the city (farconf.js) and, past ~4.5 km, as a dim green-grey suburb colour.
 import * as THREE from 'three';
 import * as L from '../layout.js';
-import { EXTENT, EXTENT_RECTS, PLAY_RECTS, RECT_NAMES } from '../data/city.js';
+import { EXTENT_RECTS } from '../data/city.js';
 import { FAR_FOG, FAR_GRID } from './farconf.js';
-import { waterCuts, pondCuts } from './river.js';
+import { waterCuts } from './river.js';
 import { CLASS_PALETTE_GLSL } from './class-palette.js';
 import { DIST_ATLAS_GLSL, distanceUniforms } from './distance-atlas.js';
 import { clipHalf, subtractConvex, area2, bucketCuts } from './clip.js';
@@ -23,27 +23,16 @@ export { clipHalf };
 
 const FAR = 7600;
 const CELL = 16;
-// WHERE THE SHADER PAINTS THE DATA (class mask, dust strips at the roads) and where the "city beyond the data" (default yard mix + the continued street grid). Three groups of EXTENT rectangles:
-//   A  the first eight (OLD, W1, N1, W2a..e): data look, as ever;
-//   P  the Petrograd side / Spit (P1..P5, V1, V2; 2026-10-06): data look - its parks (Alexander Park, the Zoo, the Kronverk glacis) are painted from the mask, no invented grid runs through it;
-//   O  the other extensions (E1, N2, N3, M1..M7, S1..S5): they have always been painted with the far look (the shader knew only eight rectangles) and were reviewed like that, so their PLAY rectangles keep it,
-//      also where a P rectangle overlaps them; the 120 m scenery margin of an O rectangle that lies inside a P rectangle is P land now (the garden strip of Petrovskaya embankment south of the Nakhimov school lay
-//      in the margin of N2 and stayed grey): the far look ends O_BAND metres outside the O play rectangles. Set GROUND_DATA_EVERYWHERE to true to give the O areas the data look too (the mask covers the whole extent).
-const GROUND_DATA_EVERYWHERE = false;
-// New southern areas also use the real land-use mask. Keep the older reviewed
-// extensions' look while allowing the park, avenue lawns and courts to be real.
-const _isP = (i) => /^(P\d|V\d|K\d|YE\d|KA\d|AP\d|PE\d|C\d|MP\d|VP$|MS$)/.test(RECT_NAMES[i] || '');
-const O_BAND = 40;
-const RECTS_A = EXTENT_RECTS.filter((r, i) => i < 8), RECTS_P = EXTENT_RECTS.filter((r, i) => i >= 8 && (_isP(i) || GROUND_DATA_EVERYWHERE));
-const RECTS_O = PLAY_RECTS.map((r) => ({ x0: r.x0 - O_BAND, x1: r.x1 + O_BAND, z0: r.z0 - O_BAND, z1: r.z1 + O_BAND })).filter((r, i) => i >= 8 && !_isP(i) && !GROUND_DATA_EVERYWHERE);
-const SH_RECTS = [...RECTS_A, ...RECTS_P, ...RECTS_O];
-const RECT_COUNT = Math.max(1, SH_RECTS.length); // Never silently discard new districts.
+// WHERE THE SHADER PAINTS THE DATA (class mask, dust strips at the roads) and where the "city beyond the data" starts (default yard mix + the continued street grid): the union of the EXTENT rectangles
+// (the eight rectangles of the strip, each its play area + 120 m).
+const SH_RECTS = EXTENT_RECTS;
+const RECT_COUNT = Math.max(1, SH_RECTS.length);
 
 const PRE = /* glsl */`
 uniform sampler2D uCls; uniform sampler2D uDist; uniform sampler2D uNoise;
 ${CLASS_PALETTE_GLSL}
 ${DIST_ATLAS_GLSL}
-uniform vec4 uBox; uniform vec4 uRects[${RECT_COUNT}]; uniform vec3 uNRects; uniform vec2 uClsInv; uniform vec2 uDistInv; uniform vec2 uFogK;
+uniform vec4 uBox; uniform vec4 uRects[${RECT_COUNT}]; uniform vec2 uClsInv; uniform vec2 uDistInv; uniform vec2 uFogK;
 uniform vec2 uC; uniform vec4 uAx; uniform vec4 uPitch; uniform vec4 uDefault; uniform float uRoadW; uniform float uCityR;
 uniform vec3 uGrassA; uniform vec3 uGrassB; uniform vec3 uGrassC; uniform vec3 uGrassD; uniform vec3 uEarth;
 uniform vec3 uAsphA; uniform vec3 uAsphB; uniform vec3 uAsphC; uniform vec3 uCrack;
@@ -67,14 +56,10 @@ const BODY = /* glsl */`
   float mpp = max(length(dFdx(P)), length(dFdy(P)));                       // metres per pixel
   vec2 q = P - uBox.xy;
   float exd = 1.0e5;                                                       // distance outside the union of the data rectangles (< 0 inside)
-  float exdP = 1.0e5, exdO = 1.0e5;                                         // ... of the Petrograd-side rectangles / of the other extensions (groups P and O above)
   for (int ri = 0; ri < ${RECT_COUNT}; ri++) {
-    float fi = float(ri); if (fi >= uNRects.x + uNRects.y + uNRects.z) break;
     vec4 R = uRects[ri]; float dR = max(max(R.x - P.x, P.x - R.z), max(R.y - P.y, P.y - R.w));
-    if (fi < uNRects.x) exd = min(exd, dR); else if (fi < uNRects.x + uNRects.y) exdP = min(exdP, dR); else exdO = min(exdO, dR);
+    exd = min(exd, dR);
   }
-  float sO = clamp(-exdO / 40.0, 0.0, 1.0);                                // 1 inside the play rectangles of the older extensions, 0 from 40 m outside them (O_BAND)
-  exd = min(exd, exdP < 0.0 ? mix(exdP, 150.0, sO) : exdP);                 // a P rectangle counts where no older play rectangle covers the spot
   float outd = exd - 40.0;
   float farT = smoothstep(0.0, 110.0, outd);
   vec4 W = mix(clsFiltered(q * uClsInv), uDefault, farT);
@@ -97,10 +82,6 @@ const BODY = /* glsl */`
   vec4 mk = smoothstep(vec4(smx - ae), vec4(smx), sc);
   float ms = mk.x + mk.y + mk.z + mk.w + 1e-4;
   float mG = mk.x / ms, mA = mk.y / ms, mS = mk.z / ms, mV = mk.w / ms;
-  // the pure mown class of the islands (field.js CLASS.mown, lawn weight 1.0): forced grass, no competition blots. Only that class reaches Wn.x > 0.93 (lawn 0.90, wood 0.86), so no older ground changes.
-  float pureG = smoothstep(0.93, 0.99, Wn.x); mG = mix(mG, 1.0, pureG); mA *= 1.0 - pureG; mS *= 1.0 - pureG; mV *= 1.0 - pureG;
-  // the island yard class (field.js CLASS.yard, asphalt weight 0.97): forced asphalt (the old asphalt class is 0.94, parking 0.90), no grass / red-paver blots in an unmapped courtyard
-  float pureA = smoothstep(0.955, 0.97, Wn.y); mA = mix(mA, 1.0, pureA); mG *= 1.0 - pureA; mS *= 1.0 - pureA; mV *= 1.0 - pureA;
 
   // ---- trimmed lawn: lighter and darker mown patches, a few clumps, trampled earth showing through
   vec3 cg = mix(uGrassA, uGrassB, smoothstep(0.48, 0.66, n2.g));
@@ -166,7 +147,7 @@ const BODY = /* glsl */`
     col = mix(col, mix(uGravA, uGravB, smoothstep(0.4, 0.7, n3.g)) * (0.95 + 0.1 * n5.r), rb);
   }
   float rr = length(P - uC);
-  float cityT = max(1.0 - smoothstep(uCityR, uCityR + 1200.0, rr), 1.0 - smoothstep(1800.0, 2500.0, exdP));      // the city reaches 4.6 km from Vosstaniya Square and 1.8 km round the Petrograd side (far.js PETRO_BELT)
+  float cityT = max(1.0 - smoothstep(uCityR, uCityR + 1200.0, rr), 1.0 - smoothstep(1800.0, 2500.0, exd));      // the city reaches 4.6 km from Vosstaniya Square and 1.8 km round the strip (far.js belt + the suburb ring: the west end of the strip is 3.6 km from the Square)
   vec3 sub = mix(uSuburb, uSuburb * vec3(1.2, 1.15, 1.0), smoothstep(0.35, 0.7, n2.r)) * (0.9 + 0.2 * n3.g);
   col = mix(col, sub, roadT * (1.0 - cityT));
 
@@ -202,7 +183,7 @@ export function farFogPatch(mat, key) {
 
 /** the convex cuts of the ground: every convex piece of every water body (river.js waterCuts) + the metro shaft rectangles; each { poly (CCW for the half-plane test), box } */
 function groundCuts() {
-  const cuts = [...waterCuts(), ...pondCuts()].map((c) => ({ poly: c.poly, box: c.box }));
+  const cuts = waterCuts().map((c) => ({ poly: c.poly, box: c.box }));
   for (const h of L.GROUND_HOLES) {
     const c = Math.cos(h.rotY || 0), s = Math.sin(h.rotY || 0), hw = h.w / 2, hd = h.d / 2;
     let pts = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([lx, lz]) => [h.x + lx * c + lz * s, h.z - lx * s + lz * c]);
@@ -242,7 +223,7 @@ export function buildGround(ctx, root, field) {
     ...distanceUniforms(f.dist),
     uCls: { value: f.cls.texture }, uDist: { value: f.dist.texture }, uNoise: { value: f.noise.texture },
     uClsPalette: { value: f.cls.paletteTexture || f.cls.texture }, uClsSize: { value: new T.Vector2(f.cls.W, f.cls.H) }, uClsIndexed: { value: f.cls.indices ? 1 : 0 },
-    uBox: { value: new T.Vector4(f.box.x0, f.box.z0, f.box.x1, f.box.z1) }, uRects: { value: SH_RECTS.map(r => new T.Vector4(r.x0, r.z0, r.x1, r.z1)) }, uNRects: { value: new T.Vector3(RECTS_A.length, RECTS_P.length, RECTS_O.length) },
+    uBox: { value: new T.Vector4(f.box.x0, f.box.z0, f.box.x1, f.box.z1) }, uRects: { value: SH_RECTS.map(r => new T.Vector4(r.x0, r.z0, r.x1, r.z1)) },
     uClsInv: { value: new T.Vector2(1 / (f.cls.W * f.cls.res), 1 / (f.cls.H * f.cls.res)) }, uDistInv: { value: new T.Vector2(1 / (f.dist.W * f.dist.res), 1 / (f.dist.H * f.dist.res)) },
     uFogK: { value: new T.Vector2(FAR_FOG.D0, FAR_FOG.K) },
     uC: { value: new T.Vector2(G.cx, G.cz) }, uAx: { value: new T.Vector4(G.ux, G.uz, G.vx, G.vz) }, uPitch: { value: new T.Vector4(G.pu, G.pv, G.u0, G.v0) },
@@ -261,7 +242,7 @@ export function buildGround(ctx, root, field) {
       .replace('#include <map_fragment>', '#include <map_fragment>\n' + BODY)
       .replace('#include <fog_fragment>', FOG);
   };
-  mat.customProgramCacheKey = () => 'paint|env-ground-pb9-palette8-dist-atlas';
+  mat.customProgramCacheKey = () => 'paint|env-ground-pb10-strip-dist-atlas';
 
   return buildGroundMesh(ctx, root, field, mat, U);
 }

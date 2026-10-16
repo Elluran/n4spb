@@ -1,12 +1,12 @@
 // landmarksOktyabrsky - the BOLSHOY CONCERT HALL "OKTYABRSKY" (Большой концертный зал «Октябрьский», Ligovsky pr. 6; V. A. Kamensky, A. V. Zhuk, Zh. M. Verzhbitsky, G. M. Vlanin, 1967: a light dolomite
 // foyer block under a cantilevered slab with a 43 m glass front and a dark bronze frieze, the windowless stone cube of the auditorium behind it), its forecourt on GREEK SQUARE (Греческая площадь:
-// the brick-paver promenade, the granite stair, black twin-globe lamps, chain bollards, the bronze group "Октябрь" by A. T. Matveev) and the MONUMENT TO IOANNIS KAPODISTRIAS (Памятник Иоаннису
-// Каподистрии, V. M. Klykov and M. A. Reinberg, 2003: verdigris bronze on a pale granite drum pedestal with a shield plaque, in the mouth of the Nekrasov Garden).
+// the brick-paver promenade, the granite stair, black twin-globe lamps, chain bollards, the bronze group "Октябрь" by A. T. Matveev).
+// (The Kapodistrias monument 56 m beyond the play edge is not part of the Nevsky strip.)
 // Why the hall was absent before: the OSM outline w30324279 has `skip` (it owns a part), so the generic city drew only the raised cube part as one yellow block and nothing for the foyer ring;
 // this module claims w30324279 (the part w929214560 follows through `parent`) and draws the whole building exactly once.
-// Dossiers docs/research/oktyabrsky.md (hall, frame, spec) and oktyabrsky-square.md (square, monument), photos refs/oktyabrsky.  User rules: no flags / flagpoles (the real facade has none), no alarm sounds.
-// Files: landmarksOktyabrsky/frame.js (hall frame HALL / W / M, outline, heights, KAP) art.js mats.js (every texture / material key starts with 'lmOkt-') · hall.js (stone, front, stair, interior,
-// flanks, roof, colliders) · plaza.js (promenade paving, lamps, bollards with chains, poster stands) · october.js (the Matveev group) · monument.js (Kapodistrias: lathe pedestal, plaque, setting) · figure.js (the kit figures: Kapodistrias with cape / cloak / cane, the three nude figures of the group) · groups.js (claims, PAVED_RINGS) ·
+// Dossiers docs/research/oktyabrsky.md (hall, frame, spec) and oktyabrsky-square.md (square), photos refs/oktyabrsky.  User rules: no flags / flagpoles (the real facade has none), no alarm sounds.
+// Files: landmarksOktyabrsky/frame.js (hall frame HALL / W / M, outline, heights) art.js mats.js (every texture / material key starts with 'lmOkt-') · hall.js (stone, front, stair, interior,
+// flanks, roof, colliders) · plaza.js (promenade paving, lamps, bollards with chains, poster stands) · october.js (the Matveev group) · figure.js (the kit figures: the three nude figures of the group) · groups.js (claims, PAVED_RINGS) ·
 // kit.js geo.js inst.js surfaces.js trees.js treegeo.js leafmat.js util.js (copies of landmarksKarpovka).  Tools: tools/landmarksOktyabrsky-walk.mjs (walk probe), -houses.mjs (houses JSON).
 // A part is built only when its claim key is in groups.js.  Publishes ctx.services.landmarksOktyabrsky = { hall, monuments, photoSpots, entrances, crowd, fences, benches, lamps, trees, parts }
 // and merges monuments / photo spots into ctx.services.landmarks.
@@ -22,7 +22,6 @@ const PARTS = [
   ['hall', 'oktyabrsky-hall', () => import('./landmarksOktyabrsky/hall.js')],
   ['plaza', 'oktyabrsky-hall', () => import('./landmarksOktyabrsky/plaza.js')],
   ['october', 'oktyabrsky-hall', () => import('./landmarksOktyabrsky/october.js')],
-  ['monument', 'kapodistrias', () => import('./landmarksOktyabrsky/monument.js')],
 ];
 
 export async function build(ctx) {

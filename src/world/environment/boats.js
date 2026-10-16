@@ -11,10 +11,7 @@
 import * as THREE from 'three';
 import * as L from '../layout.js';
 import { PIERS } from '../data/city.js';
-import { triangulateRing } from './clip.js';
-import { WATERWAYS, keepOut } from './waterways.js';
-import { inVO } from './vo-banks.js';
-import { isOwned } from '../lib/claims.js';
+import { WATERWAYS } from './waterways.js';
 import { Acc, hash2 } from './util.js';
 
 const C = (h) => new THREE.Color(h);
@@ -83,23 +80,6 @@ function boatGeometry(type) {
     boxC(A, -len * 0.5 + 2.6, 1.3 + 0.5, 0, 4.4, 0.06, wid * 0.8, '#b9bcbc'); for (const z of [-1, 1]) boxC(A, -len * 0.5 + 2.6, 1.3 + 0.55, z * wid * 0.4, 4.4, 1.0, 0.06, WHITE);   // stern deck + bulwark
     boxC(A, len * 0.5 - 14.6, 1.3 + 2.75, 0, 0.12, 0.9, 0.12, '#8a8f93');                                                                           // a bare mast (no flag)
     for (const z of [-1, 1]) for (let i = 0; i < 5; i++) boxC(A, -11 + i * 5.2, 0.5, z * (wid / 2 + 0.06), 0.5, 0.5, 0.16, TYRE);
-  } else if (type === 'cargo' || type === 'cargo2') {    // a river-sea dry cargo ship 110 x 14 m (the Neva below the Blagoveshchensky Bridge): hull, boot-topping band, forecastle, three hatches with two deck cranes, the deckhouse aft with a funnel; NO flag, no horn
-    len = 110; wid = 14; h = 24;
-    const hull = type === 'cargo' ? '#2c4668' : '#3f5f4a', band = type === 'cargo' ? '#8f2f2a' : '#9a8a5a', house = type === 'cargo' ? '#eceeec' : '#e4e2da', funnel = type === 'cargo' ? '#c43a34' : '#2c4668', hatch = type === 'cargo' ? '#5d7388' : '#7a6a58';
-    hullPrism(A, len, wid, -0.2, 4.3, 20, hull, 0, 1.0); hullPrism(A, len, wid, -0.2, 1.3, 20, band, 0.03, 1.0);
-    hullPrism(A, len * 0.97, wid * 0.94, 4.28, 4.45, 18, '#9a9d9a');                                     // the deck
-    hullPrism(A, 30, wid * 0.6, 4.28, 6.6, 12, hull, 0, 0, len / 2 - 15);                                  // the forecastle bulwark block (review-water: a tapered block inside the hull outline; the old 20 x 12.6 m box overhung the bow like a slab)
-    boxC(A, len / 2 - 4, 4.45 + 2.2, 0, 1.0, 4.4, 1.0, '#cfcfca');                                          // the jackstaff bare (no flag)
-    for (let i = 0; i < 3; i++) { const cx = 22 - i * 25; boxC(A, cx, 4.45 + 0.85, 0, 21, 1.7, wid * 0.62, hatch); boxC(A, cx, 4.45 + 1.75, 0, 21.4, 0.12, wid * 0.66, '#3b4652'); }      // hatch covers + coamings
-    for (const cx of [9.5, -15.5]) { boxC(A, cx, 4.45 + 4.2, wid * 0.36, 0.9, 8.4, 0.9, '#e0e2de'); boxC(A, cx + 3.2, 4.45 + 8.2, wid * 0.36, 8.0, 0.45, 0.45, '#cfd2cc'); }                 // two deck cranes
-    const ax = -len / 2 + 13;
-    boxC(A, ax, 4.45 + 1.7, 0, 18, 3.4, wid * 0.8, house);                                                 // the deckhouse, tier 1
-    boxC(A, ax - 0.5, 4.45 + 5.1, 0, 14, 3.4, wid * 0.7, house);                                           // tier 2
-    boxC(A, ax - 1.0, 4.45 + 8.4, 0, 9, 3.0, wid * 0.8, house);                                            // the wheelhouse with its bridge wings
-    for (let t = 0; t < 3; t++) boxC(A, ax - t * 0.5 + 0.01, 4.45 + 1.7 + t * 3.35, 0, 18.1 - t * 4, 0.85, wid * (t === 2 ? 0.81 : t === 1 ? 0.71 : 0.81) + 0.02, GLASS);
-    boxC(A, ax - 6.5, 4.45 + 9.2, 0, 3.4, 5.2, 3.0, funnel); boxC(A, ax - 6.5, 4.45 + 11.9, 0, 3.5, 0.9, 3.1, '#26282b');             // the funnel with a black top
-    boxC(A, ax + 1.5, 4.45 + 11.3, 0, 0.25, 4.4, 0.25, '#b9bcbc');                                         // a bare mast
-    for (const z of [-1, 1]) for (let i = 0; i < 6; i++) boxC(A, -len / 2 + 30 + i * 12, 3.3, z * (wid / 2 + 0.05), 0.5, 0.5, 0.16, TYRE);
   } else {                                       // speedboat 7 x 2.4 m
     len = 7; wid = 2.4; h = 2.0;
     hullPrism(A, len, wid, -0.1, 0.62, 2.6, WHITE); hullPrism(A, len, wid, 0.05, 0.26, 2.6, RED, 0.02);
@@ -121,10 +101,9 @@ export function pierRects() {
     const r = orientedRect(poly.o);
     if (r.len < 5 || r.wid < 1) return;
     const key = L.waterwayAt(r.cx, r.cz);
-    if (!key || key === 'fontanka' || key === 'nh-inner') return;       // the New Holland pier w507817412 is landmarksNewHolland's own (chevron deck, railing, stairs)
+    if (!key || key === 'fontanka') return;       // (the Fontanka stages are landmarksC's)
     if (!L.inPlay(r.cx, r.cz, -30)) return;
-    if (r.len > 90 && inVO(r.cx, r.cz)) return;                       // Vasilievsky Island: a 100-250 m 'pier' polygon is a fixed shipyard / port quay, not a floating landing stage
-    if (L.claimedBy(p.id) || keepOut(r.cx, r.cz)) return;                // a landing stage that a sight module draws (the Aurora gangway, the Commandant pier of the fortress) / its berth
+    if (L.claimedBy(p.id)) return;                // a landing stage that a sight module draws itself
     out.push({ ...r, key, y: WATERWAYS[key].water, id: p.id + '#' + pi });
   });
   return out;
@@ -139,8 +118,7 @@ function orientedRect(o) {
   return { cx: cx + ax * mu - az * mv, cz: cz + az * mu + ax * mv, ax, az, len: u1 - u0, wid: v1 - v0 };
 }
 
-const FIXED_PIERS = new Set(['w74745049']);        // OSM pier polygons of the island that are drawn as fixed scenery piers (see buildBoats)
-export function buildBoats(ctx, root, quay, owned = null) {
+export function buildBoats(ctx, root, quay) {
   const T = ctx.THREE || THREE;
   const out = { piers: [], boats: [], triangles: 0 };
   const rng = ctx.rng('env-boats');
@@ -182,41 +160,13 @@ export function buildBoats(ctx, root, quay, owned = null) {
     if (!best) return 1;
     return (-(best.mx - p.cx) * p.az + (best.mz - p.cz) * p.ax) >= 0 ? 1 : -1;
   }
-  // ---- FIXED PIERS of the island (water-2 2026-10-08, review of landmarksNavalCorps: "the second pier w74745049 ... is NOT drawn by anybody"): the 255 m ship pier of the Lt Schmidt embankment next to the S-189 pier (the
-  // sailing ship of photo d08 moors here; photos d08 / d13 of docs/research/navalcorps.md: a low white steel pontoon wall about 1 m over the water, a grey deck, red stanchions with a red top rail). SCENERY: no collider (the
-  // water round it is open and the only way on is the S-189 footbridge stub, which is not walkable either); a sight module that claims the polygon id takes it over (L.claimedBy)
-  for (const pr of PIERS) {
-    if (!FIXED_PIERS.has(pr.id) || L.claimedBy(pr.id)) continue;
-    for (const poly of pr.polys) {
-      const o = poly.o, n = o.length / 2; if (n < 3 || !L.waterwayAt(poly.o[0], poly.o[1]) && !L.waterwayAt((o[0] + o[2] * 3) / 4, (o[1] + o[3] * 3) / 4)) continue;
-      const wl = WATERWAYS.neva.water, top = wl + 1.0, wCol = C('#d9dcd9'), dCol = C('#7c8084');
-      // the polygon is a comb (the main pier and a finger): the deck is the polygon itself (earcut), the white wall stands on every edge, the red rail and stanchions run along every edge longer than 2 m
-      for (const tri of triangulateRing(o)) { const v = tri.map((q) => PA.vert(q[0], top + 0.03, q[1], 0, 1, 0, dCol.r, dCol.g, dCol.b)); PA.tri(v[0], v[1], v[2]); }
-      let area = 0; for (let i = 0; i < n; i++) { const j = (i + 1) % n; area += o[i * 2] * o[j * 2 + 1] - o[j * 2] * o[i * 2 + 1]; }
-      const boxAt = (x, cy, z, yaw, sx, sy, sz, col) => {
-        const A2 = new Acc(true), c = Math.cos(yaw), s = Math.sin(yaw), base = PA.count; boxC(A2, 0, 0, 0, sx, sy, sz, col);
-        for (let i = 0; i < A2.p.length; i += 3) { const lx = A2.p[i], ly = A2.p[i + 1], lz = A2.p[i + 2], nx = A2.n[i], nz = A2.n[i + 2]; PA.vert(x + lx * c + lz * s, cy + ly, z - lx * s + lz * c, nx * c + nz * s, A2.n[i + 1], -nx * s + nz * c, A2.c[i], A2.c[i + 1], A2.c[i + 2]); }
-        for (const k of A2.i) PA.i.push(base + k);
-      };
-      for (let i = 0; i < n; i++) {
-        const j = (i + 1) % n, ax = o[i * 2], az = o[i * 2 + 1], bx = o[j * 2], bz = o[j * 2 + 1], l = Math.hypot(bx - ax, bz - az); if (l < 0.3) continue;
-        const tx = (bx - ax) / l, tz = (bz - az) / l, sgn = area > 0 ? 1 : -1, nx = tz * sgn, nz = -tx * sgn;          // outward normal of the edge
-        const w = [PA.vert(ax, wl - 0.04, az, nx, 0, nz, wCol.r, wCol.g, wCol.b), PA.vert(bx, wl - 0.04, bz, nx, 0, nz, wCol.r, wCol.g, wCol.b), PA.vert(bx, top + 0.03, bz, nx, 0, nz, wCol.r, wCol.g, wCol.b), PA.vert(ax, top + 0.03, az, nx, 0, nz, wCol.r, wCol.g, wCol.b)];
-        PA.tri(w[0], w[1], w[2]); PA.tri(w[0], w[2], w[3]);
-        if (l < 2) continue;
-        const yaw = Math.atan2(-tz, tx), ix = -nx * 0.12, iz = -nz * 0.12;
-        boxAt((ax + bx) / 2 + ix, top + 1.0, (az + bz) / 2 + iz, yaw, l, 0.07, 0.07, '#a8372d');                       // the red top rail
-        for (let u = 0.2; u <= l - 0.1; u += 3.2) boxAt(ax + tx * u + ix, top + 0.5, az + tz * u + iz, yaw, 0.1, 1.0, 0.1, '#a8372d');       // the red stanchions
-      }
-    }
-  }
   if (PA.count) {
     const m = new T.Mesh(PA.geometry(), ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0.03, name: 'env-piers' })); m.name = 'env-piers'; m.castShadow = true; m.receiveShadow = true; group.add(m);
     out.triangles += PA.i.length / 3;
   }
 
   // ---- boats: instanced per type
-  const types = { tram: boatGeometry('tram'), open: boatGeometry('open'), speed: boatGeometry('speed'), meteor: boatGeometry('meteor'), cargo: boatGeometry('cargo'), cargo2: boatGeometry('cargo2') };
+  const types = { tram: boatGeometry('tram'), open: boatGeometry('open'), speed: boatGeometry('speed'), meteor: boatGeometry('meteor') };
   const list = [];                                                                    // { type, key, y, base: {x,z,yaw}, state? }
   const wet = (x, z) => L.inRiver(x, z);
   // moored: along the outer side of the pontoons, alternating types
@@ -230,7 +180,7 @@ export function buildBoats(ctx, root, quay, owned = null) {
       if (u + G.len > p.len / 2 + 6) break;
       const cu = u + G.len / 2, cv = outer * (Math.max(2.2, p.wid) / 2 + G.wid / 2 + 0.3), x = p.cx + p.ax * cu - p.az * cv, z = p.cz + p.az * cu + p.ax * cv;
       const ends = [-G.len / 2, G.len / 2].map((e) => [x + p.ax * e, z + p.az * e]);
-      if (wet(x, z) && !keepOut(x, z, 8) && ends.every(([ex, ez]) => wet(ex, ez))) list.push({ type, key: p.key, y: p.y, x, z, yaw: p.ax >= 0 || hash2(pi, n, 3) < 0.5 ? yaw : yaw + Math.PI, moored: true });
+      if (wet(x, z) && ends.every(([ex, ez]) => wet(ex, ez))) list.push({ type, key: p.key, y: p.y, x, z, yaw: p.ax >= 0 || hash2(pi, n, 3) < 0.5 ? yaw : yaw + Math.PI, moored: true });
       u += G.len + 1.0;
     }
   });
@@ -243,41 +193,12 @@ export function buildBoats(ctx, root, quay, owned = null) {
     { id: 'moika-red2', key: 'moika', type: 'speed', pts: [[-2300, 56], [-2270, 44], [-2160, 0], [-2060, -40]], v: 4.2, off: -4, phase: 0.3 },
     { id: 'griboedov-s', key: 'griboedov', type: 'tram', pts: [[-1410, -240], [-1423, -176], [-1439, -98], [-1452, -35]], v: 1.9, off: 0 },
     { id: 'winter', key: 'winter-canal', type: 'open', pts: [[-1795, -972], [-1853, -1049], [-1880, -1085]], v: 1.3, off: 0 },
-    // the Mars Field reach (docs/research/mars-bridges-canals.md section 6: the Moika and the Fontanka carry tourist boats, the Swan Canal none): between the 1st and 2nd Sadovy bridges and on the Fontanka between the Laundry and the Panteleymonovsky bridges
+    // the Mars Field reach (docs/research/mars-bridges-canals.md section 6: the Moika and the Fontanka carry tourist boats, the Swan Canal none): between the 1st and 2nd Sadovy bridges
     { id: 'moika-garden', key: 'moika', type: 'open', pts: [[-915, -958], [-991, -970], [-1049, -982], [-1108, -994], [-1150, -1003]], v: 2.1, off: 4.5, phase: 0.15 },
     { id: 'moika-garden2', key: 'moika', type: 'tram', pts: [[-1150, -1003], [-1108, -994], [-1049, -982], [-991, -970], [-915, -958]], v: 1.9, off: -4.5, phase: 0.65 },
-    { id: 'fontanka-garden', key: 'fontanka', type: 'open', pts: [[-812, -1662], [-804, -1634], [-779, -1558], [-764, -1479], [-752, -1400], [-745, -1321], [-739, -1241], [-735, -1190]], v: 2.3, off: 6, phase: 0.1 },
-    { id: 'fontanka-garden2', key: 'fontanka', type: 'tram', pts: [[-735, -1190], [-739, -1241], [-745, -1321], [-752, -1400], [-764, -1479], [-779, -1558], [-804, -1634], [-812, -1662]], v: 2.0, off: -6, phase: 0.55 },
-    // the south-west (docs/research/sw-canals-bridges.md 2.1 - 2.3): tourist boats on the Kryukov canal between Torgovy and Kashin, on the Moika past the Yusupov Palace, on the Griboedov canal between Kokushkin and Voznesensky
-    { id: 'kryukov-mid', key: 'kryukov', type: 'open', pts: [[-3090, 912], [-3070, 960], [-3050, 1007]], v: 1.9, off: 4, phase: 0.2 },
-    { id: 'kryukov-mid2', key: 'kryukov', type: 'tram', pts: [[-3050, 1007], [-3070, 960], [-3090, 912]], v: 1.8, off: -4, phase: 0.7 },
-    { id: 'moika-yusupov', key: 'moika', type: 'open', pts: [[-2905, 252], [-2971, 305], [-3044, 376], [-3105, 436]], v: 2.1, off: 5, phase: 0.3 },
-    { id: 'moika-yusupov2', key: 'moika', type: 'tram', pts: [[-3105, 436], [-3044, 376], [-2971, 305], [-2905, 252]], v: 1.9, off: -5, phase: 0.8 },
-    { id: 'griboedov-voz', key: 'griboedov', type: 'tram', pts: [[-2150, 731], [-2250, 709], [-2330, 690], [-2390, 672]], v: 1.8, off: 0, phase: 0.4 },
     { id: 'neva-hydro', key: 'neva', type: 'tram', pts: [[-2030, -1190], [-2140, -1110], [-2260, -1020], [-2300, -990]], v: 5.5, off: 0, size: 1.7, phase: 0.2 },
     { id: 'neva-tour', key: 'neva', type: 'open', pts: [[-2300, -1020], [-2200, -1100], [-2110, -1170], [-2030, -1230]], v: 3.2, off: 0, size: 1.4, phase: 0.6 },
-    // the Petrograd side (docs/research/petro-water.md section 5): the big river trams of the Neva tours between the Trinity Bridge and the Spit (south of the fortress), small boats through the Kronverksky
-    // strait (under the Ioannovsky and Kronverksky bridges), the Malaya Neva between the Birzhevoy and Tuchkov bridges, the Bolshaya Nevka past the Aurora (outside her berth), and a "Meteor" hydrofoil of the
-    // Peterhof line on the Bolshaya Neva below the Palace Bridge
-    { id: 'neva-fortress', key: 'neva', type: 'tram', pts: [[-1520, -1700], [-1700, -1640], [-1950, -1590], [-2200, -1500], [-2330, -1420]], v: 3.4, off: 14, size: 1.7, phase: 0.1 },
-    { id: 'neva-fortress2', key: 'neva', type: 'open', pts: [[-2330, -1420], [-2200, -1500], [-1950, -1590], [-1700, -1640], [-1520, -1700]], v: 3.0, off: 14, size: 1.5, phase: 0.55 },
-    { id: 'kronverk-strait', key: 'neva', type: 'open', pts: [[-1575, -2180], [-1700, -2262], [-1900, -2272], [-2090, -2228], [-2230, -2108], [-2320, -1985]], v: 2.4, off: 0, phase: 0.35 },
-    { id: 'malaya-neva', key: 'neva', type: 'tram', pts: [[-2800, -1560], [-3050, -1580], [-3300, -1640], [-3500, -1745]], v: 3.2, off: 12, size: 1.6, phase: 0.25 },
-    { id: 'malaya-neva2', key: 'neva', type: 'speed', pts: [[-3500, -1745], [-3300, -1640], [-3050, -1580], [-2800, -1560]], v: 6.0, off: 12, phase: 0.7 },
-    { id: 'nevka-aurora', key: 'neva', type: 'open', pts: [[-610, -2510], [-640, -2620], [-668, -2700], [-700, -2790]], v: 2.8, off: 0, size: 1.3, phase: 0.45 },
-    { id: 'neva-meteor', key: 'neva', type: 'meteor', pts: [[-2520, -800], [-2700, -700], [-2950, -520], [-3200, -400], [-3330, -330]], v: 7.5, off: 0, phase: 0.3 },
-    { id: 'neva-trinity', key: 'neva', type: 'tram', pts: [[-1180, -1840], [-1000, -1930], [-800, -2030]], v: 3.2, off: 0, size: 1.7, phase: 0.8 },
-    // Vasilievsky Island (docs/research/vo-water.md section 6). The Bolshaya Neva below the Blagoveshchensky Bridge (the river / sea boundary): the centre line from the two banks (x -3560 .. -4640), 250-390 m wide.
-    // Sea-going ships pass the bridge down to the Baltic Shipyard and the Neva mouth, never up through the city; the Peterhof Meteor leaves the Admiralty pier under the bridge for the Gulf (hull-borne here); a tour boat shuttles
-    // between the bridge and the Mining University. No horns, no flags.
-    { id: 'vo-ship-down', key: 'neva', type: 'cargo', pts: [[-3560, -232], [-3754, -143], [-3954, -69], [-4101, 25], [-4254, 187], [-4421, 430], [-4540, 800], [-4600, 1100], [-4650, 1260]], v: 3.4, off: 55, turn: 40, phase: 0.05 },
-    { id: 'vo-ship-up', key: 'neva', type: 'cargo2', pts: [[-4650, 1260], [-4600, 1100], [-4540, 800], [-4421, 430], [-4254, 187], [-4101, 25], [-3954, -69], [-3754, -143], [-3560, -232]], v: 3.0, off: 55, turn: 40, phase: 0.55 },
-    { id: 'vo-meteor', key: 'neva', type: 'meteor', pts: [[-3500, -255], [-3754, -143], [-3954, -69], [-4101, 25], [-4254, 187], [-4421, 430], [-4540, 800], [-4600, 1100], [-4650, 1260]], v: 9.0, off: -40, turn: 14, phase: 0.62 },
-    { id: 'vo-tour', key: 'neva', type: 'tram', pts: [[-3600, -216], [-3754, -150], [-3950, -75], [-4101, 15], [-4254, 170]], v: 2.8, off: -70, size: 1.6, phase: 0.2 },
-    { id: 'vo-tour2', key: 'neva', type: 'open', pts: [[-4254, 170], [-4101, 15], [-3950, -75], [-3754, -150], [-3600, -216]], v: 2.5, off: -70, size: 1.5, phase: 0.7 },
-    // the Malaya Neva west of the Tuchkov Bridge (Makarova embankment landing stages): a river tram between the stages and the Smolenka source
-    { id: 'malaya-west', key: 'neva', type: 'tram', pts: [[-3830, -1855], [-3960, -1925], [-4100, -2005], [-4230, -2085]], v: 2.7, off: 10, size: 1.6, phase: 0.4 },
-    { id: 'malaya-west2', key: 'neva', type: 'open', pts: [[-4230, -2085], [-4100, -2005], [-3960, -1925], [-3830, -1855]], v: 2.4, off: 10, size: 1.5, phase: 0.9 },
+    { id: 'neva-meteor', key: 'neva', type: 'meteor', pts: [[-2520, -800], [-2700, -700], [-2950, -520], [-3000, -492]], v: 7.5, off: 0, phase: 0.3 },
   ];
   const moving = [];
   for (const R of REACHES) {
@@ -285,7 +206,7 @@ export function buildBoats(ctx, root, quay, owned = null) {
     for (let i = 0; i + 1 < pts.length; i++) { const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); seg.push(l); tot.push(s); s += l; }
     const Lr = s, G = types[R.type], sz = R.size || 1;
     // validate: the reach must be water and the offset lane too
-    let ok = true; for (let q = 0; q <= 20; q++) { const a = at(q / 20 * Lr); if (!wet(a.x + a.nx * R.off, a.z + a.nz * R.off) || keepOut(a.x + a.nx * R.off, a.z + a.nz * R.off, 6)) { ok = false; break; } }
+    let ok = true; for (let q = 0; q <= 20; q++) { const a = at(q / 20 * Lr); if (!wet(a.x + a.nx * R.off, a.z + a.nz * R.off)) { ok = false; break; } }
     if (!ok) continue;
     function at(sv) {
       sv = Math.max(0, Math.min(Lr, sv)); let i = 0; while (i + 1 < seg.length && tot[i] + seg[i] < sv) i++;
@@ -307,32 +228,8 @@ export function buildBoats(ctx, root, quay, owned = null) {
     list.push({ type: R.type, key: R.key, y: WATERWAYS[R.key].water, moving: true, state, size: sz, id: R.id });
     moving.push(list[list.length - 1]);
   }
-  // OWNER MOORINGS (a sight module's own pontoon asks for a boat; water-2 2026-10-08): the river tram at the EAST pontoon of the Rumyantsevsky apron (docs/research/vo-requests-landmarksMenshikov.md 4: frame D of
-  // landmarksMenshikov - origin A (-3306.2, -555.1), a along the apron wall (0.866, -0.5), b toward the river (0.5, 0.866); the pontoon is a 121, b 26.5 .. 31.7, deck y -2.78): the tram lies along its river
-  // side, bow toward the palace, only while the module's apron is claimed (it draws the pontoon)
-  if (L.claimedBy('r12712436')) {
-    const G = types.tram, ux = 0.866, uz = -0.5, vx = 0.5, vz = 0.866, a = 121, b = 31.7 + G.wid / 2 + 0.35, x = -3306.2 + ux * a + vx * b, z = -555.1 + uz * a + vz * b;
-    const ends = [-G.len / 2, G.len / 2].map((e) => [x + ux * e, z + uz * e]);
-    if (wet(x, z) && ends.every(([ex, ez]) => wet(ex, ez))) list.push({ type: 'tram', key: 'neva', y: WATERWAYS.neva.water, x, z, yaw: Math.atan2(-uz, ux), moored: true });
-  }
-  // (water-3 2026-10-09; docs/research/vo-requests-landmarksSevkabel.md -> environment 3, vo-requests-environment.md "next water pass") the white river tram of the Sevkabel pier plaza (photo 017): moored along the quay
-  // at frame H lx 88 .. 105 of landmarksSevkabel (origin (-6172.2, 921.0), rotation.y -0.6458, local +x = lx along the hall quay to the ESE, +z = lz toward the river), bow toward +lx, silent, no flag. The module draws
-  // the two yellow bollards at (88, 49.8) and (101, 49.8) and leaves the boat to this service. The hull is put 0.45 m off the measured water edge (L.inRiver along lz at the middle of the berth), pushed out in
-  // 0.2 m steps until all four hull corners are water; only while the module that claims the hall r8702908 is in the build list (the pier plaza is its); added last: no older boat changes its index.
-  if (owned ? isOwned(owned, 'r8702908') : L.claimedBy('r8702908')) {
-    const G = types.tram, rot = -0.6458, Cc = Math.cos(rot), Ss = Math.sin(rot), ox = -6172.2, oz = 921.0;
-    const HW = (u, v) => [ox + Cc * u + Ss * v, oz - Ss * u + Cc * v], lc = 96.5;
-    let edge = null; for (let v = 40; v < 70; v += 0.1) { const [x, z] = HW(lc, v); if (wet(x, z)) { edge = v; break; } }
-    if (edge !== null) {
-      for (let k = 0; k < 20; k++) {
-        const v = edge + 0.45 + k * 0.2 + G.wid / 2, [x, z] = HW(lc, v);
-        const corners = [[-G.len / 2, -G.wid / 2], [-G.len / 2, G.wid / 2], [G.len / 2, -G.wid / 2], [G.len / 2, G.wid / 2]].map(([a, b]) => HW(lc + a, v + b));
-        if (wet(x, z) && corners.every(([cx, cz]) => wet(cx, cz))) { list.push({ type: 'tram', key: 'neva', y: WATERWAYS.neva.water, x, z, yaw: Math.atan2(-(-Ss), Cc), moored: true, id: 'sevkabel-tram' }); break; }
-      }
-    }
-  }
   // instanced meshes
-  const byType = { tram: [], open: [], speed: [], meteor: [], cargo: [], cargo2: [] };
+  const byType = { tram: [], open: [], speed: [], meteor: [] };
   for (const b of list) byType[b.type].push(b);
   const mat = ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0.03, name: 'env-boats' });
   const m4 = new T.Matrix4(), qt = new T.Quaternion(), pos = new T.Vector3(), sc = new T.Vector3(), up = new T.Vector3(0, 1, 0);

@@ -1,4 +1,4 @@
-// Drive-over probe (in the real page): for every new bridge of the Mars Field reach (+ the Troitsky Bridge) samples services.bridges.deckY along the road axis and across the deck and reports
+// Drive-over probe (in the real page): for every bridge of the Mars Field reach and the south-west (+ the Palace Bridge) samples services.bridges.deckY along the road axis and across the deck and reports
 //   * the profile along the axis (u every 3 m over the whole bank-to-bank deck + 6 m of approach),
 //   * steps steeper than 20 % between neighbouring samples (a car would hop) and null holes inside the deck,
 //   * the same across the width (v every 2 m at u = 0).
@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const expr = `(async () => {
-  const S = await import('/src/world/bridges/sites.js'), TR = await import('/src/world/bridges/troitsky.js');
+  const S = await import('/src/world/bridges/sites.js'), PA = await import('/src/world/bridges/palace.js');
   const B = window.__ctx.services.bridges, deckY = B.deckY, res = { ids: B.list.map((b) => b.id), failed: B.failed, sites: {} };
   const ids = S.SITES.slice(11).map((q) => q.id);
   const probe = (frame, uMin, uMax, v0, v1, name, step = 3) => {
@@ -26,7 +26,7 @@ const expr = `(async () => {
     res.sites[name] = { axis: ax, cross, bad };
   };
   for (const id of ids) { const s = S.SITES.find((q) => q.id === id); probe(s, -12, 12, s.v0, s.v1, id); }
-  probe(TR.TROITSKY, 0, TR.LEN, -11.8, 11.8, 'troitsky', 10);
+  probe(PA.PALACE, 1.5, 251, -13.85, 13.85, 'palace', 10);
   return res;
 })()`;
 const r = spawnSync('node', [path.join(root, 'tools/shot.mjs'), '--only', 'environment,streets,city,bridges', '--cams', '-1493,-90,0,2', '--out', 'shots/bridges/_probe', '--eval', expr], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 26 });

@@ -51,7 +51,6 @@ export function placeOsm(S) {
   };
   for (let f of FURNITURE) {
     if (!W.inArea(f.x, f.z)) continue;
-    if (S.claimedPetro && S.claimedPetro(f.x, f.z)) { cnt.claimed = (cnt.claimed || 0) + 1; if (f.kind === 'bench' || f.kind === 'waste_basket') (S._claimedAt ||= []).push([Math.round(f.x), Math.round(f.z), f.kind === 'bench' ? 'b' : 'w']); continue; }      // the ground of a sight of the Petrograd side / Spit / the island: it draws its own benches (state.js)
     if (f.kind === 'bench') {
       if (!okPoint(f)) { cnt.skipped++; continue; }
       if (S.lmBench.some((b) => Math.abs(b[0] - f.x) < 0.8 && Math.abs(b[1] - f.z) < 0.8 && Math.hypot(b[0] - f.x, b[1] - f.z) < 0.8)) { cnt.dupBench++; continue; }          // a landmark module drew this bench itself

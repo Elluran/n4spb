@@ -12,14 +12,12 @@
 import * as THREE from 'three';
 import { VB } from './vb.js';
 import { clamp, PointGrid } from './util.js';
-import { instances, alongKerbs, hash2, nodeNear, inMergedStrip, TRACK_CLEAR, furnZone } from './furn.js';
-import { nearCrossing, streetTrackDist } from './net.js';
-import { isOpen } from './region.js';
+import { instances, alongKerbs, hash2, nodeNear, inMergedStrip } from './furn.js';
+import { nearCrossing } from './net.js';
 import { WALK_Y, KERB_W } from './surface.js';
 import { facadeDist } from './bld.js';
 import { lampFamily } from './style.js';
 import { deckAt } from './decks.js';
-import { LANDUSE } from '../data/city.js';
 
 const DBG = (typeof location !== 'undefined' && new URLSearchParams(location.search).get('st')) || '';
 const IRON = '#1b1f20', IRON_D = '#2c3133', GOLD = '#b8943a', GREEN_D = '#2f4a38';
@@ -82,12 +80,7 @@ function lampS(basket) {
   V.rod([0, H + 0.5, 0.75], [0, H + 0.2, out], 0.04, IRON, 3, true);
   V.cyl(0.2, 0.1, 0.16, IRON_D, [0, H + 0.1, out], null, 6, null, true);        // the cup
   G.ball(0.27, GLOBE, [0, H + 0.34, out]);
-  if (basket === 2) {
-    // (open districts, docs/research/vo-requests-landmarksMenshikov.md 6: the one-sided basket on an arm read as a pink-and-green PENNANT when seen edge-on against the sky) a flower BOWL ON THE POLE: a dark-green
-    // ring band round the shaft at 3.5 m with a wreath of six blooms on it, the same from every side
-    V.cyl(0.36, 0.3, 0.26, GREEN_D, [0, 3.5, 0], null, 6, null, true);
-    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + 0.3; V.ball(0.15, k % 2 ? '#d6336c' : '#f08cb4', [Math.cos(a) * 0.3, 3.7, Math.sin(a) * 0.3], [1, 0.8, 1], 'oct'); }
-  } else if (basket) {
+  if (basket) {
     V.rod([0, 3.85, 0], [0, 3.85, 0.5], 0.03, IRON, 3, true);
     V.cyl(0.33, 0.2, 0.3, GREEN_D, [0, 3.55, 0.55], null, 6, null, true);
     V.ball(0.36, '#d6336c', [0, 3.78, 0.55], [1, 0.55, 1]);
@@ -122,55 +115,17 @@ function lampL2() {
   return { body: V.build(), glow: G.build(), H: H + 0.1, arm: 0.5 };
 }
 
-/** modern street light (M): the galvanised steel pole with a straight arm and a cobra-head luminaire over the kerb lane that lights the superblock streets of the island's west (Nalichnaya, Korablestroiteley,
- *  Kruzenshterna, the land-fill boulevards: Commons "Nalichnaya street(1).jpg"): 9 m tapered 8-sided pole, arm 2.2 m reaching out over the roadway, flat head; the Petersburg pedestal lamps stand in the old town only */
-function lampM() {
-  const V = new VB(), G = new VB(), H = 9.2, out = 2.1, C = '#8f9499', C2 = '#6f7479';
-  V.cyl(0.14, 0.2, 0.6, C2, [0, 0.3, 0], null, 8, null, true);
-  V.cyl(0.07, 0.13, H - 0.6, C, [0, 0.6 + (H - 0.6) / 2, 0], null, 8, null, true);
-  V.rod([0, H - 0.25, 0], [0, H + 0.35, out * 0.55], 0.055, C, 4, true);
-  V.rod([0, H + 0.35, out * 0.55], [0, H + 0.38, out], 0.045, C, 4, true);
-  V.box(0.34, 0.13, 0.78, C2, [0, H + 0.4, out]);                                 // the luminaire
-  G.box(0.26, 0.04, 0.62, '#fff0cf', [0, H + 0.33, out]);
-  return { body: V.build(), glow: G.build(), H: H + 0.5, arm: out };
-}
 
-const SPACING = { A: 36, S: 32, L: 34, D: 50, M: 32 };
-
-/** THE PORT ROADS (third pass, docs/research/vo-requests-landmarksMarineFacade.md streets 5; photos V 10 / 33 / 34 / 40): the service ways inside the fenced passenger-port landuse w704134882 (rank 0, lit=0 in OSM: no kerb run, no family)
- *  carry 11 m single-arm cobra heads (family M) every ~35 m on one side. Synthetic kerb points at the asphalt edge; the placer of buildLamps applies every rule of the kerb lamps (road clearance, junctions, facades, FURN_CLEAR, tram rails). Open districts only. */
-const PORT_RING = (() => { const l = LANDUSE.find((q) => q.id === 'w704134882'); return l && l.polys && l.polys[0] ? l.polys[0].o : null; })();
-const inPort = (x, z) => { const o = PORT_RING; if (!o) return false; let ins = false; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const xi = o[i], zi = o[i + 1], xj = o[j], zj = o[j + 1]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) ins = !ins; } return ins; };
-export const PORT_LAMP_SPACING = 35;
-function portRows(net, consider) {
-  if (!PORT_RING) return;
-  for (const w of net.ways) {
-    if (w.rank !== 0 || w.hw !== 'service' || w.skipDraw || w.pedestrianOnly || w.bridge || w.L < 40 || !w.n) continue;
-    const m = w.n >> 1; if (!isOpen(w.x[m], w.z[m]) || !inPort(w.x[m], w.z[m])) continue;
-    const side = hash2(w.i, 7) < 0.5 ? 1 : -1, hw = Math.max(1.5, (w.w || 4) / 2);
-    let acc = 12 + 10 * hash2(w.i, 9);
-    for (let i = 1; i < w.n; i++) {
-      const ax = w.x[i - 1], az = w.z[i - 1], bx = w.x[i], bz = w.z[i], seg = Math.hypot(bx - ax, bz - az); if (seg < 1e-6) continue;
-      const tx = (bx - ax) / seg, tz = (bz - az) / seg, nx = -tz * side, nz = tx * side;
-      acc += seg;
-      while (acc > PORT_LAMP_SPACING) {
-        acc -= PORT_LAMP_SPACING;
-        const f = 1 - acc / seg, sx = ax + (bx - ax) * f, sz = az + (bz - az) * f, s = w.s[i - 1] + (w.s[i] - w.s[i - 1]) * f;
-        if (s < 10 || w.L - s < 10 || !inPort(sx, sz)) continue;
-        consider({ x: sx + nx * hw, z: sz + nz * hw, nx, nz, w, side: side > 0 ? 'R' : 'L', s, run: -1 }, 'M');
-      }
-    }
-  }
-}
+const SPACING = { A: 36, S: 32, L: 34, D: 50 };
 
 export function buildLamps(ctx, net, T, root, opts = {}) {
   const { owned = new Set(), inPlaza = () => false, avoid = [], tPool, skipAt = null, extra = [] } = opts;
   const out = { count: 0, list: [], tris: 0 };
   const taken = new PointGrid(12);                                          // (every candidate asked every lamp placed so far)
   const free = (x, z, d) => !taken.any(x, z, d);
-  const sites = { A0: [], A1: [], A2: [], S0: [], S1: [], S2: [], L: [], D: [], L2: [], M: [] };
+  const sites = { A0: [], A1: [], A2: [], S0: [], S1: [], L: [], D: [], L2: [] };
   const consider = (k, famOv) => {
-    const w = k.w; if (w.pedestrianOnly) return;                           // the Paradny Quarter pedestrian ways: landmarksTauride draws its own lighting
+    const w = k.w; if (w.pedestrianOnly) return;                           // a way a landmark module draws itself: it lights it itself
     const fam = famOv || lampFamily(w); if (!fam || w.bridge) return;
     // road clearance rule: the base stands off every OTHER carriageway (1.2 m) and off the asphalt of its own way INCLUDING the parking pocket and its ramps (0.55 m; the kerb run does
     // not follow the pocket taper): a lamp on the asphalt moves outward in 0.3 m steps (up to 0.6 m) and is dropped when it still stands on it
@@ -179,30 +134,27 @@ export function buildLamps(ctx, net, T, root, opts = {}) {
     if (nearCrossing(net, x, z, 5.5) || net.cover(x, z, { skip: w }) > -1.2 || net.cover(x, z, {}) > -0.55 || !free(x, z, fam === 'A' ? 12 : fam === 'D' ? 10 : 11)) return;
     if (inPlaza(x, z) && owned.has('square')) return;                     // landmarksA places the square's own lamps
     if (skipAt && skipAt(x, z)) return;
-    if (isOpen(x, z) && streetTrackDist(x, z) < TRACK_CLEAR) return;                    // not on the rails of a tram reservation beside the kerb (open districts, region.js)
-    if (furnZone(x, z)) return;                                           // a place a sight module dresses itself (furn.js FURN_CLEAR: the Mining stair forecourt, the Academy pier block, the Menshikov apron wall)
     if (deckAt(x, z, 1.5)) return;                                        // bridge decks carry the bridges module's own lamp standards                                   // inside a square paved by a landmark module (it places its own lamps)
     for (const a of avoid) if (Math.hypot(a[0] - x, a[1] - z) < 6) return;
     if (facadeDist(x, z, 2.5) < (fam === 'A' ? 1.2 : 1.0)) return;
     if (nodeNear(net, x, z, 10)) return;
     if (net.cover(x, z, { skip: w }) > -7.7 && inMergedStrip(net, x, z, 0.15, 7.5)) return;                    // the strip between two carriageways of one street that fillMedians merged (gap < 7.5 m) is roadway: no lamp on it (furn.js; a median of 7.5 m and more keeps its lamps)
     const hsh = hash2(Math.round(x * 3), Math.round(z * 3));
-    const key = fam === 'A' ? (hsh < 0.3 ? 'A2' : hsh < 0.62 ? 'A0' : 'A1') : fam === 'S' ? (hsh < 0.34 ? (isOpen(x, z) ? 'S2' : 'S1') : 'S0') : fam;       // (S2 = the flower bowl on the pole: the open districts; the reviewed ones keep the basket on its arm)
+    const key = fam === 'A' ? (hsh < 0.3 ? 'A2' : hsh < 0.62 ? 'A0' : 'A1') : fam === 'S' ? (hsh < 0.34 ? 'S1' : 'S0') : fam;
     // arms of A run along the street normal (across the pavement and the carriageway); D / S / L crooks lean over the road
     const rotY = fam === 'A' ? Math.atan2(-k.nz, k.nx) : Math.atan2(-k.nx, -k.nz);
     sites[key].push({ x, y: WALK_Y, z, rotY, way: w.i, kind: fam, nx: k.nx, nz: k.nz, run: k.run, s: k.s }); taken.add(x, z);
   };
   alongKerbs(net, (w) => SPACING[lampFamily(w)] || 50, (k) => consider(k));
-  portRows(net, consider);
   for (const e of extra) {                                                  // mapped OSM lamps that stand where the generator has no kerb (the Gostiny Dvor promenade): the lantern model, facing the street
     if (deckAt(e.x, e.z, 1.5) || (skipAt && skipAt(e.x, e.z))) continue;
     sites.L2.push({ x: e.x, y: WALK_Y, z: e.z, rotY: e.rotY || 0, way: -1, kind: 'L2', nx: e.nx || 0, nz: e.nz || 1, run: -1, s: 0 }); taken.add(e.x, e.z);
   }
-  for (const key of Object.keys(sites)) for (const s of sites[key]) ctx.physics.addCylinder(s.x, s.z, key === 'D' || key === 'L' || key === 'L2' || key === 'M' ? 0.16 : 0.34, 0, key === 'L' || key === 'L2' ? 2.5 : 3);
+  for (const key of Object.keys(sites)) for (const s of sites[key]) ctx.physics.addCylinder(s.x, s.z, key === 'D' || key === 'L' || key === 'L2' ? 0.16 : 0.34, 0, key === 'L' || key === 'L2' ? 2.5 : 3);
 
   const mVC = ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0.02, name: 'pt-lamp' });
   const mGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff0cc'), toneMapped: false, name: 'pt-lamp-glow' });
-  const models = { A0: lampA(0, false), A1: lampA(1, false), A2: lampA(2, true), D: lampD(), S0: lampS(false), S1: lampS(true), S2: lampS(2), L: lampL(), L2: lampL2(), M: lampM() };
+  const models = { A0: lampA(0, false), A1: lampA(1, false), A2: lampA(2, true), D: lampD(), S0: lampS(false), S1: lampS(true), L: lampL(), L2: lampL2() };
   for (const key of Object.keys(sites)) {
     const m = models[key]; if (!m || !sites[key].length) continue;
     instances(ctx, m.body, mVC, sites[key], 'lamps-' + key);

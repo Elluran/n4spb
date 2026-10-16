@@ -1,5 +1,5 @@
 // npm run roads: runs the furniture audit, the surface audit and the ribbon audit one after the other (every one also runs when an earlier one fails) and exits non-zero when any failed.
-// The audits cover the whole play area (layout.inPlay), the Petrograd side and Vasilievsky Island (V3..V12) included; the strict furniture audit also fails on objects within 1.35 m of a tram rail axis.
+// The audits cover the whole play area of the strip (layout.inPlay: the union of the eight play rectangles).
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const runs = [
   ['roads-furniture-audit.mjs', '--strict', '--allow', 'GUARD_STONE,PROP,BIN,TREE,FACADE_COLLIDER'],
-  ['roads-surface-audit.mjs', '--max-fail', '2170'],
-  ['streets-ribbon-audit.mjs', '--max-walls', '10', '--max-surf', '1000'],       // walls / pavement strips laid over asphalt (docs/AGENT-BRIEF.md road integrity rules): 4 wall segments, 935 triangles (372 m2) of strips over side-street mouths on 2026-10-07
+  ['roads-surface-audit.mjs', '--max-fail', '120'],                                // the strip on 2026-10-16: 91 residual samples of 221118 (the budget of the whole city was 2170)
+  ['streets-ribbon-audit.mjs', '--max-walls', '4', '--max-surf', '150'],         // walls / pavement strips laid over asphalt (docs/AGENT-BRIEF.md road integrity rules): the strip on 2026-10-16: 2 wall segments, 100 triangles (44 m2)
 ];
 let code = 0;
 for (const [script, ...args] of runs) {

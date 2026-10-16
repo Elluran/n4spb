@@ -14,8 +14,8 @@ import { LINES } from '../data/metro.js';
 import { lineStations, BY_ID } from './net.js';
 import { indexExact } from './lib.js';
 
-/** official line colours of the signage (the LINES table of data/metro.js has 5 and 6 slightly off) */
-export const SIGN_COLORS = { 1: '#D6083B', 2: '#0078C9', 3: '#009A49', 4: '#EA7125', 5: '#6E0A78', 6: '#8C5646' };
+/** official line colours of the signage (the LINES table of data/metro.js has 5 slightly off) */
+export const SIGN_COLORS = { 1: '#D6083B', 2: '#0078C9', 3: '#009A49', 4: '#EA7125', 5: '#6E0A78' };
 export const lineColor = (line) => SIGN_COLORS[String(line)] || (LINES[String(line)] && LINES[String(line)].color) || '#444444';
 
 const BLUE = '#22309A', CREAM = '#efe9da', GRAPHITE = '#3a3f46', SILVER = '#aeb4ba', WHITE = '#ffffff', INK = '#14161a';
@@ -247,9 +247,9 @@ function paintScheme(g, W, H, o, FONT) {
 
 // ------------------------------------------------------------------ network map
 const MAP_W = 2048, MAP_H = 1536, SX = 1.55, MAP_OX = 10;
-const MAP_ROWS = { 3: { y: 300, up: true, room: 350, pivot: 'mayakovskaya', px: 466, dx: 62 }, 2: { y: 560, up: true, room: 310, pivot: 'nevsky', px: 404, dx: -44 }, 1: { y: 800, up: false, room: 310, x0: 34, dx: 48 },
-  5: { y: 1060, up: false, room: 282, x0: 60, dx: 62 }, 4: { y: 1300, up: false, room: 277, pivot: 'dostoevskaya', px: 520, dx: 72 }, 6: { y: 1450, up: true, room: 160, x0: 60, dx: 96 } };
-/** [x, y] of every station on the 2048 x 1536 network map canvas (strip layout of map-ui.js, stretched to the canvas) */
+const MAP_ROWS = { 3: { y: 300, up: true, room: 350, pivot: 'mayakovskaya', px: 466, dx: 62 }, 2: { y: 560, up: true, room: 310, pivot: 'nevsky', px: 404, dx: -44 }, 1: { y: 800, up: false, room: 310, pivot: 'vosstaniya', px: 466, dx: 48 },
+  5: { y: 1060, up: false, room: 282, pivot: 'admiralteyskaya', px: 370, dx: 62 }, 4: { y: 1300, up: false, room: 277, pivot: 'dostoevskaya', px: 520, dx: 72 } };
+/** [x, y] of every station on the 2048 x 1536 network map canvas (a strip layout, stretched to the canvas; the rows are pivoted on a built station so that the interchanges line up) */
 export function networkMapXY() {
   const xy = {};
   for (const line of Object.keys(MAP_ROWS)) {
@@ -299,7 +299,7 @@ function paintMap(g, W, P, xy) {
     g.fillStyle = INK; g.textAlign = 'left'; P.fit(g, def.name.replace(' линия', ''), lx + 82, yy - 11, 216, 21, FONT, 700);
     g.fillStyle = '#43454d'; P.fit(g, def.nameEn.replace(' line', ''), lx + 82, yy + 12, 216, 16, FONT, 400);
   });
-  const ly = 230 + 6 * 78 + 20;
+  const ly = 230 + 5 * 78 + 20;
   g.fillStyle = '#2b2b30'; tcap(g, lx + 8, ly, 56, 24, 12); g.fillStyle = WHITE; tcap(g, lx + 14, ly, 44, 12, 6);
   g.fillStyle = INK; P.fit(g, 'Пересадка', lx + 82, ly - 8, 216, 20, FONT, 700); g.fillStyle = '#43454d'; P.fit(g, 'Interchange', lx + 82, ly + 12, 216, 15, FONT, 400);
   g.restore();

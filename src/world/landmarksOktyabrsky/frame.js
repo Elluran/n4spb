@@ -3,7 +3,6 @@
 //          bearing 29.87 deg), local +z = v INTO the building (ESE), y up; the front faces local -z (WNW, toward Ligovsky pr.).  three.js rotation.y = +1.0495 rad.  The outline is a trapezoid
 //          (front 67.5 m, rear 56.6 m, depth 83.5 m); it and the part polygon are taken from the baked OSM footprints so the walls close on the data exactly (fallbacks = the dossier numbers).
 //          world(u, v) = A' + u * (0.4981, -0.8671) + v * (0.8671, 0.4981).
-//   KAP    frame of the Kapodistrias monument (OSM n1372027612): origin = the node, rotY = -0.4712 (the figure and its plaque face SSW, bearing 207 deg), local +z = the front.
 //   OCT    the "Oktyabr" group of A. T. Matveev (OSM n1732981183): the dossier puts it at hall (56, -9) at the foot of the NNE end of the stair; it faces the front (WNW = local -z of the hall frame).
 import * as L from '../layout.js';
 
@@ -91,12 +90,5 @@ export const HF = {
   walk(ph, u, v, du, dv, top, bottom) { const p = W(u, v); return ph.addWalkBox(p.x, p.z, du, dv, HALL.rot, top, bottom); },
 };
 
-// ------------------------------------------------------------------------------------------------ the monument
-export const KAP = { x: 796.6, z: -460.6, rot: -0.4712 };
-{
-  const cs = Math.cos(KAP.rot), sn = Math.sin(KAP.rot);
-  /** monument-local (a along +x = the figure's left, b along +z = the front) -> world */
-  KAP.W = (a, b) => ({ x: KAP.x + a * cs + b * sn, z: KAP.z - a * sn + b * cs });
-}
 /** the October group: hall (56, -9) */
 export const OCT = (() => { const p = W(56, -9); return { x: p.x, z: p.z, rot: HALL.rot + Math.PI, u: 56, v: -9 }; })();

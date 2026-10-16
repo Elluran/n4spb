@@ -1,5 +1,7 @@
 # Performance plan, 2026-10-15: comfortable walking and driving
 
+> Written for the whole 102_3d_piter city; the numbers and region counts do not apply to the Nevsky strip (see [STRIP.md](STRIP.md)). Kept because `src/core/spatial.js` cites its item 1a (range audit).
+
 Goal set by the user: the old centre must be comfortable to walk and drive on this machine
 (RTX 3090 Ti, Edge, D3D11, 1280 x 720, **medium** quality):
 

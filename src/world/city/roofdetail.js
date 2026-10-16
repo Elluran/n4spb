@@ -56,11 +56,10 @@ export function buildRoofDetail(ctx, { M, info }) {
   const dormerT = templateOf(dormerGeo()), chimT = templateOf(chimneyGeo());
   const dormers = { add: (it) => stamp(M.fine(it.x, it.z), dormerT, it) }, chimneys = { add: (it) => stamp(M.fine(it.x, it.z), chimT, it) };
   let nMansard = 0, nDormer = 0, nChim = 0, tris = 0;
-  const P = ctx.L.WORLD.play;
   for (const rec of info) {
     const { b, st } = rec;
     if (b.minH > 0.5 || st.deckY == null) continue;
-    const nearPlay = st.ob.cx > P.x0 - 30 && st.ob.cx < P.x1 + 30 && st.ob.cz > P.z0 - 30 && st.ob.cz < P.z1 + 30;
+    const nearPlay = ctx.L.inPlay(st.ob.cx, st.ob.cz, -30);
     let deckY = st.deckY;
     // ---- mansard
     if (st.mansard && nearPlay) {

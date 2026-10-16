@@ -1,5 +1,7 @@
 # FIX-PLAN: roads (furniture on the carriageways + non-asphalt surfaces) - plan critic, 2026-10-05
 
+> Historical plan of the first build; its street names and counts refer to the whole city and some tools it lists were removed. The resulting rules are in `docs/AGENT-BRIEF.md` ("Road integrity rules") and `docs/rules/`; the audits that remain are `npm run roads | ribbons | markings | paving`.
+
 Inputs: furn_report.md, surf_report.md, examples_report.md (+ their tools). Everything below was re-checked by the critic:
 both tools were re-run on the current tree (reproduced: furniture 1,049 on road / 271 edge / 823 median<7.5 m; surface 72,989 offending samples, 66,994 not excepted),
 the blamed code lines were read, 8 screenshots were viewed (a_0, b_0, b_4, whatif f_0, f_1, roadsurf a_0 ...), and extra probes were run (section 2).

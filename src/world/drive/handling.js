@@ -20,7 +20,7 @@ export function createHandling(ctx, tuning = null) {
   const L = ctx.L, ph = ctx.physics;
   const T = tuning ? { ...COUPE_TUNING, ...tuning } : COUPE_TUNING, SPEC = T.spec || COUPE_SPEC, GEAR = T.gearTop;
   const collide = createCarCollisions(ph, SPEC);
-  const deckY = () => (x, z) => ctx.services.landmarksTauride?.deckY(x,z) ?? ctx.services.northBridges?.deckY(x, z) ?? ctx.services.eastBridges?.deckY(x, z) ?? ctx.services.landmarksC?.bridge?.deckY?.(x, z) ?? ctx.services.bridges?.deckY(x, z) ?? null;
+  const deckY = () => (x, z) => ctx.services.landmarksC?.bridge?.deckY?.(x, z) ?? ctx.services.bridges?.deckY(x, z) ?? null;
   const deck = deckY();
 
   /** road surface height at (x, z): the humped Anichkov deck, a low (<= 0.3 m) pavement / kerb slab, else the asphalt (0.03) */

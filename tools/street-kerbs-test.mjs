@@ -21,7 +21,7 @@ timings.cachedBuildMs = now() - t;
 
 // Graph equality includes all coordinate values and way/fillet aliases. Query
 // caches and their monotonic visit stamps are implementation details, excluded here.
-const topologyKeys = ['ways', 'nodes', 'fillets', 'kerbRuns', 'crossings', 'cell', 'restored', 'trimmed', 'slabs', 'medians', 'patches', 'swallowedIslands'];
+const topologyKeys = ['ways', 'nodes', 'fillets', 'kerbRuns', 'crossings', 'cell', 'medians'];
 function equalTopology(a, b) {
   const queue = topologyKeys.map(k => [a[k], b[k]]), forward = new WeakMap(), reverse = new WeakMap();
   while (queue.length) {

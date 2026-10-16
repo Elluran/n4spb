@@ -1,5 +1,7 @@
 # Calibration of `yandex-center.png`
 
+> The screenshot itself (a third-party Yandex Maps image, a private layout reference) is not in this repository, and neither are `tools/plan.mjs` / `tools/fetch-osm.mjs` named below. The frame (origin, bearing, scale) it defines is still the frame of `src/world/data/city*.js`.
+
 Machine-readable result: `calibration.json` (same folder). Everything is in the local frame of `src/world/data/city.js`:
 metres, **+X east, +Z south (-Z = north)**, origin `ORIGIN` = 59.932421 N, 30.351279 E (the `ll` of the Yandex URL), no rotation (the screenshot is north-up).
 

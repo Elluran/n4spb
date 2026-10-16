@@ -1,5 +1,5 @@
 // tools/landmarksOktyabrsky-walk.mjs - headless walk probe of landmarksOktyabrsky (no GPU): the forecourt in front of the Bolshoy Concert Hall is open, the seven-riser stair and the stylobate are
-// walkable, the foyer is ENTERABLE through the five door groups (landing, 7 interior risers down, parquet; the user's L-pose stands on it; the glass between the doors, the foyer shell, the columns and the stair flights block), the end blocks, the flanks, the rear and the lamps / bollards / the October group / the Kapodistrias monument block; a ring round the monument stays open.
+// walkable, the foyer is ENTERABLE through the five door groups (landing, 7 interior risers down, parquet; the user's L-pose stands on it; the glass between the doors, the foyer shell, the columns and the stair flights block), the end blocks, the flanks, the rear and the lamps / bollards / the October group block.
 // usage: node tools/landmarksOktyabrsky-walk.mjs
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -65,7 +65,7 @@ ctx.buildList = ['landmarksOktyabrsky'];
 const mod = await import(pathToFileURL(path.join(root, 'src/world/landmarksOktyabrsky.js')).href);
 await mod.build(ctx);
 const F = await import(pathToFileURL(path.join(root, 'src/world/landmarksOktyabrsky/frame.js')).href);
-const ph = ctx.physics, W = F.W, KAP = F.KAP;
+const ph = ctx.physics, W = F.W;
 /** walk a polyline of [x, z] points from feet height y0 in 0.1 m steps (feet follow the walk surfaces); returns { stuck, y } */
 const walk = (pts, y0 = 0) => {
   const p = { x: pts[0][0], z: pts[0][1] }; let y = y0;
@@ -86,7 +86,6 @@ const test = (label, pts, open, yEnd, y0 = 0) => {
   all &&= ok;
 };
 const h = (u, v) => { const p = W(u, v); return [p.x, p.z]; };
-const k = (a, b) => { const p = KAP.W(a, b); return [p.x, p.z]; };
 // the hall (frame: u along the front, v into the building)
 test('forecourt: along the promenade in front of the stair', [h(5, -11), h(60, -11)], true, 0);
 test('stair: from the forecourt up the seven risers to the stylobate', [h(33, -9), h(33, -4), h(33, 1.2)], true, 1.2);
@@ -116,9 +115,6 @@ test('forecourt: past the lamp (1.5 m beside it)', [h(13, -10), h(13, -5)], true
 // the October group: the block stands at hall (56, -9)
 test('October group: through the granite block', [h(56, -14), h(56, -4)], false);
 test('October group: round the block', [h(48, -14), h(48, -9), h(56, -17), h(64, -9)], true);
-// the Kapodistrias monument
-test('monument: through the platform / pedestal', [k(-3.5, 0), k(3.5, 0)], false);
-test('monument: a ring at 3.1 m round it', [k(3.1, 0), k(2.2, 2.2), k(0, 3.1), k(-2.2, 2.2), k(-3.1, 0)], true, 0);
 const S = ctx.services.landmarksOktyabrsky;
 console.log('monuments', S.monuments.length, 'photo spots', S.photoSpots.length, 'crowd', S.crowd.length, 'lamps', S.lamps.length, 'bollards', S.bollards, 'tris', S.triangles, 'build ms', S.buildMs);
 console.log('parts', JSON.stringify(S.parts));

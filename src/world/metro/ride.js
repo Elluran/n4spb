@@ -126,7 +126,7 @@ export function createRide(ctx, M, env) {
       S_end = mouthO + smpO.L + mouthD; T_run = Math.max(hopT, minRunTime(S_end));
       pose = (s) => (s <= mouthO + smpO.L ? originAt(s) : hallPose(destRt, destTk, destTk.dir * (s - S_end)));
     } else {
-      // jump points (the rider's car centre): wholly behind the origin disc (a stub, a real end, or the free-end disc of a PARTIAL tube: links-vo.js) / the destination disc by RIDER_MARGIN
+      // jump points (the rider's car centre): wholly behind the origin disc (a stub, a real end, or the free-end disc of a PARTIAL tube) / the destination disc by RIDER_MARGIN
       const aO = (real ? real.partial.discS : discO - mouthO) + carHalf + RIDER_MARGIN, aD = discD - mouthD + carHalf + RIDER_MARGIN, JO = mouthO + aO, JD = mouthD + aD;
       limO = mouthO + (smpO ? smpO.L : discO - mouthO + STUB_EXT); limD = mouthD + (smpD ? smpD.L : discD - mouthD + STUB_EXT);
       const lampOf = (Lk) => Lk.lamp || { step: Lk.path.lampStep || 18, at0: (Lk.path.lampStep || 18) / 2 };

@@ -13,16 +13,8 @@ const ENV_SLOTS = {
   tram: [{ lx: -3.6, lz: 0.55, y: 2.15 }, { lx: -0.7, lz: -0.6, y: 2.15 }, { lx: 2.2, lz: 0.5, y: 2.15 }],
   open: [{ lx: 4.4, lz: 0, y: 2.1 }, { lx: -3.4, lz: 1.6, y: 1.44 }, { lx: -0.8, lz: -1.6, y: 1.44 }],
   speed: [{ lx: -1.0, lz: 0.2, y: 1.9 }],
-  // the river-sea cargo ships of the Bolshaya Neva (environment/boats.js boatGeometry 'cargo' / 'cargo2', 110 x 14 m, local +x = bow, y above the water line; deck 4.45): the numbers are read off that
-  // builder - deckhouse aft (ax -42): tier 1 roof 7.85 (18 x 11.2 m), tier 2 roof 11.25 (14 x 9.8), wheelhouse roof 14.35 (9 x 11.2), bare mast top 17.95 (x -40.5); the two deck cranes (posts at x 9.5 / -15.5,
-  // z 5.04) carry 8 m jibs at 12.88; hatch coamings top 6.26; the forecastle block top 6.6; the bare jackstaff top 8.85 (x 51). No funnel slot (the funnel is hot) and no flag.
-  cargo: [
-    { lx: -44.2, lz: 3.6, y: 14.37 }, { lx: -42.0, lz: -3.4, y: 14.37 }, { lx: -37.0, lz: 2.6, y: 11.27 }, { lx: -34.2, lz: -3.0, y: 7.87 }, { lx: -40.5, lz: 0, y: 17.97 },
-    { lx: 15.3, lz: 5.04, y: 12.9 }, { lx: -9.7, lz: 5.04, y: 12.9 }, { lx: 22, lz: -3.5, y: 6.28 }, { lx: -28, lz: 3.0, y: 6.28 }, { lx: 44, lz: 1.5, y: 6.62 }, { lx: 51, lz: 0, y: 8.87 },
-  ],
 };
-ENV_SLOTS.cargo2 = ENV_SLOTS.cargo;
-const ENV_HULL = { tram: [13, 3.2], open: [12, 3.4], speed: [7, 2.4], cargo: [110, 14], cargo2: [110, 14] };
+const ENV_HULL = { tram: [13, 3.2], open: [12, 3.4], speed: [7, 2.4] };
 const ENV_SIZE = { 'neva-hydro': 1.7, 'neva-tour': 1.4 };         // the scaled boats of environment/boats.js REACHES (not in the service)
 const C_ROOF = { tram: { y: 3.05, z: [-3, 1.5, 6.2] }, vintage: { y: 3.0, z: [-2, 3.5] } };    // landmarksC/boats.js (the Fontanka)
 
@@ -48,28 +40,7 @@ export function collectBoats(ctx, L) {
     }
     out.push(make({ id: 'e-' + b.id, key: b.key, moving: !!b.moving, hull: { len: len * size, wid: wid * size }, slots, y0, state: b.state, rotOf: (st) => st.yaw, yawOf: (st) => st.yaw + Math.PI / 2 }));
   }
-  // the two moored liners of the Marine Facade port (landmarksMarineFacade/ships.js; static, no horn): ctx.services.landmarksMarineFacade.ships = [{ id, c, ax, L, B, wall }]
-  for (const sh of S.landmarksMarineFacade?.ships || []) {
-    const slots = linerSlots(sh); if (!slots.length || !Array.isArray(sh.c)) continue;
-    const st = { x: sh.c[0], z: sh.c[1], rot: Math.atan2(-sh.ax[1], sh.ax[0]), yaw: Math.atan2(sh.ax[0], sh.ax[1]) };      // the ship frame: +x = bow (sh.ax), +z = starboard (-ax1, ax0): the same frame as the boats of the environment
-    out.push(make({ id: 'm-' + sh.id, key: 'neva', moving: false, hull: { len: sh.L, wid: sh.B }, slots, y0: L.WATERWAYS.neva.water, state: () => st, rotOf: (q) => q.rot, yawOf: (q) => q.yaw }));
-  }
   return out;
-}
-
-/** numbers of landmarksMarineFacade/ships.js (SHIPS rows and liner()): the wheelhouse (x bridge, wing roofs y 39.0, bridge roof 42.0, mast cross-bars 52.3 / 57.2), the funnel cap (x funnelX, top funnelTop), the glass solarium roof (top + 2.4),
- *  the tender roofs (12 per side from x tender0 every 14 m, 14.55 m off the centre line, y 13.2), y over the water line */
-const LINERS = { 'liner-a': { bridge: 96, tender0: -108, funnelX: -40, funnelTop: 52, top: 36, fRx: 9.3 }, 'liner-b': { bridge: 82, tender0: -88, funnelX: -60, funnelTop: 48, top: 39, fRx: 4.2 } };
-function linerSlots(sh) {
-  const d = sh && LINERS[sh.id]; if (!d || !Array.isArray(sh.ax)) return [];
-  const s = [], add = (lx, lz, y) => s.push({ lx, lz, y });
-  for (const [dx, lz] of [[-2, 12], [-2, -12], [2, 16], [2, -16]]) add(d.bridge + dx, lz, 39.03);
-  add(d.bridge - 0.5, 3.0, 42.03);
-  for (const sg of [-1, 1]) add(d.funnelX + sg * d.fRx * 0.45, -sg * 0.9, d.funnelTop + 0.02);
-  add(10, 3, d.top + 2.43); add(30, -4, d.top + 2.43);
-  for (const [n, sg] of [[1, 1], [4, -1], [7, 1], [10, -1]]) add(d.tender0 + 14 * n, sg * 14.55, 13.22);
-  add(d.bridge - 0.5, 2.4, 52.32); add(d.bridge - 0.5, -1.6, 57.22);
-  return s;
 }
 
 function make(o) {

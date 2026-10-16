@@ -3,8 +3,7 @@
 //             its recessed round downlights (one per bay, three rows), the row of small square louvred apertures at the foot of the cube, the roof membrane, the honey parquet of the
 //             foyer, the 26 m dark bronze relief frieze (rifles and a crowd, no banners), poster sheets, the citylight stand, the white fluted annex, the paving of the forecourt
 //             (pavers + red-brown bands 0.9 m wide every 6 m) and the granite slabs of the platform.
-//   monument: the verdigris bronze (teal, streaks on up-facing surfaces), the pale granite, the shield plaque (ИОАННИСУ КАПОДИСТРИЯ / ПАТРИОТЫ ГРЕЦИИ И РОССИИ under a coronet), the engraved text
-//             on the back, the begonia beds, the brick-red garden pavers.
+// (The Kapodistrias monument of the full city is not part of the Nevsky strip: its painters are gone.)
 // Every key starts with 'lmOkt-' (the texture cache is scene-wide: a prefix that matches another module silently takes its textures).
 const TAU = Math.PI * 2;
 export const COL = {
@@ -180,54 +179,5 @@ export function makeArt(ctx) {
   }, 'slabLight');
   /** granite sett strips for the kerb course of the monument platform: tile 2 x 0.5 m */
   A.kerb = D(256, 64, (g, w, h) => { const r = R(7195); for (let i = 0; i < 2; i++) { const v = 0.93 + r() * 0.12; g.fillStyle = `rgb(${154 * v | 0},${148 * v | 0},${142 * v | 0})`; g.fillRect(i * 128 + 1, 1, 126, h - 2); } g.fillStyle = 'rgba(40,36,32,0.5)'; g.fillRect(0, 0, 2, h); g.fillRect(128, 0, 2, h); speckle(g, w, h, 7196, 60, 0.08); }, 'kerb');
-
-  // ------------------------------------------------------------------------------------------ the monument: verdigris bronze, plaque, engraved back
-  /** teal verdigris bronze read by the figure kit's patina uv (u = horizontal position, v = normal.y: the TOP rows are the up-facing surfaces) */
-  A.verdi = D(256, 256, (g, w, h) => {
-    const r = R(7201); g.fillStyle = '#34796b'; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 360; i++) { g.globalAlpha = 0.2; g.fillStyle = r() < 0.5 ? '#1f433d' : '#4f9686'; g.beginPath(); g.arc(r() * w, r() * h, 2 + r() * 8, 0, TAU); g.fill(); }
-    g.globalAlpha = 1;
-    g.fillStyle = 'rgba(122,188,170,0.3)'; g.fillRect(0, 0, w, h * 0.22);
-    for (let x = 0; x < w; x += 3) { const s = r(); if (s < 0.3) continue; const gr = g.createLinearGradient(0, 0, 0, h * (0.25 + s * 0.4)); gr.addColorStop(0, `rgba(138,200,182,${0.2 + 0.3 * s})`); gr.addColorStop(1, 'rgba(138,200,182,0)'); g.fillStyle = gr; g.fillRect(x, 0, 3, h * (0.25 + s * 0.4)); }
-    for (let i = 0; i < 40; i++) { g.globalAlpha = 0.2; g.fillStyle = '#6a553f'; g.beginPath(); g.ellipse(r() * w, h * (0.5 + r() * 0.4), 3 + r() * 6, 2 + r() * 5, r() * 3, 0, TAU); g.fill(); }
-    g.globalAlpha = 1;
-  }, 'verdi');
-  /** unpolished pale granite: fine speckle, a faint algae bloom toward the bottom rows; tile 1.6 x 1.6 m (the pedestal lathe, the plinth) */
-  A.graniteGrain = D(128, 128, (g, w, h) => {
-    const r = R(7231); g.fillStyle = '#ddd8ca'; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 900; i++) { const v = r(); g.fillStyle = v < 0.45 ? `rgba(160,152,138,${0.18 + r() * 0.2})` : v < 0.85 ? `rgba(255,255,250,${0.2 + r() * 0.25})` : `rgba(90,84,76,${0.15 + r() * 0.15})`; g.fillRect(r() * w, r() * h, 1 + r() * 1.8, 1 + r() * 1.6); }
-    const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(143,160,138,0)'); gr.addColorStop(1, 'rgba(143,160,138,0.16)'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
-  }, 'graniteGrain');
-  /** the shield plaque on the front of the pedestal: heater shield under a count's coronet, 0.45 x 0.71 m (canvas 288 x 456), capitals in relief */
-  A.plaque = D(288, 456, (g, w, h) => {
-    g.clearRect(0, 0, w, h);
-    const cx = w / 2, top = 96, bot = h - 8, wd = w - 20;
-    // coronet: band + nine pearl-tipped points
-    g.fillStyle = '#3f8576'; g.fillRect(cx - 74, 54, 148, 34); g.fillStyle = '#6fb3a3'; g.fillRect(cx - 74, 54, 148, 5);
-    for (let i = 0; i < 9; i++) { const x = cx - 66 + i * 16.5; g.fillStyle = '#4a9484'; g.beginPath(); g.moveTo(x - 6, 56); g.lineTo(x + 6, 56); g.lineTo(x + 3, 26); g.lineTo(x - 3, 26); g.closePath(); g.fill(); g.fillStyle = '#9fd3c4'; g.beginPath(); g.arc(x, 22, 5, 0, TAU); g.fill(); }
-    // heater shield
-    g.beginPath(); g.moveTo(10, top); g.lineTo(w - 10, top); g.lineTo(w - 10, top + 190); g.quadraticCurveTo(w - 16, bot - 70, cx, bot); g.quadraticCurveTo(16, bot - 70, 10, top + 190); g.closePath();
-    g.fillStyle = '#3f8576'; g.fill(); g.lineWidth = 7; g.strokeStyle = '#6fb3a3'; g.stroke();
-    g.lineWidth = 3; g.strokeStyle = '#1f433d'; g.beginPath(); g.moveTo(28, top + 14); g.lineTo(w - 28, top + 14); g.lineTo(w - 28, top + 188); g.quadraticCurveTo(w - 32, bot - 84, cx, bot - 22); g.quadraticCurveTo(32, bot - 84, 28, top + 188); g.closePath(); g.stroke();
-    for (const [rx, ry] of [[24, top + 24], [w - 24, top + 24], [30, top + 200], [w - 30, top + 200]]) { g.fillStyle = '#9fd3c4'; g.beginPath(); g.arc(rx, ry, 5, 0, TAU); g.fill(); g.fillStyle = '#1f433d'; g.beginPath(); g.arc(rx + 1, ry + 1, 2.4, 0, TAU); g.fill(); }
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    const line = (t, y, sz, wt) => { g.font = `${wt} ${sz}px ${F.serif}`; let s = sz; while (s > 8 && g.measureText(t).width > wd - 54) { s -= 1; g.font = `${wt} ${s}px ${F.serif}`; } g.fillStyle = '#10261f'; g.fillText(t, cx + 1.5, y + 1.5); g.fillStyle = '#8fcfbd'; g.fillText(t, cx - 0.5, y - 0.5); g.fillStyle = '#2a5a4e'; g.fillText(t, cx, y); };
-    line('ИОАННИСУ', top + 52, 34, 700); line('КАПОДИСТРИЯ', top + 96, 33, 700);
-    line('ПАТРИОТЫ', top + 166, 19, 700); line('ГРЕЦИИ И РОССИИ', top + 192, 19, 700);
-  }, 'plaque', [1, 1]);
-  /** the four small engraved lines on the back of the shaft (the opening-day sentence "В год 300-летия Санкт-Петербурга от Греции"), dark grey letters on transparent, 0.62 x 0.4 m */
-  A.back = D(256, 160, (g, w, h) => {
-    g.clearRect(0, 0, w, h); g.textAlign = 'center'; g.textBaseline = 'middle';
-    const L4 = ['В ГОД', '300-ЛЕТИЯ', 'САНКТ-ПЕТЕРБУРГА', 'ОТ ГРЕЦИИ'];
-    L4.forEach((t, i) => { let s = 28; g.font = `600 ${s}px ${F.serif}`; while (s > 8 && g.measureText(t).width > w - 20) { s -= 1; g.font = `600 ${s}px ${F.serif}`; } g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillText(t, w / 2 + 1, 22 + i * 38 + 1); g.fillStyle = '#6a665c'; g.fillText(t, w / 2, 22 + i * 38); });
-  }, 'back', [1, 1]);
-  /** the bed of red begonias: tile 1 x 1 m, ruby blooms over dark green leaves */
-  A.begonia = D(128, 128, (g, w, h) => {
-    const r = R(7211); g.fillStyle = '#2f5a24'; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 160; i++) { g.fillStyle = r() < 0.7 ? '#c8281e' : '#a81c16'; g.beginPath(); g.arc(r() * w, r() * h, 3 + r() * 4, 0, TAU); g.fill(); }
-    for (let i = 0; i < 40; i++) { g.fillStyle = '#e6463a'; g.beginPath(); g.arc(r() * w, r() * h, 2 + r() * 2, 0, TAU); g.fill(); }
-  }, 'begonia');
-  /** the information board beside the monument: white panel with a few lines (no emblem) */
-  A.board = D(128, 160, (g, w, h) => { g.fillStyle = '#f2f1ec'; g.fillRect(0, 0, w, h); g.fillStyle = '#6a6e74'; for (let i = 0; i < 9; i++) g.fillRect(12, 36 + i * 12, 104 - (i % 3) * 18, 4); g.fillStyle = '#2e5a9e'; g.fillRect(12, 10, 60, 14); }, 'board');
   return A;
 }

@@ -1,16 +1,18 @@
 // The static claims table: which sub-groups every world module declares with `export const OWNS_GROUPS = ...` (a literal: true or a list of keys).
-// src/world/lib/claims.js reads the table instead of importing all 40 landmark modules before the first module (environment) can start building:
-// those imports (44 MB of code and data) took ~5 s on the critical path of every load. The table is generated from the sources:
+// src/world/lib/claims.js reads the table instead of importing every landmark module before the first module (environment) can start building:
+// those imports took seconds on the critical path of every load. Only the modules of src/main.js MODULES count (tools/modules-list.mjs). The table is generated from the sources:
 //   node tools/owns-table.mjs            writes src/world/lib/owns-table.js
 //   node tools/owns-table.mjs --check    exits 1 when the table is stale (run by tools/layout-test.mjs)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mainModules } from './modules-list.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dir = path.join(root, 'src/world'), outFile = path.join(dir, 'lib/owns-table.js');
 const table = {};
-for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js')).sort()) {
+const built = new Set(mainModules());
+for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js') && built.has(n.replace(/.js$/, ''))).sort()) {
   const src = fs.readFileSync(path.join(dir, f), 'utf8');
   const m = /^export\s+const\s+OWNS_GROUPS\s*=\s*([^;]+);/m.exec(src);
   if (!m) continue;

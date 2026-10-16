@@ -1,27 +1,15 @@
-// tools/environment-regress.mjs - a signature of what the environment module builds inside a few boxes of the OLDER areas (reviewed by the user): meshes (vertex count + coordinate sums per mesh name),
-// instanced meshes (instances + position sums), physics items, trees, quay segments / descents. Two signatures are compared to prove that a change for a new district left the old banks exactly as they were.
+// tools/environment-regress.mjs - a signature of what the environment module builds inside a few boxes of the strip (Moscow station - Nevsky - Admiralty - Palace Square - Hermitage): meshes (vertex count + coordinate sums per
+// mesh name), instanced meshes (instances + position sums), physics items, trees, quay segments / descents. Two signatures are compared to prove that a change left the banks exactly as they were.
 // usage: node tools/environment-regress.mjs --out a.json            (builds the environment of THIS checkout)
 //        node tools/environment-regress.mjs --diff base.json a.json  (prints every difference; exit 1 when there is one)
 // The tool resolves the project root from its own location: copy it into a snapshot of an older commit (git archive <commit> src tools package.json | tar -x -C dir; link node_modules) to make the base signature.
 import fs from 'node:fs';
 const args = process.argv.slice(2), arg = (k) => (args.includes(k) ? args[args.indexOf(k) + 1] : null);
 export const BOXES = {                       // name: [x0, x1, z0, z1]
-  palaceEmb: [-2000, -1800, -1250, -1050], trinitySouth: [-1300, -1100, -1620, -1480], fontankaMouth: [-900, -700, -1800, -1650], winterCanal: [-1950, -1750, -1150, -850],
-  palaceBridgeS: [-2420, -2250, -950, -800], englishEmb: [-3500, -3200, -350, -50], anichkov: [-520, -360, -180, 0], newHolland: [-3500, -3300, 150, 400], swanCanal: [-1100, -850, -1600, -1000],
-  kutuzovEmb: [-1100, -850, -1760, -1600], blagoveshchensky: [-3450, -3300, -260, -60], obvodny: [1500, 1800, 1500, 1800], smolnyNeva: [2400, 2700, -1900, -1600],
+  palaceEmb: [-2000, -1800, -1250, -1050], winterCanal: [-1950, -1750, -1150, -850], palaceBridgeS: [-2420, -2250, -950, -800], anichkov: [-520, -360, -180, 0], swanCanal: [-1100, -850, -1120, -1000],
+  nevaWall: [-2900, -1900, -1300, -1000], fontankaNorth: [-900, -600, -1120, -700], griboedov: [-2100, -1700, -400, 300], nevsky: [-1500, -1000, -600, 0], vosstaniya: [-100, 300, -300, 100], railYard: [500, 900, 400, 1100],
+  stripAll: [-3100, 1000, -1500, 1300],
 };
-// --extra (water-2 2026-10-08): more boxes - the REVIEWED Petrograd round (the fortress, Kronverk, the Karpovka, the Tuchkov / Makarova reach, Universitetskaya east of the Twelve Collegia) must stay identical too; the
-// three boxes round the LATE ROADS (Birzhevoy proezd, Kadetsky pereulok, the 6-7 line stub) are the cells that the field change (late roads are road for trunks / hedges) is expected to change
-if (args.includes('--extra')) Object.assign(BOXES, {
-  fortress: [-2440, -1800, -1900, -1500], kronverk: [-2700, -2100, -2800, -2200], karpovka: [-2900, -2000, -4150, -3850], tuchkovNorth: [-3800, -3500, -2000, -1750], makarovaEast: [-3700, -3000, -1700, -1450],
-  universitetskaya: [-3000, -2500, -1000, -600], strelka: [-2600, -2400, -1400, -1200],
-  lateBirzhevoy: [-2720, -2620, -1260, -1130], lateKadetsky: [-3990, -3890, -430, -360], lateSixSeven: [-4470, -4400, -1880, -1790],
-});
-// --extra2 (islands integration 2026-10-14, owner water-banks): whole older districts that border the islands of round 2 - Vasilievsky Island with the Gulf shore (V3..V12), the Petrograd side south of z -3900 (P1..P8, V1, V2) and the Zhdanovka east
-// reach (P6, east of the stadium island PE6: x > -3800): the water rules of the islands (island natural banks, fallback decks, T-junction splits, barrier gates) must leave every vertex of them where it was
-if (args.includes('--extra2')) Object.assign(BOXES, {
-  vasilievskyAll: [-10000, -3300, -1900, 1100], vasilievskyGulf: [-10000, -7500, -2900, -1500], petroSideAll: [-3400, -600, -3900, -1900], petroWest: [-4600, -3400, -1990, -1700], zhdanovkaP6: [-3800, -2780, -2900, -2480],
-});
 if (args.includes('--diff')) {
   const i = args.indexOf('--diff'), A = JSON.parse(fs.readFileSync(args[i + 1], 'utf8')), B = JSON.parse(fs.readFileSync(args[i + 2], 'utf8'));
   let bad = 0;

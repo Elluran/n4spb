@@ -1,6 +1,7 @@
-// End-to-end test of the metro module in the real renderer (headless Edge / Chrome with GPU, puppeteer-core): ?only=metro.
-//   node tools/metro-test.mjs [--q medium|high|low] [--out shots/metro/mt] [--only 1,2,3...]   (sections: 1 load, 2 street + escalator, 3 platform + ride (stops along the line), 4 corridors + doors, 6 ways out of every station, 7 transfers on foot, 8 walk into an open door,
-//   9 west stations: Gostiny Dvor / Nevsky Prospekt / Admiralteyskaya trains, rides incl. the real tunnel Gostiny Dvor <-> Mayakovskaya, closed platform doors, 10 the Petrograd side, 11 Vasilievsky Island: Vasileostrovskaya / Gorny Institut / Sportivnaya-2)
+// End-to-end test of the metro module in the real renderer (headless Edge / Chrome with GPU, puppeteer-core): ?only=metro. The map is cut to ONE strip: 7 real halls (Vosstaniya, Vladimirskaya,
+// Mayakovskaya, Dostoevskaya, Gostiny Dvor, Nevsky Prospekt, Admiralteyskaya); each line end is ONE out-of-strip neighbour served by the shared generic hall (a terminus, data/metro.js STATIONS).
+//   node tools/metro-test.mjs [--q medium|high|low] [--out shots/metro/mt] [--only 1,2,3...]   (sections: 1 load, 2 street + escalator, 3 platform + ride (stops along the line, the Pushkinskaya terminus), 4 corridors + doors + the Mayakovskaya -> PAN-1 terminus, 6 ways out of every station, 7 transfers on foot, 8 walk into an open door,
+//   9 west stations: Gostiny Dvor / Nevsky Prospekt / Admiralteyskaya trains, rides incl. the real tunnel Gostiny Dvor <-> Mayakovskaya, the line-end termini, closed platform doors)
 // Asserts the walk (street -> turnstiles -> escalator -> hall), the interact prompts, boarding (the chip «Войти»; no destination panel), the ride in REAL time as a chain of legs (the train leaves on the platform timetable, runs the
 // real hop, stops at every station with open doors; Vosstaniya <-> Vladimirskaya real tunnel, generic-hall stops, a multi-stop ride), getting off at a stop, brightness of the screenshots (not dark / white), boundaries (no trapped positions) and the frame time. Exit code 1 on any failed check.
 import http from 'node:http';
@@ -14,8 +15,8 @@ const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { const k = a.slice(2); args[k] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; } }
 const out = path.resolve(root, args.out || 'shots/metro/mt');
 fs.mkdirSync(path.dirname(out), { recursive: true });
-const SECTIONS = new Set((args.only || '1,2,3,4,5,6,7,8,9,10,11').split(',').map((s) => s.trim()));
-const ONLY_EXITS = args.exits ? new Set(args.exits.split(',')) : null;            // --exits gorkovskaya,sportivnaya : section 6 walks only these ways out
+const SECTIONS = new Set((args.only || '1,2,3,4,6,7,8,9').split(',').map((s) => s.trim()));
+const ONLY_EXITS = args.exits ? new Set(args.exits.split(',')) : null;            // --exits gostiny,nevsky : section 6 walks only these ways out
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png' };
 const server = http.createServer((req, res) => {
@@ -229,17 +230,17 @@ try {
     ok(s1.to === 'vladimirskaya' && s1.dest === 'vladimirskaya', `the first stop is Vladimirskaya, in its own hall (${s1.to} / ${s1.dest})`);
     await frames(2); const c2 = await chip(); ok(c2.show && /Выйти/.test(c2.text), `get-off prompt at the first stop: "${c2.text}"`);
     const sv = await shot('car_stop'); lumOk(sv, 'doors open at Vladimirskaya, from inside the car', 30, 215);
-    // multi-stop: stay aboard through the whole dwell at Vladimirskaya; the next stop is Pushkinskaya, shown in the generic hall
+    // multi-stop: stay aboard through the whole dwell at Vladimirskaya; the second stop is Pushkinskaya, the TERMINUS of the shortened line: shown in the generic hall, the exit closed
     const s2 = await rideTo(1);
-    ok(!s2.gone && s2.k === 1 && s2.phase === 'open' && s2.to === 'pushkinskaya', `stayed aboard through Vladimirskaya: the second stop is Pushkinskaya, doors open (k ${s2.k}, ${s2.to}, ${s2.phase})`);
+    ok(!s2.gone && s2.k === 1 && s2.phase === 'open' && s2.to === 'pushkinskaya' && s2.terminus === true, `stayed aboard through Vladimirskaya: the second stop is the terminus Pushkinskaya, doors open (k ${s2.k}, ${s2.to}, ${s2.phase}, terminus ${s2.terminus})`);
     if (!s2.gone) {
       const ms = await ev(() => {
         const S = window.__ctx.metro.ride.session, leg = S.legs[1], tk = leg.destTk, tr = tk.trains[tk.stock], rt = leg.destRt, p = window.__ctx.playerObj, [lx, lz] = rt.L(p.pos.x, p.pos.z);
-        return { dest: rt.id, same: rt === window.__ctx.metro.stations.pushkinskaya, override: tk.override, trainVisible: tr ? tr.root.visible : null, ride: !!p.riding, lx, lz, y: p.pos.y, fy: tk.fy ?? rt.hall.FY, PZ: rt.hall.PZ, halfW: (rt.hall.WALL || rt.hall.TRK + 4) + 1 };
+        return { dest: rt.id, generic: rt === window.__ctx.metro.stations.generic, shown: rt.shownId || null, override: tk.override, trainVisible: tr ? tr.root.visible : null, ride: !!p.riding, lx, lz, y: p.pos.y, fy: tk.fy ?? rt.hall.FY, PZ: rt.hall.PZ, halfW: (rt.hall.WALL || rt.hall.TRK + 4) + 1 };
       });
-      ok(ms.dest === 'pushkinskaya' && ms.same, `Pushkinskaya is a real hall of its own (hall ${ms.dest}, is ctx.metro.stations.pushkinskaya: ${ms.same})`);
+      ok(ms.generic && ms.shown === 'pushkinskaya', `Pushkinskaya is served by the generic hall relabelled Pushkinskaya (hall ${ms.dest}, shown ${ms.shown})`);
       ok(ms.override === true && ms.trainVisible !== true, `the scheduled train of the destination track is held and hidden while the ride train stands (override ${ms.override}, scheduled train visible ${ms.trainVisible})`);
-      ok(ms.ride && Math.abs(ms.lx) < ms.halfW && Math.abs(ms.lz) < ms.PZ && Math.abs(ms.y + 57) < 2 && Math.abs(ms.y - ms.fy) < 2, `the rider stands inside the Pushkinskaya hall frame (hall x ${ms.lx.toFixed(1)} z ${ms.lz.toFixed(1)}, y ${ms.y.toFixed(1)} vs floor ${ms.fy})`);
+      ok(ms.ride && Math.abs(ms.lx) < ms.halfW && Math.abs(ms.lz) < ms.PZ && Math.abs(ms.y - ms.fy) < 2, `the rider stands inside the generic hall frame (hall x ${ms.lx.toFixed(1)} z ${ms.lz.toFixed(1)}, y ${ms.y.toFixed(1)} vs floor ${ms.fy})`);
       const pr = await alightChip('Pushkinskaya', s2);
       ok(!pr.ride, 'got off the train');
       const s7 = await shot('arrived'); lumOk(s7, 'arrival platform');
@@ -253,21 +254,19 @@ try {
     for (const r of rep) ok(r.gaps === 0, `corridor ${r.name}: ${r.n} samples, ${r.gaps} without a floor`);
     await ev(() => { const m = window.__ctx.metro, rt = m.stations.mayakovskaya; const [x, z] = rt.W(-7.4, 0); window.__setCam(x, rt.hall.FY, z, 0, 0, true); const tk = rt.platform.trackByKey('S'); window.__ff(200, 1 / 30, null, () => { const s = rt.platform.state(tk, window.__ctx.time); return s.phase === 'dwell' && s.open > 0.95; }); const f = rt.frame, dx = -Math.cos(f.yaw), dz = Math.sin(f.yaw); window.__ctx.playerObj.yaw = Math.atan2(-dx, -dz); });
     const bm = await boardChip('Mayakovskaya', 'mayak_platform', 'pan1');
-    ok(bm.ride, 'Mayakovskaya: riding to the first stop, Ploshchad Aleksandra Nevskogo 1 (a real hall)');
+    ok(bm.ride, 'Mayakovskaya: riding to the first stop, Ploshchad Aleksandra Nevskogo 1 (the terminus of line 3, served by the generic hall)');
     const sm2 = await rideTo(0);
-    ok(!sm2.gone && sm2.phase === 'open' && sm2.to === 'pan1' && sm2.dest === 'pan1', `Mayakovskaya: the first stop is Ploshchad Aleksandra Nevskogo 1 in its own hall, doors open (${sm2.to} / ${sm2.dest}, ${sm2.phase})`);
-    const pan1 = await ev(() => { const m = window.__ctx.metro, rt = m.stations.pan1, p = window.__ctx.playerObj; if (!rt) return null; const [lx, lz] = rt.L(p.pos.x, p.pos.z); return { id: rt.id, lx, lz, PZ: rt.hall.PZ, halfW: (rt.hall.WALL || rt.hall.TRK + 4) + 1 }; });
-    ok(pan1 && pan1.id === 'pan1', 'pan1 is a real hall (ctx.metro.stations.pan1)');
-    // the generic hall starts as the first station of its list (net.lenina); its label must be the definition name
-    const gname = await ev(() => { const g = window.__ctx.metro.stations.generic; return { name: g.def.name, shown: g.shownId, net: window.__ctx.metro.env.net.BY_ID[g.shownId || 'lenina']?.name }; });
+    ok(!sm2.gone && sm2.phase === 'open' && sm2.to === 'pan1' && sm2.dest === 'generic' && sm2.shown === 'pan1' && sm2.terminus === true, `Mayakovskaya: the first stop is the terminus Ploshchad Aleksandra Nevskogo 1 in the generic hall, doors open (${sm2.to} / ${sm2.dest} / ${sm2.shown}, ${sm2.phase}, terminus ${sm2.terminus})`);
+    // the generic hall is labelled with the definition name of the station it shows
+    const gname = await ev(() => { const g = window.__ctx.metro.stations.generic; return { name: g.def.name, shown: g.shownId, net: window.__ctx.metro.env.net.BY_ID[g.shownId || 'pushkinskaya']?.name }; });
     ok(!!gname.name && (gname.net == null || gname.name === gname.net), `the generic hall is labelled «${gname.name}» (net ${gname.net})`);
     const pg = sm2.gone ? { ride: !!sm2.ride, y: 1e9 } : await alightChip('Mayakovskaya', sm2);
-    ok(!pg.ride && pan1 && pg.y < -50 && Math.abs(pan1.lx) < pan1.halfW + 1 && Math.abs(pan1.lz) <= pan1.PZ + 1, `alighted in the hall of pan1 (y ${pg.y.toFixed(1)}, hall x ${pan1 ? pan1.lx.toFixed(1) : '-'} z ${pan1 ? pan1.lz.toFixed(1) : '-'})`);
-    const sg = await shot('pan1_hall'); lumOk(sg, 'pan1 hall');
+    ok(!pg.ride && pg.y < -60, `alighted in the generic hall (y ${pg.y.toFixed(1)})`);
+    const sg = await shot('pan1_hall'); lumOk(sg, 'generic hall (pan1)');
     // every door of the metro lets a walker in (colliders split, nothing in the way): walk 3 s inward from 3 m outside
     for (const d of await ev(() => window.__ctx.L.DOORWAYS.map((q) => ({ id: q.id, x: q.x, z: q.z, rotY: q.rotY })))) {
       const r = await ev((d) => { const nx = Math.sin(d.rotY), nz = Math.cos(d.rotY); window.__setCam(d.x + nx * 3, null, d.z + nz * 3, Math.atan2(nx, nz) * 180 / Math.PI, 0); const lg = window.__ff(3, 1 / 60, () => ['KeyW']); const p = window.__ctx.playerObj; return { depth: -((p.pos.x - d.x) * nx + (p.pos.z - d.z) * nz) }; }, d);
-      ok(r.depth > (/^(gorny|sportivnaya2)/.test(d.id) ? 2.5 : 3.5), `door ${d.id}: walked ${r.depth.toFixed(1)} m past the door line`);               // the small pavilions of the island: the stair + escalator well starts 3 m behind the door (the straight line ends at its parapet)
+      ok(r.depth > 3.5, `door ${d.id}: walked ${r.depth.toFixed(1)} m past the door line`);
     }
   }
   // ---------------------------------------------------------------- 6. every station has a way up: walk from the platform to the pavement (real physics, steering along the exit route)
@@ -359,18 +358,21 @@ try {
     ok(outside.length === 0, `the three vestibule rooms lie inside their buildings (${outside.length ? JSON.stringify(outside) : 'all corners inside'})`);
     // rides: board at the open doors, the first stop of the chain is the next station of the line, real time, get off at the stop
     const w9 = (id, key, next, dest, label, o = {}) => rideFlow(id, key, next, dest, label, { pf: 'w9', yCheck: false, ...o });
-    // the chain ahead of a train skips the closed Park Pobedy (line 2 toward Kupchino: Sennaya, ..., Moskovskiye Vorota, Elektrosila, Moskovskaya)
-    const chain = await ev(() => { const N = window.__ctx.metro.env.net, ids = N.ahead(N.BY_ID.nevsky, -1).map((q) => q.id); return { first: ids[0], parkpobedy: ids.includes('parkpobedy'), elektrosila: ids.includes('elektrosila'), n: ids.length }; });
-    ok(chain.first === 'sennaya' && !chain.parkpobedy && chain.elektrosila, `the chain ahead of Nevsky Prospekt toward Kupchino starts at Sennaya and skips the closed Park Pobedy (${JSON.stringify(chain)})`);
+    // the chains ahead of a train end at the neighbour terminus of the line (data/metro.js STATIONS: [neighbour, in-strip stations, neighbour])
+    const chain = await ev(() => { const N = window.__ctx.metro.env.net, ids = (id, d) => N.ahead(N.BY_ID[id], d).map((q) => q.id).join('>'); return { nevskoN: ids('nevsky', -1), nevskoS: ids('nevsky', 1), vosN: ids('vosstaniya', -1), vosS: ids('vosstaniya', 1), mayE: ids('mayakovskaya', 1), mayW: ids('mayakovskaya', -1), dosE: ids('dostoevskaya', 1), dosW: ids('dostoevskaya', -1), admE: ids('admiralteyskaya', 1), admW: ids('admiralteyskaya', -1) }; });
+    ok(chain.nevskoN === 'sennaya' && chain.nevskoS === 'gorkovskaya' && chain.vosN === 'chernyshevskaya' && chain.vosS === 'vladimirskaya>pushkinskaya' && chain.mayE === 'pan1' && chain.mayW === 'gostiny>vasileostrovskaya' && chain.dosE === 'ligovsky' && chain.dosW === 'spasskaya' && chain.admE === 'sadovaya' && chain.admW === 'sportivnaya', `the chains ahead of the seven stations end at one neighbour terminus per line end (${JSON.stringify(chain)})`);
     const r1 = await w9('gostiny', 'S', 'mayakovskaya', 'mayakovskaya', 'Gostiny Dvor -> Mayakovskaya', { real: true });
     ok(r1.s.real && Math.abs(r1.pa.y - (-51)) < 1, 'the Gostiny Dvor -> Mayakovskaya ride uses the real tunnel and ends on the Mayakovskaya platform (y -51)');
     const r2 = await w9('mayakovskaya', 'N', 'gostiny', 'gostiny', 'Mayakovskaya -> Gostiny Dvor', { real: true });
     ok(r2.s.real && Math.abs(r2.pa.y - (-56)) < 1, 'the way back (Mayakovskaya -> Gostiny Dvor) uses the real tunnel and ends on the Gostiny Dvor platform (y -56)');
-    const r3 = await w9('nevsky', 'N', 'sennaya', 'generic', 'Nevsky Prospekt -> Sennaya Ploshchad');                 // (Gorkovskaya and Petrogradskaya are real halls since the Petrograd-side extension: section 10)
-    // (since the interchange round Sennaya and Sadovaya are real halls reached through real tunnels: s.real is true there; the check is the destination, not the tunnel kind)
-    ok(r3.generic ? r3.pa.y < -60 : r3.s.dest === 'sennaya', 'Nevsky Prospekt -> Sennaya Ploshchad ends in the hall of the first stop (' + (r3.generic ? 'generic' : 'sennaya, a real hall') + ')');
+    const r3 = await w9('nevsky', 'N', 'sennaya', 'generic', 'Nevsky Prospekt -> Sennaya Ploshchad');
+    ok(r3.generic && r3.pa.y < -60, 'Nevsky Prospekt -> Sennaya Ploshchad ends in the generic hall (the terminus of line 2)');
     const r4 = await w9('admiralteyskaya', 'S', 'sadovaya', 'generic', 'Admiralteyskaya -> Sadovaya');
-    ok(r4.generic ? r4.pa.y < -60 : r4.s.dest === 'sadovaya', 'Admiralteyskaya -> Sadovaya ends in the hall of the first stop (' + (r4.generic ? 'generic' : 'sadovaya, a real hall') + ')');
+    ok(r4.generic && r4.pa.y < -60, 'Admiralteyskaya -> Sadovaya ends in the generic hall (the terminus of line 5)');
+    // the other line ends: the first stop is the neighbour terminus, shown in the generic hall (S = toward the higher station index of the line, N = toward the lower)
+    for (const [id, key, next, label] of [['vosstaniya', 'N', 'chernyshevskaya', 'Vosstaniya -> Chernyshevskaya'], ['vladimirskaya', 'S', 'pushkinskaya', 'Vladimirskaya -> Pushkinskaya'], ['nevsky', 'S', 'gorkovskaya', 'Nevsky Prospekt -> Gorkovskaya'], ['gostiny', 'N', 'vasileostrovskaya', 'Gostiny Dvor -> Vasileostrovskaya'], ['dostoevskaya', 'S', 'ligovsky', 'Dostoevskaya -> Ligovsky Prospekt'], ['dostoevskaya', 'N', 'spasskaya', 'Dostoevskaya -> Spasskaya'], ['admiralteyskaya', 'N', 'sportivnaya', 'Admiralteyskaya -> Sportivnaya']]) {
+      const r = await w9(id, key, next, 'generic', label); ok(r.generic && r.s.terminus === true && !r.pa.ride, `${label}: the terminus is shown in the generic hall (terminus ${r.s.terminus})`);
+    }
     // the closed-type hall shuts its platform doors while no train stands: a walker cannot enter the recess
     const gate = await ev(() => {
       const rt = window.__ctx.metro.stations.gostiny, tk = rt.platform.trackByKey('S'), p = window.__ctx.playerObj; const [x, z] = rt.W(-6.4, 2); window.__setCam(x, rt.hall.FY, z, 0, 0, true);
@@ -379,150 +381,6 @@ try {
       return { lx, phase: rt.platform.state(tk, window.__ctx.time).phase, y: p.pos.y };
     });
     ok(gate.lx > -7.3 && gate.y > -56.3, `Gostiny Dvor: the platform doors are shut while no train stands (x ${gate.lx.toFixed(2)}, ${gate.phase})`);
-  }
-  // ---------------------------------------------------------------- 10. the Petrograd side: Gorkovskaya, Petrogradskaya (line 2), Sportivnaya (two levels), Chkalovskaya (line 5)
-  if (SECTIONS.has('10')) {
-    console.log('10. Petrograd side: Gorkovskaya / Petrogradskaya / Sportivnaya / Chkalovskaya');
-    const built = await ev(() => { const m = window.__ctx.metro; return ['gorkovskaya', 'petrogradskaya', 'sportivnaya', 'chkalovskaya'].map((id) => ({ id, rt: !!m.stations[id], net: !!m.env.net.BY_ID[id].built, exit: !!m.debug.exits[id], entry: !!m.debug.entries[id] })); });
-    for (const b of built) ok(b.rt && b.net && b.exit && b.entry, `${b.id}: real hall, marked built in the network, a way out and a way in (${JSON.stringify(b)})`);
-    // the vestibule rooms lie inside their houses; no shaft / stair pit opens on a carriageway or in the water
-    const geo = await ev(() => {
-      const L = window.__ctx.L, p = window.__ctx.metro.petro, bad = [];
-      for (const [n, r] of [['gorkovskaya', p.gork.room], ['petrogradskaya', p.petr.room], ['chkalovskaya', p.chk.room]]) for (const [x, z] of r.poly) if (!L.insideBuilding(x, z, 0)) bad.push(['room ' + n, +x.toFixed(1), +z.toFixed(1)]);
-      for (const s of L.GROUND_HOLES.filter((q) => ['gorkovskaya', 'petrogradskaya', 'sportivnaya', 'chkalovskaya'].includes(q.station))) {
-        const c = Math.cos(s.rotY), sn = Math.sin(s.rotY);
-        for (const [lx, lz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) { const x = s.x + lx * s.w / 2 * c + lz * s.d / 2 * sn, z = s.z - lx * s.w / 2 * sn + lz * s.d / 2 * c; if (L.isOnRoad(x, z, 0) || L.waterwayAt(x, z)) bad.push(['hole ' + s.id, +x.toFixed(1), +z.toFixed(1)]); if (s.kind === 'escalator' && !L.insideBuilding(x, z, 0)) bad.push(['shaft outside its house ' + s.id, +x.toFixed(1), +z.toFixed(1)]); }
-      }
-      return bad;
-    });
-    ok(geo.length === 0, `rooms inside their houses, shafts inside, no hole on a carriageway / in the water (${geo.length ? JSON.stringify(geo) : 'all clear'})`);
-    // ways in: from the pavement through the door / down the street stairs, down the incline, onto the platform
-    for (const n of await ev(() => Object.keys(window.__ctx.metro.debug.entries))) {
-      const r = await ev((n) => { const w = window.__ctx.metro.debug.entries[n], res = window.__walk(w.start, w.points), rt = window.__ctx.metro.stations[w.end.station], [lx, lz] = rt.L(res.x, res.z); return { ...res, lx, lz, endY: w.end.y }; }, n);
-      console.log(`   way in ${n}: reached ${r.reached}/${r.of}, ${r.t.toFixed(0)} s, y ${r.y.toFixed(1)}, hall x ${r.lx.toFixed(1)} z ${r.lz.toFixed(1)} ${r.trace ? JSON.stringify(r.trace) : ''}`);
-      ok(r.reached === r.of && Math.abs(r.y - r.endY) < 0.4 && Math.abs(r.lx) < 9, `${n}: walked in from the pavement, down the incline and onto the platform`);
-    }
-    // Sportivnaya: between the two levels by the short escalators
-    for (const n of await ev(() => Object.keys(window.__ctx.metro.petro.sport.walks()))) {
-      const r = await ev((n) => { const w = window.__ctx.metro.petro.sport.walks()[n], res = window.__walk(w.start, w.points); return { ...res, endY: w.end.y }; }, n);
-      console.log(`   ${n}: reached ${r.reached}/${r.of}, ${r.t.toFixed(0)} s, y ${r.y.toFixed(1)} ${r.trace ? JSON.stringify(r.trace) : ''}`);
-      ok(r.reached === r.of && Math.abs(r.y - r.endY) < 0.4, `${n}: walked between the levels`);
-    }
-    // trains and rides: both lines, both ways, from and to the older stations; the first stop of every ride is the next station of the line (a real hall here)
-    const ride = (id, key, next, dest, label) => rideFlow(id, key, next, dest, label, { pf: 'p10', arr: true });
-    await ride('nevsky', 'S', 'gorkovskaya', 'gorkovskaya', 'Nevsky Prospekt -> Gorkovskaya');
-    await ride('gorkovskaya', 'S', 'petrogradskaya', 'petrogradskaya', 'Gorkovskaya -> Petrogradskaya');
-    await ride('petrogradskaya', 'N', 'gorkovskaya', 'gorkovskaya', 'Petrogradskaya -> Gorkovskaya');
-    await ride('gorkovskaya', 'N', 'nevsky', 'nevsky', 'Gorkovskaya -> Nevsky Prospekt');
-    await ride('admiralteyskaya', 'N', 'sportivnaya', 'sportivnaya', 'Admiralteyskaya -> Sportivnaya (upper level)');
-    await ride('sportivnaya', 'N', 'chkalovskaya', 'chkalovskaya', 'Sportivnaya (upper level) -> Chkalovskaya');
-    // the generic-hall relabel (an unbuilt first stop): Petrogradskaya -> Chyornaya Rechka (asserted only while chernaya has no hall of its own)
-    if (await ev(() => !window.__ctx.metro.stations.chernaya)) { const rc = await ride('petrogradskaya', 'S', 'chernaya', 'generic', 'Petrogradskaya -> Chyornaya Rechka'); ok(rc.generic && rc.pa.y < -50, 'Petrogradskaya -> Chyornaya Rechka ends in the generic hall relabelled Chyornaya Rechka'); }
-    else console.log('   (Chyornaya Rechka has its own hall: the generic relabel is covered by section 4 / 11 rides)');
-    await ride('chkalovskaya', 'S', 'sportivnaya', 'sportivnaya', 'Chkalovskaya -> Sportivnaya (lower level)');
-    await ride('sportivnaya', 'S', 'admiralteyskaya', 'admiralteyskaya', 'Sportivnaya (lower level) -> Admiralteyskaya');
-    // the closed-type hall of Petrogradskaya shuts its platform doors while no train stands
-    const gate = await ev(() => {
-      const rt = window.__ctx.metro.stations.petrogradskaya, tk = rt.platform.trackByKey('S'), p = window.__ctx.playerObj, zd = rt.hall.openings.z0; const [x, z] = rt.W(-6.3, zd); window.__setCam(x, rt.hall.FY, z, 0, 0, true);
-      window.__ff(150, 1 / 30, null, () => rt.platform.state(tk, window.__ctx.time).phase === 'away');
-      const f = rt.frame, dx = -Math.cos(f.yaw), dz = Math.sin(f.yaw); p.yaw = Math.atan2(-dx, -dz); window.__ff(2.5, 1 / 60, () => ['KeyW']); const [lx] = rt.L(p.pos.x, p.pos.z);
-      return { lx, phase: rt.platform.state(tk, window.__ctx.time).phase, y: p.pos.y };
-    });
-    ok(gate.lx > -7.3 && gate.y > -53.3, `Petrogradskaya: the platform doors are shut while no train stands (x ${gate.lx.toFixed(2)}, ${gate.phase})`);
-    // screenshots of every hall, incline and vestibule (luma checks; the pictures are compared with the reference photos by eye)
-    const views = await ev(() => { const m = window.__ctx.metro, p = m.petro, out = [], add = (name, S, x, y, z, tx, tz) => { const a = S.W(x, z), b = S.W(tx, tz); out.push({ name, x: a[0], y, z: a[1], yaw: Math.atan2(-(b[0] - a[0]), -(b[1] - a[1])) * 180 / Math.PI }); };
-      add('gork_hall', p.gork.S, 0, -51.3, -12, 0, 10); add('gork_platform', p.gork.S, 7.4, -51.3, -40, 7.4, 0); add('gork_esc', p.gork.Se, 2, p.gork.esc.yAt(78) + 1.7, 78, 2, 0); add('gork_vest', p.gork.Se, 6, 1.7, -20, 0, 0);
-      add('petr_hall', p.petr.S, 0, -51.3, 30, 0, -60); add('petr_esc', p.petr.Se, 2, p.petr.esc.yAt(78) + 1.7, 78, 2, 0); add('petr_vest', p.petr.Se, -14, 1.7, -8, 0, 2);
-      add('sport_upper', p.sport.S, 4.8, -55.7, 40, 0, -40); add('sport_lower', p.sport.S, 0, -62.3, 30, 0, -40); add('sport_bank', p.sport.S, 0, -62.3, -40, 0, -60); add('sport_vest', p.sport.Sv, 0, -3.3, -20, 0, 10); add('sport_vest2', p.sport.Sv, 0, -3.3, -3, 0, -50);
-      add('chk_hall', p.chk.S, 0, -58.3, -40, 0, 60); add('chk_esc', p.chk.Se, 2, p.chk.esc.yAt(90) + 1.7, 90, 2, 0); add('sport_esc', p.sport.Se, 1, p.sport.esc.yAt(30) + 1.7, 30, 1, 0); add('chk_vest', p.chk.Se, -12, 1.7, -4, 0, 2);
-      return out; });
-    for (const v of views) { await cam(v.x, v.y, v.z, v.yaw, -2); const s = await shot('p10v_' + v.name); lumOk(s, `view ${v.name}`, 45, 215); }
-  }
-  // ---------------------------------------------------------------- 11. Vasilievsky Island: Vasileostrovskaya (line 3, closed type), Gorny Institut (line 4), Sportivnaya-2 (the island vestibule of Sportivnaya)
-  if (SECTIONS.has('11')) {
-    console.log('11. Vasilievsky Island: Vasileostrovskaya / Gorny Institut / Sportivnaya-2');
-    const built = await ev(() => { const m = window.__ctx.metro; return ['vasileostrovskaya', 'gorny'].map((id) => ({ id, rt: !!m.stations[id], net: !!m.env.net.BY_ID[id].built, exit: !!m.debug.exits[id], entry: !!m.debug.entries[id] })); });
-    for (const b of built) ok(b.rt && b.net && b.exit && b.entry, `${b.id}: real hall, built in the network, a way out and a way in (${JSON.stringify(b)})`);
-    // rooms lie inside their buildings, no ground hole on a carriageway / in the water
-    const geo = await ev(() => {
-      const L = window.__ctx.L, p = window.__ctx.metro.petro, bad = [], rooms = [['vasileostrovskaya', p.vo.room]];
-      if (p.gorny) rooms.push(['gorny in', p.gorny.wells.in.room], ['gorny out', p.gorny.wells.out.room]);
-      if (p.sport2) for (const w of Object.values(p.sport2.wells)) rooms.push(['sportivnaya2 ' + w.w.id, w.room]);
-      for (const [n, r] of rooms) if (r) for (const [x, z] of r.poly) if (!L.insideBuilding(x, z, 0)) bad.push(['room ' + n, +x.toFixed(1), +z.toFixed(1)]);
-      for (const s of L.GROUND_HOLES.filter((q) => ['vasileostrovskaya', 'gorny', 'sportivnaya2'].includes(q.station))) {
-        const c = Math.cos(s.rotY), sn = Math.sin(s.rotY);
-        for (const [lx, lz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) { const x = s.x + lx * s.w / 2 * c + lz * s.d / 2 * sn, z = s.z - lx * s.w / 2 * sn + lz * s.d / 2 * c; if (L.isOnRoad(x, z, 0) || L.waterwayAt(x, z)) bad.push(['hole ' + s.id, +x.toFixed(1), +z.toFixed(1)]); if (s.kind === 'escalator' && !L.insideBuilding(x, z, 0)) bad.push(['shaft outside its house ' + s.id, +x.toFixed(1), +z.toFixed(1)]); }
-      }
-      return bad;
-    });
-    ok(geo.length === 0, `pavilion rooms inside their houses, shafts inside, no hole on a carriageway / in the water (${geo.length ? JSON.stringify(geo) : 'all clear'})`);
-    // the interiors published for the pavilion owners (ctx.services.metro.pavilions, by building id)
-    const pv = await ev(() => { const P = window.__ctx.services.metro.pavilions || {}; return Object.entries(P).map(([id, p]) => ({ id, st: p.station, n: p.poly ? p.poly.length : 0, ceil: p.ceil - p.floor, doors: p.doors.length, hole: p.hole })); });
-    const pvIds = pv.map((p) => p.id), pvFive = ['w183122885', 'w1305590665', 'w1305590664', 'w627859233', 'w627859229'];
-    ok(pvFive.every((id) => pvIds.includes(id)) && pv.every((p) => p.n >= 4 && p.doors >= 1 && (pvFive.includes(p.id) ? p.ceil > 2.9 && p.ceil < 3.6 : p.ceil > 2.5 && p.ceil < 8)), `ctx.services.metro.pavilions lists the five known pavilion interiors (a subset: the pavilions of Chernyshevskaya, Sennaya and Spasskaya are extras with a looser ceiling bound) (${JSON.stringify(pv.map((p) => p.id + ':' + p.n))})`);
-    // a floor under every point of the island rooms (review-metro: the 1.5 m strips of the Vasileostrovskaya podium left wedges beside the slanted walls: the player stepped off the floor into the podium and was
-    // trapped 1.7 m down): sample the physics floor on a 0.4 m grid, 0.4 m clear of the walls and 0.9 m clear of the shaft opening; everything must be within 15 cm of the floor level
-    const flo = await ev(() => {
-      const c = window.__ctx, ph = c.physics, p = c.metro.petro, out = [];
-      const chk = (name, room, fy, hole) => {
-        if (!room) { out.push([name, 'no room']); return; }
-        let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const [x, z] of room.poly) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
-        let n = 0, bad = 0; const sample = [];
-        for (let x = x0; x <= x1; x += 0.4) for (let z = z0; z <= z1; z += 0.4) {
-          if (!room.inside(x, z) || ![[0.4, 0], [-0.4, 0], [0, 0.4], [0, -0.4]].every(([dx, dz]) => room.inside(x + dx, z + dz))) continue;
-          if (hole) { const [lx, lz] = hole.S.L(x, z); if (lx > hole.x[0] - 0.9 && lx < hole.x[1] + 0.9 && lz > hole.z[0] - 0.9 && lz < hole.z[1] + 0.9) continue; }
-          n++; const y = ph.groundHeight(x, z, fy + 0.6, false); if (!(Math.abs(y - fy) < 0.15)) { bad++; if (sample.length < 4) sample.push([+x.toFixed(1), +z.toFixed(1), y === -Infinity ? '-inf' : +y.toFixed(2)]); }
-        }
-        out.push([name, n, bad, sample]);
-      };
-      chk('vasileostrovskaya vestibule', p.vo.room, p.vo.FV, { S: p.vo.Sv, x: [-4.05, 4.05], z: [0, 13] });
-      if (p.gorny) { chk('gorny ticket hall', p.gorny.room, p.gorny.FV, { S: p.gorny.Sv, x: [-5.05, 5.05], z: [0, 11.4] }); for (const [k, w] of Object.entries(p.gorny.wells)) { chk('gorny pavilion ' + k, w.room, 0.05, { S: w.Se, x: [-w.w.A, w.w.A], z: [0, w.w.open] }); chk('gorny landing ' + k, w.landing.room, -6.95, null); } }
-      if (p.sport2) { chk('sportivnaya2 lobby', p.sport2.room, p.sport2.FV, { S: p.sport2.Sv, x: [-5.05, 5.05], z: [0, 11.4] }); for (const [k, w] of Object.entries(p.sport2.wells)) { chk('sportivnaya2 pavilion ' + k, w.room, 0.05, { S: w.Se, x: [-w.w.A, w.w.A], z: [0, w.w.open] }); chk('sportivnaya2 landing ' + k, w.landing.room, -6.95, null); } }
-      return out;
-    });
-    for (const [name, n, bad, sample] of flo) ok(bad === 0 && n > 20, `${name}: floor under every point (${n} samples, ${bad} without a floor ${bad ? JSON.stringify(sample) : ''})`);
-    // ways in: from the pavement through the door, down the stairs / lanes, onto the platform
-    for (const n of await ev(() => Object.keys(window.__ctx.metro.debug.entries).filter((q) => ['vasileostrovskaya', 'gorny', 'sportivnaya2'].includes(q)))) {
-      const r = await ev((n) => { const w = window.__ctx.metro.debug.entries[n], res = window.__walk(w.start, w.points), rt = window.__ctx.metro.stations[w.end.station], [lx, lz] = rt.L(res.x, res.z); return { ...res, lx, lz, endY: w.end.y }; }, n);
-      console.log(`   way in ${n}: reached ${r.reached}/${r.of}, ${r.t.toFixed(0)} s, y ${r.y.toFixed(1)}, hall x ${r.lx.toFixed(1)} z ${r.lz.toFixed(1)} ${r.trace ? JSON.stringify(r.trace) : ''}`);
-      ok(r.reached === r.of && Math.abs(r.y - r.endY) < 0.4 && Math.abs(r.lx) < 12, `${n}: walked in from the pavement and onto the platform`);
-    }
-    // rides: board at the open doors, the first stop is the next station of the line, real time, get off at the stop
-    const ride2 = (id, key, next, dest, label, o = {}) => rideFlow(id, key, next, dest, label, { pf: 'p11', arr: true, ...o });
-    const r1 = await ride2('vasileostrovskaya', 'N', 'primorskaya', 'generic', 'Vasileostrovskaya -> Primorskaya', { real: false });
-    ok(r1.pa.y < -60, 'Vasileostrovskaya -> Primorskaya ends in the generic hall');
-    if (await ev(() => !!window.__ctx.metro.env.real['vasileostrovskaya>gostiny'])) {
-      const r2 = await ride2('vasileostrovskaya', 'S', 'gostiny', 'gostiny', 'Vasileostrovskaya -> Gostiny Dvor', { real: true });
-      ok(Math.abs(r2.pa.y - (-56)) < 1, 'ends on the Gostiny Dvor platform (y -56)');
-      const r3 = await ride2('gostiny', 'N', 'vasileostrovskaya', 'vasileostrovskaya', 'Gostiny Dvor -> Vasileostrovskaya', { real: true });
-      ok(Math.abs(r3.pa.y - (-64)) < 1, 'ends on the Vasileostrovskaya platform (y -64)');
-    } else console.log('   (the real tunnel Vasileostrovskaya <-> Gostiny Dvor is not built: rides through the generic hall)');
-    if (await ev(() => !!window.__ctx.metro.env.real['admiralteyskaya>sportivnaya'])) {
-      const r4 = await ride2('admiralteyskaya', 'N', 'sportivnaya', 'sportivnaya', 'Admiralteyskaya -> Sportivnaya', { real: true });
-      ok(Math.abs(r4.pa.y - (-57.4)) < 1, 'ends on the upper level of Sportivnaya (y -57.4)');
-      const r5 = await ride2('sportivnaya', 'S', 'admiralteyskaya', 'admiralteyskaya', 'Sportivnaya (lower level) -> Admiralteyskaya', { real: true });
-      ok(Math.abs(r5.pa.y - (-86)) < 1, 'ends on the Admiralteyskaya platform (y -86)');
-    } else console.log('   (the real tunnel Admiralteyskaya <-> Sportivnaya is not built)');
-    {
-      const part = await ev(() => { const l = window.__ctx.metro.env.real['gorny>spasskaya']; return l ? { len: Math.round(l.length), disc: Math.round(l.partial ? l.partial.discS : -1) } : null; });
-      const r6 = await ride2('gorny', 'S', 'spasskaya', 'generic', 'Gorny Institut -> Spasskaya' + (part ? ' (partial real tunnel)' : ''), part ? { real: true } : {});
-      if (part && part.disc >= 0) { ok(part.disc > 2000 && part.len - part.disc > 40 && part.len - part.disc < 70, `Gorny -> Spasskaya: the real tube is ${part.len} m long, its disc stands ${part.disc} m from the Gorny mouth`); ok(r6.generic ? r6.pa.y < -60 : r6.s.dest === 'spasskaya', 'Gorny -> Spasskaya ends in the hall of the first stop'); }
-      else if (part) ok(part.len > 2000 && r6.s.real && r6.s.dest === 'spasskaya', `Gorny -> Spasskaya: the whole tube is real (${part.len} m, no disc) and ends in the Spasskaya hall (${r6.s.dest})`);
-    }
-    // the closed-type hall shuts its platform doors while no train stands
-    const gate = await ev(() => {
-      const rt = window.__ctx.metro.stations.vasileostrovskaya, tk = rt.platform.trackByKey('S'), p = window.__ctx.playerObj; const [x, z] = rt.W(-6.3, 3.2); window.__setCam(x, rt.hall.FY, z, 0, 0, true);
-      window.__ff(150, 1 / 30, null, () => rt.platform.state(tk, window.__ctx.time).phase === 'away');
-      const f = rt.frame, dx = -Math.cos(f.yaw), dz = Math.sin(f.yaw); p.yaw = Math.atan2(-dx, -dz); window.__ff(2.5, 1 / 60, () => ['KeyW']); const [lx] = rt.L(p.pos.x, p.pos.z);
-      return { lx, phase: rt.platform.state(tk, window.__ctx.time).phase, y: p.pos.y };
-    });
-    ok(gate.lx > -7.3 && gate.y > -64.3, `Vasileostrovskaya: the platform doors are shut while no train stands (x ${gate.lx.toFixed(2)}, ${gate.phase})`);
-    // screenshots of the halls, inclines and ticket halls (luma; the pictures are compared with the photos by eye: tools/metro-vo-shots.mjs)
-    const views = await ev(() => { const m = window.__ctx.metro, p = m.petro, out = [], add = (name, S, x, y, z, tx, tz, pitch = -2) => { const a = S.W(x, z), b = S.W(tx, tz); out.push({ name, x: a[0], y, z: a[1], pitch, yaw: Math.atan2(-(b[0] - a[0]), -(b[1] - a[1])) * 180 / Math.PI }); };
-      add('vo_hall', p.vo.S, 0, -62.3, -50, 0, 40); add('vo_esc', p.vo.Se, 2, p.vo.esc.yAt(78) + 1.7, 78, 2, 0); add('vo_vest', p.vo.Sv, -12, p.vo.FV + 1.7, -6.5, 0, 0);
-      if (p.gorny) { add('gn_hall', p.gorny.S, 0.5, -68.3, -60, 0.5, 40); add('gn_esc', p.gorny.Se, -2, p.gorny.esc.yAt(40) + 1.7, 40, -2, 0, 24); add('gn_ticket', p.gorny.Sv, 0, p.gorny.FV + 1.7, -9, 0, 20); }      /* gn_esc looks UP the incline (pitch 24): review-metro found it at pitch -2 on 10.0 % dark, the very threshold of lumOk, failing with the clock of the day */
-      return out; });
-    for (const v of views) { await cam(v.x, v.y, v.z, v.yaw, v.pitch); const s = await shot('p11v_' + v.name); lumOk(s, `view ${v.name}`, 45, 215); }
   }
   console.log(`\n${checks - problems.filter((p) => !p.startsWith('[')).length}/${checks} checks passed`);
   for (const l of logs.slice(0, 12)) console.log(l);

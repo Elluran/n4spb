@@ -5,9 +5,9 @@ or adding work to the frame loop. Read the latest pass in [PERFORMANCE.md](PERFO
 for measured bottlenecks and rejected experiments. The road, marking, label and facade
 rules in [AGENT-BRIEF.md](AGENT-BRIEF.md) apply as well.
 
-The whole city must remain usable while walking and driving. A district that performs
+The whole strip (Moscow Station -> Nevsky -> Admiralty, [STRIP.md](STRIP.md)) must remain usable while walking and driving. A district that performs
 well alone can still slow every other district if its objects, updates or caches run
-city-wide. Validate the integrated scene, including Vasilievsky Island.
+city-wide. Validate the integrated scene at both ends of the strip (Vosstaniya Square and the Admiralty / Palace Square).
 
 ## Rendering and instances
 
@@ -72,7 +72,7 @@ city-wide. Validate the integrated scene, including Vasilievsky Island.
   For opaque tree LODs, use the persistent bucket writer in
   `world/environment/tree-instances.js`: unchanged membership should not repack
   every following instance. Preserve each geometry's transform and colour, use
-  full-placement bounds, and run `tools/tree-bucket-test.mjs`. Do not apply unordered
+  full-placement bounds, and run `tools/tree-instance-test.mjs`. Do not apply unordered
   swap removal to transparent instances whose order affects blending.
 * Navigation edges remain packed numeric columns with ordered CSR adjacency.
   Routing must preserve edge order, costs, crossings and tie-breaking. Use the

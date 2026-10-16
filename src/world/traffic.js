@@ -40,30 +40,15 @@
 //     buses / trolleybuses / taxis only (a PT vehicle or taxi every ~95 m; private cars avoid it when choosing a turn), taxis 14 %, sightseeing double-deckers / coaches stop 28-50 s at the
 //     pick-up bays (Дворцовая площадь, Исаакиевская, Гостиный двор, Казанск..., Адмиралтейск..., Конюшенн...: sim.js TOUR_STOP)
 //   * bridges: vehicles ride the humped decks of every bridge (services.bridges.deckY, the Palace Bridge crown is +2.4 m) and pitch with them
-//   * parked: 2.9 k cars in the kerb bays / lots of streets.parkedSlots, never on a bridge deck or on the Palace Square polygon, never inside a building; taxi ranks (Admiralteysky corner 5, Kazanskaya st,
+//   * parked: ~2.5 k cars in the kerb bays / lots of streets.parkedSlots, never on a bridge deck or on the Palace Square polygon, never inside a building; taxi ranks (Admiralteysky corner 5, Kazanskaya st,
 //     Isaac's Sq, Gostiny Dvor side: white taxis with a driver), coaches / double-decker / minibuses at the Isaac's Square loop, Kazanskaya st and the Moika at the Pevchesky bridge
-// PETROGRAD SIDE / SPIT (regions P1..P5, V1, V2 of docs/PETRO-BRIEF.md, 2026-10-06; tools/traffic-regions.mjs, tools/traffic-decks.mjs, tools/traffic-probe.mjs):
-//   * the lane graph of the new streets is driven as it comes (one-way Bolshoy pr. P.S., the squares at 30 km/h, densities of the west); vehicles ride the long decks (Trinity 554 m, Palace,
-//     Birzhevoy, Tuchkov, Sampsonievsky: services.bridges.deckY); a lane that leaves the data over open water ends on its last dry metre (sim.js, opts.wet); two lanes that merge into one take
-//     turns (sim.js, lane drop: the Vasilievsky end of the Tuchkov Bridge)
-//   * TRAMS (traffic/trams.js, model in buses.js): red and cream one-section cars on the rails of streets.tram: route 3 (Sampsonievsky Bridge - ul. Kuibysheva - Troitskaya Square - Trinity
-//     Bridge - Sadovaya, and the Sennaya - pl. Repina half beyond a 95 m gap of the data), routes 6 and 40 (Sampsonievsky Bridge - Kuibysheva - Kronverksky pr. - pr. Dobrolyubova - Tuchkov
-//     Bridge - Vasilievsky Island); ~30 cars in the whole map, stops, signals, a raised pantograph; ?tr=notram switches them off. The car lanes that lie on their rails are left to them
-//   * buses / trolleybuses: the route boards come from the stops of the area (bus 7 10 24 46 76 191, trolleybus 1 7 10 11 28), trolleybuses only under the wires streets draws
-//   * parked: the kerb bays / lots of streets.parkedSlots, with the rules of traffic/parking.js (not beside tram rails, archway mouths, gates of the sights, the judicial-quarter site road),
-//     taxi ranks at the metro pavilions, coaches at the sights where a quiet kerb exists
-// VASILIEVSKY ISLAND (rectangles V3..V12 of traffic/region.js, 2026-10-09; tools/traffic-vo-holes.mjs, traffic-vo-trams.mjs, traffic-vo-parking.mjs, traffic-regions.mjs --set vo):
-//   * region.js: V3..V12 appended to RECTS (inPetro is true on the island: the parking rules of the Petrograd side - rails, archway mouths, gates of the sights - apply there)
-//   * routes (fleetdata.ROUTES appended, LEGACY_ROUTES keeps the random picks of the older districts): trolleybus 1 9 10 11 12 28, buses 1 6 7 24 41 42 100 128 151 152 158 168 220 230 249 261 262 275; traffic.js ISL_ROUTES gives
-//     the boards of a lane by the street it runs on; the 8th / 9th line pair carries most buses (sim.js busWeight), 24 and 275 end at Vasileostrovskaya (longer layover there)
-//   * trams 6 (Sampsonievsky Bridge - Tuchkov Bridge - Sredny pr. - Gavanskaya - Maly pr. - Nalichny Bridge, terminal at the rails' end (-6530, -2295)) and 40 (... 22-23 liniya - Kosaya liniya - Detskaya st., terminal loop
-//     (-5455, 645)), headway 450 s per route and direction; the tourist T1 (a ring needing a turn-back loop) is not run; the rigid pantograph (5.6 m) hangs under streets.wires.tramWires (5.7 m); the Tuchkov and Nalichny
-//     bridge tracks are unwired in streets (tools/traffic-vo-trams.mjs prints the share)
-//   * stops: sim.js skips the stops that only trams serve (streets flag tram: 1, no bus / trolleybus route) for buses and trolleybuses (extension only); long vehicles (len >= 9 m) avoid corners their bicycle model would cut
-//     over the pavement (busBad) and are not seeded / born on lanes whose every exit is such a corner; cars seeded beyond a mid-lane line have passed it
-//   * parking: the planner of the Petrograd side runs on the island (kerbs 88-96 % full, lots 60-97 %); WHSD far traffic is NOT built (motorway ways have no lanes); no cars on the apron / pedestrian ways / Sea Terminal decks
-//   * public-transport density (2026-10-10, sim.js ISL_PT / ISL_SKIP, tools/traffic-vo-queue.mjs): the first island pass put 20-38 buses / trolleybuses within 450 m and convoys of 11-17 standing at the stops (old districts: 13-16, chains 4-7);
-//     the island lanes (region.js inIsland, and the lanes of busWeight > 1: Universitetskaya emb., the 8th / 9th lines) now seed and spawn half as many, and a bus skips 45 % of the island stops (not Vasileostrovskaya for 24 / 275)
+// TRAMS (traffic/trams.js, model in buses.js): red and cream one-section cars on the rails of streets.tram: route 3 (Sadovaya / Apraksin Dvor - Gostiny Dvor - Italyanskaya - Mikhailovsky Castle - Letny Sad),
+//   one line per direction (the two directions are different OSM ways, the north twin of the southbound track lies outside the strip); ~5 cars on the map, stops, signals, a raised pantograph;
+//   ?tr=notram switches them off. The car lanes that lie on their rails are left to them
+// BUS ROUTES: the route boards come from the stops of the area (trolleybus 1 3 5 7 8 10 11 12 15 16 17 22 28 42, bus 2 3 7 10 15 22 24 26 27 46 49 54 65 70 71 74 76 105 141 181 191 225 290), trolleybuses only under the wires
+//   streets draws; traffic.js PALACE_ROUTES gives the boards of the Palace Bridge lanes
+// PARKED: the kerb bays / lots of streets.parkedSlots inside the data extent, with the rules of traffic/parking.js (not beside tram rails, archway mouths, gates of the sights), taxi ranks at the metro pavilions,
+//   coaches at the sights where a quiet kerb exists
 // TODO / NOT BUILT (next iteration): no two-wheelers in the traffic (cyclists / e-scooters belong to the people module), no lane changes / overtaking (a bus dwelling at a stop blocks its lane for 12-28 s; cars rarely use the bus lane), bus doors do not animate, no turn indicators, no
 // couriers / scooters / motorcycles / municipal vehicles, no tram contact wire on the streets (streets draws none yet: docs/research/petro-requests-traffic.md), the trolleybus routes follow the wired lanes found by geometry (streets.wires), a few short unwired lanes are driven through.
 import { bindCarImpact, bindParkedImpact } from './traffic/impact.js';
@@ -109,16 +94,12 @@ export async function build(ctx) {
     ball.center.set(x, 1.5, z); return !frus.intersectsSphere(ball);
   };
   // the Anichkov Bridge is a humped deck (+0.06 m at the abutments, +1.5 m at the crown): vehicles on it ride at the deck height and pitch with its slope (landmarksC.bridge.deckY)
-  const westDeckY = bridgeDeck(ctx), SV = ctx.services;
-  // the east / north bridges publish their own deck-height services; they are asked first (far from the west bridges), the west decks (bridges module + the Anichkov Bridge) otherwise
-  const deckY = SV.northBridges || SV.eastBridges || westDeckY
-    ? (x, z) => SV.northBridges?.deckY(x, z) ?? SV.eastBridges?.deckY(x, z) ?? (westDeckY ? westDeckY(x, z) : null)
-    : null;
+  const deckY = bridgeDeck(ctx);
   const sim = DBG.includes('nomove') || DBG.includes('gallery') ? null : createSim(st, () => ctx.rng('traffic-sim'), {
     trams: !DBG.includes('notram'), tramStops: STATIONS.filter((q) => q.kind === 'tram'),
     // a road that the data extent cuts in the middle of a river crossing ends on the last dry metre (outside the play area only: inside it every crossing has its deck)
     wet: (x, z) => L.inRiver(x, z) && (!deckY || deckY(x, z) === null), inPlay: (x, z) => L.inPlay(x, z, 0),
-    extent: L.EXTENT, atEdge: L.inExtent ? (x, z, m = 70) => !L.inExtent(x, z, m) : undefined,
+    extent: L.EXTENT, atEdge: (x, z, m = 70) => !L.inExtent(x, z, m),
     centre: DBG.includes('whole') ? undefined : () => { centre[0] = camPos.x; centre[1] = camPos.z; return centre; },
     radius: Math.max(260, CULL_RADIUS(ctx) + 80),
     routes: routeProvider(st), hidden,
@@ -256,20 +237,8 @@ function bridgeDeck(ctx) {
   return (x, z) => { for (let i = 0; i < sites.length; i++) { const b = sites[i], dx = b.x - x, dz = b.z - z; if (dx * dx + dz * dz < R2) return fn(x, z); } return lc ? lc(x, z) : null; };
 }
 
-/** Vasilievsky Island (docs/research/vo-roster-metro.md 3.1 / 3.3 / 3.4, OSM 2026 mapper state [L]): street (lane name) -> [trolleybus refs, bus refs]. The 8th / 9th line pair carries most buses, the Palace Bridge
- *  flow turns onto Universitetskaya emb., trolleybus 12 crosses the Blagoveshchensky Bridge, 24 and 275 end at Vasileostrovskaya (Sredny pr.), the others at Korablestroiteley / Nalichnaya */
-const ISL_ROUTES = [
-  [/Университетская набережная|Дворцовый мост/, ['1', '10', '11', '28'], ['6', '7', '24']],
-  [/Кадетская линия|^1-я линия В\.О\./, ['1', '10', '11', '28'], ['24', '249']],
-  [/Большой проспект В\.О\./, ['10', '11'], ['41', '42', '128', '151', '262']],
-  [/Средний проспект В\.О\./, ['12', '28'], ['24', '230', '249', '275']],
-  [/Малый проспект В\.О\./, ['9', '12', '28'], ['128', '275']],
-  [/^(8|9)-я линия В\.О\./, ['12', '28'], ['1', '24', '41', '42', '100', '128', '151', '152', '230', '262', '275']],
-  [/набережная Лейтенанта Шмидта|Благовещенский мост/, ['12'], ['1', '100', '262']],
-  [/набережная Макарова|Тучков мост/, ['1', '9'], ['128', '275']],
-  [/Гаванская улица/, ['12'], ['230', '249', '158']],
-  [/Наличная улица|улица Нахимова|улица Кораблестроителей/, ['9', '10', '11', '12', '28'], ['1', '6', '7', '41', '42', '100', '151', '152', '168', '220', '261']],
-];
+/** the Palace Bridge (docs/research/vo-roster-metro.md 3.1, OSM 2026 mapper state [L]): street (lane name) -> [trolleybus refs, bus refs] of the flow that runs to Vasilievsky Island (the stop data of the bridge knows only a few relations) */
+const PALACE_ROUTES = [/Университетская набережная|Дворцовый мост/, ['1', '10', '11', '28'], ['6', '7', '24']];
 
 /**
  * The route boards of a lane: the routes of the stops whose bay lies on the lane (within 6 m, same direction), else (trolleybus) the trolley routes of its road, else the routes of the nearest
@@ -282,9 +251,9 @@ function routeProvider(st) {
   const toIdx = (refs, trolley) => { const o = []; for (const r of refs || []) { const i = ROUTE_BY_REF.get((trolley ? 'T' : 'A') + r); if (i !== undefined) o.push(i); } return o; };
   return (seg, trolley) => {
     const key = seg.id + (trolley ? 'T' : 'A'); let c = cache.get(key); if (c !== undefined) return c;
-    // Vasilievsky Island: the routes of a lane by the street it runs on (the stop data of the island knows only a few relations)
-    { const nm = seg.lane && seg.lane.name; const row = nm ? ISL_ROUTES.find((q) => q[0].test(nm)) : null;
-      if (row) { const o = toIdx(trolley ? row[1] : row[2], trolley); if (o.length) { cache.set(key, o); return o; } } }
+    // the Palace Bridge: the routes of a lane by the street it runs on
+    { const nm = seg.lane && seg.lane.name;
+      if (nm && PALACE_ROUTES[0].test(nm)) { const o = toIdx(trolley ? PALACE_ROUTES[1] : PALACE_ROUTES[2], trolley); if (o.length) { cache.set(key, o); return o; } } }
     const set = new Set(); let near = null, nd = 1e9;
     const { xs, zs, n } = seg;
     for (const b of bays) {

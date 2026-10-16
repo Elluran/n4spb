@@ -1,10 +1,7 @@
 // streets/paths.js - mapped footways / paths / steps (ROADS hw footway, path, steps, pedestrian) and the pedestrian-area paving (AREAS)
 // that is not claimed by a landmark module. Flat ribbons on the ground (y 0.04), clipped to nothing: they are mapped where people walk.
 import { pairs, chaikin, densify, dpKeep } from './util.js';
-import { ROADS, CROSSINGS, AREAS, GREEN } from '../data/city.js';
-import { nearestWay, DROPPED } from './net.js';
-import { isOpen } from './region.js';
-import { closedWalk } from './island-data.js';
+import { ROADS, CROSSINGS, AREAS } from '../data/city.js';
 import { profMax } from './style.js';
 import * as THREE from 'three';
 import { addCap } from '../lib/massing.js';
@@ -12,11 +9,6 @@ import { SLAB_TILE, PAVER_TILE, ASPHALT_TILE, BRICK_TILE } from './tex.js';
 
 const FOOT_W = { footway: 2.4, path: 1.8, pedestrian: 5, steps: 2.2, cycleway: 2.2 };
 export const PATH_Y = 0.04;
-/** ANDREEVSKY BOULEVARD (6-7 liniya between Sredny and Bolshoy pr., open districts): the central alley is mapped as a 2.4 m footway; the real one is ~6 m of reddish-brown hexagon pavers between granite kerbs
- *  (lawns with larches on both sides, black fences, benches: landmarksAndrew; docs/research/streets-vo.md, Commons "Andreevsky Boulevard SPB.jpg"). Drawn 5.8 m wide as block paving with a kerb band on each side;
- *  a module that claims the way ids draws it itself. */
-const ALLEY_W = { w214409218: 5.8, w532429067: 5.8 };
-const offsetLine = (pts, d) => pts.map((q, i) => { const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)]; let tx = b[0] - a[0], tz = b[1] - a[1]; const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l; return [q[0] - tz * d, q[1] + tx * d]; });
 
 /** mitred ribbon along a polyline [[x,z],...] of width w at height y; uv = metres / tile */
 export function ribbon(B, pts, w, y, tile = 2, col = null) {
@@ -38,7 +30,6 @@ export function ribbon(B, pts, w, y, tile = 2, col = null) {
 const GRAVEL = new Set(['compacted', 'fine_gravel', 'gravel', 'ground', 'dirt', 'unpaved', 'pebblestone', 'sand']);
 function footClass(r) {
   const sf = r.surface;
-  if (ALLEY_W[r.id] && isOpen(r.pts[0], r.pts[1])) return ['brick', BRICK_TILE];                // (Andreevsky boulevard: block paving)
   if (GRAVEL.has(sf)) return ['gravel', 2];
   if (sf === 'asphalt') return ['asph', ASPHALT_TILE];
   if (r.pts[0] < -595 && sf !== 'wood' && sf !== 'building_passage') return sf === 'sett' ? ['paver', PAVER_TILE] : ['slab', SLAB_TILE];
@@ -71,7 +62,7 @@ function inPavementBand(net, px, pz) {
 
 /** mapped footways / paths / steps as ribbons; the parts that lie on a carriageway (crossing ways, pavements mapped on the road edge) are left out because the
  *  zebra and the sidewalk generator draw those. Returns the centrelines for the pedestrian service. */
-export function buildPaths(Bfoot, Bsteps, net, X = {}, owned = () => false, pier = null, cut = null) {
+export function buildPaths(Bfoot, Bsteps, net, X = {}, owned = () => false) {
   const lines = [];
   // Named squares already have one paving surface. Do not draw lower path
   // ribbons under it: differing slope-based depth offsets make them bleed
@@ -84,19 +75,13 @@ export function buildPaths(Bfoot, Bsteps, net, X = {}, owned = () => false, pier
     return inside;
   };
   const inSquare = p => squares.some(q => ringHas(q.o,p[0],p[1]) && !q.h.some(h => ringHas(h,p[0],p[1])));
-  // A park, garden or square that a landmark module claims (GREEN / AREAS polygon in its groups.js) is drawn by that module with its own alleys and steps: a mapped footway or flight of steps
-  // inside it is not drawn here (the pale step slabs on the grit beside the Trinity chapel). Open districts only (region.js); the line stays for the pedestrian routing.
-  const ownedPolys = [...GREEN, ...AREAS].filter((a) => owned(a.id) && a.polys && a.polys.length).flatMap((a) => a.polys.map((q) => ({ o: q.o, h: q.h || [], b: ringBox(q.o) })));
-  const inOwnedPoly = (p) => ownedPolys.length > 0 && isOpen(p[0], p[1]) && ownedPolys.some((q) => p[0] >= q.b[0] && p[0] <= q.b[1] && p[1] >= q.b[2] && p[1] <= q.b[3] && ringHas(q.o, p[0], p[1]) && !q.h.some((h) => ringHas(h, p[0], p[1])));
   const cross = new Set(CROSSINGS.map((c) => c.id));
   for (const r of ROADS) {
-    if (!(r.hw in FOOT_W) || r.tunnel || r.layer < 0 || r.bridge || cross.has(r.id) || r.sub === 'crossing' || DROPPED.has(r.id) || closedWalk(r)) continue;       // (closedWalk: the permissive footways inside the fenced palace garden of Kamenny Island are no walkable ground: islands.js)
+    if (!(r.hw in FOOT_W) || r.tunnel || r.layer < 0 || r.bridge || cross.has(r.id) || r.sub === 'crossing') continue;
     let pts = pairs(r.pts); if (pts.length < 2) continue;
     if (pts.length > 2) pts = chaikin(pts, 1, 60);
     pts = densify(pts, 2.5);
-    const alley = !!ALLEY_W[r.id] && isOpen(r.pts[0], r.pts[1]), w = alley ? ALLEY_W[r.id] : (r.w ?? FOOT_W[r.hw]);
-    const onPier = pier && pier.count ? pier.classify(pts) : 'none';         // a pier deck that a module draws (islands.js): no ribbon on it, the routing line stays
-    if (onPier === 'part') pts = densify(pts, 0.5);                           // (the ribbon ends 0.6 m from the deck edge, not up to 2.5 m before it)
+    const w = r.w ?? FOOT_W[r.hw];
     // split into runs outside the asphalt
     let run = [];
     const flush = () => {
@@ -105,14 +90,13 @@ export function buildPaths(Bfoot, Bsteps, net, X = {}, owned = () => false, pier
         if (sub.length > 2 && !steps) { const kp = dpKeep([sub], 0.05); sub = sub.filter((_, i) => kp[i]); }          // the 2.5 m samples were only for the clipping tests: draw straight pieces as single quads
         if (sub.length < 2) return;
         if (steps) ribbon(Bsteps, sub, w, PATH_Y + 0.05, 1.5);
-        else if (alley && X.curb) { const [fk, ft] = footClass(r); ribbon(Bfoot, sub, w, PATH_Y + 0.001, ft); for (const sg of [-1, 1]) ribbon(X.curb, offsetLine(sub, sg * (w / 2 + 0.12)), 0.26, PATH_Y + 0.07, 1, [0.80, 0.79, 0.76]); }       // (the granite kerb band on both sides of the alley)
         else { const [fk, ft] = footClass(r), FB = X[fk] || Bfoot; ribbon(FB, sub, w, PATH_Y + 0.001 * (parseInt(String(r.id).replace(/D/g, '').slice(-3), 10) % 9), FB === Bfoot ? 2 : ft); }   /* QA: mapped footways overlap each other at forks / crossings: 0..8 mm apart per way */
       };
       if (run.length >= 2) {
         const steps = r.hw === 'steps';
-        if (!owned(r.id) && onPier !== 'all') {
+        if (!owned(r.id)) {
           let visible = [];
-          for (const p of run) { if ((!steps && inSquare(p)) || inOwnedPoly(p) || (onPier === 'part' && pier.near(p[0], p[1], 0.6)) || (cut && cut(p[0], p[1]))) { drawRun(visible, steps); visible = []; } else visible.push(p); }
+          for (const p of run) { if (!steps && inSquare(p)) { drawRun(visible, steps); visible = []; } else visible.push(p); }
           drawRun(visible, steps);
         }
         if (!steps) lines.push({ id: r.id, pts: run, w, hw: r.hw });
@@ -204,7 +188,7 @@ export function buildAreas(B, AREAS, skip, skirt, net, inOwned = null) {
   for (const e of list) {
     const { a, p } = e;
     if (e.isRoad) { addCap(B.road, p, 0.02, { uvScale: 8 }); }
-    else if (e.isIsland) { cap(B.island, p, 0.15, 1.6, isOpen(p.o[0], p.o[1]) ? 0.7 : 2); wall(p.o, 0.15, [0.62, 0.61, 0.6], ringArea(p.o) > 0); }      // (open districts: carved to 0.7 m pieces: no 2 m rag of bare ground between the island and the asphalt that cuts it)
+    else if (e.isIsland) { cap(B.island, p, 0.15, 1.6, 2); wall(p.o, 0.15, [0.62, 0.61, 0.6], ringArea(p.o) > 0); }
     else if (e.isSquare) { addCap(B.slab, p, 0.012, { uvScale: 2.8 }); }
     else {
       const slab = a.surface === 'sett', y = 0.10 + 0.004 * e.level;
@@ -236,7 +220,7 @@ export function buildPassages(B, tile = 1.6) {
  *  asks net.cover). Same decisions as calling net.cover for every sample, a fraction of the work: most of a polygon's lattice lies far from any road. */
 function clearCells(net) {
   const CS = 8, RHO = CS * Math.SQRT1_2 + 0.01, cache = new Map(), fil = new Set();
-  for (const f of [...net.fillets, ...(net.patches || [])]) for (let cx = Math.floor(f.box[0] / CS); cx <= Math.floor(f.box[1] / CS); cx++) for (let cz = Math.floor(f.box[2] / CS); cz <= Math.floor(f.box[3] / CS); cz++) fil.add(cx * 65536 + cz);
+  for (const f of net.fillets) for (let cx = Math.floor(f.box[0] / CS); cx <= Math.floor(f.box[1] / CS); cx++) for (let cz = Math.floor(f.box[2] / CS); cz <= Math.floor(f.box[3] / CS); cz++) fil.add(cx * 65536 + cz);
   return (x, z) => {
     const cx = Math.floor(x / CS), cz = Math.floor(z / CS), key = cx * 65536 + cz;
     let v = cache.get(key);

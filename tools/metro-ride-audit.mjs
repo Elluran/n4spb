@@ -1,12 +1,12 @@
 // Metro ride audit: regression checks of the train rides in the real renderer (headless Edge / Chrome with GPU, puppeteer-core, ?only=metro). docs/UNDERGROUND.md sections 5-6, src/world/metro/ride.js.
-//   node tools/metro-ride-audit.mjs [--only a,b,c] [--out shots/metro/audit] [--q medium] [--rides 1,2,3,4,5,6] [--dests 3] [--every 2] [--look fwd|board] [--no-shim]
-//   A  route geometry, no rendering: every built station x track x the next --dests destinations -> ride.makeRoute(). The rider's (middle) car is sampled every 2 m of the train centre: metres "in rock"
+//   node tools/metro-ride-audit.mjs [--only a,b,c] [--out shots/metro/audit] [--q medium] [--rides 1,2,3,4,5,6,7,8] [--dests 3] [--every 2] [--look fwd|board] [--no-shim]
+//   A  route geometry, no rendering: every built station (the 7 real halls of the strip) x track x the next --dests destinations (the chains end at the neighbour terminus of each line) -> ride.makeRoute(). The rider's (middle) car is sampled every 2 m of the train centre: metres "in rock"
 //      (> 4 m from the origin / destination hall box (|x| <= WALL or TRK + 4, |z| <= PZ + 0.6 + 46: the 6 m visible stub + 40 m behind its disc, |y - any floor| <= 8), every real tube (debug.tubes), every stub
 //      (debug.stubs + the 40 m tube behind its disc) and the generic tunnel axis). Routes: makeRoute(fromRt, fromDef, tk, toDef, destRt, destTk) with env.resolve(def, tk, { show: false }) (the audit never
 //      re-labels the generic hall). The ride timeline at 60 Hz drives route.profile(u) directly (u = time since the departure, T_run = the real hop time): the largest yaw step between two frames
 //      (teleports excluded and counted) and the black disc planes the rider's eye crosses; a disc counts as DRAWN when it is still drawn after env.onRideStart(route, S) on a stand-in session (merged
 //      discs and discs known only from their path can never be hidden). FAIL: rock > 0 m, yaw step > 1.5 deg, a drawn disc crossed.
-//   B  six live rides through the chain-of-legs API: ride.board(rt, tk) (no destination panel: the train runs along the line and stops everywhere; leg 0 = to the first stop, which is the ride's
+//   B  eight live rides through the chain-of-legs API: ride.board(rt, tk) (no destination panel: the train runs along the line and stops everywhere; leg 0 = to the first stop, which is the ride's
 //      destination). Screenshots from the rider every --every s and just before every disc crossing, a see-through probe at 25 / 50 / 75 % of the run (the ride train hidden: the picture must change);
 //      overlap: while the ride train stands at the stop, its track (legs[k].destTk) must be HELD (override) with the scheduled train hidden; alight() at phase 'open'.
 //      FAIL: near-black (luma < 12) > 35 % or mean luma < 25, see-through change < 6 % (pixels > 40 luma), car wall not drawn (--look fwd: < 3 % of an edge band changes by > 4 luma), overlap, not boarded / not arrived within 320 s / not off.
@@ -33,10 +33,12 @@ const RIDE_SEL = args.rides ? new Set(args.rides.split(',').map(Number)) : null;
 const RIDES = [
   { n: 1, from: 'vosstaniya', to: 'vladimirskaya', what: 'S track, real tunnel' },
   { n: 2, from: 'gostiny', to: 'mayakovskaya', what: 'real tunnel' },
-  { n: 3, from: 'admiralteyskaya', to: 'sportivnaya', what: 'real tunnel L5' },
+  { n: 3, from: 'admiralteyskaya', to: 'sadovaya', what: 'S track, generic: the Sadovaya terminus' },
   { n: 4, from: 'mayakovskaya', to: 'pan1', what: 'generic hall' },
   { n: 5, from: 'vosstaniya', to: 'chernyshevskaya', what: 'N track, generic through the north end' },
-  { n: 6, from: 'gorny', to: 'spasskaya', what: 'partial real tunnel -> generic' },
+  { n: 6, from: 'gostiny', to: 'vasileostrovskaya', what: 'N track, generic through the west dead stub' },
+  { n: 7, from: 'dostoevskaya', to: 'ligovsky', what: 'S track, generic: the Ligovsky terminus' },
+  { n: 8, from: 'admiralteyskaya', to: 'sportivnaya', what: 'N track, generic through the 70 m west stubs' },
 ].filter((r) => !RIDE_SEL || RIDE_SEL.has(r.n));
 
 // ---------------------------------------------------------------- HTTP server (+ the in-memory API shims)

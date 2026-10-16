@@ -37,11 +37,10 @@ export function makeDirector(ctx, W, A) {
       let best = null, bk = -1;
       for (const s of A.sites[f.sp] || []) {
         if (s.taken && s.taken !== f) continue;
-        if (s.cnt && !f.big) continue;                                             // a zone with a flock size (Xenia: 45 pigeons asked) belongs to the big flock
         const d = dist(s.x, s.z);
         if (d < (init ? 12 : 25) || d > (init ? 300 : 215)) continue;
         if (!init && seen(s.x, 1, s.z)) continue;
-        const k = scoreSite(s, d) * (f.big ? (s.cnt ? 4 : 0.6) : (s.cnt ? 0.25 : 1)); if (k > bk) { bk = k; best = s; }
+        const k = scoreSite(s, d); if (k > bk) { bk = k; best = s; }
       }
       if (!best) continue;
       if (f.site.taken === f) f.site.taken = null;
@@ -51,7 +50,7 @@ export function makeDirector(ctx, W, A) {
   }
   let crowOrder = null;
   function crowStep(t, init) {
-    crowOrder ||= birds.filter((b) => b.sp === 'crow').sort((x, y) => (y.jack ? 1 : 0) - (x.jack ? 1 : 0));          // the jackdaws first: one move per pass, and the island haunts (the cemetery) are where they belong
+    crowOrder ||= birds.filter((b) => b.sp === 'crow');
     for (const b of crowOrder) {
       if (b.dead || (b.st !== 'ground' && b.st !== 'perch')) continue;
       if (dist(b.x, b.z) < (init ? 170 : 280)) continue;

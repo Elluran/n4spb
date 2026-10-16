@@ -4,10 +4,9 @@
 //     the cornice line and a dark mansard band at the top), a window-grid shader with a darker ground-floor band, pastel stucco colours (ochre, salmon, mint, grey-blue, cream),
 //     grey / green / rust sheet-iron roof tones; denser near the centre, thinning out to 4 km, 9-storey panel slabs in the outskirts; keeps clear of the Fontanka / Neva, the
 //     rail corridor south-east of the Moscow station (the rail module draws the yard) and the landmark footprints
-//   * landmarks in the right directions (lon / lat -> metres, 1-3 draw calls each, merged vertex-coloured meshes): the Admiralty spire (the end of Nevsky, 2.4 km WNW),
-//     St Isaac's dome, Kazan Cathedral dome, the Church on the Spilled Blood, Peter and Paul cathedral spire, Smolny Cathedral, the TV tower (316 m)
-//   * the Neva: a flat water band north of the Fontanka mouth, ~430 m wide, with a granite edge line
-//   * distant street trees / park groves (20-triangle blobs), a dim green-grey suburb ring at the horizon
+//   * landmarks in the right directions (lon / lat -> metres, 1-3 draw calls each, merged vertex-coloured meshes) of the sights that no module of the strip builds: Peter and Paul cathedral spire, the Strelka (Exchange,
+//     Rostral columns) and the Universitetskaya embankment across the Neva, Smolny Cathedral, the TV tower (316 m); drawn only while the module of the sight is not built (sightIsReal)
+//   * distant street trees / park groves (20-triangle blobs), a dim green-grey suburb ring at the horizon (broken where the Neva scenery of water.js / quay.js runs through it)
 // Everything is cheap (instanced boxes / strips, ctx.noOutline) and uses the far fog (FAR_FOG): the horizon stays readable while the sky shader fades to the same fog
 // colour. Nothing here is closer than ~130 m to the playable area.
 import * as THREE from 'three';
@@ -29,8 +28,9 @@ const FAR_BELT = 1700;
 /** distance (m) from (x, z) to the coverage union (0 inside) */
 const distanceToCoverage = (x, z) => coverageDistance(EXTENT_RECTS, x, z);
 const TV = [30.3207, 59.9766];
-/** a far silhouette of a sight stands only while no landmark module draws the sight: the module's claims (layout.GROUPS.<module>) are empty until its model exists (the modules are registered as stubs first) */
-const sightIsReal = (m) => (L.GROUPS[m] || []).length > 0;
+/** a far silhouette of a sight stands only while no landmark module draws the sight: the module is in the build list (ctx.buildList) and its claims (layout.GROUPS.<module>) exist. The strip builds none of the five sights
+ *  that have a silhouette here (Peter and Paul, Smolny, the Strelka, the University embankment, the TV tower), so all of them are drawn across the Neva / on the horizon */
+const sightIsReal = (ctx, m) => (ctx.buildList || []).includes(m) && (L.GROUPS[m] || []).length > 0;
 const WALL = [['#e3c288', 3], ['#d9917f', 2], ['#cfd6c4', 1.6], ['#b9d0b0', 1.5], ['#e6e2d8', 2.2], ['#e6d2a0', 2.6], ['#cc7f6c', 1.4], ['#aab2c0', 1.4], ['#e8b898', 1.6], ['#d8b8a0', 1.2], ['#c9b48a', 1.4]];
 const PANEL = [['#c9c5bb', 2], ['#d7c8aa', 1.5], ['#b8c4cc', 1.5], ['#cfc2b4', 1.2]];
 const pickFrom = (tab, r) => { let t = 0; for (const [, w] of tab) t += w; let x = r * t; for (const [c, w] of tab) { x -= w; if (x <= 0) return c; } return tab[0][0]; };
@@ -143,7 +143,7 @@ function genBlocks(ctx) {
   const rot0 = Math.PI / 2 - (L.GRID_DEG * Math.PI) / 180;
   const RMAX = 4300;
   const q = ctx.quality && ctx.quality.name, thin = q === 'low' ? 0.5 : q === 'medium' ? 0.75 : 1;
-  const N = 31, NP = 72;                                                          // the old field: 31 cells each way; the Petrograd belt needs up to 72 (its cells come AFTER the old ones: the old blocks keep their order)
+  const N = 31, NP = 72;                                                          // 31 cells each way round the Square; the belt round the strip's far ends needs up to 72 (its cells come AFTER the inner ones: the inner blocks keep their order)
   const cells = []; for (let i = -N; i <= N; i++) for (let j = -N; j <= N; j++) cells.push([i, j]);
   for (let i = -NP; i <= NP; i++) for (let j = -NP; j <= NP; j++) if (Math.abs(i) > N || Math.abs(j) > N) cells.push([i, j]);
   for (const [i, j] of cells) {
@@ -256,7 +256,7 @@ function ringStrip(ctx, group, name, R0, rJit, hBase, hJit, colA, colB, opts = {
   let prev = null;
   for (let i = 0; i <= N; i++) {
     const a = arc[0] + (arc[1] - arc[0]) * i / N, r = (opts.radius ? opts.radius(a) : R0) + rJit * Math.sin(a * 7 + 0.4), x = SQ.x + Math.cos(a) * r, z = SQ.z + Math.sin(a) * r, h = hAt(a, i);
-    if (opts.skip && opts.skip(x, z)) { prev = null; continue; }                     // (the strip is broken where it would stand on water: the Gulf west of Vasilievsky Island)
+    if (opts.skip && opts.skip(x, z)) { prev = null; continue; }                     // (the strip is broken where it would stand on water: the Neva scenery runs through the ring)
     const nx = -Math.cos(a), nz = -Math.sin(a), k = 0.85 + 0.3 * hash2(i, 9, 8), t = hash2(i, 3, 8);
     const bot = A.vert(x, -4, z, nx, 0.2, nz, mix(ca.r, cb.r, t) * 0.7 * k, mix(ca.g, cb.g, t) * 0.7 * k, mix(ca.b, cb.b, t) * 0.7 * k);
     const top = A.vert(x, h, z, nx, 0.6, nz, mix(ca.r, cb.r, t) * k, mix(ca.g, cb.g, t) * k, mix(ca.b, cb.b, t) * k);
@@ -310,27 +310,26 @@ function landmarks(ctx, group) {
   // The sights INSIDE the play area (Admiralty, St Isaac's, Kazan Cathedral, the Saviour on Blood ...) are drawn by their own modules from real footprints: no placeholders here.
   // Only what lies outside the data: the Neva panorama from the Palace Embankment (docs/research/palace-square-hermitage.md section 11) and the far east.
   // ---- Peter and Paul Cathedral (spire 122.5 m at the WEST end of the church, (-1946, -1981)) + the fortress: long dark-brown bastion wall 5.5 m, sand beach, trees behind
-  // Since the Petrograd side bake the island, its shore and the footprints of the fortress are DATA (environment draws the shore, city the footprints as plain houses until landmarksFortress claims them): the invented
-  // curtain wall / beach / bastions and the four barrack boxes are gone. What is left of the silhouette is what no generic module can draw - the bell tower with the gilded spire - and only until the
-  // fortress module has its model (sightIsReal).
-  if (!sightIsReal('landmarksFortress')) { const x = -1946, z = -1981, rot = -0.12;
+  // The island, its shore and the footprints of the fortress are DATA (environment draws the shore, city the footprints as plain houses); the strip builds no fortress module, so what is drawn here is the bell tower with
+  // the gilded spire that no generic module can draw (sightIsReal: only until a fortress module has its model).
+  if (!sightIsReal(ctx, 'landmarksFortress')) { const x = -1946, z = -1981, rot = -0.12;
     box(x, z, 14, 14, 0, 56, rot, '#e2dac2', '#6f7a6a'); cyl(x, z, 56, 66, 4.2, 3, 8, '#e2dac2');
     needle(x, z, 66, 118, 2.6, GOLD); cyl(x, z, 118, 123, 0.4, 0.1, 4, GOLD);
     if (!L.insideBuilding(x + 36, z, 0)) { box(x + 36, z, 66, 28, 0, 20, rot, '#d8d0b8', '#6f7a6a'); dome(x + 30, z, 20, 7, 8, 10, '#c9993a', GOLD); }
   }
   // ---- Smolny Cathedral: pale blue and white, five domes, the central one 85 m
-  if (!ctx.buildList?.includes('landmarksSmolny')) { const [x, z] = at(30.3956, 59.9486), rot = 0.5;
+  if (!sightIsReal(ctx, 'landmarksSmolny')) { const [x, z] = at(30.3956, 59.9486), rot = 0.5;
     box(x, z, 56, 56, 0, 38, rot, '#9fc0dc', '#7a9ab4'); box(x, z, 40, 40, 38, 52, rot, '#b4cfe4', '#7a9ab4'); cyl(x, z, 52, 72, 9, 9, 12, '#c8dceb'); dome(x, z, 72, 9, 10, 12, '#4a82b8', '#78a8d4'); cyl(x, z, 82, 90, 0.9, 0.4, 4, GOLD);
     for (const [ox, oz] of [[-24, -24], [24, -24], [-24, 24], [24, 24]]) { cyl(x + ox, z + oz, 34, 54, 5, 4.5, 8, '#c8dceb'); dome(x + ox, z + oz, 54, 5, 7, 8, '#4a82b8', '#78a8d4'); } }
   // ---- the Strelka of Vasilievsky Island: the Old Stock Exchange (pale yellow temple, 25 m) between the two Rostral columns (red-ochre shafts, 32 m, green prows, flame bowls)
   // (until landmarksStrelka has its model: the two columns, which no generic module draws; the Exchange box only where the data has no building footprint for the city module)
-  if (!sightIsReal('landmarksStrelka')) { const rot = -0.52;
+  if (!sightIsReal(ctx, 'landmarksStrelka')) { const rot = -0.52;
     if (!L.insideBuilding(-2540, -1288, 0)) { box(-2540, -1288, 78, 44, 0, 17, rot, '#e8dcaa', '#7a8a70'); box(-2540, -1288, 62, 8, 17, 22, rot, '#f0e6c4', '#f0e6c4'); }
     for (const [cx, cz] of [[-2481, -1190], [-2586, -1365]]) { box(cx, cz, 10, 10, 0, 4, 0, '#b09b88'); cyl(cx, cz, 4, 31, 2.4, 1.5, 10, '#d65a3a'); cyl(cx, cz, 31, 33, 2.9, 2.9, 10, '#4a6a52'); cyl(cx, cz, 33, 34.5, 1.8, 1.0, 8, '#c9993a'); }
   }
   // ---- the Vasilievsky embankment (Universitetskaya): Kunstkamera (pale blue-white, tower), the Academy of Sciences, the Menshikov Palace, the Twelve Collegia, the University
   // (until landmarksUniversity has its model; a box is left out where the data has a building footprint: the city module draws that house)
-  if (!sightIsReal('landmarksUniversity')) { const row = [['kunst', -2619, -1036, 62, 34, 19, -0.62, '#cfd8e0'], ['acad', -2735, -975, 84, 26, 18, -0.6, '#e6dcb0'], ['mensh', -2900, -905, 52, 20, 15, -0.58, '#e0c47a'], ['colleg', -3080, -770, 320, 26, 19, -0.7, '#d4b0a0'], ['univ', -3300, -610, 110, 24, 17, -0.72, '#d8c8a8']];
+  if (!sightIsReal(ctx, 'landmarksUniversity')) { const row = [['kunst', -2619, -1036, 62, 34, 19, -0.62, '#cfd8e0'], ['acad', -2735, -975, 84, 26, 18, -0.6, '#e6dcb0'], ['mensh', -2900, -905, 52, 20, 15, -0.58, '#e0c47a'], ['colleg', -3080, -770, 320, 26, 19, -0.7, '#d4b0a0'], ['univ', -3300, -610, 110, 24, 17, -0.72, '#d8c8a8']];
     // QA: the long Twelve Collegia box stood 60 m in the Neva where the bank bends: keep only the longest stretch whose whole depth (+ 3 m) is dry
     const dry = (n, x, z, w, d, rot) => {
       const co = Math.cos(rot), si = Math.sin(rot), ok = (lx) => [-d / 2 - 3, 0, d / 2 + 3].every((lz) => !L.inRiver(x + lx * co + lz * si, z - lx * si + lz * co));
@@ -398,8 +397,9 @@ export function buildFar(ctx, root) {
   // The cheap horizon curtain remains beyond all coverage, including jitter
   // and segment interiors. Its search limit follows the actual outer corners.
   const NR = 1100, rs = horizonRadii(EXTENT_RECTS, SQ, NR);
-  ringStrip(ctx, group, 'suburb', 4700, HORIZON_JITTER, 22, 8, '#6a7a60', '#5c6c54', { n: NR, radius: (a) => rs[Math.min(NR, Math.max(0, Math.round(a / (Math.PI * 2) * NR)))], skip: (x, z) => x < -6500 && !!L.waterwayAt(x, z) });
+  const river = waterRings().filter((r) => r.kind === 'far'), onRiver = (x, z) => river.some((r) => pointInRing(x, z, r.o));      // the Neva scenery runs through the ring: the strip is broken where it would stand on the water
+  ringStrip(ctx, group, 'suburb', 4700, HORIZON_JITTER, 22, 8, '#6a7a60', '#5c6c54', { n: NR, radius: (a) => rs[Math.min(NR, Math.max(0, Math.round(a / (Math.PI * 2) * NR)))], skip: onRiver });
   landmarks(ctx, group);
-  const tower = sightIsReal('landmarksTVTower') ? null : buildTVTower(ctx, group);      // the TV tower module draws the real tower (its claim w49489011 is registered)
+  const tower = sightIsReal(ctx, 'landmarksTVTower') ? null : buildTVTower(ctx, group);      // the TV tower module draws the real tower (its claim w49489011 is registered)
   return { blocks, tower, parks: gen.parks.length };
 }

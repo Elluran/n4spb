@@ -1,4 +1,3 @@
-import { inParadny } from '../landmarksTauride/paradny-surface.js';
 // props/world.js - spatial knowledge of the props module: a 1 m raster of the play area (+ margin) built from the baked OSM data and the services of the earlier
 // modules (no global distance fields: they cost 0.5 s and 80 MB on the 9.4 M-cell west raster; the water coping strip is a one-cell dilation). Adapted from the Yakutsk props/world.js (same API) and retuned for Saint Petersburg: carriageways come from the streets
 // network (`services.streets.net.ways`: half widths incl. the parking pockets, + the junction fillets), the Fontanka trench + quay edge, the metro shafts
@@ -168,7 +167,7 @@ export function buildWorld(ctx) {
     lawn: (x, z) => !!(at(x, z) & F.LAWN),
     insideBld,
     blocked: (x, z, mask = BLOCK) => !!(at(x, z) & mask),
-    inPlay: (x, z, m = 0) => x > PL.x0 + m && x < PL.x1 - m && z > PL.z0 + m && z < PL.z1 - m,
+    inPlay: (x, z, m = 0) => L.inPlay(x, z, m),                    // the union of the play rectangles (PL is only its bounding box: the raster below)
     inArea: (x, z, m = 0) => x > PL.x0 - M + m && x < PL.x1 + M - m && z > PL.z0 - M + m && z < PL.z1 + M - m,
     reserve(x, z, r, bit = F.MISC) { stamp(x, z, r, bit); },
     reserveBox(cx, cz, w, d, rotY, bit = F.MISC, fudge = 0.5) { stampBox(cx, cz, w, d, rotY, bit, fudge); },
@@ -183,7 +182,6 @@ export function buildWorld(ctx) {
     /** footprint test for an oriented box (local x = w, local z = d, rotY as three.js). Samples the corners, the edge midpoints and the centre (+ a margin).
      *  o: { allow (flags that may be hit), road (min carriageway distance), bld (min wall distance), margin, noLawn, water (min distance to the Fontanka water) } */
     fits(cx, cz, w, d, rotY, o = {}) {
-      if (ctx.buildList?.includes('landmarksTauride') && inParadny(cx,cz)) return false;
       const c = Math.cos(rotY), s = Math.sin(rotY), m = o.margin ?? 0.1, hw = w / 2 + m, hd = d / 2 + m, mask = BLOCK & ~(o.allow || 0);
       const nx = Math.max(2, Math.ceil(w / 1.0)), nz = Math.max(2, Math.ceil(d / 1.0));
       for (let a = 0; a <= nx; a++) for (let b = 0; b <= nz; b++) {

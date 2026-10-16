@@ -6,9 +6,7 @@ import { hash2, clamp } from './util.js';
 import { atlasableTex, buildAtlas } from '../../core/batch2.js';
 import * as L from '../layout.js';
 import { deckAt } from './decks.js';
-import { segInfo, trackDist, streetTrackDist, coverLocal } from './net.js';
-import { isOpen } from './region.js';
-import { whsdDeckY } from '../bridges/sites-vo2.js';                                 // (pure data, no imports: the footprint of the Western High-Speed Diameter viaduct / ramp that the bridges module draws)
+import { segInfo, coverLocal } from './net.js';
 import { cg, mtx } from './vb.js';
 
 export const COL = {
@@ -158,98 +156,14 @@ export const inMergedStrip = (net, x, z, step = 0.2, lim = 7.9) => {       // (s
   if (kr == null || kl == null || pl.w === pr.w || kr + kl >= lim) return false;
   return !!pl.w.name && pl.w.name === pr.w.name && pl.tx * pr.tx + pl.tz * pr.tz <= -0.5;
 };
-const RING = [[0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]], DIAG = [[0.21, 0.21], [-0.21, 0.21], [0.21, -0.21], [-0.21, -0.21]];
+const RING = [[0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]];
 
-/** FURNITURE KEEP-CLEAR ZONES (Vasilievsky Island, 2026-10-08; open districts only): places a sight module dresses itself, where no generic lamp, sign, mast or other pole of this module may stand (pure data: streets builds
- *  before the landmark modules). Rows: { id, o: [x, z], u: [ux, uz], w: [wx, wz], u0, u1, w0, w1 } = a rectangle in a frame (origin o, the two axes as world unit vectors) or { id, c: [x, z], r } = a circle.
- *  Sources: docs/research/vo-requests-landmarksMining.md "streets" 1, vo-requests-landmarksAcademy.md 3, vo-requests-landmarksMenshikov.md "streets" 4. */
-const DEG = Math.PI / 180, AX = (rad) => ({ u: [Math.cos(rad), -Math.sin(rad)], w: [Math.sin(rad), Math.cos(rad)] });          // (axes of a three.js rotation.y frame: world = o + u * (cos, -sin) + w * (sin, cos))
-export const FURN_CLEAR = [
-  // Mining University: the stair forecourt (frame P: origin (-4566.8, 358.4), rotation 0.9320: u (0.5958, -0.8031) along the front, w (0.8031, 0.5958) towards the Neva): the portico stair, the cheeks and the bollard strip
-  // (u -40 .. 40, w 0 .. 9; the asphalt edge in front of it is at w about 8.5); 3.5 m round each of the two ornate teal lamps at P (+-25.2, 2.6)
-  { id: 'mining-forecourt', o: [-4566.8, 358.4], u: [0.5958, -0.8031], w: [0.8031, 0.5958], u0: -40, u1: 40, w0: 0, w1: 9 },
-  { id: 'mining-lamp-west', c: [-4579.7, 380.2], r: 3.5 },
-  { id: 'mining-lamp-east', c: [-4549.7, 339.7], r: 3.5 },
-  // Academy of Arts: the pavement block in front of the sphinx pier (frame A: origin (-3432.0, -601.6), u (0.8643, -0.5030) along the river front, v (0.5030, 0.8643) towards the Neva): u -26 .. 24, v 100 .. 108
-  { id: 'academy-pier-block', o: [-3432.0, -601.6], u: [0.8643, -0.5030], w: [0.5030, 0.8643], u0: -26, u1: 24, w0: 100, w1: 108 },
-  // Menshikov apron (frame D: origin (-3306.2, -555.1), rotation 30 deg: a (0.866, -0.5) along the wall, b (0.5, 0.866) towards the river): the railing and the pylons stand at b -0.3 (0.55 m square every 5.44 m)
-  { id: 'menshikov-apron-wall', o: [-3306.2, -555.1], u: [0.866, -0.5], w: [0.5, 0.866], u0: -20, u1: 150, w0: -1.8, w1: 0.6 },
-  // Sea Terminal (frame T: origin (-6542.4, 652.9), u (0.87327, 0.48723) along the long faces, v (-0.48723, 0.87327) towards the sea; docs/research/vo-requests-landmarksSeaTerminal.md streets 4): the asphalt under the NE deck
-  // (u 3.4 .. 117.5, v -21 .. 0) and the row of mushroom piers / Jersey barriers at v -23: no lamp, sign or pole there or within 1 m of it (v -24.5 .. 0.3, u 2.4 .. 118.5)
-  { id: 'seaterminal-deck', o: [-6542.4, 652.9], u: [0.87327, 0.48723], w: [-0.48723, 0.87327], u0: 2.4, u1: 118.5, w0: -24.5, w1: 0.3 },
-  // Sevkabel (frame M of landmarksSevkabel: origin (-5654.3, 1078.0), rotation.y -0.4189: u (0.9135, 0.4067), w (-0.4067, 0.9135); docs/research/vo-requests-landmarksSevkabel.md "-> streets" 2): the abutments of the skyway w335462132
-  // over Kozhevennaya line (u 9.8 .. 14.4, w 0 .. 15.1, clear height 5.0 m): no lamp, wire mast or sign within 1.5 m of them (second-pass review of streets-2; 0 objects of streets stood there before: a guard, no change of output)
-  { id: 'sevkabel-skyway', o: [-5654.3, 1078.0], u: [0.9135, 0.4067], w: [-0.4067, 0.9135], u0: 8.3, u1: 15.9, w0: -1.5, w1: 16.6 },
-  // ---- third pass (streets-3, 2026-10-09): the sights built since the second pass. Most rows are GUARDS (a census of the finished build found 0 streets objects inside: tools in docs/research/streets-vo.md "THIRD PASS"),
-  // the metro doors of the island are the exception (a trolleybus mast stood 4 m beside the door of exit 6).
-  // Kirova Palace of Culture (frame FD of landmarksKirova: origin (-5449, -145), rotation 30.57 deg, plan (r, q): u = r, w = -q): the module paves the first 9.6 m of the forecourt and stands its own lamp row 3 - 4 m from the wall
-  // (vo-requests-landmarksKirova.md "streets"): nothing of ours from the wall line (q -32.4, portal bump -35.5) to q -45 along the whole front (r -74 .. 131)
-  { id: 'kirova-dk-front', o: [-5449, -145], ...AX(30.57 * DEG), u0: -74, u1: 131, w0: 31, w1: 45 },
-  // Erarta (frame FE: origin (-5582.8, 23.7), rotation 119.67 deg, u = q', w = r'): the portal stair with the two steel figures (cheek walls q' +-5.5 .. 8.2, figures at +-7.1) and the museum forecourt
-  { id: 'erarta-stair', o: [-5582.8, 23.7], ...AX(119.67 * DEG), u0: -14, u1: 14, w0: -2, w1: 10 },
-  // Sevkabel Port (frame H: origin (-6172.2, 921.0), rotation -0.6458): the paved yard, the sea square, the timber promenade and the pier plaza (claims `sevkabel-yard`; the Kozhevennaya line lamps stand at lz -94 .. -99, outside)
-  { id: 'sevkabel-yard', o: [-6172.2, 921.0], ...AX(-0.6458), u0: -128, u1: 111, w0: -92, w1: 52 },
-  // Sredny: the depot east apron behind the open tram gate (frame D: origin (-5110, -760), rotation 29.6 deg: a 39 .. 95, b -80 .. 103) and the Brush plot
-  { id: 'sredny-depot-apron', o: [-5110, -760], ...AX(29.6 * DEG), u0: 39, u1: 95, w0: -80, w1: 103 },
-  { id: 'sredny-brush-plot', c: [-4985, -697], r: 9 },
-  // Makarova: the nine steps of the Catherine church tower stair beside the footway w359152358 (frame C: origin (-3647.3, -1557.6), rotation 30 deg; u -39.7 .. -36.8, v -3.2 .. 2.8), the Lions pier head and the Lutheran gravel square
-  { id: 'catherine-stair', o: [-3647.3, -1557.6], ...AX(0.5236), u0: -42, u1: -34.5, w0: -5, w1: 4.5 },
-  { id: 'lions-pier-head', c: [-2851, -1441], r: 10 },
-  { id: 'lutheran-gravel-square', c: [-3445, -1001], r: 8 },
-  // Pribaltiyskaya Hotel: the granite plaza (frame HF: origin (-7573.07, -746.9), rotation 1.9966 rad: a -31 .. 31, b 9 .. 88) and the Kirov memorial platform (frame KF: origin (-7987.21, -1067.85), rotation 2.0017 rad)
-  { id: 'pribaltiyskaya-plaza', o: [-7573.07, -746.9], ...AX(1.9966), u0: -31, u1: 31, w0: 9, w1: 88 },
-  { id: 'kirov-memorial', o: [-7987.21, -1067.85], ...AX(2.0017), u0: -26, u1: 26, w0: -10, w1: 26 },
-  // Gavan: the courtyard A-B of the workers' town (-6290, -654) and the fire reserve forecourt (frame F: origin (-6176.3, -625.3))
-  { id: 'gavan-courtyard-ab', c: [-6290, -654], r: 10 },
-  // the island metro doors (data/metro.js DOORWAYS, 4.4 m wide; "keep street furniture 2 m clear", vo-requests-metro.md): 4.5 m round the door anchor of each pavilion, 3.5 m round the mouth of the three Sportivnaya-2 pits
-  { id: 'metro-gorny-in', c: [-5057.89, 12.22], r: 4.5 }, { id: 'metro-gorny-out', c: [-5024.66, -25.56], r: 4.5 },
-  { id: 'metro-sport2-6', c: [-3758.5, -1677.7], r: 5.2 }, { id: 'metro-sport2-7', c: [-3792.0, -1699.6], r: 4.5 },
-  { id: 'metro-vo-in', c: [-4072.88, -1140.65], r: 4.5 }, { id: 'metro-vo-out', c: [-4089.10, -1147.70], r: 4.5 },
-  { id: 'metro-sport2-pit-8', c: [-3804.7, -1768.5], r: 3.5 }, { id: 'metro-sport2-pit-9', c: [-3765.5, -1754.7], r: 3.5 }, { id: 'metro-sport2-pit-10', c: [-3713.4, -1717.5], r: 3.5 },
-];
-const _fc = FURN_CLEAR.map((z) => ({ ...z, b: z.c ? [z.c[0] - z.r, z.c[0] + z.r, z.c[1] - z.r, z.c[1] + z.r] : (() => { const xs = [], zs = []; for (const [a, b] of [[z.u0, z.w0], [z.u1, z.w0], [z.u1, z.w1], [z.u0, z.w1]]) { xs.push(z.o[0] + a * z.u[0] + b * z.w[0]); zs.push(z.o[1] + a * z.u[1] + b * z.w[1]); } return [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]; })() }));
-/** THE METRO GROUND HOLES (layout.GROUND_HOLES: street stair pits, escalator shafts; review of streets-3, 2026-10-09): the metro module draws a granite well with parapets, a steel-and-glass canopy and a lit sign round and beyond the hole rectangle, and asked
- *  for 2 m of clear pavement all round it (docs/research/vo-requests-metro.md). The circles of FURN_CLEAR cover the door anchors and the pit MOUTHS only: a trolleybus mast stood inside the Sportivnaya stair pit 4 (-3324.3, -2153.7) and two masts and a
- *  sign pole hugged the far end of pit 9 of Sportivnaya-2 (-3754.7, -1761.2): no pole of ours within HOLE_CLEAR of any hole rectangle (open districts only, like every row above). */
-export const HOLE_CLEAR = 2.0;
-const _holes = (L.GROUND_HOLES || []).map((h) => { const r = Math.hypot(h.w, h.d) / 2 + HOLE_CLEAR; return { h, c: Math.cos(h.rotY), s: Math.sin(h.rotY), b: [h.x - r, h.x + r, h.z - r, h.z + r] }; });
-/** SHELTER FOOTPRINTS (review of streets-3, 2026-10-10; open districts only): stops.js registers the footprint of every bus shelter (3.0 x 1.4 m + the bin at its end + 0.3 m: 4.6 x 2.0 m) BEFORE the lamps, wire masts and signs are placed, so no pole
- *  base stands inside a shelter (a trolleybus mast stood in the middle of the Gorny Institut shelter after it moved off the metro pavilion; two more at (-3289, -2170)). One rectangle: centre, unit tangent along the road, half sizes. */
-let _stopRects = [], _stopGrid = new Map();
-export function setStopRects(list) {
-  _stopRects = list; _stopGrid = new Map();
-  for (const r of list) { const e = Math.abs(r.tx) * r.a + Math.abs(r.tz) * r.b + 0.2, f = Math.abs(r.tz) * r.a + Math.abs(r.tx) * r.b + 0.2; for (let i = Math.floor((r.cx - e) / 8); i <= Math.floor((r.cx + e) / 8); i++) for (let j = Math.floor((r.cz - f) / 8); j <= Math.floor((r.cz + f) / 8); j++) { const k = i * 65536 + j; let g = _stopGrid.get(k); if (!g) _stopGrid.set(k, (g = [])); g.push(r); } }
-}
-const inStopRect = (x, z, m) => { const g = _stopGrid.get(Math.floor(x / 8) * 65536 + Math.floor(z / 8)); if (!g) return false; for (const r of g) { const dx = x - r.cx, dz = z - r.cz, a = dx * r.tx + dz * r.tz, b = dx * -r.tz + dz * r.tx; if (Math.abs(a) < r.a + m && Math.abs(b) < r.b + m) return true; } return false; };
-/** true when (x, z) lies inside a keep-clear zone of FURN_CLEAR (open districts only; m = extra margin) */
-export function furnZone(x, z, m = 0) {
-  if (!isOpen(x, z)) return false;
-  if (_stopRects.length && inStopRect(x, z, m)) return true;
-  for (const q of _holes) {
-    if (x < q.b[0] - m || x > q.b[1] + m || z < q.b[2] - m || z > q.b[3] + m) continue;
-    const dx = x - q.h.x, dz = z - q.h.z, lx = dx * q.c - dz * q.s, lz = dx * q.s + dz * q.c;                       // (the frame of physics.js _obb: local z = (sin rotY, cos rotY))
-    if (Math.abs(lx) < q.h.w / 2 + HOLE_CLEAR + m && Math.abs(lz) < q.h.d / 2 + HOLE_CLEAR + m) return true;
-  }
-  // the WHSD (bridges/sites-vo2.js whsdDeckY): the deck of the viaduct and its ramps carries the bridges module's own lamps on the median barrier; a lamp of ours inside the footprint stood in the middle of the carriageway
-  // (second-pass review of streets-2, docs/research/vo-requests-streets.md "FROM bridges-2" 1: ten M lamps at z -300 .. 180, one at (-7864.1, -279.7) that the red car hit)
-  if (whsdDeckY(x, z) !== null) return true;
-  for (const f of _fc) {
-    if (x < f.b[0] - m || x > f.b[1] + m || z < f.b[2] - m || z > f.b[3] + m) continue;
-    if (f.c) { if (Math.hypot(x - f.c[0], z - f.c[1]) < f.r + m) return true; continue; }
-    const dx = x - f.o[0], dz = z - f.o[1], u = dx * f.u[0] + dz * f.u[1], w = dx * f.w[0] + dz * f.w[1];
-    if (u > f.u0 - m && u < f.u1 + m && w > f.w0 - m && w < f.w1 + m) return true;
-  }
-  return false;
-}
 /** ROAD CLEARANCE RULE of the furniture: a pole base at (x, z) stands clear of every asphalt (own way with its pocket, other carriageways, junction fillets: net.cover without a skip), of a bridge deck and of a facade */
-export const TRACK_CLEAR = 1.35;                      // nothing stands closer than this to the axis of a tram track (open districts): the half width of a tram body is 1.3 m
 export const poleClear = (net, x, z, gap = 0.5) => {
   // one local cover for the base and its 0.3 m ring (net.js coverLocal: with R = 0.5 + gap it is exact above -(0.5 + gap) for probes within 0.3 m; every test here is at -gap or 0.3 - gap)
   const cl = coverLocal(net, x, z, 0.5 + gap, {});
   return cl(x, z) <= -gap && !deckAt(x, z, 1) && !L.insideBuilding(x, z, 0.3)
-  && RING.every(([dx, dz]) => cl(x + dx, z + dz) <= 0.3 - gap) && !inMergedStrip(net, x, z)        // (a base right on the edge of a junction fillet polygon is not clear: its footprint would straddle it)
-  && !furnZone(x, z) && !(isOpen(x, z) && (streetTrackDist(x, z) < TRACK_CLEAR || DIAG.some(([dx, dz]) => cl(x + dx, z + dz) > 0.3 - gap)));       // (open districts, region.js: nor in a keep-clear zone of a sight (FURN_CLEAR), nor on the rails of a tram track that runs off the asphalt,
-                                                                                                                   // nor with a DIAGONAL of the 0.3 m ring on a fillet / strip patch: a sliver between the four axis probes)
+  && RING.every(([dx, dz]) => cl(x + dx, z + dz) <= 0.3 - gap) && !inMergedStrip(net, x, z);        // (a base right on the edge of a junction fillet polygon is not clear: its footprint would straddle it)
 };
 
 /** the nearest clear base to (x, z) within maxR (rings of 1 m): ok(px, pz) narrows the search (e.g. one side of a road); null when none.

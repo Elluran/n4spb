@@ -1,5 +1,3 @@
-import { inParadny } from '../landmarksTauride/paradny-surface.js';
-import { inCampus } from '../landmarksKirochnaya/groups.js';
 // environment/lawns.js - the low vegetation and the sports / flower surfaces on top of the ground plane (ground.js paints the lawn colour itself). Adapted from the Yakutsk sibling
 // for Saint Petersburg in July (docs/research/streets.md section 6: petunia pink #e0457b / #f08cb4, geranium red #d0242e, white #f5f1f0, lobelia blue #5a6fd0; trimmed lawn; clipped privet / box):
 //   * sports pitches (GREEN kind "pitch"): artificial turf with white markings (goals / fences are props'); playgrounds are dark earth / rubber in the ground shader
@@ -11,15 +9,12 @@ import { inCampus } from '../landmarksKirochnaya/groups.js';
 //     lawns read as grass at eye height.
 // Claimed objects (the square's lawn beds, the amphitheatre hill) are skipped when their owner module is built (lib/claims.js).
 import * as THREE from 'three';
-import { GREEN, BUILDINGS } from '../data/city.js';
+import { GREEN } from '../data/city.js';
 import * as L from '../layout.js';
 import { MeshBuilder, addCap, addWalls, ringFromFlat } from '../lib/massing.js';
 import { isOwned } from '../lib/claims.js';
 import { Acc, hash2, clamp, mix, sstep, polyArea, ringCentroid, longestEdge, pointInPoly, distToRing, polyBox } from './util.js';
 import { canopyMaterial, tuftMaterial } from './leafmat.js';
-import { inVO } from './vo-banks.js';
-import { inIslands, inRound2, sightStrips } from './islands.js';
-import { parkPonds } from './river.js';
 
 // ---------------------------------------------------------------- textures
 function flowerTexture(ctx) {
@@ -85,52 +80,9 @@ function roadShare(p) {
   return inside ? onRoad / inside : 0;
 }
 
-/** true when a drivable way of the layout runs through the polygon (sampled on a <= 1 m grid, at most 60 x 60 samples) */
-function driveCross(p) {
-  const bb = polyBox(p), step = Math.max(1, (bb.x1 - bb.x0) / 60, (bb.z1 - bb.z0) / 60);
-  for (let x = bb.x0 + step / 2; x < bb.x1; x += step) for (let z = bb.z0 + step / 2; z < bb.z1; z += step) if (pointInPoly(x, z, p) && L.roadsNear(x, z, 0.3, { drivable: true }).length) return true;
-  return false;
-}
-/** (islands 2026-10-14, Botanical Garden Japanese garden r14150174, photos 54 / 55) moss ground with big clipped azalea masses (magenta #b0357f, a few pink highlights) and darker moss patches; one tile = 12 m */
-function mossTexture(ctx) {
-  return ctx.tex.draw(512, 512, (g, w, h) => {
-    const r = ctx.rng('env-moss-pb');
-    g.fillStyle = '#5a7c3c'; g.fillRect(0, 0, w, h);
-    const wrap = (x, y, rad, fn) => { for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) { if (x + ox < -rad || x + ox > w + rad || y + oy < -rad || y + oy > h + rad) continue; fn(x + ox, y + oy); } };
-    for (let i = 0; i < 90; i++) { const x = r() * w, y = r() * h, rx = 14 + r() * 40, ry = 10 + r() * 28, c = r() < 0.55 ? 'rgba(62,92,40,0.55)' : 'rgba(110,140,70,0.4)'; wrap(x, y, rx, (X, Y) => { g.fillStyle = c; g.beginPath(); g.ellipse(X, Y, rx, ry, r() * 3, 0, 6.3); g.fill(); }); }
-    for (let i = 0; i < 700; i++) { const x = r() * w, y = r() * h; g.fillStyle = r() < 0.5 ? 'rgba(150,170,90,0.35)' : 'rgba(40,64,30,0.35)'; g.fillRect(x, y, 2, 2); }
-    for (let i = 0; i < 12; i++) {                                                                                        // azalea masses: dark leaf dome + magenta bloom dots
-      const x = r() * w, y = r() * h, rad = 26 + r() * 22;
-      wrap(x, y, rad, (X, Y) => {
-        g.fillStyle = 'rgba(30,50,26,0.55)'; g.beginPath(); g.ellipse(X + 3, Y + 4, rad * 1.05, rad * 0.9, 0, 0, 6.3); g.fill();
-        g.fillStyle = '#3f6a2e'; g.beginPath(); g.ellipse(X, Y, rad, rad * 0.86, 0, 0, 6.3); g.fill();
-        for (let k = 0; k < 90; k++) { const a = r() * 6.283, d = Math.sqrt(r()) * rad * 0.92, px = X + Math.cos(a) * d, py = Y + Math.sin(a) * d * 0.86, dr = 2.6 + r() * 2.4; g.fillStyle = r() < 0.78 ? '#b0357f' : '#d870a8'; g.beginPath(); g.arc(px, py, dr, 0, 6.3); g.fill(); }
-      });
-    }
-  }, { key: 'env-moss-pb', repeat: [1, 1], anisotropy: 4 });
-}
-/** kerb walls + inward rim of an island bed: not over the stretches where a mapped way (footway, path, service drive) runs along the edge (the bed would bury the path) */
-function bedEdges(wall, rim, poly) {
-  const ring = poly.o, n = ring.length / 2;
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n, ax = ring[i * 2], az = ring[i * 2 + 1], bx = ring[j * 2], bz = ring[j * 2 + 1], dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz); if (l < 0.05) continue;
-    const steps = Math.max(1, Math.ceil(l / 1.5)); let onWay = false;
-    for (let s = 0; s <= steps && !onWay; s++) onWay = L.roadsNear(ax + dx * s / steps, az + dz * s / steps, 0.15).length > 0;
-    if (onWay) continue;
-    let nx = -dz / l, nz = dx / l;                                                              // inward normal (probe)
-    if (!pointInPoly((ax + bx) / 2 + nx * 0.3, (az + bz) / 2 + nz * 0.3, poly)) { nx = -nx; nz = -nz; }
-    const wnx = -nx, wnz = -nz, swap = (-dz) * wnx + dx * wnz < 0;                              // outward normal of the kerb face; quad (A0, B0, B1, A1) faces (-dz, dx)
-    const [px, pz, qx, qz] = swap ? [bx, bz, ax, az] : [ax, az, bx, bz];
-    const a0 = wall.vert(px, 0, pz, wnx, 0, wnz), b0 = wall.vert(qx, 0, qz, wnx, 0, wnz), b1 = wall.vert(qx, 0.21, qz, wnx, 0, wnz), a1 = wall.vert(px, 0.21, pz, wnx, 0, wnz); wall.quad(a0, b0, b1, a1);
-    const r0 = rim.vert(ax, 0.212, az, 0, 1, 0), r1 = rim.vert(bx, 0.212, bz, 0, 1, 0), r2 = rim.vert(ax + nx * 0.14, 0.212, az + nz * 0.14, 0, 1, 0), r3 = rim.vert(bx + nx * 0.14, 0.212, bz + nz * 0.14, 0, 1, 0);
-    rim.tri(r0, r3, r1); rim.tri(r0, r2, r3);
-  }
-}
-
 export function buildSurfaces(ctx, root, field, owned) {
   const T = ctx.THREE;
   const turf = new MeshBuilder(), lines = new MeshBuilder(), bedTop = new MeshBuilder(), bedWall = new MeshBuilder(), bedRim = new MeshBuilder();
-  const moss = new MeshBuilder(), bedFlat = new MeshBuilder(); let mossN = 0, flatN = 0;
   let pitches = 0, beds = 0;
   for (const g of GREEN) {
     if (isOwned(owned, g.id)) continue;
@@ -153,14 +105,6 @@ export function buildSurfaces(ctx, root, field, owned) {
           line(lines, [...P(ue, (v0 + v1) / 2 - bw / 2), ...P(ue + d * bd, (v0 + v1) / 2 - bw / 2), ...P(ue + d * bd, (v0 + v1) / 2 + bw / 2), ...P(ue, (v0 + v1) / 2 + bw / 2)], 0.11, 0.02);
         }
       } else if ((g.kind === 'garden' || g.kind === 'flowerbed') && polyArea(p) > 3 && roadShare(p) < 0.1) {
-        if (inIslands(p.o[0], p.o[1])) {
-          // islands (2026-10-14): a Japanese garden is a flat moss ground with azalea masses, not a raised flowerbed (r14150174: confetti at 1.7 m); every other bed keeps its kerb and rim only where no mapped way
-          // runs over the edge (the service way w141829387 of the Botanical Garden north court lay under the rim of the Continuous Bloom bed)
-          if (/Японск/.test(g.name || '')) { addCap(moss, { o: p.o, h: [...p.h, ...parkPonds().filter((q) => pointInPoly(q.o[0], q.o[1], p)).map((q) => q.o)] }, 0.022, { uvScale: 12 }); mossN++; continue; }      // (water-banks 2026-10-14) the moss leaves out the ponds under the plank bridge (w413677927 / 28)
-          // a bed that a drivable way (service drive, park alley) runs through is laid FLUSH under the asphalt (no kerb, no rim): the raised top at 0.19 m covered the asphalt (surface audit: bare-ground at (-1520.6, -4279.8))
-          if (driveCross(p)) { addCap(bedFlat, p, 0.014, { uvScale: 1.5 }); flatN++; continue; }
-          addCap(bedTop, p, 0.19, { uvScale: 1.5 }); bedEdges(bedWall, bedRim, p); beds++; continue;
-        }
         addCap(bedTop, p, 0.19, { uvScale: 1.5 }); addWalls(bedWall, ringFromFlat(p.o), 0, 0.21, { bay: 3, floor: 3 }); rimInward(bedRim, p, p.o, 0.14, 0.212); beds++;
       }
     }
@@ -180,19 +124,6 @@ export function buildSurfaces(ctx, root, field, owned) {
   mk(bedTop, ctx.mat.toon('#ffffff', { map: flowerTexture(ctx), paint: 0.02, name: 'env-flowerbed' }), 'env-flowerbed');
   mk(bedWall, ctx.mat.toon('#ece9df', { paint: 0.04, name: 'env-bed-kerb' }), 'env-bed-kerb', { cast: true });
   mk(bedRim, ctx.mat.toon('#f2f0e8', { paint: 0.03, name: 'env-bed-rim' }), 'env-bed-rim');
-  if (mossN) mk(moss, ctx.mat.toon('#ffffff', { map: mossTexture(ctx), paint: 0.02, polygonOffset: -1, name: 'env-moss-garden' }), 'env-moss-garden');
-  if (flatN) mk(bedFlat, ctx.mat.toon('#ffffff', { map: flowerTexture(ctx), paint: 0.02, polygonOffset: -1, name: 'env-flowerbed-flush' }), 'env-flowerbed-flush');
-  // (islands 2026-10-15, landmarksLETI request) the low steel rail on the outer edge of the lawn strips in front of the end walls of Corpus 7: posts every 2 m, two thin rails (0.04 m, no collider: knee high)
-  {
-    const rail = new MeshBuilder(), ring = (cx, cz, ux, uz, hl, hw) => [[cx - ux * hl - uz * hw, cz - uz * hl + ux * hw], [cx + ux * hl - uz * hw, cz + uz * hl + ux * hw], [cx + ux * hl + uz * hw, cz + uz * hl - ux * hw], [cx - ux * hl + uz * hw, cz - uz * hl - ux * hw]];
-    for (const st of sightStrips(BUILDINGS, (id) => isOwned(owned, id))) {
-      const ax = st.a[0] + st.nx * (st.w - 0.1), az = st.a[1] + st.nz * (st.w - 0.1), bx = st.b[0] + st.nx * (st.w - 0.1), bz = st.b[1] + st.nz * (st.w - 0.1), dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz) || 1, ux = dx / l, uz = dz / l;
-      const nPost = Math.max(2, Math.round(l / 2) + 1);
-      for (let k = 0; k < nPost; k++) { const t = k / (nPost - 1); addWalls(rail, ring(ax + dx * t, az + dz * t, ux, uz, 0.03, 0.03), 0, 0.58, {}); }
-      for (const y of [0.3, 0.54]) addWalls(rail, ring((ax + bx) / 2, (az + bz) / 2, ux, uz, l / 2, 0.015), y, y + 0.04, {});
-    }
-    if (!rail.empty) mk(rail, ctx.mat.toon('#5d666b', { paint: 0.02, name: 'env-sight-rail' }), 'env-sight-rail', { cast: true });
-  }
   if (round.length) {
     const tex = roundBedTexture(ctx), kerbMat = ctx.mat.toon('#ece9df', { paint: 0.04, name: 'env-bed-kerb' }), topMat = ctx.mat.toon('#ffffff', { map: tex, paint: 0.02, name: 'env-roundbed' });
     for (const b of round) {
@@ -214,25 +145,17 @@ function hedgeGeometry(runs) {
   const c0 = new THREE.Color('#34502a'), c1 = new THREE.Color('#5f8a3a');
   for (const r of runs) {
     const { ax, az, bx, bz, h, tint } = r, l = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(l / 2.4)), tx = (bx - ax) / l, tz = (bz - az) / l, nx = -tz, nz = tx;
-    // (review-water-3b 2026-10-09, request of city / the Sredny builder: "two dark slabs with box outlines at their ends, reading as floating raised beds", Sredny pr. 76-78) a run of Vasilievsky Island (`cap`:
-    // the open districts only, the reviewed ones keep their mesh bit for bit) is closed at both ends (the open tube showed its inside as a thin dark rectangle) and its foliage is a brighter green (the tint
-    // product made the top almost black: a hedge reads as a clipped shrub, not as a slab)
-    const base = P.length / 3, tc = new THREE.Color(tint), lit = r.cap ? 1.8 : 1;
-    const put = (i, x, z, end, wob, pnx3, pnz3, nrm) => {            // one profile ring at section i; nrm: the end-cap normal (tx, tz sign) or null for the side normals of the profile
+    const base = P.length / 3, tc = new THREE.Color(tint);
+    const put = (i, x, z, end, wob) => {            // one profile ring at section i
       for (const [d, y, pnx, pny] of prof) {
         const w = d * end, yy = y * h * wob;
         P.push(x + nx * w, yy, z + nz * w);
-        if (nrm) N.push(pnx3, 0, pnz3); else { const nl = Math.hypot(pnx, pny) || 1; N.push(nx * pnx / nl, pny / nl, nz * pnx / nl); }
-        const t = Math.min(1, y / 0.68), k = 0.66 + 0.34 * t; C.push(mix(c0.r, c1.r, t) * k * tc.r * 1.1 * lit, mix(c0.g, c1.g, t) * k * tc.g * 1.1 * lit, mix(c0.b, c1.b, t) * k * tc.b * 1.1 * lit);
+        { const nl = Math.hypot(pnx, pny) || 1; N.push(nx * pnx / nl, pny / nl, nz * pnx / nl); }
+        const t = Math.min(1, y / 0.68), k = 0.66 + 0.34 * t; C.push(mix(c0.r, c1.r, t) * k * tc.r * 1.1, mix(c0.g, c1.g, t) * k * tc.g * 1.1, mix(c0.b, c1.b, t) * k * tc.b * 1.1);
       }
     };
-    for (let i = 0; i <= n; i++) put(i, ax + (bx - ax) * i / n, az + (bz - az) * i / n, i === 0 || i === n ? 0.7 : 1, 0.92 + 0.16 * hash2(i, Math.round(ax), 3), 0, 0, false);
+    for (let i = 0; i <= n; i++) put(i, ax + (bx - ax) * i / n, az + (bz - az) * i / n, i === 0 || i === n ? 0.7 : 1, 0.92 + 0.16 * hash2(i, Math.round(ax), 3));
     for (let i = 0; i < n; i++) for (let j = 0; j < prof.length - 1; j++) { const a = base + i * prof.length + j, b = a + 1, c = a + prof.length, d = c + 1; I.push(a, b, d, a, d, c); }
-    if (r.cap) for (const e of [0, 1]) {                                // the two end caps: the profile ring of the end section again, with the normal along the run
-      const i = e ? n : 0, cb = P.length / 3;
-      put(i, ax + (bx - ax) * i / n, az + (bz - az) * i / n, 0.7, 0.92 + 0.16 * hash2(i, Math.round(ax), 3), e ? tx : -tx, e ? tz : -tz, true);
-      if (e) I.push(cb, cb + 1, cb + 2, cb, cb + 2, cb + 3); else I.push(cb, cb + 2, cb + 1, cb, cb + 3, cb + 2);
-    }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
@@ -246,19 +169,8 @@ export function buildHedges(ctx, root, field, owned) {
   const runs = [];
   const lawns = GREEN.filter((g) => (g.kind === 'grass' || g.kind === 'park' || g.kind === 'garden') && !isOwned(owned, g.id));
   const TINT = ['#6f9a48', '#5a8a3a', '#7aa04e', '#4e7a3a'];   // clipped privet / box
-  // ISLANDS round 2 (Yelagin, Kamenny, Aptekarsky, Petrovsky; 2026-10-14): a landscape park has no clipped privet along the edge of its lawns and none round the park itself (hedge boxes stood on the closed
-  // garden of the Kamenny Palace, r10254219 and its two lawns, beside the fence that the palace module draws). A park polygon of >= 1 ha, and any lawn / bed whose centre lies in a park of >= 3 ha, gets none.
-  const PARKS = [];
-  for (const g of GREEN) if (g.kind === 'park') for (const p of g.polys) if (inRound2(p.o[0], p.o[1]) && polyArea(p) >= 30000) PARKS.push({ p, box: polyBox(p) });
-  const parkEdge = (g, poly) => {                                      // polygon level; the run itself is skipped only where it lies on island ground (inRound2 at its middle), never in an older play rectangle
-    if (g.kind === 'park' && polyArea(poly) >= 10000) return true;
-    const [cx, cz] = ringCentroid(poly.o);
-    for (const k of PARKS) if (k.p !== poly && cx >= k.box.x0 && cx <= k.box.x1 && cz >= k.box.z0 && cz <= k.box.z1 && pointInPoly(cx, cz, k.p)) return true;
-    return false;
-  };
   for (const g of lawns) for (const poly of g.polys) {
     if (polyArea(poly) < 90) continue;
-    const noHedge = parkEdge(g, poly);
     const ring = poly.o, n = ring.length / 2;
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n, ax = ring[i * 2], az = ring[i * 2 + 1], bx = ring[j * 2], bz = ring[j * 2 + 1], l = Math.hypot(bx - ax, bz - az);
@@ -272,30 +184,12 @@ export function buildHedges(ctx, root, field, owned) {
       const inset = 0.8, a = [ax + tx * s0 + nx * inset, az + tz * s0 + nz * inset], b = [ax + tx * s1 + nx * inset, az + tz * s1 + nz * inset], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
       if (![a, [(a[0] + m[0]) / 2, (a[1] + m[1]) / 2], m, [(m[0] + b[0]) / 2, (m[1] + b[1]) / 2], b].every(([x, z]) => field.clear(x, z, 0.9) && field.shore(x, z) > 2.4 && pointInPoly(x, z, poly) && !L.isOnRoad(x, z, 2.0))) continue;      // 2 m off the layout asphalt: the net widens junction mouths / parking pockets       // never on the quay edge (a hedge there would wall off the descents)
       const h = 0.9 + hash2(i, 6, 19) * 0.55, tint = TINT[Math.floor(hash2(i, 8, 20) * TINT.length)];
-      // (review-water-2 2026-10-09, request of bridges-2: a 183 m run crossed the north entrance of the Novo-Andreevsky footbridge, others the approaches of the 2nd - 4th Smolensky bridges) on Vasilievsky Island
-      // (both ends inVO: the open districts; the reviewed districts keep their runs as they were) a run is cut where any mapped way (footway, path, steps, service road) comes within 0.45 m of its edge: sampled every
-      // 1 m along the run, the free stretches stay (0.6 m back from the way), stretches shorter than 3 m go. A run that meets no way is pushed unchanged.
-      // a GHOST run (park of the round-2 islands, both ends on island ground) is kept in the list for the tree placer (it keeps its clearance, so the older districts' trees stay exactly as they were) but is not drawn
-      if (!(inVO(a[0], a[1]) && inVO(b[0], b[1]))) { runs.push({ ax: a[0], az: a[1], bx: b[0], bz: b[1], h, tint, ...(noHedge && inRound2(a[0], a[1]) && inRound2(b[0], b[1]) ? { ghost: true } : {}) }); continue; }
-      const rl = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / rl, uz = (b[1] - a[1]) / rl, blk = [];
-      for (let s = 0; s <= rl + 1e-6; s += 1) blk.push(L.roadsNear(a[0] + ux * s, a[1] + uz * s, 0.45).length > 0);
-      if (rl - Math.floor(rl) > 1e-6) blk.push(L.roadsNear(b[0], b[1], 0.45).length > 0);                      // (the last sample sits on the end of the run)
-      if (!blk.some(Boolean)) { runs.push({ ax: a[0], az: a[1], bx: b[0], bz: b[1], h, tint, cap: true }); continue; }
-      for (let k = 0, from = -1; k <= blk.length; k++) {
-        const free = k < blk.length && !blk[k];
-        if (free && from < 0) from = k;
-        if (!free && from >= 0) {
-          const to = k - 1, s0 = from > 0 ? from + 0.6 : 0, s1 = to < blk.length - 1 ? to - 0.6 : rl; from = -1;
-          if (s1 - s0 >= 3) runs.push({ ax: a[0] + ux * s0, az: a[1] + uz * s0, bx: a[0] + ux * s1, bz: a[1] + uz * s1, h, tint, cap: true });
-        }
-      }
+      runs.push({ ax: a[0], az: a[1], bx: b[0], bz: b[1], h, tint });
     }
   }
   if (!runs.length) return { runs };
-  const drawn = runs.filter((r) => !r.ghost);
-  if (!drawn.length) return { runs };
-  const m = new THREE.Mesh(hedgeGeometry(drawn), canopyMaterial(ctx)); m.name = 'env-hedges'; m.castShadow = true; m.receiveShadow = true; ctx.noBatch(m); root.add(m);
-  for (const r of drawn) { const l = Math.hypot(r.bx - r.ax, r.bz - r.az); ctx.physics.addBox((r.ax + r.bx) / 2, (r.az + r.bz) / 2, l + 0.4, 0.7, Math.atan2(-(r.bz - r.az), r.bx - r.ax), 0, 1.1); }
+  const m = new THREE.Mesh(hedgeGeometry(runs), canopyMaterial(ctx)); m.name = 'env-hedges'; m.castShadow = true; m.receiveShadow = true; ctx.noBatch(m); root.add(m);
+  for (const r of runs) { const l = Math.hypot(r.bx - r.ax, r.bz - r.az); ctx.physics.addBox((r.ax + r.bx) / 2, (r.az + r.bz) / 2, l + 0.4, 0.7, Math.atan2(-(r.bz - r.az), r.bx - r.ax), 0, 1.1); }
   return { runs };
 }
 
@@ -364,8 +258,7 @@ export function buildTufts(ctx, root, field) {
   }
   const one = new Float64Array(6);
   // the live part of put(): claims and courtyards can change; ANDed with the cached verdict, so the order is free
-  const live = (x, z) => !(field.claimed(x, z) || inCourt(x, z)
-    || (ctx.buildList?.includes('landmarksTauride') && inParadny(x, z)) || (ctx.buildList?.includes('landmarksKirochnaya') && inCampus(x, z)));
+  const live = (x, z) => !(field.claimed(x, z) || inCourt(x, z));
   function emit(x, z, out, o) {
     const h = out[o], w = out[o + 1];
     col.setRGB(out[o + 3], out[o + 4], out[o + 5]);

@@ -1,31 +1,41 @@
 # Notices and credits
 
+n4spb is the Nevsky strip of `102_3d_piter` (Moscow Railway Station, Nevsky Prospekt, the district around it, Palace Square, the Hermitage and the Admiralty; see [`docs/STRIP.md`](docs/STRIP.md)).
+The repository is licensed under Apache-2.0 (see [`LICENSE`](LICENSE)); the third-party parts below keep their own licences.
+
 ## Engine and look: Sakuragaoka Station (MIT)
 
 The rendering engine and the anime cel-shaded look are derived from **Sakuragaoka Station**
 (<https://github.com/Kenton-GMI/sakuragaoka-station>, MIT License, Copyright (c) 2026 Sakuragaoka Station contributors),
-which is included in this repository as the git submodule `../sakuragaoka-station` and served as the reference for this project
-(through the sibling project `../100_3d_moscow_city`, which adapted it first).
+which served as the reference for the original project `102_3d_piter` (through its sibling projects `100_3d_moscow_city` and `101_3d_yakutsk`, which adapted it first; none of them is part of this repository).
 The files under `src/core/` (renderer with colour-aware outlines and bloom, toon materials, sky, geometry kit, physics, first-person
 player, static batcher, canvas textures, WebAudio synth) and the dev tools in `tools/` (`serve`, `shot`, `check`, `smoke`, `tour`)
 started from that project and were adapted. The original licence text is kept in
 [`LICENSE-sakuragaoka-station.txt`](LICENSE-sakuragaoka-station.txt).
-Everything under `src/world/` (except where a file says it was adapted from the reference) is new work for Saint Petersburg (the sibling projects `../100_3d_moscow_city` and `../101_3d_yakutsk` served as code libraries).
+Everything under `src/world/` (except where a file says it was adapted from the reference) is new work for Saint Petersburg.
 
 ## Map data: OpenStreetMap (ODbL)
 
 Building footprints, levels, roads, crossings, pavements, lawns, water, street furniture, monuments and points of interest come from
 **OpenStreetMap** data, (c) OpenStreetMap contributors, available under the
 [Open Database Licence (ODbL) 1.0](https://www.openstreetmap.org/copyright).
-`src/world/data/city.js` is a derived extract baked by `tools/fetch-osm.mjs` + `tools/bake-osm.mjs`; if you redistribute it, keep
-this attribution and the ODbL share-alike terms. `docs/images/plan.*` and `docs/reference/plan-overlay.png` are rendered from the same data.
-The extract is registered to a screenshot of Yandex Maps (`docs/reference/yandex-center.png`) that is kept **only as a private
-layout reference** for checking the building and street pattern; nothing of it is drawn in the scene.
+`src/world/data/city.js` and its region parts `src/world/data/city-*.js` are a derived extract of the centre of Saint Petersburg, baked once for the whole city and then clipped to the strip
+(the eight play rectangles grown by 120 m, `tools/strip-data-*.mjs`); `src/world/data/metro.js` and `data/east-water.js` are derived from the same source plus the project's own measurements.
+If you redistribute the data, keep this attribution and the ODbL share-alike terms. The baked products under `assets/baked/` (when present) are derived from that data.
+The extract was registered to a screenshot of Yandex Maps that is kept **only as a private layout reference** outside this repository (see `docs/reference/calibration.md`); nothing of it is drawn in the scene and no part of it is included here.
+
+## three.js, Rapier and fonts
+
+* **three.js** 0.170.0 (MIT, <https://threejs.org/>) is loaded at run time from the jsDelivr CDN (importmap in `index.html`) and is a development dependency of the tools (`package.json`).
+* **Rapier** (<https://rapier.rs/>, Apache-2.0, Dimforge): `vendor/rapier/rapier.js` is the unmodified browser ESM bundle `dist/rapier.mjs` of `@dimforge/rapier3d-compat` 0.21.0 with its embedded WebAssembly;
+  its licence is `vendor/rapier/LICENSE`. It is vendored so that the static deployment needs no CDN for physics; the npm package is therefore not listed in `package.json`, and the file's provenance is this note.
+* **Fonts**: Rubik, Noto Sans, Noto Serif, Caveat, Golos Text and Oranienbaum (SIL Open Font License, Google Fonts) are loaded from Google Fonts at run time and baked into canvas textures (signs, plates); no font files are included.
 
 ## Reference photographs
 
 Photographs (mostly Wikimedia Commons, each under its own licence) were used **only as visual references** while modelling (shapes,
 colours, proportions, details); no photograph is copied into the repository or the scene.
+The loading-screen images in `assets/splash/` are renders of this scene (`node tools/tour.mjs --set splash`).
 
 ## Names and brands
 

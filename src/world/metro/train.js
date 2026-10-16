@@ -33,8 +33,8 @@ const shade = (hex, f) => { const c = new THREE.Color(hex); c.multiplyScalar(f);
 // ---------------------------------------------------------------- in-car line strips
 const FONT = '"Rubik","Noto Sans",sans-serif';                                          // = mats.js FONT
 export const STRIP_W = 3.1, STRIP_H = 0.42, STRIP_Y = 1.93, STRIP_X = 1.205, STRIP_Z = 3.8, STRIP_PX_W = 2048, STRIP_PX_H = 256;
-/** official line colours (the user's research 2026; data/metro.js LINES carries #702785 for line 5 and #9c5b2a for line 6) */
-export const LINE_COLOR = { '1': '#D6083B', '2': '#0078C9', '3': '#009A49', '4': '#EA7125', '5': '#6E0A78', '6': '#8C5646' };
+/** official line colours (the user's research 2026; data/metro.js LINES carries #702785 for line 5) */
+export const LINE_COLOR = { '1': '#D6083B', '2': '#0078C9', '3': '#009A49', '4': '#EA7125', '5': '#6E0A78' };
 /** the blank screen of the Baltiets strip (px of the 2048 x 256 picture) reserved for the live "next station / door side / exit direction" text */
 export const STRIP_LCD_RECT = { x: 16, y: 44, w: 640, h: 196 };
 const STYLE_PARAMS = {                                                                   // x0 / x1 = first / last station dot (px), maxStep caps the dot spacing of short lines, dotY = the row of the dots (px from the top)

@@ -23,8 +23,8 @@ export async function ownedGroups(ctx) {
     for (const m of L.MODULE_KEYS) {
       if (!list.includes(m)) continue;
       try {
-        // the generated table (tools/owns-table.mjs) answers without importing the module: importing all 40 landmark modules (44 MB of code and data) before the first
-        // module could build cost ~5 s of every load; a module missing from the table is imported as before
+        // the generated table (tools/owns-table.mjs) answers without importing the module: importing every landmark module (code and data) before the first
+        // module could build cost seconds of every load; a module missing from the table is imported as before
         const o = m in OWNS_TABLE ? OWNS_TABLE[m] : (await import(`../${m}.js`)).OWNS_GROUPS;
         if (o === true) for (const g of L.GROUPS[m]) owned.add(g.key);
         else if (Array.isArray(o)) for (const k of o) owned.add(k);

@@ -314,8 +314,6 @@ log('bridge-deck samples (exception, drawn by the bridges module):'); for (const
 const EXCEPTIONS = [
   { id: 'palace-square-stone-field', test: (o) => /lmG-(pave|flagMat|flagstone|stone-field)/.test(o.mesh), why: 'Palace Square stone field / arch flagstones (landmarksG): pedestrian square, the mapped living-street trace is drawn under it' },
   { id: 'kazan-square-garden', test: (o) => /lmF-slabs/.test(o.mesh) && /^Казанская площадь$/.test(o.name || ''), why: 'Kazan Square slabs (landmarksF) over the mapped Kazanskaya ploshchad way: pedestrian square' },
-  { id: 'bridge-deck-module', test: (o) => /^(eastBridges|northBridges)\//.test(o.mesh), why: 'road-bridge decks drawn by eastBridges / northBridges (their footprints are not in streets/decks.js, so the streets asphalt below them is sampled)' },
-  { id: 'tram-slab-median', test: (o) => /pt-tramslab/.test(o.mesh || '') || /pt-tramslab/.test(o.cause || ''), why: 'the flush concrete-slab tram median of Nalichnaya ulitsa (net.js SLAB_MEDIAN, docs/research/streets-vo.md, photo Commons "Nalichnaya street(1).jpg"): both carriageways are asphalt, the strip between them carries the double track on slabs (a documented exception to "every drivable road is asphalt", user brief 2026-10-07)' },
   { id: 'object-tops', test: (o) => o.mesh === 'city/city-fine/city-fine' && o.y >= 0.15, why: 'tops of 0.17 m stone corner guards / plinths in arch mouths (city module), not a surface' },
   { id: 'wide-median', test: (o) => o.kind === 'median' && o.gap >= MEDIAN_MAX, why: `central reservation wider than ${MEDIAN_MAX} m between two one-way carriageways: a real median (boulevard), pavement / lawn allowed` },
 ];

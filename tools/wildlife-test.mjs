@@ -35,10 +35,6 @@ globalThis.requestAnimationFrame = (f) => setTimeout(() => f(Date.now()), 16); g
 globalThis.innerWidth = 1280; globalThis.innerHeight = 720; globalThis.devicePixelRatio = 1; globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
 
 
-if (process.argv.includes('--isloff')) globalThis.__islOff = true;           // A / B: without the animals of the islands of round 2
-if (process.argv.includes('--petrooff')) globalThis.__petroOff = true;       // A / B: without the animals of the Petrograd side / the Spit
-const PETRO = !globalThis.__petroOff;
-const ISLAND = !process.argv.includes('--noisland');
 const THREE = await import('three');
 const { createContext } = await import(pathToFileURL(path.join(root, 'src/core/ctx.js')).href);
 const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);
@@ -47,14 +43,7 @@ const sunDir = new THREE.Vector3(...L.SUN_DIR).normalize();
 const calls = [], loops = [];
 const audio = { play: (n, o) => calls.push([n, o]), loop: (n, o) => { loops.push([n, o]); return { setVolume() {}, stop() {} }; } };
 const ctx = createContext({ scene, camera, renderer: null, audio, quality: { name: process.env.Q || 'high', pixelRatio: 1, msaa: 4, shadowMap: 4096, shadowSize: 75, petals: 1 }, sunDir });
-ctx.buildList = ['environment', 'streets', 'city', 'landmarksA', 'landmarksC', 'landmarksD', 'landmarksE', 'landmarksF', 'landmarksG', 'landmarksH', 'landmarksI', 'landmarksJ',
-  'landmarksFortress', 'landmarksStrelka', 'landmarksUniversity', 'landmarksTroitskaya', 'landmarksAurora', 'landmarksKronverk', 'landmarksKamennoostrovsky', 'landmarksVladimir',
-  ...(process.argv.includes('--noisland') ? [] : ['landmarksOktyabrsky', 'landmarksModernVO', 'landmarksMarineFacade', 'landmarksPribaltiyskaya', 'landmarksGavan', 'landmarksSredny', 'landmarksMakarova', 'landmarksKirova', 'landmarksSevkabel',
-    'landmarksSeaTerminal', 'landmarksSmolensky', 'landmarksNavalCorps', 'landmarksAndrew', 'landmarksMining', 'landmarksMenshikov', 'landmarksAcademy']),      // (+ the sights of Vasilievsky Island: section 10; --noisland leaves them out)
-  ...(process.argv.includes('--noisl2') ? [] : ['landmarksKrestovsky', 'landmarksYelaginPalace', 'landmarksYelaginKitchen', 'landmarksYelaginServices', 'landmarksYelaginRossi', 'landmarksYelaginSpits', 'landmarksYelaginPark', 'landmarksKamennyPalace', 'landmarksKamennyChurch',
-    'landmarksBotanicalGreenhouses', 'landmarksBotanicalGarden', 'landmarksPetrovskyStadium', 'landmarksPetrovskyYacht',
-    'landmarksKamennyTheatre', 'landmarksKamennyDachasEast', 'landmarksKamennyDachasWest', 'landmarksTVTower', 'landmarksLETI', 'landmarksTransfiguration', 'landmarksPetrovskyWest', 'landmarksZhdanovka']),      // (+ the islands of round 2: wildlife/zones.js ISL zones, the swans of the ponds, the gulls on the Yelagin spit parapet; --noisl2 leaves them out)
-  'bridges', 'props', 'wildlife'];      // (+ the sights of the Petrograd side / the Spit: section 9)
+ctx.buildList = ['environment', 'streets', 'city', 'landmarksA', 'landmarksC', 'landmarksD', 'landmarksE', 'landmarksF', 'landmarksG', 'landmarksH', 'landmarksI', 'landmarksJ', 'bridges', 'props', 'wildlife'];
 ctx.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight(), uniforms: {} };
 ctx.player.position.set(L.HERO.x, 0, L.HERO.z);               // the animals start round the player
 
@@ -273,138 +262,6 @@ follow('St Isaac Square', -2440, 20, 0, { flocks: 3, tag: 'isaac', gulls: 2 });
   const m4 = new THREE.Matrix4(), v = new THREE.Vector3();
   if (sh) for (const b of svc.birds) { if (b.dead) continue; sh.getMatrixAt(b.shSlot, m4); v.setFromMatrixPosition(m4); const s = m4.elements[0]; if (Math.abs(s) > 1e-6 && L.inRiver(v.x, v.z)) over++; }
   check(over === 0, 'no bird shadow hangs over the river (' + over + ')');
-}
-// ---------------------------------------------------------------- 9. the Petrograd side / the Spit: zones, perches, lanes, water loops; the animals follow the player there
-if (PETRO) {
-  const ptags = new Set(svc.sites.pigeon.map((s) => s.tag)), stags = new Set(svc.sites.sparrow.map((s) => String(s.name).split(' · ')[1] || s.tag));
-  check(['fortress-square', 'troitskaya', 'tolstoy', 'spit'].every((k) => ptags.has(k)) && stags.has('Sparrows in Alexander Park'), 'flock sites on the cathedral square of the fortress, Troitskaya, Lev Tolstoy, the Spit; sparrows in Alexander Park (' + [...ptags].filter((k) => !['kazan', 'column', 'alexander', 'isaac', 'catherine', 'gostiny', 'obelisk'].includes(k)).join(',') + ' | ' + [...stags].join(',') + ')');
-  console.log('  perches by kind', JSON.stringify(kinds), '| duck lanes by key', JSON.stringify(LK));
-  check((kinds['post:beach'] || 0) >= 3, 'gull perches at the water line of the fortress beach (' + (kinds['post:beach'] || 0) + '), on the Spit landing ' + (kinds['post:descent'] || 0) + ', Zhdanovka posts ' + (kinds['post:zhdanovka'] || 0));
-  check((LK.zhdanovka || 0) + (LK['kronverk-moat'] || 0) + (LK.neva || 0) + (LK.pond || 0) >= 4, 'duck lanes on the quiet waters of the Petrograd side ' + JSON.stringify({ zhdanovka: LK.zhdanovka, moat: LK['kronverk-moat'], strait: LK.neva, pond: LK.pond }));
-  { const { WATER } = await import(pathToFileURL(path.join(root, 'src/world/data/city.js')).href); const inRing = (o, x, z) => { let ins = false; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { if ((o[i + 1] > z) !== (o[j + 1] > z) && x < (o[j] - o[i]) * (z - o[i + 1]) / (o[j + 1] - o[i + 1]) + o[i]) ins = !ins; } return ins; };
-    for (const l of D.lanes) if (l.key === 'pond') { const w = WATER.find((q) => q.id === l.bank); let dry = 0; for (let k = 0; k < l.n; k++) if (!w || !inRing(w.polys[0].o, l.xs[k], l.zs[k])) dry++; check(dry === 0, `the pond lane of ${l.bank} lies inside its pond (${dry} of ${l.n} samples outside)`); } }
-  for (const l of D.lanes) if (l.key === 'kronverk-moat' || l.key === 'zhdanovka' || l.key === 'neva') { const env = ctx.services.environment; let dry = 0; for (let k = 0; k < l.n; k++) if (env.waterAt && !env.waterAt(l.xs[k], l.zs[k])) dry++; if (dry) { check(false, `lane ${l.key}#${l.id} has ${dry} dry samples`); break; } }
-  check(loops.filter((l) => l[0] === 'lake').length >= 2, 'water loops at the Spit descent and the fortress beach (' + loops.filter((l) => l[0] === 'lake').length + ")");
-  const C = svc.crowds || []; check(['fortress-square', 'spit', 'aurora'].every((k) => C.some((c) => c.name === k)), 'crowd ambience zones on the cathedral square, the Spit and the Aurora quay');
-  const b0 = bad.bird;
-  for (const [name, x, z, yaw, need] of [['the Spit', -2470, -1318, -1.6, { gull: 2, pigeon: 4 }], ['the fortress beach', -2030, -1738, 1.6, { gull: 2 }], ['the cathedral square', -1995, -1955, -1, { pigeon: 5 }], ['Alexander Park', -1900, -2560, 0, { sparrow: 3 }], ['Troitskaya Square', -1443, -2296, 0, { pigeon: 4 }], ['the Aurora quay', -772, -2512, -0.4, { gull: 2 }]]) {
-    player(x, z, 0, yaw); run(40, (tt, i) => { if (i % 30 === 0) audit(); });
-    const near = {}; for (const b of svc.birds) { if (b.hid || b.dead) continue; if (Math.hypot(b.x - x, b.z - z) < 230) near[b.sp] = (near[b.sp] || 0) + 1; }
-    let dk = 1e9; for (const g of D.groups) dk = Math.min(dk, Math.hypot(g.lane.cx - x, g.lane.cz - z));
-    console.log(`  at ${name}: birds within 230 m ${JSON.stringify(near)}, nearest duck lane ${dk.toFixed(0)} m`);
-    check(Object.entries(need).every(([sp, k]) => (near[sp] || 0) >= k), 'the animals follow the player to ' + name + ' ' + JSON.stringify(near));
-  }
-  check(bad.bird === b0, 'ground birds on free ground on the Petrograd side (' + (bad.bird - b0) + ' bad samples)');
-}
-// ---------------------------------------------------------------- 10. Vasilievsky Island: gulls on the cargo ships / liners / the scenery pier, pigeons at the Academy, the Andreevsky market, Sevkabel Port and the Xenia forecourt,
-//      ducks on the Smolenka and in Galerny Harbour, crows and jackdaws in the old trees of the Smolensky cemetery
-if (ISLAND) {
-  const B = svc.debug.birds, bl = B.boatList, ships = bl.filter((b) => /^e-vo-ship/.test(b.id)), liners = bl.filter((b) => /^m-liner/.test(b.id));
-  console.log(`island: ${ships.length} cargo ships (${ships.map((b) => b.n).join('/')} slots), ${liners.length} liners (${liners.map((b) => b.n).join('/')} slots), ${kinds['post:pier'] || 0} pier perches, ${svc.birds.filter((b) => b.jack).length} jackdaws`);
-  check(ships.length === 2 && ships.every((b) => b.n >= 9), 'both river-sea cargo ships carry gull slots (' + ships.map((b) => b.id + ':' + b.n).join(',') + ')');
-  check(liners.length === 2 && liners.every((b) => b.n >= 12), 'both liners of the Marine Facade carry gull slots (' + liners.map((b) => b.id + ':' + b.n).join(',') + ')');
-  // every slot lies over its hull: the cargo ship 110 x 14 m, the liner beam 32.2 m (the wheelhouse wings reach 18 m), 5 .. 65 m over the water, whatever the boat is doing
-  let badSlot = 0, nSlot = 0;
-  for (const bt of [...ships, ...liners]) for (let s = 0; s < bt.n; s++) for (const tt of [0, 123.4, 400, 777]) {
-    const p = bt.pose(s, tt), a = bt.at(tt), dx = p.x - a.x, dz = p.z - a.z, cs = Math.cos(a.rot), sn = Math.sin(a.rot), lx = dx * cs - dz * sn, lz = dx * sn + dz * cs, h = p.y + 3.4;
-    nSlot++; if (Math.abs(lx) > bt.hull.len / 2 || Math.abs(lz) > bt.hull.wid / 2 + (bt.id.startsWith('m-') ? 3 : 0.3) || h < 5 || h > 65 || !Number.isFinite(p.yaw)) { badSlot++; if (badSlot < 4) console.log(`  bad slot ${bt.id}#${s}: lx ${lx.toFixed(1)} lz ${lz.toFixed(1)} h ${h.toFixed(1)}`); }
-  }
-  check(badSlot === 0, 'every gull slot of the ships lies over the hull, 5 .. 65 m over the water (' + nSlot + ' poses)');
-  // gulls forced onto the slots ride the ships exactly (a pure function of the boat's state): the player stands 120 m off so that nobody is scared
-  {
-    const gulls = svc.birds.filter((b) => b.sp === 'gull' && !b.dead); let gi = 0, nPlaced = 0, off = 0, left = 0;
-    for (const bt of [...ships, ...liners]) {
-      const bi = bl.indexOf(bt), a = bt.at(t), placed = []; player(a.x + 45 * Math.sin(a.rot), a.z + 45 * Math.cos(a.rot), 0, 0);      // abeam, 45 m off the middle: every slot within 150 m (the director's first pass keeps nearer gulls where they are), none within 13 m
-      for (let s = 0; s < Math.min(bt.n, 8) && gi < gulls.length; s++, gi++) {
-        const g = gulls[gi]; if (g.st === 'boat') B.leaveBoat(g); if (g.perch && g.perch.occ === g) g.perch.occ = null; g.perch = null; g.fl = null; g.orb = null;
-        B.boatTaken.delete(bi * 16 + s); B.takeBoat(g, bi, s); placed.push({ g, bt, s });
-      }
-      run(3);                                                                                    // (the director moves a boat gull only when the player is 260 m away: not here)
-      for (const e of placed) {
-        nPlaced++; if (e.g.st !== 'boat' || e.g.boat.bt !== e.bt) { left++; console.log('  left ' + e.bt.id + '#' + e.s + ': state ' + e.g.st + ' mode ' + e.g.mode); continue; }
-        const p = e.bt.pose(e.g.boat.slot, t - 1 / 30), dd = Math.hypot(p.x - e.g.x, p.z - e.g.z), dy = Math.abs(p.y - e.g.y);           // (the pose of the slot the gull sits on, at the time of the last update)
-        if (dd > 0.1 || dy > 0.05 || e.g.boat.slot !== e.s) { off++; console.log('  off ' + e.bt.id + '#' + e.s + ' (gull on slot ' + e.g.boat.slot + '): ' + dd.toFixed(2) + ' m, dy ' + dy.toFixed(2) + ', t ' + t.toFixed(1)); }
-      }
-    }
-    console.log(`  ${nPlaced} gulls placed on the ships, ${left} left, ${off} off their slots`);
-    check(nPlaced >= 20 && off === 0 && left <= 2, 'gulls on the cargo ships and liners sit exactly on their slots (' + (nPlaced - left) + ' riding, ' + left + ' left, ' + off + ' off)');
-  }
-  // the scenery pier w74745049: gulls on the red rail / the deck, every perch on the polygon
-  {
-    const { PIERS } = await import(pathToFileURL(path.join(root, 'src/world/data/city.js')).href), pr = PIERS.find((q) => q.id === 'w74745049'), pp = svc.perches.filter((p) => p.key === 'pier');
-    const inRing = (o, x, z) => { let ins = false; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { if ((o[i + 1] > z) !== (o[j + 1] > z) && x < (o[j] - o[i]) * (z - o[i + 1]) / (o[j + 1] - o[i + 1]) + o[i]) ins = !ins; } return ins; };
-    const segD = (o, x, z) => { let m = 1e9; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const dx = o[i] - o[j], dz = o[i + 1] - o[j + 1], l2 = dx * dx + dz * dz || 1, u = Math.max(0, Math.min(1, ((x - o[j]) * dx + (z - o[j + 1]) * dz) / l2)); m = Math.min(m, Math.hypot(x - o[j] - dx * u, z - o[j + 1] - dz * u)); } return m; };
-    const bad = pp.filter((p) => !pr.polys.some((q) => inRing(q.o, p.x, p.z) || segD(q.o, p.x, p.z) < 0.5) || p.y < -2.5 || p.y > -1.2);
-    check(pp.length >= 4 && bad.length === 0, 'perches on the red rail / the deck of the scenery pier w74745049 (' + pp.length + ', ' + bad.length + ' off the polygon or at a wrong height)');
-  }
-  // the zones: pigeon sites at the Academy, the Andreevsky market, Sevkabel Port, the Xenia forecourt (free ground in the play area: checked with every site above); sparrows in the island gardens
-  {
-    const ptags = new Set(svc.sites.pigeon.map((s) => s.tag)), stags = new Set(svc.sites.sparrow.map((s) => String(s.name).split(' · ')[1]));
-    check(['academy', 'andreevsky', 'sevkabel', 'xenia'].every((k) => ptags.has(k)), 'pigeon sites at the Academy, the Andreevsky market, Sevkabel Port and the Xenia forecourt (' + [...ptags].filter((k) => ['academy', 'academy-trezzini', 'andreevsky', 'andreevsky-boulevard', 'sevkabel', 'sevkabel-pier', 'xenia', 'menshikov', 'lutheran', 'gorny', 'pribaltiyskaya', 'mining', 'navalcorps'].includes(k)).join(',') + ')');
-    check(['Sparrows in the Rumyantsev garden', 'Sparrows in the Academy garden'].every((k) => stags.has(k)), 'sparrow flock sites in the Rumyantsev and Academy gardens');
-  }
-  // ducks: lanes on the Smolenka and in Galerny Harbour, every sample in the water
-  {
-    const lk = {}; for (const l of D.lanes) lk[l.key] = (lk[l.key] || 0) + 1; let dry = 0, n = 0;
-    for (const l of D.lanes) if (l.key === 'smolenka' || l.key === 'gavan') for (let k = 0; k < l.n; k++) { n++; if (!L.inRiver(l.xs[k], l.zs[k]) || (ctx.services.environment.waterAt && !ctx.services.environment.waterAt(l.xs[k], l.zs[k]))) dry++; }
-    console.log(`  island duck lanes: smolenka ${lk.smolenka || 0}, gavan ${lk.gavan || 0}, ${n} samples, ${dry} dry`);
-    check((lk.smolenka || 0) >= 10 && (lk.gavan || 0) >= 4 && dry === 0, 'duck lanes on the Smolenka and in Galerny Harbour, all in the water');
-  }
-  const lane = (key) => D.lanes.find((l) => l.key === key);
-  const b1 = bad.bird;
-  follow('the Academy of Arts', -3394, -522, 0.5, { flocks: 1, tag: 'academy', gulls: 4 });
-  follow('the Andreevsky market', -3708, -690, 0, { flocks: 1, tag: 'andreevsky', gulls: 0 });
-  follow('Sevkabel Port', -6240, 880, 3.5, { flocks: 1, tag: 'sevkabel', gulls: 3 });
-  { const l = lane('smolenka'); follow('the Smolenka', l.cx, l.cz, 0, { flocks: 0, gulls: 0, ducks: 1 }); }
-  { const l = lane('gavan'); follow('Galerny Harbour', l.cx, l.cz, 0, { flocks: 0, gulls: 0, ducks: 1 }); }
-  // the Smolensky cemetery: crows and jackdaws in the old trees; the tree tops of its 6 566 trunks are perches
-  {
-    const inCem = (p) => p.x > -6300 && p.x < -5300 && p.z > -1700 && p.z < -1100, nTree = svc.perches.filter((p) => p.kind === 'tree' && inCem(p)).length;
-    check(nTree >= 200, 'tree-top perches in the Smolensky cemetery (' + nTree + ')');
-    check(svc.birds.filter((b) => b.jack && !b.dead).length >= 2, 'jackdaws exist (' + svc.birds.filter((b) => b.jack && !b.dead).length + ')');
-    player(-5860, -1420, 0, 0.7); let maxTree = 0, maxJack = 0;
-    run(60, (tt, i) => { if (i % 90) return; let nt = 0, nj = 0; for (const b of svc.birds) { if (b.dead || b.sp !== 'crow' || Math.hypot(b.x + 5860, b.z + 1420) > 260) continue; if (b.st === 'perch' && b.perch?.kind === 'tree') nt++; if (b.jack) nj++; } maxTree = Math.max(maxTree, nt); maxJack = Math.max(maxJack, nj); });
-    console.log(`  Smolensky cemetery: up to ${maxTree} crows / jackdaws on tree tops and ${maxJack} jackdaws within 260 m`);
-    check(maxTree >= 2 && maxJack >= 1, 'crows / jackdaws sit in the old trees of the Smolensky cemetery (' + maxTree + ' on tree tops, ' + maxJack + ' jackdaws about)');
-  }
-  // the Xenia forecourt: the big flock (the module asks for 45 pigeons; the budget gives the largest flock of the map)
-  {
-    player(-5574.6 + 38, -1330.2 + 30, 0, 2.2); run(40, (tt, i) => { if (i % 30 === 0) audit(); });
-    const xf = svc.flocks.find((f) => f.site.tag === 'xenia'); check(!!xf && xf.birds.filter((b) => !b.dead).length >= 8, 'the big pigeon flock stands on the Xenia forecourt (' + (xf ? xf.birds.length + ' pigeons' : 'no flock there') + ')');
-  }
-  check(bad.bird === b1, 'ground birds on free ground on Vasilievsky Island (' + (bad.bird - b1) + ' bad samples)');
-  // the draw calls: the island adds no mesh (the jackdaws are the crow meshes, the ship slots and perches are data)
-  {
-    const nBirdMeshes = svc.debug.birds.group.children.length, nDuckMeshes = svc.debug.ducks.group.children.length;
-    console.log(`  meshes: birds ${nBirdMeshes}, ducks ${nDuckMeshes}`);
-    check(nBirdMeshes <= 19 && nDuckMeshes <= 8 + (D.ducks.some((q) => q.model === 'swan') ? 3 : 0), 'no mesh added by the island (the three swan meshes of the islands of round 2 aside: they are hidden beyond 320 m from the swans (birds ' + nBirdMeshes + ', ducks ' + nDuckMeshes + ')');
-  }
-}
-// ---------------------------------------------------------------- 11. the islands of round 2: pigeon / sparrow zones, the gulls on the Yelagin spit parapet, the pond lanes, the swans (visible only near them)
-const ISLE = !process.argv.includes('--noisl2') && !process.argv.includes('--isloff') && PETRO;
-if (ISLE) {
-  const b2 = bad.bird, ptags = new Set(svc.sites.pigeon.map((s) => s.tag)), stags = new Set(svc.sites.sparrow.map((s) => s.tag));
-  const wantP = ['ye-spit', 'ye-palace', 'ye-kitchen', 'botanic-palm', 'kamenny-church', 'petrovsky-betancourt', 'krestovsky-arena', 'leti', 'kamenny-sphinx'], missP = wantP.filter((k) => !ptags.has(k));
-  console.log('islands2: pigeon zones', wantP.map((k) => k + (ptags.has(k) ? ' ok' : ' MISSING')).join(' | '), '| sparrow zones', [...stags].filter((k) => /^(ye-|botanic|petrovsky)/.test(k)).join(','));
-  check(missP.length === 0, 'pigeon sites in the zones of the islands of round 2 (missing: ' + missP.join(',') + ')');
-  const spitP = svc.perches.filter((p) => p.key === 'spit'); console.log('  gull perches on the spit parapet:', spitP.length, spitP.length ? 'y ' + spitP[0].y.toFixed(2) : '');
-  check(spitP.length >= 6 && spitP.every((p) => Math.abs(p.y - 1.49) < 0.05), 'gull perches on the crown of the Yelagin spit parapet (' + spitP.length + ')');
-  { const np = (ctx.services.props && ctx.services.props.pontoons || []).length, pp = svc.perches.filter((p) => p.key === 'pontoon'); console.log('  gull perches on the pontoons:', pp.length, 'of', np, 'pontoons'); if (np > 40) check(pp.length >= 5, 'gull perches on the pontoons of the yacht clubs (' + pp.length + ' of ' + np + ')'); }
-  const pl = D.lanes.filter((l) => l.key === 'pond' && l.bank && !/^w(138155241|609619503)$/.test(l.bank)), swanL = pl.filter((l) => l.swan), sw = D.ducks.filter((q) => q.model === 'swan');
-  let dryI = 0, nI = 0; for (const l of pl) for (let k = 0; k < l.n; k++) { nI++; if (!(ctx.services.environment.waterAt && ctx.services.environment.waterAt(l.xs[k], l.zs[k]))) dryI++; }
-  console.log('  island pond lanes', pl.length, '(swan ponds ' + swanL.length + '), samples', nI, 'dry', dryI, '| swans + cygnets', sw.length, '| swan groups', D.groups.filter((g) => g.swan).length);
-  check(dryI === 0, 'every island pond lane lies on drawn water');
-  if (pl.length) check(pl.length >= 4, 'duck lanes on the ponds of the islands (' + pl.length + ')');
-  if (swanL.length) { check(sw.length >= 5, 'swans on the island ponds (' + sw.length + ')');
-    const sg = D.groups.find((g) => g.swan); player(sg.lane.cx + 30, sg.lane.cz + 30, 0, 0); run(8);
-    const swanMesh = D.group.children.filter((m) => /swan/.test(m.name)); check(swanMesh.length === 3 && swanMesh.every((m) => m.visible), 'the swan meshes are drawn near the swans (' + swanMesh.length + ' meshes)');
-    player(L.HERO.x, L.HERO.z); run(8); check(swanMesh.every((m) => !m.visible), 'the swan meshes are hidden 3 km from the swans (no draw call in the old centre)');
-    for (const g of D.groups.filter((q) => q.swan)) { const bk = g.lane.bank; check(swanL.some((l) => l === g.lane), 'a swan group stays on a swan pond (' + bk + ')'); } }
-  // the player on the spit terrace / at the palace / in the Botanical Garden: pigeons, gulls (spit), crows round him
-  follow('the Yelagin west spit (100 m east of the terrace)', -6305, -5309, 1.57, { flocks: 1, tag: 'ye-spit', gulls: 1 });
-  follow('the Yelagin Palace', -4584, -5226, 1.57, { flocks: 1, tag: 'ye-palace', gulls: 0 });
-  follow('the Botanical Garden (100 m east of the Palm House)', -1405, -4135, 1.2, { flocks: 1, tag: 'botanic-palm', gulls: 0 });
-  check(bad.bird === b2, 'ground birds on free ground on the islands of round 2 (' + (bad.bird - b2) + ' bad samples)');
 }
 audit();
 check(calls.some((c) => c[0] === 'crow' || c[0] === 'gull'), 'crows / gulls call (audio.play crow / gull)');

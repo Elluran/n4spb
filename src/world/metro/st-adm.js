@@ -84,7 +84,7 @@ export function buildAdmiralteyskaya(ctx, M, X) {
     skin: { pylon: { plaster: '#ead6b8', marble: '#dcc19c', vein: '#d2b48a', plinth: '#1c1c1e', corn: '#f4eee0' }, track: { plaster: '#f2f0ea', marble: '#a5abb0', vein: '#e8ecee', skirt: '#1c1c1e', corn: '#f4f1ea' }, floor: '#bdbcb2', sideFloor: '#d9d2c0', floorSpeck: ['rgba(60,70,60,0.22)', 'rgba(255,255,250,0.35)', null] },
   });
   const k = S.k;
-  for (const m of hall.mouths) { const go = () => buildStub(ctx, M, S, m.sx * TRK, m.zs * (PZ + 0.6), m.zs, hall.BED, {}); if (m.zs < 0 && X.realEnd && X.realEnd('admiralteyskaya:-1')) X.deferStub('admiralteyskaya:-1', go); else go(); }      // the -z end: the real tunnel to Sportivnaya (links-vo.js)
+  for (const m of hall.mouths) buildStub(ctx, M, S, m.sx * TRK, m.zs * (PZ + 0.6), m.zs, hall.BED, {});      // black-disc stubs at both ends (the real tunnels to Sportivnaya / Sadovaya are outside the strip: a ride jumps into the generic tunnel)
   // columns, medallions, benches, info plates on the pylon faces
   for (const sx of [-1, 1]) for (const [i, z] of hall.pylonZ.slice(1, -1).entries()) {
     const cx = sx * (C - 0.3), face = sx * (C - 0.03);
@@ -116,7 +116,7 @@ export function buildAdmiralteyskaya(ctx, M, X) {
   // the end mosaic and the purple hanging signs of the west end
   { const f = k.plane(5.6, 2.7, M.board(mosaic, 0.9), [0, FY + 3.7, -PZ + 0.04], [0, 0, 0]); f.castShadow = false;
     k.box(5.9, 0.12, 0.08, M.gold, [0, FY + 5.12, -PZ + 0.06]); k.box(5.9, 0.12, 0.08, M.gold, [0, FY + 2.32, -PZ + 0.06]); k.box(0.12, 2.9, 0.08, M.gold, [-2.9, FY + 3.72, -PZ + 0.06]); k.box(0.12, 2.9, 0.08, M.gold, [2.9, FY + 3.72, -PZ + 0.06]);
-    for (const [x, t, s] of [[-2.2, 'Волковская', 'Volkovskaya'], [2.2, 'Комендантский проспект', 'Komendantsky prospekt']]) { const p = k.plane(2.6, 0.62, M.board(M.blueBoard(t, s, x < 0 ? 'r' : 'l', 'adm-pill-' + x, { bg: purple }), 1.0), [x, FY + 1.7, -PZ + 0.12], [0, 0, 0]); p.castShadow = false; } }
+    for (const [x, t, s] of [[-2.2, 'Спортивная', 'Sportivnaya'], [2.2, 'Садовая', 'Sadovaya']]) { const p = k.plane(2.6, 0.62, M.board(M.blueBoard(t, s, x < 0 ? 'r' : 'l', 'adm-pill-' + x, { bg: purple }), 1.0), [x, FY + 1.7, -PZ + 0.12], [0, 0, 0]); p.castShadow = false; } }
   // ---------------------------------------------------------------- Petersburg wayfinding (signs.js kit; docs/research/metro-wayfinding.md): purple hanging boards, linear schemes on the track walls, the network map
   //   The hall already draws the track-wall name bands (purple boards with white lettering, dossier section 5), so signs.trackBand is NOT used here.  Nothing stands on a track bed; boards hang at FY + 3.2.
   {

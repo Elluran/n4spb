@@ -1,5 +1,3 @@
-import { inParadny } from '../landmarksTauride/paradny-surface.js';
-import { inCampus } from '../landmarksKirochnaya/groups.js';
 // environment/trees.js - the trees and shrubs of central Saint Petersburg in July: placement (from the OSM tree nodes / rows, the gardens, the courtyards, the Fontanka
 // embankment) and the instanced meshes with wind sway and distance LOD. Adapted from the Yakutsk sibling (trees.js).
 // Species (docs/research/streets.md section 6, fontanka.md section D / spec 10): small-leaved lime (the main park / embankment tree, young 5-6 m rows on the west bank of
@@ -18,17 +16,13 @@ import { inCampus } from '../landmarksKirochnaya/groups.js';
 import * as THREE from 'three';
 import { mergedMedianAt } from '../lib/road-plan.js';
 import { createTreeInstanceWriter } from './tree-instances.js';
-import { BUILDINGS, GREEN, DOORS, EXTENT, TREES, TREE_ROWS, TRAMWAYS, ROADS } from '../data/city.js';
+import { BUILDINGS, GREEN, EXTENT, TREES, TREE_ROWS } from '../data/city.js';
 import * as L from '../layout.js';
-import { TAURIDE_GARDEN } from '../landmarksTauride/terrain.js';
 import { isOwned } from '../lib/claims.js';
 import { SPECIES, FAMILIES, canopyGeometry, trunkGeometry } from './treegeo.js';
 import { canopyMaterial, coniferMaterial, trunkMaterial } from './leafmat.js';
 import { riverBanks, waterBanks } from './river.js';
-import { petroAt, slopeRuns, slopeAt } from './waterways.js';
-import { inVO } from './vo-banks.js';
-import { hash2, clamp, polyArea, polyBox, pointInPoly, sstep, lonLatToXZ, distToRing, pointInRing } from './util.js';
-import { inIslands } from './islands.js';
+import { hash2, clamp, polyArea, polyBox, pointInPoly, sstep, lonLatToXZ } from './util.js';
 
 // ---------------------------------------------------------------- leaf colours (sRGB, the instance colour; cel lighting makes lit ~ 1.4x)
 const LEAF = {
@@ -45,7 +39,6 @@ const LEAF = {
   rowan: ['#53783d', '#5d8446', '#678f4c'],
   shrub: ['#52763a', '#5f8641', '#456b32', '#6a9248', '#4e7a3a'],
 };
-const VO_BANK_TREES = new Set(['smolenka-natural', 'kovsh-natural', 'gavan-natural', 'malaya-natural']);
 const MIX = {
   yard: { mapleA: 0.26, ash: 0.15, limeB: 0.1, birchA: 0.13, birchB: 0.1, elm: 0.05, rowan: 0.12, shrub: 0.09 },
   green: { limeA: 0.2, limeB: 0.12, mapleA: 0.16, elm: 0.1, ash: 0.1, oak: 0.08, birchA: 0.08, chestnut: 0.06, poplar: 0.05, spruceA: 0.05 },
@@ -53,7 +46,6 @@ const MIX = {
   rows: { limeA: 0.6, mapleA: 0.25, ash: 0.15 },
   osm: { limeA: 0.24, mapleA: 0.2, limeB: 0.12, ash: 0.1, elm: 0.07, birchA: 0.1, chestnut: 0.05, poplar: 0.06, rowan: 0.06 },
   wood: { birchA: 0.2, mapleA: 0.2, ash: 0.15, limeB: 0.15, poplar: 0.1, oak: 0.08, elm: 0.07, shrub: 0.05 },
-  bank: { birchA: 0.22, poplar: 0.2, mapleA: 0.18, ash: 0.12, elm: 0.05, shrub: 0.23 },        // the natural banks of Vasilievsky Island: birch, poplar, maple and shrubs on the earth bank (photos V08 / V09, V24)
 };
 const LOD_D = [42, 150, 360];
 
@@ -111,65 +103,6 @@ export function placeTrees(ctx, field, owned, extraAvoid = []) {
   const hashXZ = (x, z, salt) => (Math.imul(Math.round(x * 4) | 0, 73856093) ^ Math.imul(Math.round(z * 4) | 0, 19349663) ^ Math.imul(salt | 0, 83492791)) >>> 0;
   const seed = (v) => { _a = (typeof v === 'number' ? v : hashStr(v)) | 0; R(); R(); };
   seed('env-trees-pb');
-  // squares that are bare paving in reality (docs/research/petro-requests-landmarksKamennoostrovsky.md 1, 2): no tree of any generator inside [x, z, radius]
-  const BARE = [[-1906, -3065, 52], [-2198, -3714, 48], [-2205, -3745, 14],      // Austrian Square; Lev Tolstoy Square and the pavement in front of the House of Fashion
-    [-3530.5, -2189.9, 4], [-3656.5, -2279.1, 4], [-3744.1, -2160.0, 4], [-3617.5, -2067.5, 4]];      // the four floodlight masts of the Petrovsky stadium (petro-requests-landmarksVladimir.md 3)
-  // GREEN polygons that keep only a few old trees (the triangle of Alexander Park in front of the Mosque: the classic view of the Mosque is taken across it; petro-requests-landmarksTroitskaya.md 7)
-  const SPARSE = { w5726155: 0.3, r7633123: 0.3, r13492544: 0.3 };
-  // ISLANDS (round 2, integration 2026-10-14; only ground for which islands.js inIslands holds, the older districts keep every tree):
-  //  * OPEN MEADOWS: a mapped grassland / meadow / grass polygon above OPEN_MIN m2 (~1 ha: the Oil Meadow of Yelagin, the lawn east of the palace, the Tikhy Otdykh lawns) is an open lawn in the photos: the park
-  //    scatter that overlaps it (the giant leisure=park polygons) plants only within OPEN_EDGE m of its edge. Mapped trees (OSM nodes / rows) stay.
-  //  * DOORS: no generic trunk within ISL_DOOR_R m of a mapped entrance (the Palm House aedicule, the church porch: the front of a sight is judged from 6-12 m).
-  const OPEN_MIN = 8000, OPEN_EDGE = 15, ISL_DOOR_R = 10;
-  const OPEN = [];
-  for (const g of GREEN) {
-    if (g.kind !== 'grassland' && g.kind !== 'meadow' && g.kind !== 'grass' && g.kind !== 'village_green') continue;
-    for (const poly of g.polys) if (inIslands(poly.o[0], poly.o[1]) && polyArea(poly) >= OPEN_MIN) OPEN.push({ poly, box: polyBox(poly) });
-  }
-  const inOpen = (x, z) => {
-    for (const m of OPEN) { const b = m.box; if (x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1 || !pointInPoly(x, z, m.poly)) continue; if (distToRing(x, z, m.poly.o) > OPEN_EDGE) return true; }
-    return false;
-  };
-  const islDoors = new Map(), dKey = (i, j) => i * 100003 + j;
-  for (const d of DOORS) if (inIslands(d.x, d.z)) { const k = dKey(Math.floor(d.x / 16), Math.floor(d.z / 16)); let a = islDoors.get(k); if (!a) islDoors.set(k, (a = [])); a.push(d); }
-  const islDoorNear = (x, z) => {
-    if (!islDoors.size) return false;
-    const ci = Math.floor(x / 16), cj = Math.floor(z / 16);
-    for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) { const a = islDoors.get(dKey(i, j)); if (a) for (const d of a) if (Math.hypot(d.x - x, d.z - z) < ISL_DOOR_R) return true; }
-    return false;
-  };
-  //  * SIGHT BUILDINGS: a building that a landmark module of the islands draws (isOwned) keeps generic trunks sightR m from its footprint (sightR = 0.5 sqrt(area) clamped to 8..14 m: a house 8 m,
-  //    the 129 m Orangery front 14 m): the Orangery glass wall, the five service houses, the church porch, the Palm House portal and the chapel steps are judged from 5-12 m and stood behind generic crowns.
-  //    Grid of 32 m cells over the island footprints (each registered in every cell it touches + its sightR).
-  const sightR = (p) => clamp(0.5 * Math.sqrt(Math.max(0, polyArea(p))), 8, 14), sightGrid = new Map(), sKey = (i, j) => i * 100003 + j;
-  for (const b of BUILDINGS) {
-    if (!isOwned(owned, b.id)) continue;
-    for (const p of b.polys) {
-      if (!inIslands(p.o[0], p.o[1])) continue;
-      const bb = polyBox(p), R = sightR(p), e = { o: p.o, r: R, x0: bb.x0 - R, x1: bb.x1 + R, z0: bb.z0 - R, z1: bb.z1 + R };
-      for (let i = Math.floor(e.x0 / 32); i <= Math.floor(e.x1 / 32); i++) for (let j = Math.floor(e.z0 / 32); j <= Math.floor(e.z1 / 32); j++) { const k = sKey(i, j); let a = sightGrid.get(k); if (!a) sightGrid.set(k, (a = [])); a.push(e); }
-    }
-  }
-  const sightNear = (x, z) => {
-    const a = sightGrid.get(sKey(Math.floor(x / 32), Math.floor(z / 32))); if (!a) return false;
-    for (const e of a) if (x >= e.x0 && x <= e.x1 && z >= e.z0 && z <= e.z1 && (pointInRing(x, z, e.o) || distToRing(x, z, e.o) < e.r)) return true;
-    return false;
-  };
-  //  * BRIDGE APPROACHES: a drivable bridge of the islands (a way with bridge=yes that cars can use: the park road over the Victory Park pond neck w44389548 has only 2.4 m footways on its two sides) carries its
-  //    carriageway BRIDGE_APPROACH m over the land beyond both ends of the way, BRIDGE_HW m to each side of the axis: no trunk of ANY source stands there (the drivable-bridge car tests start in front of the ends).
-  const BRIDGE_APPROACH = 12, BRIDGE_HW = 3.6, bridgeSegs = [];
-  for (const r of ROADS) {
-    if (!r.bridge || r.tunnel || !L.isDrivable(r) || r.pts.length < 4 || !inIslands(r.pts[0], r.pts[1])) continue;
-    const n = r.pts.length, e = (i0, i1) => { const dx = r.pts[i0] - r.pts[i1], dz = r.pts[i0 + 1] - r.pts[i1 + 1], l = Math.hypot(dx, dz) || 1; bridgeSegs.push([r.pts[i0], r.pts[i0 + 1], r.pts[i0] + dx / l * BRIDGE_APPROACH, r.pts[i0 + 1] + dz / l * BRIDGE_APPROACH]); };
-    e(0, 2); e(n - 2, n - 4);
-  }
-  const bridgeNear = (x, z) => {
-    for (const s of bridgeSegs) {
-      const dx = s[2] - s[0], dz = s[3] - s[1], l2 = dx * dx + dz * dz || 1e-6, t = clamp(((x - s[0]) * dx + (z - s[1]) * dz) / l2, 0, 1);
-      if (Math.hypot(x - s[0] - dx * t, z - s[1] - dz * t) < BRIDGE_HW) return true;
-    }
-    return false;
-  };
   const q = ctx.quality && ctx.quality.name, density = q === 'low' ? 0.5 : q === 'medium' ? 0.75 : 1;
   const list = [], grid = new Map(), stats = {}, rej = {};
   const key = (i, j) => i * 100003 + j, cellOf = (v) => Math.floor(v / 8);
@@ -178,14 +111,7 @@ export function placeTrees(ctx, field, owned, extraAvoid = []) {
   // keep the hero view and the numbered viewpoints open: a disc around each and a corridor along the look direction
   const CLEAR = [];
   for (const [i, v] of [L.HERO, ...L.VIEWS].entries()) { const yaw = (v.yaw * Math.PI) / 180; CLEAR.push({ x: v.x, z: v.z, r: 7, dx: -Math.sin(yaw), dz: -Math.cos(yaw), len: i === 0 ? 100 : 40, hw: i === 0 ? 10 : 6 }); }
-  // the view of the Baltic House portico from the pavement of Kronverksky pr. (pose -2162,-2658 looking SSE; petro-requests-landmarksKronverk.md 3): the forecourt itself is a claim ring of landmarksKronverk,
-  // this corridor keeps the park limes between the avenue and the forecourt out of the sight line
-  CLEAR.push({ x: -2162, z: -2658, r: 5, dx: 0.438, dz: 0.899, len: 26, hw: 15 });
   const cleared = (x, z) => {
-    // Smolny's mapped ceremonial approaches must remain open, not procedural woodland.
-    if (ctx.buildList?.includes('landmarksSmolny') &&
-      ((x>2320 && x<2440 && z>-1847 && z<-1820) || (x>2400 && x<2520 && z>-1553 && z<-1533))) return true;
-    for (const b of BARE) if ((x - b[0]) * (x - b[0]) + (z - b[1]) * (z - b[1]) < b[2] * b[2]) return true;
     for (const c of CLEAR) {
       const px = x - c.x, pz = z - c.z; if (px * px + pz * pz < c.r * c.r) return true;
       const t = px * c.dx + pz * c.dz; if (t > 0 && t < c.len && Math.abs(px * c.dz - pz * c.dx) < c.hw * (1 - 0.5 * t / c.len)) return true;
@@ -201,24 +127,6 @@ export function placeTrees(ctx, field, owned, extraAvoid = []) {
     const list = m + 0.7 <= AV_PAD ? avGrid.get(avKey(Math.floor(x / AV_CELL), Math.floor(z / AV_CELL))) : hedgeRuns; if (!list) return true;
     for (let q = 0; q < list.length; q++) { const a = list[q]; const dx = a.bx - a.ax, dz = a.bz - a.az, l2 = dx * dx + dz * dz || 1, t = clamp(((x - a.ax) * dx + (z - a.az) * dz) / l2, 0, 1); if (Math.hypot(a.ax + dx * t - x, a.az + dz * t - z) < m + 0.7) return false; }
     return true;
-  };
-  // TRAM TRACKS (water-2 2026-10-08, docs/research/vo-requests-streets.md item 5): streets keeps its furniture 1.35 m off every rail axis of the open districts; a trunk or a bush stands at least 2 m from the axis of
-  // a track (the depot yard fan at (-5297..-5207, -767..-719), the Detskaya loop, the rails of the Petrograd side). Only in the open districts of Vasilievsky Island (inVO: V3..V12, never inside an older rectangle: the reviewed trees
-  // of the centre and of the Petrograd round stay as they were); bridge decks and tunnels carry no trunks anyway. 16 m grid of the segments, each registered in the cells within TRAM_CLEAR of it.
-  const TRAM_CLEAR = 2.0, tramGrid = new Map(), tramKey = (i, j) => i * 100003 + j;
-  for (const t of TRAMWAYS) {
-    if (t.tunnel || t.bridge || t.layer < 0) continue;
-    const p = t.pts;
-    for (let i = 0; i + 3 < p.length; i += 2) {
-      const seg = [p[i], p[i + 1], p[i + 2], p[i + 3]];
-      for (let a = Math.floor((Math.min(seg[0], seg[2]) - TRAM_CLEAR) / 16); a <= Math.floor((Math.max(seg[0], seg[2]) + TRAM_CLEAR) / 16); a++) for (let b = Math.floor((Math.min(seg[1], seg[3]) - TRAM_CLEAR) / 16); b <= Math.floor((Math.max(seg[1], seg[3]) + TRAM_CLEAR) / 16); b++) { const k = tramKey(a, b); let l = tramGrid.get(k); if (!l) tramGrid.set(k, (l = [])); l.push(seg); }
-    }
-  }
-  const tramNear = (x, z) => {
-    if (!inVO(x, z)) return false;
-    const l = tramGrid.get(tramKey(Math.floor(x / 16), Math.floor(z / 16))); if (!l) return false;
-    for (const [ax, az, bx, bz] of l) { const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1, t = clamp(((x - ax) * dx + (z - az) * dz) / l2, 0, 1); if (Math.hypot(ax + dx * t - x, az + dz * t - z) < TRAM_CLEAR) return true; }
-    return false;
   };
   const NEVSKY = L.NAMES.streets.nevsky;
   const onNevsky =(x, z) => L.roadsNear(x, z, 13, { drivable: true, name: NEVSKY }).length > 0;      // (roadsNear name filter: only the Nevsky segments are measured; the same answer as filtering the result)
@@ -257,36 +165,24 @@ export function placeTrees(ctx, field, owned, extraAvoid = []) {
     const trunk = F.trunk * Math.min(1.1, .7 + .35*s);
     if (ctx._roadPlan?.cover(x,z,{}) >= -(trunk+.5)) return no('asphalt');
     if (mergedMedianAt(ctx,x,z)) return no('merged-median');
-    if (inVO(x, z) && slopeAt(x, z, 0.8)) return no('slope');                      // Vasilievsky Island: no trunk on a natural bank slope (mapped OSM trees included)
-    if (ctx.buildList?.includes('landmarksTauride') && inParadny(x, z)) return no('paradny');
-    if (ctx.buildList?.includes('landmarksKirochnaya') && inCampus(x, z)) return no('campus');
-    if (ctx.buildList?.includes('landmarksSuvorov') && x > 1384 && x < 1442 && z > -1226 && z < -1208) return no('suvorov');
     if (!o.force) {
       if (cleared(x, z)) return no('cleared');
       if (fam !== 'ball' && onNevsky(x, z)) return no('nevsky');                                                     // no trees on Nevsky itself
-      if (tramNear(x, z)) return no('tram');                                                                         // not within 2 m of a tram rail axis (open districts)
       if (L.isOnRoad(x, z, F.trunk * 1.1 + 0.3)) return no('road');                                                   // the trunk (and 0.3 m) clear of every drivable way incl. the courtyard lanes the field does not read
       if (inMergedStrip(x, z)) return no('strip');                                                                   // not between two carriageways that net.js merges
       if (inBay(x, z, F.trunk * 0.9)) return no('bay');                                                              // never in a parking pocket of a side street
-      // (water-2 2026-10-08, streets request 5 / the strict furniture audit: two mapped trees on the island stood in the asphalt of a service lane that streets draws wider than the layout width - fillets, bends:
-      //  (-3509.3, -1044.7) and (-3913, -836.5)) the mapped trees and rows of the island keep 1.6 m from the layout asphalt edge (the net's junction fillets reach 1.5 m; the open districts V3..V12 only)
-      const roadM = (o.src === 'osm' || o.src === 'row') && inVO(x, z) ? Math.max(o.road ?? 1.3, 1.6) : o.road;
-      if (!field.free(x, z, o.extra ?? 0, { onPave: !!o.onPave, loose: !!o.loose, claimOk: !!o.claimOk, road: roadM, bld: o.bld ?? (F.shrub ? 1.3 : F.sp === 'spruce' ? 2.2 : 2.4 * Math.min(1, 0.55 + 0.45 * s)), shore: o.shore })) return no('free');
+      if (!field.free(x, z, o.extra ?? 0, { onPave: !!o.onPave, loose: !!o.loose, claimOk: !!o.claimOk, road: o.road, bld: o.bld ?? (F.shrub ? 1.3 : F.sp === 'spruce' ? 2.2 : 2.4 * Math.min(1, 0.55 + 0.45 * s)), shore: o.shore })) return no('free');
       if (!o.noHedge && !avoidOk(x, z, r * 0.5)) return no('hedge');          // mapped trees (OSM nodes / rows) are ground truth: they stand in a hedge if need be
     }
     const pack = o.pack ?? (F.shrub ? 0.5 : 0.55);
     for (const nb of near(x, z)) if (Math.hypot(nb.x - x, nb.z - z) < (nb.r + r) * (nb.shrub || F.shrub ? Math.min(pack, 0.42) : pack)) return no('pack');
     const pal = colors[F.sp], c = pal[Math.floor(R() * pal.length)];
     const t = { src: o.src || 'other', x, z, fam, sp: F.sp, shrub: !!F.shrub, s, sy: s * R.range(0.92, 1.1), yaw: R() * 6.283, r, h: F.H * s, tr: F.trunk * Math.min(1.1, 0.7 + 0.35 * s), hex: c, bright: R.range(0.93, 1.07), onPave: !!o.onPave };
-    // ISLANDS (2026-10-14): a GHOST tree stands in an open meadow / at the door of a sight / round a sight building of the islands: it is placed exactly as before (the random stream, the packing grid and the count
-    // of the placement loops stay identical, so every tree of the older districts that the same polygon loop plants after it is unchanged) but it is NOT output (no instance, no collider)
-    const ghost = ((o.src !== 'osm' && o.src !== 'row' && o.src !== 'osm-ball' && !o.force && ((OPEN.length && inOpen(x, z)) || islDoorNear(x, z) || sightNear(x, z))) || (bridgeSegs.length && bridgeNear(x, z))) && inIslands(x, z);
-    if (!ghost) list.push(t);
+    list.push(t);
     const k = key(cellOf(x), cellOf(z)); let a = grid.get(k); if (!a) grid.set(k, (a = [])); a.push(t);
-    if (!ghost) stats[o.src || 'other'] = (stats[o.src || 'other'] || 0) + 1; else rej[(o.src || 'other') + ':ghost'] = (rej[(o.src || 'other') + ':ghost'] || 0) + 1;
+    stats[o.src || 'other'] = (stats[o.src || 'other'] || 0) + 1;
     return true;
   }
-  const doorNear = (x, z, d) => DOORS.some((q2) => Math.hypot(q2.x - x, q2.z - z) < d);
 
   // ---- 1. the OSM tree nodes and tree rows (Vosstaniya Sq: the 16 clipped maple balls near Hotel Oktyabrskaya)
   {
@@ -341,7 +237,6 @@ export function placeTrees(ctx, field, owned, extraAvoid = []) {
   for (const g of GREEN) {
     if (g.kind === 'flowerbed' || g.kind === 'pitch' || g.kind === 'playground' || g.kind === 'garden' || g.kind === 'fitness_station' || g.kind === 'track') continue;
     if (L.isClaimed(g.id) || isOwned(owned, g.id)) continue;                       // the square's lawns belong to landmarksA
-    if (g.kind === 'stadium' && g.polys.length && inIslands(g.polys[0].o[0], g.polys[0].o[1])) continue;   // a stadium plot of the islands is paving round the arena (field.js plaza class), not a park
     const mix = /Аничков/.test(g.name || '') ? MIX.anichkov : MIX.green;
     let gi = 0;
     for (const poly of g.polys) {
@@ -354,7 +249,7 @@ export function placeTrees(ctx, field, owned, extraAvoid = []) {
           if (R() < 0.25) plant(px, pz, 'shrub', { s: R.range(0.7, 1.2), pack: 0.4, src: 'wood' }); else plant(px, pz, pick(R, MIX.wood), { s: R.range(0.8, 1.25), pack: 0.5, src: 'wood' });
         }
       } else {
-        const dens = (g.kind === 'park' ? 1 / 105 : 1 / 240) * density * (SPARSE[g.id] ?? 1);
+        const dens = (g.kind === 'park' ? 1 / 105 : 1 / 240) * density;
         let want = Math.round(area * dens);
         for (let tries = 0; tries < want * 30 && want > 0; tries++) {
           const px = R.range(bb.x0, bb.x1), pz = R.range(bb.z0, bb.z1);
@@ -413,37 +308,12 @@ export function placeTrees(ctx, field, owned, extraAvoid = []) {
     if (bank.far) continue;
     for (let i = 0; i + 1 < bank.pts.length; i++) {
       const a = bank.pts[i], b = bank.pts[i + 1], l = Math.hypot(b[0] - a[0], b[1] - a[1]), mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
-      if (l < 12 || mx > -2950 || mx < -3830 || mz > 140 || petroAt(mx, mz)) continue;      // (not the banks of the Malaya Neva, which the Petrograd side data added to the same x range)
+      if (l < 12 || mx > -2950 || mx < -3830 || mz > 140) continue;      // (the part of the English embankment that lies in the margin west of the Senate Square)
       const tx = (b[0] - a[0]) / l, tz = (b[1] - a[1]) / l, nx = -tz * bank.landSide, nz = tx * bank.landSide;
       seed(hashXZ(a[0], a[1], 7));
       for (let s = 4; s < l - 4; s += R.range(8, 9.5)) plant(a[0] + tx * s + nx * 5.2, a[1] + tz * s + nz * 5.2, 'limeY', { s: R.range(0.9, 1.15), onPave: true, loose: true, road: 1.8, bld: 1.4, pack: 0.5, src: 'engl-row' });
     }
   }
-  // ---- 8. (last: every older tree keeps its random stream) Vasilievsky Island, build-water 2026-10-07: loose rows and clumps of birch, poplar, maple and shrubs on the earth bank above the natural banks of the
-  // Smolenka, the Kovsh, Galerny Harbour and the Dekabristov / Krestovsky shore (waterways.js SLOPE_REACHES, vo-banks.js): 3-9 m behind the slope top, one every 7-13 m; the generic free() test keeps them off roads,
-  // footways, buildings and claimed ground
-  for (const run of slopeRuns()) {
-    if (!VO_BANK_TREES.has(run.reach.id)) continue;
-    const P = run.pts;
-    for (let i = 0; i + 1 < P.length; i++) {
-      const a = P[i], b = P[i + 1], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (l < 8) continue;
-      const tx = (b[0] - a[0]) / l, tz = (b[1] - a[1]) / l, nx = tz, nz = -tx;                  // the landward normal of a bank chain (water on the left of travel)
-      seed(hashXZ(a[0], a[1], 8));
-      for (let s = R.range(2, 6); s < l - 2; s += R.range(7, 13)) { const d = run.reach.run + 0.3 + R.range(3.2, 9); if (R() < 0.22 * (1 - density) + 0.12) continue; plant(a[0] + tx * s + nx * d, a[1] + tz * s + nz * d, pick(R, MIX.bank), { s: R.range(0.8, 1.15), loose: true, road: 1.6, bld: 1.6, pack: 0.5, shore: 3, src: 'vo-bank' }); }
-    }
-  }
-  // Keep mapped specimens; thin the procedural infill to retain the garden's open lawns.
-  if (ctx.buildList?.includes('landmarksTauride')) {
-    for (let i = list.length - 1; i >= 0; i--) {
-      const t = list[i];
-      if (t.src.startsWith('osm') || t.src === 'row') continue;
-      if (t.x < 915 || t.x > 1500 || t.z < -1800 || t.z > -1250) continue;
-      if (TAURIDE_GARDEN.some(p => pointInPoly(t.x, t.z, p)) && hash2(t.x * 10 | 0, t.z * 10 | 0, 197) < 0.57) {
-        stats[t.src]--; list.splice(i, 1);
-      }
-    }
-  }
-  void doorNear;
   // ENV_TREE_AT="x,z,r;x,z,r" (node tools only): print the source of every tree within r of each point (diagnostics for the furniture audit rows)
   if (typeof process !== 'undefined' && process.env && process.env.ENV_TREE_AT) for (const q of process.env.ENV_TREE_AT.split(';')) { const [qx, qz, qr] = q.split(',').map(Number); for (const t of list) if (Math.hypot(t.x - qx, t.z - qz) < qr) console.log('[tree]', t.src, t.fam, t.x.toFixed(1), t.z.toFixed(1), 'trunk', t.tr.toFixed(2)); }
   stats.rej = rej;                                                            // rejected placements per source and reason (ENV_DEBUG prints it)
@@ -597,8 +467,8 @@ export function buildTrees(ctx, root, field, owned, extraAvoid = []) {
   let info = list.map((t) => { const e = { x: t.x, z: t.z, r: t.r, h: t.h, tr: t.tr, sp: t.sp, ...(t.shrub ? { shrub: true } : {}) }; owner.set(e, t); return e; });
   /** remove every tree whose trunk lies within r metres of a point [x, z, r] (street lamps, bus stops, signals: their positions exist only after streets is built):
    *  the tree disappears (instances, contact shadow), its collider is disabled and it leaves the published list */
-  /** remove the trees within r of any [x, z, r] of `points`, and (water-2 2026-10-08) every tree for which kill(tree) is true (the asphalt test of the streets net, environment.js prune) */
-  function prune(points, kill) {
+  /** remove the trees within r of any [x, z, r] of `points`, */
+  function prune(points) {
     let n = 0; const zero = new T.Matrix4().makeScale(0, 0, 0);
     // 16 m grid of the points (each stored in every cell its radius touches): trees x points was ~1 s of the load
     const GC = 16, grid = new Map();
@@ -608,7 +478,7 @@ export function buildTrees(ctx, root, field, owned, extraAvoid = []) {
       let hit = false;
       const cand = grid.get(Math.floor(t.x / GC) * 4096 + Math.floor(t.z / GC));
       if (cand) for (const [x, z, r] of cand) if (Math.hypot(t.x - x, t.z - z) < r) { hit = true; break; }
-      if (!hit && kill && kill(t)) hit = true;
+
       if (hit) {
         t.dead = true; n++;
         if (t.col) { t.col.y0 = -200; t.col.y1 = -100; }

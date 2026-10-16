@@ -1,9 +1,10 @@
-// loads ?only=metro headless and prints every module / console error with its stack (run from the project root: node <this file>)
+// loads ?only=metro headless (GPU browser, puppeteer-core) and prints every module / console error with its stack: node tools/metro-load-errors.mjs [modules]  (the project root is the parent of this folder)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
-const root = 'D:/git2/agi-fun-tests/102_3d_piter';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png', '.gz': 'application/gzip', '.bin': 'application/octet-stream' };
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (p.endsWith('/')) p += 'index.html';
@@ -24,6 +25,6 @@ await page.goto(`http://127.0.0.1:${port}/index.html?q=low&stats=1&only=${proces
 await page.waitForFunction("document.body.classList.contains('loaded')", { timeout: 280000, polling: 250 });
 const errs = await page.evaluate(() => (window.__errors || []).map((e) => e.module + ': ' + String(e.message).slice(0, 1200)));
 console.log('module errors:', errs.length); for (const e of errs) console.log('  ', e);
-const st = await page.evaluate(() => { const m = window.__ctx.metro; return { stations: Object.keys(m.stations), petro: Object.keys(m.petro || {}).filter((k) => m.petro[k]) }; });
+const st = await page.evaluate(() => { const m = window.__ctx.metro; return { stations: Object.keys(m.stations), west: Object.keys(m.west || {}).filter((k) => m.west[k]) }; });
 console.log(JSON.stringify(st));
 await browser.close(); server.close();

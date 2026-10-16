@@ -1,9 +1,8 @@
 // exempt.js - houses that must not get the random decorations that would cover something a landmark module draws ON their wall.
 //
 // restoreExempt(b): true for a house whose outline lies within REACH metres of a CLAIMED mapped monument / memorial / plaque node (data/city.js MONUMENTS + layout claims).
-// Such a node is drawn by a landmark module as a wall piece (landmarksPetroMonuments: the Shostakovich plaque on Bolshaya Pushkarskaya 37, the topographers' panel on Pionerskaya 20 ...)
-// at 1.4 - 3 m up the wall; the generic restoration scaffold (scaffold.js: a plywood hoarding 2.4 m high 1.5 m off the wall, plank platform at 2.4 m, canvas net on the facade, F.NET) would hide it.
-// The rule is generic (every claimed node, not a list of ids) and applies to the new regions only (archetypes.describe: `dist`): the older regions never see it.
+// Such a node is drawn by a landmark module as a wall piece (a plaque or a panel) at 1.4 - 3 m up the wall; the generic restoration scaffold (scaffold.js: a plywood hoarding 2.4 m high 1.5 m off the wall, plank platform at 2.4 m, canvas net on the facade, F.NET) would hide it.
+// The rule is generic (every claimed node, not a list of ids). It applies to the houses of the Petrograd-side / Vasilievsky grammar only (archetypes.describe: `dist`), which the strip does not have: it never fires here.
 // The answer is per HOUSE (outline id): every part of a house agrees, as the restoration hash itself does (archetypes: hid).
 import { BUILDINGS, MONUMENTS } from '../data/city.js';
 import * as L from '../layout.js';

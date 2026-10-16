@@ -25,15 +25,8 @@ import { createMinimap } from './core/minimap.js';
 
 export const MODULES = [
   // order matters: later modules read services of earlier ones (see docs/DESIGN.md)
-  'environment',  // ground, embankment granite, Fontanka water, trees, lawns, flowerbeds, far skyline
-  'landmarksEast', // Lavra, Feodorovsky Cathedral and Hotel Moscow
-  'eastBridges',   // Alexander Nevsky Bridge and the Lavra canal crossings
-  'landmarksNorth', // Transfiguration, Chernyshevskaya and the detailed north corridor
-  'landmarksSmolny', // Smolny Cathedral, convent and Institute
-  'landmarksSuvorov', // Suvorov Memorial Museum
-  'landmarksKirochnaya', // Historic Clinical Institute and garden courts
-  'landmarksTauride', // Tauride Garden, palace and Paradny Quarter
-  'northBridges', // Liteyny and Bolsheokhtinsky crossings
+  'environment',  // ground, embankment granite, Fontanka / Moika / Neva water, trees, lawns, flowerbeds, far skyline
+  'landmarksNorth', // Podpisnye Izdaniya bookstore and the Mayakovskogo / Vosstaniya corridor houses
   'streets',      // roads, markings, kerbs, granite pavements, crossings, road furniture, trolleybus overhead wires
   'city',         // every OSM building that no landmark module owns: Petersburg facade grammar, roofs, courtyards, entrances
   'rail',         // Moscow Railway Station tracks, platforms, canopies, catenary, signals, trains
@@ -49,67 +42,10 @@ export const MODULES = [
   'landmarksJ',   // St Isaac's Cathedral + square, Mariinsky Palace
   'landmarksBelinsky', // Ciniselli Circus and Church of Simeon and Anna
   'landmarksK',   // Church of the Saviour on Blood, Mikhailovsky Garden, Russian Museum
-  'landmarksMars', // Mars Field, Memorial to the Fighters of the Revolution, Suvorov monument, Marble Palace, Pavlovsky Barracks
-  'landmarksGarden', // Summer Garden, its fence, statues and Summer Palace
   'landmarksCastle', // Engineering (Mikhailovsky) Castle and the Peter I monument
-  'landmarksNikolsky', // St Nicholas Naval Cathedral and bell tower
-  'landmarksMariinsky', // Mariinsky Theatre, Conservatory, Teatralnaya Square
-  'landmarksNewHolland', // New Holland island
-  'landmarksYusupov', // Yusupov Palace on the Moika
-  'landmarksFortress', // Peter and Paul Fortress on Zayachy Island, Ioannovsky and Kronverksky bridges
-  'landmarksStrelka', // the Spit of Vasilievsky Island: Old Stock Exchange, Rostral columns, warehouses, Customs house
-  'landmarksUniversity', // Universitetskaya embankment: Kunstkamera, Academy of Sciences, Twelve Collegia
-  'landmarksTroitskaya', // Troitskaya Square, the Cathedral Mosque, Kshesinskaya mansion
-  'landmarksAurora', // Cabin of Peter the Great, Nakhimov school, cruiser Aurora
-  'landmarksKronverk', // Kronverk (Artillery Museum), Alexander Park, Narodny Dom group
-  'landmarksKamennoostrovsky', // Kamennoostrovsky pr., Austrian Square, Lev Tolstoy Square
-  'landmarksVladimir', // Prince Vladimir Cathedral, Tuchkov Buyan, Yubileyny, Petrovsky stadium
-  'landmarksKarpovka', // the Karpovka embankment: Ioannovsky convent, First Lensovet House
-  'landmarksOktyabrsky', // Bolshoy Concert Hall Oktyabrsky, Greek Square, Kapodistrias monument
-  'landmarksModernVO', // Art Nouveau hero houses of Vasilievsky Island
-  'landmarksMarineFacade', // Marine Facade passenger port and the Golden City spire (OPTIONAL, scenery class)
-  'landmarksPribaltiyskaya', // Pribaltiyskaya Hotel, Tsereteli's Peter I, the Fleet Creators group and the Kirov cruiser memorial
-  'landmarksGavan', // Gavan: Galerny Harbour with the kronshpitses, the workers' town and the Merciful church
-  'landmarksSredny', // Sredny pr. and the 21st-25th lines: tram depot and museum, the Geological museum, Dom Evangelia, the Frank mansion, the Chernikhov tower and the Gorny Institut pavilions
-  'landmarksMakarova', // Makarova embankment: Yakovlev houses, the two churches, the Lions pier, the Lutheran churches and the Sportivnaya-2 pavilions
-  'landmarksKirova', // Kirov Palace of Culture, the Vasileostrovets garden and the Erarta museum
-  'landmarksPetroCompletion', // Red Banner power station, Sytny Market and Pechatny Dvor
-  'landmarksKrestovsky', // stadium, mapped park axis and eastern metro pavilion
-  'landmarksYelaginPalace', // Yelagin Palace (Rossi 1818-22): west and east fronts, rotunda, dome, terrace, cast-iron lions
-  'landmarksYelaginKitchen', // Yelagin Kitchen block: half-drum colonnade and the 14 niche statues
-  'landmarksYelaginServices', // Yelagin Stable block, Orangery (Museum of Art Glass) and the service houses
-  'landmarksYelaginRossi', // Yelagin Music Pavilion, East pavilion with the granite pier, Island Pavilion, Guardhouse site
-  'landmarksYelaginSpits', // Yelagin west spit: granite terrace and the two limestone lions
-  'landmarksYelaginPark', // Yelagin park: Hercules, Kirov bust, Estradny Theatre, metro vent pavilion, boat piers
-  'landmarksKamennyPalace', // Kamennoostrovsky Palace, gates, fence line and service buildings
-  'landmarksKamennyChurch', // Church of the Nativity of John the Baptist on Kamenny Island and its chapel
-  'landmarksBotanicalGreenhouses', // Peter the Great Botanical Garden: the glass-house complex and the Palm House
-  'landmarksBotanicalGarden', // Botanical Garden: institute buildings, gate, Japanese garden, monuments
-  'landmarksPetrovskyStadium', // Petrovsky stadium details: masts, soffit, seats, apron and quay
-  'landmarksPetrovskyYacht', // Petrovskaya kosa: the yacht club buildings, harbours and breakwater
-  'landmarksVOStatues', // Vasilievsky Island: the unclaimed statues, busts, sculptures and fountains (the Philological sculpture garden and the rest)
-  'landmarksPetroMonuments', // Petrogradsky Island: 74 statues, busts and sculptures and 13 fountains
-  'landmarksKamennyTheatre', // Каменноостровский театр
-  'landmarksKamennyDachasEast', // Дачи Каменного острова · восток
-  'landmarksKamennyDachasWest', // Дачи Каменного острова · запад
-  'landmarksTVTower', // Телебашня на Аптекарском острове
-  'landmarksLETI', // ЛЭТИ · Аптекарский остров
-  'landmarksTransfiguration', // Церковь Преображения · Аптекарский остров
-  'landmarksPetrovskyWest', // Петровская коса · запад острова
-  'landmarksZhdanovka', // Ждановская набережная
-  'landmarksSevkabel', // Sevkabel Port, the Brusnitsyn quarter and the Kozhevennaya line industrial skyline
-  'landmarksSeaTerminal', // Sea Terminal, Marine Glory Square and submarine D-2 Narodovolets
-  'landmarksSmolensky', // Smolensky Orthodox Cemetery: the Smolensk church, St Xenia's chapel, the gates and the grounds
-  'landmarksNavalCorps', // Naval Cadet Corps embankment: Krusenstern, the Dormition church and submarine S-189
-  'landmarksAndrew', // St Andrew's Cathedral, the Andreevsky axis (market, boulevard, metro pavilion) and the Annunciation Church
-  'landmarksMining', // Mining University and the icebreaker Krasin
-  'landmarksMenshikov', // Menshikov Palace, First Cadet Corps and the Rumyantsev Garden
-  'landmarksAcademy', // Academy of Arts, the Sphinx pier and Trezzini Square
-  'landmarksCentralSouth', // Trinity Cathedral and Vitebsky Station
-  'landmarksMoskovsky', // Moscow Gate, Chesme and Moscow Square
-  'landmarksVictoryPark', // Moscow Victory Park and arena
-  'bridges',      // the bridges of the west (Kazansky, Green, Blue, Palace ...)
-  'metro',        // underground: vestibules, escalators, station halls, tunnels, trains, ride + network map
+  'landmarksOktyabrsky', // Bolshoy Concert Hall Oktyabrsky on Ligovsky Prospekt
+  'bridges',      // the bridges of the strip: Kazansky, Green, Blue, Palace, Hermitage ...
+  'metro',        // underground: vestibules, escalators, station halls, tunnels, trains, ride + network map (the seven stations of the strip)
   'props',        // benches, bins, kiosks, bus shelters, tourist stalls, billboards, flower baskets
   'traffic',      // moving cars, buses, trolleybuses + parked cars
   'people',       // pedestrians, tourists, groups with guides, station crowd, cyclists, scooters
@@ -193,36 +129,11 @@ function setProgress(frac, label) {
   const lab = $('loadlabel'); if (lab && label !== undefined) lab.textContent = label;   // '' clears the text (the 'Ready' line is CSS)
 }
 const LABELS = {
-  landmarksNorth: 'Чернышевская · Преображенский собор · Подписные Издания',
-  landmarksSuvorov: 'Музей Суворова',
-  landmarksCentralSouth: 'Троице-Измайловский собор · Витебский вокзал',
-  landmarksMoskovsky: 'Московские ворота · Чесменская церковь · Московская площадь',
-  landmarksVictoryPark: 'Московский парк Победы',
-  landmarksPetroCompletion: 'Красное знамя · Сытный рынок · Печатный двор',
-  landmarksKrestovsky: 'Крестовский остров · стадион · Приморский парк Победы',
-  landmarksYelaginPalace: 'Елагин дворец', landmarksYelaginKitchen: 'Кухонный корпус · Елагин остров', landmarksYelaginServices: 'Конюшенный корпус · Оранжерея · Музей художественного стекла',
-  landmarksYelaginRossi: 'Музыкальный и Восточный павильоны · Елагин остров', landmarksYelaginSpits: 'Западная стрелка Елагина острова · львы', landmarksYelaginPark: 'Парк Елагина острова',
-  landmarksKamennyPalace: 'Каменноостровский дворец', landmarksKamennyChurch: 'Церковь Рождества Иоанна Предтечи · Каменный остров',
-  landmarksBotanicalGreenhouses: 'Ботанический сад · оранжереи', landmarksBotanicalGarden: 'Ботанический сад Петра Великого',
-  landmarksPetrovskyStadium: 'Стадион на Петровском острове', landmarksPetrovskyYacht: 'Яхт-клуб · Петровская коса',
-  landmarksVOStatues: 'Памятники и скульптуры Васильевского острова', landmarksPetroMonuments: 'Памятники, скульптуры и фонтаны Петроградской стороны',
-  landmarksKamennyTheatre: 'Каменноостровский театр',
-  landmarksKamennyDachasEast: 'Дачи Каменного острова · восток',
-  landmarksKamennyDachasWest: 'Дачи Каменного острова · запад',
-  landmarksTVTower: 'Телебашня на Аптекарском острове',
-  landmarksLETI: 'ЛЭТИ · Аптекарский остров',
-  landmarksTransfiguration: 'Церковь Преображения · Аптекарский остров',
-  landmarksPetrovskyWest: 'Петровская коса · запад острова',
-  landmarksZhdanovka: 'Ждановская набережная',
-  landmarksKirochnaya: 'Клинический институт · Кирочная',
-  landmarksSmolny: 'Смольный собор и институт', landmarksTauride: 'Таврический сад · Парадный квартал',
-  northBridges: 'Литейный и Большеохтинский мосты',
-  landmarksEast: 'Александро-Невская лавра · Старо-Невский', eastBridges: 'мост Александра Невского · мосты Лавры',
   environment: 'земля, набережные и деревья', streets: 'улицы, мостовые и провода', city: 'городские кварталы', rail: 'пути, платформы и поезда', landmarksA: 'Московский вокзал · площадь Восстания',
+  landmarksNorth: 'Подписные Издания · дома улицы Маяковского',
   landmarksBelinsky: 'Цирк Чинизелли · Симеон и Анна',
-  landmarksB: 'Невский проспект', landmarksC: 'Фонтанка · Аничков мост', landmarksD: 'Владимирский собор · библиотека', landmarksE: 'Гостиный Двор · площадь Островского', landmarksF: 'Казанский собор', landmarksG: 'Дворцовая площадь · Главный штаб', landmarksH: 'Адмиралтейство · Сенатская площадь', landmarksI: 'Зимний дворец · Эрмитаж', landmarksJ: 'Исаакиевский собор', landmarksK: 'Спас на Крови · Михайловский сад', landmarksMars: 'Марсово поле · Мраморный дворец', landmarksGarden: 'Летний сад · ограда', landmarksCastle: 'Михайловский замок', landmarksNikolsky: 'Никольский собор', landmarksMariinsky: 'Мариинский театр', landmarksNewHolland: 'Новая Голландия', landmarksYusupov: 'Юсуповский дворец', bridges: 'мосты', metro: 'метрополитен', props: 'скамейки, урны и киоски', traffic: 'машины, автобусы и троллейбусы',
-  landmarksFortress: 'Петропавловская крепость', landmarksStrelka: 'Стрелка Васильевского острова · Биржа', landmarksUniversity: 'Кунсткамера · Университетская набережная', landmarksTroitskaya: 'Троицкая площадь · Соборная мечеть',
-  landmarksAurora: 'Домик Петра I · крейсер «Аврора»', landmarksKronverk: 'Кронверк · Александровский парк', landmarksKamennoostrovsky: 'Каменноостровский проспект · площадь Льва Толстого', landmarksVladimir: 'Князь-Владимирский собор · Тучков буян', landmarksKarpovka: 'набережная Карповки · Иоанновский монастырь', landmarksOktyabrsky: 'БКЗ «Октябрьский» · Греческая площадь', landmarksModernVO: 'Модерн Васильевского острова', landmarksMarineFacade: 'Пассажирский порт «Морской фасад» · Golden City', landmarksPribaltiyskaya: 'Гостиница «Прибалтийская» · Пётр I Церетели · памятник крейсеру «Киров»', landmarksGavan: 'Галерная гавань · Кроншпицы · Гаванский городок · церковь «Милующая»', landmarksSredny: 'Трамвайный парк и музей · ЦНИГР · Дом Евангелия · башня Чернихова · «Горный институт»', landmarksMakarova: 'Набережная Макарова · Екатерининская церковь · лютеранские церкви · «Спортивная-2»', landmarksKirova: 'ДК Кирова · сад «Василеостровец» · музей «Эрарта»', landmarksSevkabel: '«Севкабель Порт» · Брусницыны · индустриальный силуэт Кожевенной линии', landmarksSeaTerminal: 'Морской вокзал · площадь Морской Славы · подлодка Д-2', landmarksSmolensky: 'Смоленское православное кладбище · часовня Ксении Блаженной', landmarksNavalCorps: 'Морской кадетский корпус · Крузенштерн · С-189', landmarksAndrew: 'Андреевский собор · Андреевский бульвар и рынок · «Василеостровская»', landmarksMining: 'Горный университет · ледокол «Красин»', landmarksMenshikov: 'Меншиковский дворец · Первый кадетский корпус · Румянцевский сад', landmarksAcademy: 'Академия художеств · Сфинксы · площадь Трезини',
+  landmarksB: 'Невский проспект', landmarksC: 'Фонтанка · Аничков мост', landmarksD: 'Владимирский собор · библиотека', landmarksE: 'Гостиный Двор · площадь Островского', landmarksF: 'Казанский собор', landmarksG: 'Дворцовая площадь · Главный штаб', landmarksH: 'Адмиралтейство · Сенатская площадь', landmarksI: 'Зимний дворец · Эрмитаж', landmarksJ: 'Исаакиевский собор', landmarksK: 'Спас на Крови · Михайловский сад', landmarksCastle: 'Михайловский замок', bridges: 'мосты', metro: 'метрополитен', props: 'скамейки, урны и киоски', traffic: 'машины, автобусы и троллейбусы',
+  landmarksOktyabrsky: 'БКЗ «Октябрьский»',
   people: 'прохожие и туристы', wildlife: 'голуби, чайки и вороны', drive: 'красная машина',
 };
 
@@ -575,18 +486,12 @@ async function main() {
     const drv = ctx.drive && ctx.drive.active;      // while driving the places / R move the car instead of the walker
     if (e.code === 'KeyR') { if (drv) ctx.drive.place(L.HERO.x, L.HERO.z, L.HERO.yaw); else player.setPose(L.HERO.x, L.HERO.z, L.HERO.yaw, L.HERO.pitch); }
     if (e.code === 'Backquote' && !e.altKey && !e.shiftKey) { const s = $('stats'); if (s) s.hidden = !s.hidden; }
-    const v = VIEWS[(e.altKey && e.shiftKey ? 'AltShift' : e.altKey ? 'Alt' : e.shiftKey ? 'Shift' : '') + e.code]; if (v && !e.repeat) goToView(v);     // standing on the ground there (setPose without y ends a flight); with the baked scene the regions around the destination stream in first (the island is 7 km from the start pose)
+    const v = VIEWS[(e.altKey && e.shiftKey ? 'AltShift' : e.altKey ? 'Alt' : e.shiftKey ? 'Shift' : '') + e.code]; if (v && !e.repeat) goToView(v);     // standing on the ground there (setPose without y ends a flight); with the baked scene the regions around the destination stream in first (the Admiralty end is 2.6 km from the start pose)
   });
   if (flyBtn) flyBtn.addEventListener('click', () => { player.toggleFly(); flyBtn.blur(); });   // for touch screens / a free mouse (blur: Space must not click it again)
   const places = $('places');
   if (places) {
-    const groups = new Map();      // views with a `group` (Vasilievsky Island) form an optgroup of the list
-    for (const v of L.VIEWS) {
-      const o = document.createElement('option'); o.value=v.key; o.textContent=v.label;
-      if (!v.group) { places.append(o); continue; }
-      let g = groups.get(v.group); if (!g) { g = document.createElement('optgroup'); g.label = v.group; groups.set(v.group, g); places.append(g); }
-      g.append(o);
-    }
+    for (const v of L.VIEWS) { const o = document.createElement('option'); o.value=v.key; o.textContent=v.label; places.append(o); }
     places.addEventListener('change', () => {
       const v=VIEWS[places.value]; if (!v) return;
       goToView(v); places.value=''; places.blur();

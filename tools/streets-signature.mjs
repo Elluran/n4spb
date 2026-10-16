@@ -3,9 +3,8 @@
 //   * every mesh of the module: triangles (by centroid) + an order-independent hash of the vertex positions rounded to 1 cm; instanced meshes: instances + a hash of their matrices,
 //   * the colliders it registered, the overhead wire polylines (ctx.wires),
 //   * the service lists (lanes, connectors, stop lines, signals, crosswalks, lamps, plates, bus stops, parked slots, wire pairs / spans / masts / anchors, guard rails, pavements).
-// Zones: 'new' = the open districts of src/world/streets/region.js (isOpen: the extent of the regions from FIRST_OPEN on, outside every reviewed PLAY rectangle: where the rules of the latest
-//        extension apply) PLUS the deck of the Blagoveshchensky Bridge (bridges/sites-vo.js blagDeckY != null: the bridge reaches into a reviewed district, its deck is new ground, 2026-10-08);
-//        'old' = the reviewed districts. `--diff a.json b.json` lists every (zone, cell, item) whose count or hash differs and exits 1 when an 'old' entry differs.
+// Zones: every district of the strip is a reviewed one, so there is a single zone, 'old' (the 'new' zone of the full city, the open districts, is empty).
+//        `--diff a.json b.json` lists every (zone, cell, item) whose count or hash differs and exits 1 when an 'old' entry differs.
 // usage: node tools/streets-signature.mjs --out file.json [--src dir] [--cell 640] [--dump lists.json]
 //          --src dir : load <dir>/streets.js instead of src/world/streets.js (a copy of an older revision whose imports point at this tree: tools/streets-signature.mjs --export-rev <git rev> <dir>)
 //        node tools/streets-signature.mjs --export-rev <rev> <dir>     write the streets module of a git revision to <dir> with absolute imports (read-only git: git show)
@@ -110,11 +109,7 @@ const { REGIONS } = await imp('src/world/data/city.js');
 
 const OUT = opt('out'), SRC = opt('src'), CELL = Number(opt('cell', 640));
 if (!OUT) { console.log('usage: node tools/streets-signature.mjs --out file.json [--src dir] | --diff a.json b.json | --export-rev <rev> <dir>'); process.exit(1); }
-const { isOpen, FIRST_OPEN } = await imp('src/world/streets/region.js');       // the zones are the generator's own: 'new' = the open districts (streets/region.js), 'old' = the reviewed ones
-// the Blagoveshchensky Bridge reaches into a reviewed district (its south half), but the DECK is new ground (bridges/blag.js draws it; the wires over its humped deck are redone, 2026-10-08): everything that lies on the deck rectangle
-// (bridges/sites-vo.js blagDeckY: |v| <= 19.0, u -1.2 .. 333.8) counts as the 'new' zone. Nothing off the deck changes zone.
-const { blagDeckY } = await imp('src/world/bridges/sites-vo.js');
-const zoneOf = (x, z) => (isOpen(x, z) || blagDeckY(x, z) != null ? 'new' : 'old');
+const zoneOf = () => 'old';                                                   // (one zone: the eight regions of the strip are all reviewed districts)
 void REGIONS;
 
 const scene = new THREE.Scene();
@@ -211,6 +206,6 @@ if (opt('dump') && st) {                                                  // --d
   }));
 }
 fs.mkdirSync(path.dirname(path.resolve(OUT)), { recursive: true });
-fs.writeFileSync(path.resolve(OUT), JSON.stringify({ cell: CELL, src: SRC || 'src/world', firstOpen: FIRST_OPEN, triangles, buildMs, warnings: warns, zones }));
+fs.writeFileSync(path.resolve(OUT), JSON.stringify({ cell: CELL, src: SRC || 'src/world', triangles, buildMs, warnings: warns, zones }));
 console.log(`streets signature: ${triangles} triangles, build ${buildMs} ms, ${colliders.length} colliders, ${wireLists.length} wire polylines; old zone ${Object.keys(zones.old).length} cells / ${count('old')} entries, new zone ${Object.keys(zones.new).length} cells / ${count('new')} entries${warns.length ? '; ' + warns.length + ' warnings' : ''} -> ${OUT}`);
 process.exit(0);

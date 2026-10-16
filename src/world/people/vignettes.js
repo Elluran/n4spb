@@ -12,10 +12,6 @@ import { makeSpec } from './chars.js';
 import { GESTURE as G } from './contract.js';
 import { addWest } from './west.js';
 import { addMars } from './mars.js';
-import { addSW } from './sw.js';
-import { addPetro } from './petro.js';
-import { addVO } from './vo.js';
-import { addIsl } from './isl2.js';
 import { addMetroLife } from './metrolife.js';
 
 export function addVignettes(ctx, nav, sim, S) {
@@ -26,7 +22,7 @@ export function addVignettes(ctx, nav, sim, S) {
   const dist = (x0, z0, x1, z1) => Math.hypot(x0 - x1, z0 - z1);
   const nodeAt = (x, z, r, kinds = 'sapkh') => nav.nearestNode(x, z, r, (id) => kinds.includes(N.k[id]));
   const floorOK = (x, z) => { if (x > -600) return true; const h = ctx.physics.groundHeight(x, z, 1.0, false); return !Number.isFinite(h) || (h > -0.3 && h < 0.5) || (nav.deckWalk && nav.deckWalk(x, z)); };   // west: no stairs down, quay trenches, steps
-  const free = (x, z, clr = 0.45) => nav.walkable(x, z) && nav.obstDist(x, z, clr + 0.2) > clr && nav.cover(x, z) < -0.6 && floorOK(x, z) && !(nav.area && nav.area.veto(x, z));      // (area.veto: the Summer Garden lawns)
+  const free = (x, z, clr = 0.45) => nav.walkable(x, z) && nav.obstDist(x, z, clr + 0.2) > clr && nav.cover(x, z) < -0.6 && floorOK(x, z);
   const standNear = (a, x, z, yaw, gest, dur, y) => { sim.standAt(a, x, z, yaw, gest, dur, null, 0, y ?? 0.12); fixed(a); };
 
   // the start pose and the five view poses of layout.js stay free (nobody scripted within 14 m: the player arrives there)
@@ -274,11 +270,7 @@ export function addVignettes(ctx, nav, sim, S) {
   }
   // =================================================================== the WEST (west.js) and the platforms of the west metro stations (metrolife.js)
   try { S.westInfo = addWest(ctx, nav, sim, S, { mk, fixed, free, lookAt, dist, openSpot, arcPlan, standNear, nodeAt }); } catch (e) { console.error('[people] west vignettes failed:', e); }
-  if (!(nav.marsCfg && nav.marsCfg.off)) try { S.marsInfo = addMars(ctx, nav, sim, S, { mk, fixed, free, lookAt, dist, openSpot, arcPlan, standNear, nodeAt }); } catch (e) { console.error('[people] mars vignettes failed:', e); }
-  if (S.marsInfo && S.marsInfo.kit && !globalThis.__swOff) try { S.swInfo = addSW(ctx, nav, sim, S, { mk, fixed, free, lookAt, dist, openSpot, arcPlan, standNear, nodeAt }, S.marsInfo.kit); } catch (e) { console.error('[people] south-west vignettes failed:', e); }
-  if (S.petro && S.marsInfo && S.marsInfo.kit && nav.area && nav.area.petro) try { S.petroInfo = addPetro(ctx, nav, sim, S, { mk, fixed, free, lookAt, dist, openSpot, arcPlan, standNear, nodeAt }, S.marsInfo.kit); } catch (e) { console.error('[people] petro vignettes failed:', e); }
-  if (S.vo && S.marsInfo && S.marsInfo.kit && nav.area && nav.area.petro && nav.area.petro.voZone0 >= 0) try { S.voInfo = addVO(ctx, nav, sim, S, { mk, fixed, free, lookAt, dist, openSpot, arcPlan, standNear, nodeAt }, S.marsInfo.kit); } catch (e) { console.error('[people] island vignettes failed:', e); }
-  if (S.isl && S.marsInfo && S.marsInfo.kit && nav.area && nav.area.isl) try { S.islInfo = addIsl(ctx, nav, sim, S, { mk, fixed, free, lookAt, dist, openSpot, arcPlan, standNear, nodeAt }, S.marsInfo.kit); } catch (e) { console.error('[people] islands vignettes failed:', e); }
+  if (!(nav.marsCfg && nav.marsCfg.off)) try { S.marsInfo = addMars(ctx, nav, sim, S, { mk, fixed, free, lookAt, dist, openSpot, arcPlan, standNear, nodeAt }); } catch (e) { console.error('[people] castle vignettes failed:', e); }
   try { S.metroInfo = addMetroLife(ctx, nav, sim, S); } catch (e) { console.error('[people] metro platforms failed:', e); }
 
 }

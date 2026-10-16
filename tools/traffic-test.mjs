@@ -9,9 +9,7 @@
 //   --plan x0,z0,x1,z1,px,out.png [--lanes] [--withparked]  top-down plan with the vehicles (red = stopped), lane / connector lines;  --sigdump x,z  signals + junction arms near a point;  --parked  parked-car plan
 //   TRAFFIC_BUILDLIST=environment,streets,bridges,traffic  also builds the bridges (deck heights: the open-water rule of sim.js is then tested as the page runs it);  --notram  no trams
 //   trams (traffic/trams.js) are part of every run: they count in the overlaps, and each must stay on its rails (--tramdump prints the routes: length, stops, lights)
-//   (the whole-network run seeds ~800 cars at t = 0 because the region logic is off: that is why the count limit is 2600 (--maxcount); CAP only stops new arrivals)
-//   SINCE VASILIEVSKY ISLAND (2026-10-10) the whole-network run at full density seeds 7133 cars, jams (54 % stopped, 539 overlaps, 96 "stuck" at the 4-minute check) and takes 43 minutes: it is no longer a meaningful gate.
-//   Use --density 0.4 (6 min: ~2 600 cars, 8 minutes of real time, RESULT OK) for the whole network, and tools/traffic-regions.mjs (the regional runs round the camera, as the page runs the traffic) for the places.
+//   (the whole-network run seeds ~1 000 cars at t = 0 on the strip because the region logic is off: the count limit 2600 (--maxcount) is only a limit; CAP only stops new arrivals)
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -280,8 +278,7 @@ const railDist = (v) => { const g = v.seg; let m = 1e9; for (let i = 0; i + 1 < 
 const frontKeys = {};
 const traceLane = flag('trace', false) ? String(flag('trace')) : null, traceN = {}, traceWhy = [];
 const viol = { red: 0, nan: 0, overlap: 0, offlane: 0, teleport: 0, stuck: 0, count: 0, offrail: 0 };
-const { inPetro } = await import(pathToFileURL(path.join(root, 'src/world/traffic/region.js')).href);
-const split = { overlapOld: 0, overlapPetro: 0, overlapTram: 0, overlapBus: 0, stuckOld: 0, stuckPetro: 0 };      // the districts reviewed before 2026-10-06 against the Petrograd side / Spit extension
+const split = { overlapTram: 0, overlapBus: 0 };
 let tramSum = 0, tramStop = 0, tramMax = 0;
 const lastMove = new Map();
 const msgs = [], omsgs = [], fmsgs = [], redSeen = new Set();
@@ -321,7 +318,7 @@ for (let k = 0; k < steps; k++) {
       for (let ix = cx - 1; ix <= cx + 1; ix++) for (let iz = cz - 1; iz <= cz + 1; iz++) for (const u of g.get(ix * 4096 + iz) || []) {
         if (u.id <= v.id || !inX(v)) continue;
         if (Math.hypot(u.x - v.x, u.z - v.z) > 14) continue;
-        if (overlap(u, v)) { const pk = u.id + '-' + v.id; if (!pairs.has(pk)) { pairs.add(pk); viol.overlap++; split[inPetro(v.x, v.z, 120) ? 'overlapPetro' : 'overlapOld']++; if (u.tram || v.tram) split.overlapTram++; else if (u.bus || v.bus) split.overlapBus++; { const hk = Math.round(v.x / 30) * 30 + ',' + Math.round(v.z / 30) * 30; hot[hk] = (hot[hk] || 0) + 1; } if (omsgs.length < (flag("ovl", false) ? 400 : 14)) omsgs.push(`overlap t=${sim.time.toFixed(1)} ${v.kind}#${v.id}(${v.seg.id} s${v.s.toFixed(1)}/${v.seg.len.toFixed(0)} v${v.v.toFixed(1)}) vs ${u.kind}#${u.id}(${u.seg.id} s${u.s.toFixed(1)}/${u.seg.len.toFixed(0)} v${u.v.toFixed(1)}) at ${v.x.toFixed(0)},${v.z.toFixed(0)} rot ${(v.rot * 57.3).toFixed(0)}/${(u.rot * 57.3).toFixed(0)}`); } }
+        if (overlap(u, v)) { const pk = u.id + '-' + v.id; if (!pairs.has(pk)) { pairs.add(pk); viol.overlap++; if (u.tram || v.tram) split.overlapTram++; else if (u.bus || v.bus) split.overlapBus++; { const hk = Math.round(v.x / 30) * 30 + ',' + Math.round(v.z / 30) * 30; hot[hk] = (hot[hk] || 0) + 1; } if (omsgs.length < (flag("ovl", false) ? 400 : 14)) omsgs.push(`overlap t=${sim.time.toFixed(1)} ${v.kind}#${v.id}(${v.seg.id} s${v.s.toFixed(1)}/${v.seg.len.toFixed(0)} v${v.v.toFixed(1)}) vs ${u.kind}#${u.id}(${u.seg.id} s${u.s.toFixed(1)}/${u.seg.len.toFixed(0)} v${u.v.toFixed(1)}) at ${v.x.toFixed(0)},${v.z.toFixed(0)} rot ${(v.rot * 57.3).toFixed(0)}/${(u.rot * 57.3).toFixed(0)}`); } }
       }
       if (v.tram) { tramSum++; if (v.v < 0.3) tramStop++; if (k % 150 === 0 && v.s < v.seg.len - 1 && v.s > v.len + 1 && railDist(v) > 1.2) { viol.offrail++; if (fmsgs.length < 8) fmsgs.push(`off-rail tram#${v.id} ${v.seg.id} at ${v.x.toFixed(0)},${v.z.toFixed(0)} t=${sim.time.toFixed(1)}`); } continue; }
       if (inX(v) && st.net.cover(v.x, v.z, {}) < -2.2) { viol.offlane++; if (fmsgs.length < 8) fmsgs.push(`off-lane ${v.kind}#${v.id} ${v.seg.id} at ${v.x.toFixed(0)},${v.z.toFixed(0)} t=${sim.time.toFixed(1)} (len ${v.len} s ${v.s.toFixed(1)}/${v.seg.len.toFixed(1)} next ${v.next && v.next.id} came from ${(v.trail || []).map((q) => q.id).join(' < ')} cover ${st.net.cover(v.x, v.z, {}).toFixed(1)})`); }
@@ -423,7 +420,7 @@ console.log('long waits', long.length); for (const l of long.slice(0, 15)) conso
 }
 const kinds = {}; for (const v of sim.vehicles) kinds[v.kind] = (kinds[v.kind] || 0) + 1; console.log('final mix', kinds);
 for (const m of [...msgs, ...omsgs, ...fmsgs]) console.log('  ' + m);
-for (const v of sim.vehicles) if (sim.time - (lastMove.get(v.id) ?? sim.time) > 240) { viol.stuck++; split[inPetro(v.x, v.z, 120) ? 'stuckPetro' : 'stuckOld']++; if (viol.stuck <= 6) console.log(`  stuck ${v.kind}#${v.id} on ${v.seg.id} s=${v.s.toFixed(0)}/${v.seg.len.toFixed(0)} at ${v.x.toFixed(0)},${v.z.toFixed(0)} why=[${v.why}] col=${v.cgOn ? v.cgGap.toFixed(1) : '-'}`); }
+for (const v of sim.vehicles) if (sim.time - (lastMove.get(v.id) ?? sim.time) > 240) { viol.stuck++; if (viol.stuck <= 6) console.log(`  stuck ${v.kind}#${v.id} on ${v.seg.id} s=${v.s.toFixed(0)}/${v.seg.len.toFixed(0)} at ${v.x.toFixed(0)},${v.z.toFixed(0)} why=[${v.why}] col=${v.cgOn ? v.cgGap.toFixed(1) : '-'}`); }
 if (sim.trams) { const slow = sim.vehicles.filter((v) => v.tram && v.wait > 45); if (slow.length) console.log('trams standing > 45 s:', slow.map((v) => `${v.seg.id} s=${v.s.toFixed(0)} at ${v.x.toFixed(0)},${v.z.toFixed(0)} wait ${v.wait.toFixed(0)} why=${v.why} col=${v.cgOn ? v.cgGap.toFixed(1) : '-'}${v.why === 'col' && v.obs ? ` behind ${v.obs.kind}#${v.obs.id} on ${v.obs.seg.id} s=${v.obs.s.toFixed(0)}/${v.obs.seg.len.toFixed(0)} v=${v.obs.v.toFixed(1)} why=[${v.obs.why}] wait=${(v.obs.wait || 0).toFixed(0)} next=${v.obs.next ? v.obs.next.id : '-'}` : ''}`).join(' | ')); }
 if (sim.stats.wetLanes) { const nm = new Map(); for (const g of sim.laneSeg.values()) if (g.wet) { const k = (g.lane.name || g.lane.hw) + (g.cut < Infinity ? ' (ends)' : ' (starts)'); nm.set(k, (nm.get(k) || 0) + 1); } console.log('lanes cut at open water outside the play area:', [...nm].map(([k, c]) => k + ' x' + c).join(', ')); }
 const OVL_MAX = Number(flag('overlaps', (regionArg ? 20 : 60) * minutes)),      // (whole network: the limit grew with the map: the committed simulation counted 449 in 10 min on the map of 2026-10-06, this one 480 - 510 from run to run)
@@ -431,13 +428,13 @@ const OVL_MAX = Number(flag('overlaps', (regionArg ? 20 : 60) * minutes)),      
 console.log(`trams: ${(tramSum / (n || 1)).toFixed(1)} on the map on average, ${(100 * tramStop / (tramSum || 1)).toFixed(0)} % standing (stops, lights); pushed through a standing queue ${sim.trams ? sim.trams.pushes() : 0} times, ended the trip of an unseen car on the rails ${sim.trams ? sim.trams.retired() : 0} times`);
 const bad = viol.nan + viol.offlane + viol.offrail + viol.teleport + (viol.red > RED_MAX ? 1 : 0) + (viol.overlap > OVL_MAX ? 1 : 0) + (viol.stuck > 0.04 * sim.vehicles.length ? 1 : 0);
 console.log('overlap hotspots (30 m cells)', Object.entries(hot).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([k, n]) => k + ':' + n).join(' '));
-console.log('violations', JSON.stringify(viol), '| old districts / Petrograd side:', JSON.stringify(split));
+console.log('violations', JSON.stringify(viol), '| overlaps by kind:', JSON.stringify(split));
 if (flag('plan', false)) {
   let parkedCars = null;
   if (args.includes('--withparked')) { const { planParked } = await import(pathToFileURL(path.join(root, 'src/world/traffic/parking.js')).href); parkedCars = planParked(ctx, st).cars; }
   await writePlan(String(flag('plan')), sim.vehicles, parkedCars);
 }
-const MAXC = Number(flag('maxcount', regionArg ? 2600 : 6500));      // the whole-network run seeds the cars of the whole map at t = 0 (~800 on the first 2.1 km2, 2100 on the 13 km2 east + west + north map, ~4 500 with the south-west, the Mars Field and the Petrograd side)
+const MAXC = Number(flag('maxcount', regionArg ? 2600 : 6500));      // the whole-network run seeds the cars of the whole map at t = 0 (~1 000 on the strip)
 const ok = bad === 0 && maxCount < MAXC && minCount > 15;
 console.log(ok ? 'RESULT: OK' : 'RESULT: FAIL');
 process.exit(ok ? 0 : 1);

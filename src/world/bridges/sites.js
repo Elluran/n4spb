@@ -8,13 +8,9 @@
 // Blue 97.3 m ...).  `zones` = [v from, v to, kind] bands of the deck surface (asphalt roadway, granite pavement, sett paving, plaza).  Sources: docs/research/west-canals-bridges.md
 // section 4 (cards), OSM bridge ways (tools: scratchpad br_frames.mjs) and relation r-boxes; heights: street level y = 0, water y per waterway (WATER_Y).
 import { SW_SITES } from './sites-sw.js';
-import { PETRO_SITES } from './sites-petro.js';
-import { VO_SITES, BLAG_ZONE } from './sites-vo.js';
-import { VO2_SITES } from './sites-vo2.js';
-import { SOUTH_SITES } from './sites-south.js';
 export const EXT = 0.8;                                   // the deck runs this far over the land beyond the bank line (no sliver of water at the corners; the street asphalt ends at the bank, a small overlap)
 /** water surface level per waterway key (dossier section 2.5; environment may publish its own: see bridges.js) */
-export const WATER_Y = { griboedov: -2.9, moika: -3.0, 'winter-canal': -3.1, neva: -3.4, fontanka: -3.2, 'swan-canal': -2.8, kryukov: -2.9, admiralty: -2.8, zhdanovka: -3.4, karpovka: -3.4, smolenka: -3.4 };
+export const WATER_Y = { griboedov: -2.9, moika: -3.0, 'winter-canal': -3.1, neva: -3.4, fontanka: -3.2, 'swan-canal': -2.8, kryukov: -2.9, admiralty: -2.8 };
 
 const BASE_SITES = [
   { id: 'belinsky', name: 'Мост Белинского', nameEn: 'Belinsky Bridge', kind: 'road', style: 'belinsky', water: 'r1201709', ww: 'fontanka',
@@ -59,18 +55,10 @@ const BASE_SITES = [
     hump: 0.25, soffitCrown: -0.3, spring: 0.2, clear: '2.5', at: [-1775, -945] },
   // ---- the Mars Field / Summer Garden reach (docs/research/mars-bridges-canals.md sections 4 and 7).  Extra fields: stone (granite arch generator), bank (fixed bank interval), spans / crowns / pier
   // (three-span arch), trams (v of the two tram tracks), pole (tripod name pole text), ped (a pedestrian deck: closed to cars), clear (board).
-  { id: 'swan-upper', name: 'Верхний Лебяжий мост', nameEn: 'Upper Swan Bridge', kind: 'road', style: 'swan-upper', stone: true, water: 'r2653741', ww: 'swan-canal',
-    cx: -1069.2, cz: -1610.6, b: 67, v0: -7.45, v1: 7.45,
-    zones: [[-7.45, -5.3, 'pave'], [-5.3, -4.7, 'sett'], [-4.7, 4.7, 'asphalt'], [4.7, 5.3, 'sett'], [5.3, 7.45, 'pave']],
-    hump: 0.85, soffitCrown: 0.25, spring: 0.4, at: [-1069, -1611] },
   { id: 'swan-lower', name: 'Нижний Лебяжий мост', nameEn: 'Lower Swan Bridge', kind: 'road', style: 'swan-lower', stone: true, water: 'r2653741', ww: 'swan-canal',
     cx: -857.7, cz: -1004.3, b: 67, v0: -10.5, v1: 10.5, bank: [-5.2, 5.5],
     zones: [[-10.5, -7, 'pave'], [-7, 7, 'asphalt'], [7, 10.5, 'pave']],
     hump: 0.5, soffitCrown: -0.3, spring: 0.3, at: [-858, -1004] },
-  { id: 'prachechny', name: 'Прачечный мост', nameEn: 'Laundry Bridge', kind: 'road', style: 'arch3', stone: true, water: 'r1201709', ww: 'fontanka',
-    cx: -829.9, cz: -1716.2, b: 247, v0: -7.15, v1: 7.15, bank: [-19.7, 17.7], spans: [9.5, 12, 9.5], crowns: [-0.2, 0.6, -0.2], pier: 3.2,
-    zones: [[-7.15, -5.02, 'pave'], [-5.02, 5.02, 'asphalt'], [5.02, 7.15, 'pave']],
-    hump: 1.3, soffitCrown: 0.6, spring: 0.3, at: [-830, -1716] },
   { id: 'panteleymonovsky', name: 'Пантелеймоновский мост', nameEn: 'Panteleymonovsky Bridge', kind: 'road', style: 'pantel', water: 'r1201709', ww: 'fontanka',
     cx: -725.2, cz: -1082.8, b: 76.5, v0: -11.7, v1: 11.7, pole: 'Пантелеймоновский мост',
     zones: [[-11.7, -8, 'pave'], [-8, 8, 'asphalt'], [8, 11.7, 'pave']],
@@ -111,8 +99,8 @@ const BASE_SITES = [
     zones: [[-1.5, 1.5, 'asphalt']], hump: 0.15, at: [-1350, -540] },
 ];
 
-/** every bridge site: the west + the Mars Field reach (this file) + the south-west (sites-sw.js) + the Karpovka (sites-petro.js) + Vasilievsky Island (sites-vo.js: the two Smolenka bridges and the quay-zone record of the Blagoveshchensky Bridge, kind 'zone') */
-export const SITES = [...BASE_SITES, ...SW_SITES, ...PETRO_SITES, ...VO_SITES, ...VO2_SITES, ...SOUTH_SITES, BLAG_ZONE];
+/** every bridge site of the Nevsky strip: the west + the Mars Field reach (this file) + the three south-west bridges of the strip (sites-sw.js: Kamenny, Pochtamtsky, Fonarny); every centre lies in the data extent (tools/bridges-sites-check.mjs) */
+export const SITES = [...BASE_SITES, ...SW_SITES];
 export const siteById = (id) => SITES.find((s) => s.id === id) || null;
 const rad = (d) => d * Math.PI / 180;
 /** the frame constants of a site: { cx, cz, T (rad), c, s } */

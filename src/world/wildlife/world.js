@@ -8,9 +8,7 @@
 // parapet whose crown is 1.04 m high 0.44 m behind the wall line); the ground tests also ask ctx.physics.columnBlocked (benches, plinths, fountains, steps, trunks).
 // Sources: docs/research/people.md (O10 species, spots), fontanka.md (parapet: granite posts 0.45 x 1.0 m every ~3.2 m, coping top +0.17), architecture.md (cornice 1.0 m),
 // west-canals-bridges.md (Moika / Griboedov posts), west-life-furniture.md section 8 (birds per zone).
-import { BUILDINGS, AREAS, PIERS, PARKING } from '../data/city.js';
-import { PETRO_OFF, ISL_OFF } from './zones.js';
-import { world as spitWorld, faceB as spitFace, HL as SPIT_HL, ROT as SPIT_ROT, TERRACE as SPIT_TERRACE, BELT as SPIT_BELT, PARAPET_H as SPIT_PH, PARAPET_T as SPIT_PT } from '../landmarksYelaginSpits/frame.js';       // pure data: the local frame of the Yelagin west spit
+import { BUILDINGS, AREAS, PARKING } from '../data/city.js';
 
 const hash2 = (a, b) => { let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const ringHas = (o, x, z) => { let ins = false; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const xi = o[i], zi = o[i + 1], xj = o[j], zj = o[j + 1]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) ins = !ins; } return ins; };
@@ -20,18 +18,13 @@ const POST_Y = { fontanka: 1.30, griboedov: 1.24, 'swan-canal': 1.24, moika: 1.1
 export function makeWorld(ctx) {
   const { L } = ctx, svc = ctx.services, phys = ctx.physics;
   const env = svc.environment, streets = svc.streets, landmarks = svc.landmarks, city = svc.city, lmC = svc.landmarksC;
-  const play = L.WORLD.play, OB = L.OBELISK;
+  const OB = L.OBELISK;
   const timing = {}; let tl = performance.now(); const lap = (k) => { const n = performance.now(); timing[k] = (timing[k] || 0) + n - tl; tl = n; };      // build time per phase (W.timing, ms)
 
   // ---------------------------------------------------------------- trunks grid (trees / shrubs the animals must not stand in)
   const tgrid = new Map(); const TC = 8;
   const tk = (i, j) => i * 40009 + j;
-  // Vasilievsky Island: the trees the island sights draw themselves ({ x, z, h, r [, tr] }): the 6 566 old trunks of the Smolensky cemetery (crows and jackdaws sit in their tops, sparrows dive into them), the gardens of the
-  // Academy, the Menshikov Palace, Kirova, Pribaltiyskaya and the Mining University (Andrew publishes families without heights: skipped). They stand in the trunk grid too (no animal stands in a trunk) and give tree-top perches below.
-  const islandTrees = [];
-  for (const k of ['landmarksSmolensky', 'landmarksAcademy', 'landmarksMenshikov', 'landmarksKirova', 'landmarksPribaltiyskaya', 'landmarksMining']) for (const t of (Array.isArray(svc[k]?.trees) ? svc[k].trees : Array.isArray(svc[k]?.treeList) ? svc[k].treeList : [])) if (t && Number.isFinite(t.x) && Number.isFinite(t.z) && Number.isFinite(t.h)) islandTrees.push(t);
   for (const t of env?.trees || []) { const k = tk(Math.floor(t.x / TC), Math.floor(t.z / TC)); (tgrid.get(k) || tgrid.set(k, []).get(k)).push(t); }
-  for (const t of islandTrees) { const k = tk(Math.floor(t.x / TC), Math.floor(t.z / TC)); (tgrid.get(k) || tgrid.set(k, []).get(k)).push(t); }
   const inTree = (x, z, pad = 0.3) => {
     const ci = Math.floor(x / TC), cj = Math.floor(z / TC);
     for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) for (const t of tgrid.get(tk(i, j)) || []) {
@@ -153,16 +146,14 @@ export function makeWorld(ctx) {
     addPerch({ kind: 'lamp', x: l.x, y: l.h + (l.kind === 'A' ? 0.27 : 0.12), z: l.z, yaw: hash2(Math.round(l.x), Math.round(l.z)) * 6.283, size: 2 });
   }
   // the torchere lamps / lanterns of the landmark gardens (landmarksE / H / J publish { x, z, h })
-  const petroLamps = PETRO_OFF ? [] : [...(svc.landmarksFortress?.lamps || []), ...(svc.landmarksTroitskaya?.lamps || []), ...(svc.landmarksStrelka?.lamps || [])].filter((l) => l && typeof l === 'object');      // the lanterns of the fortress alleys, Troitskaya Square and the Spit garden
-  for (const l of [...(svc.landmarksE?.lamps || []), ...(svc.landmarksH?.lamps || []), ...(svc.landmarksJ?.lamps || []), ...petroLamps]) {
+  for (const l of [...(svc.landmarksE?.lamps || []), ...(svc.landmarksH?.lamps || []), ...(svc.landmarksJ?.lamps || [])]) {
     if (!Number.isFinite(l.x) || !Number.isFinite(l.h) || l.h < 3 || hash2(Math.round(l.x * 3), Math.round(l.z * 3)) > 0.6 || !L.inPlay(l.x, l.z)) continue;
     addPerch({ kind: 'lamp', x: l.x, y: l.h + 0.1, z: l.z, yaw: hash2(Math.round(l.x), Math.round(l.z)) * 6.283, size: 2 });
   }
   // tree tops (lime / maple / elm crowns of the side streets, the embankments and the gardens): a bird sits just under the top of a tall crown. The trees of the landmark gardens are
   // drawn by their modules: they may publish services.landmarksX.treeList = [{ x, z, h }] (not yet: the Alexander Garden, Kazan and St Isaac's gardens then have lamps only)
   const gardenTrees = ['landmarksE', 'landmarksF', 'landmarksH', 'landmarksJ'].flatMap((k) => (Array.isArray(svc[k]?.treeList) ? svc[k].treeList : []));
-  if (!PETRO_OFF) for (const k of ['landmarksTroitskaya', 'landmarksKronverk', 'landmarksFortress', 'landmarksStrelka', 'landmarksAurora', 'landmarksVladimir']) for (const t of (Array.isArray(svc[k]?.trees) ? svc[k].trees : Array.isArray(svc[k]?.treeList) ? svc[k].treeList : [])) if (t && Number.isFinite(t.x) && Number.isFinite(t.h)) gardenTrees.push(t);      // the trees the Petrograd sights draw themselves ({ x, z, h })
-  for (const t of [...(env?.trees || []), ...gardenTrees, ...islandTrees]) {
+  for (const t of [...(env?.trees || []), ...gardenTrees]) {
     if (t.shrub || t.h < 9) continue;
     if (hash2(Math.round(t.x * 7), Math.round(t.z * 7)) > 0.22) continue;
     if (!L.inPlay(t.x, t.z, 0)) continue;
@@ -201,56 +192,7 @@ export function makeWorld(ctx) {
     }
     break;
   }
-  // the scenery pier w74745049 of the Lt Schmidt embankment (environment/boats.js FIXED_PIERS: a low white pontoon wall 1 m over the water, a grey deck, the red top rail 1.0 m over the deck, inset 0.12 m from the edge,
-  // drawn only while no sight claims the polygon): gulls on the rail every ~30 m of the long edges and on the deck a little inside; scenery, nobody walks there (water-2 request, vo-requests-wildlife.md)
-  if (!L.claimedBy || !L.claimedBy('w74745049')) for (const pr of PIERS.filter((q) => q.id === 'w74745049')) for (const poly of pr.polys) {
-    const o = poly.o, n = o.length / 2; if (n < 3) continue;
-    let area = 0; for (let i = 0; i < n; i++) { const j = (i + 1) % n; area += o[i * 2] * o[j * 2 + 1] - o[j * 2] * o[i * 2 + 1]; }
-    const wl = L.WATERWAYS.neva.water, top = wl + 1.0, sgn = area > 0 ? 1 : -1;
-    for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n, ax = o[i * 2], az = o[i * 2 + 1], bx = o[j * 2], bz = o[j * 2 + 1], len = Math.hypot(bx - ax, bz - az); if (len < 9) continue;
-      const tx = (bx - ax) / len, tz = (bz - az) / len, nx = tz * sgn, nz = -tx * sgn, k = Math.max(1, Math.round(len / 30));
-      for (let q = 0; q < k; q++) {
-        const u = (q + 0.5) / k * len, x = ax + tx * u - nx * 0.12, z = az + tz * u - nz * 0.12;
-        addPerch({ kind: 'post', key: 'pier', x, y: top + 1.04, z, yaw: Math.atan2(-nx, -nz) + (hash2(Math.round(x), Math.round(z)) - 0.5) * 1.4, size: 2 });                      // on the red rail (its top 1.035 m over the deck)
-        if (ringHas(o, x - nx * 1.6, z - nz * 1.6)) addPerch({ kind: 'post', key: 'pier', x: x - nx * 1.6, y: top + 0.03, z: z - nz * 1.6, yaw: Math.atan2(-nx, -nz) + (hash2(q, 5) - 0.5) * 2, size: 2 });      // on the deck beside it
-      }
-    }
-  }
-  // the Petrograd side: gulls STAND at the water line of the fortress beach and on the edge of the descent landing of the Spit (ground perches: the height is read from the physics)
-  if (!PETRO_OFF && phys) try {
-    const gh = (x, z, f) => { const h = phys.groundHeight(x, z, f, false); return Number.isFinite(h) ? h : null; };
-    const FO = svc.landmarksFortress, SK = svc.landmarksStrelka;
-    for (const c of (FO?.crowd || []).filter((q) => q.kind === 'beach')) {
-      const k = Math.max(3, Math.round((c.r || 16) / 5));
-      for (let i = 0; i < k; i++) {
-        const x = c.x + ((i + 0.5) / k - 0.5) * 2 * (c.r || 16) + (hash2(i, Math.round(c.x)) - 0.5) * 3; let zw = null;
-        for (let z = c.z - 6; z < c.z + 46; z += 0.5) { const h = gh(x, z, 0.6); if (h !== null && h < -0.14 && h > -1.2) { zw = z; break; } if (h !== null && h <= -1.2) break; }
-        if (zw === null) continue; const z = zw - 0.3 - 1.6 * hash2(i, 5), h = gh(x, z, 0.6); if (h === null || h < -0.6 || h > 0.3) continue;
-        addPerch({ kind: 'post', key: 'beach', x, y: h + 0.01, z, yaw: hash2(i, 9) * 6.283, size: 2 });
-      }
-    }
-    const ld = SK?.descent?.landing, ly = SK?.descent?.landingY;
-    if (ld && Number.isFinite(ly)) {                                                                                // the edge of the landing: a point of the landing with the water 1.4 m beyond it
-      const on = (x, z) => { const h = gh(x, z, ly + 0.6); return h !== null && Math.abs(h - ly) < 0.2; }, got = [];
-      for (let i = 0; i < 90 && got.length < 5; i++) {
-        const a = hash2(i, 3) * 6.283, r = 2 + 14 * hash2(i, 7), x = ld.x + Math.sin(a) * r, z = ld.z + Math.cos(a) * r; if (!on(x, z) || got.some((p) => Math.hypot(p[0] - x, p[1] - z) < 3.5)) continue;
-        let out = null; for (let q = 0; q < 8 && !out; q++) { const b = q * 0.7854, ox = Math.sin(b), oz = Math.cos(b); if (!on(x + ox * 1.4, z + oz * 1.4) && on(x - ox * 0.8, z - oz * 0.8) && env?.waterAt && env.waterAt(x + ox * 2.2, z + oz * 2.2) && (gh(x + ox * 1.4, z + oz * 1.4, ly + 0.6) ?? -9) < ly - 0.8) out = b; }
-        if (out === null) continue; got.push([x, z]); addPerch({ kind: 'post', key: 'descent', x, y: ly + 0.01, z, yaw: out, size: 2 });
-      }
-    }
-  } catch (e) { /* the sights are optional */ }
-  // the islands of round 2: gulls on the crown of the parapet of the Yelagin west spit (the arc wall of landmarksYelaginSpits: terrace 0.30 + belt 0.14 + parapet 1.0 m; a bird every ~3.4 m between the two corners, facing the water)
-  if (!ISL_OFF && svc.landmarksYelaginSpits && L.inPlay(-6420, -5307)) {
-    for (let a = -SPIT_HL + 2.4, i = 0; a <= SPIT_HL - 2.4; a += 3.4 + 0.5 * hash2(i++, 41)) { const [x, z] = spitWorld(a, spitFace(a) - SPIT_PT / 2 - 0.03); addPerch({ kind: 'post', key: 'spit', x, y: SPIT_TERRACE + SPIT_BELT + SPIT_PH + 0.05, z, yaw: SPIT_ROT + (hash2(i, 43) - 0.5) * 1.2, size: 2 }); }
-  }
-  // the floating pontoons of the yacht clubs and marinas of the islands (props/islands.js publishes ctx.services.props.pontoons = [{ x, z, rotY, len, y }], deck top y): a gull on every ninth deck, facing along it
-  if (!ISL_OFF) for (const p of svc.props?.pontoons || []) {
-    if (!Number.isFinite(p.x) || !Number.isFinite(p.z) || !Number.isFinite(p.y) || !L.inPlay(p.x, p.z, 0) || hash2(Math.round(p.x * 3), Math.round(p.z * 3)) > 0.11) continue;
-    const u = (hash2(Math.round(p.z), 11) - 0.5) * Math.max(0, (p.len || 4) - 1.4), ry = Number.isFinite(p.rotY) ? p.rotY : 0;
-    addPerch({ kind: 'post', key: 'pontoon', x: p.x + Math.sin(ry) * u, y: p.y + 0.02, z: p.z + Math.cos(ry) * u, yaw: ry + (hash2(Math.round(p.x), 13) < 0.5 ? 0 : Math.PI), size: 2 });
-  }
-  lap('posts+petro');
+  lap('posts');
   // cornices of the street facades: the flat top moulding is 0.6 m deep, 1.0 m above the cornice line (city/cornice.js CORNICE)
   const styles = city?.styles;
   const roofs = [];

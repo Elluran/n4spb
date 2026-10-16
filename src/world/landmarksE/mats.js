@@ -5,7 +5,7 @@ import * as THREE from 'three';
 export const GE = {
   gdWall: '#e8c46c', gdWallShade: '#d8b25c', white: '#f2efe6', whiteShade: '#dcd7c8', vault: '#eed08a', plinth: '#9a9c92', plinthDark: '#7d8078',
   roofGreen: '#5d9b7c', roofGreenDark: '#4f8a5a', roofZinc: '#8f949c', slab: '#7c7a76', slabDark: '#4a4c50',
-  theatre: '#e8c070', theatreShade: '#dcb868', rossiWall: '#ecd8a0', rossiGround: '#e6cc90', libWall: '#b8bec8', libWallLit: '#c8ccd6', libTrim: '#ecebe6',
+  theatre: '#e8c070', theatreShade: '#dcb868', rossiGround: '#e6cc90', libWall: '#b8bec8', libWallLit: '#c8ccd6', libTrim: '#ecebe6',
   palace: '#ecd0a8', cabinet: '#e0e2c4', pavilion: '#bdb9a6', fenceIron: '#6a6055', gold: '#d6ac4e', bronzeGreen: '#3a5040', monumentBronze: '#2b3330', redGranite: '#7a3d36', redGraniteLight: '#8a5a52',
   graniteGrey: '#8d807c', gravel: '#b0807a', lawn: '#5f9a40', lawnDark: '#4e8636', ironBlack: '#1b1f20', ironGreen: '#25382d', bench: '#f0ede4', door: '#8a6a3a',
 };
@@ -32,7 +32,7 @@ export function makeG(K) {
   M.vaultPlain = T(GE.vault, { side: 'double', name: 'lmE-vaultPlain' });
   M.plinth = K.rust(GE.plinth); M.plinthFlat = T(GE.plinth); M.plinthDark = T(GE.plinthDark);
   M.theatre = K.wall(GE.theatre); M.theatreShade = K.wall(GE.theatreShade); M.theatreRust = K.rust('#e8cc88');
-  M.rossi = K.wall(GE.rossiWall); M.rossiGround = K.rust(GE.rossiGround);
+  M.rossiGround = K.rust(GE.rossiGround);
   M.lib = K.wall(GE.libWall); M.libRust = K.rust('#aeb4be'); M.libTrim = T(GE.libTrim);
   M.palace = K.wall(GE.palace); M.cabinet = K.wall(GE.cabinet); M.pavilion = K.wall(GE.pavilion);
   M.gold = T(GE.gold, { emissive: '#4a3508', emissiveIntensity: 0.35, name: 'lmE-gold' });

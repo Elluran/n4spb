@@ -18,7 +18,7 @@
 //   director.js the DENSITY DIRECTOR: ~130 birds on a map 2.4x bigger than the first build, so what the player has left behind (> 240-420 m, never in the view cone) is moved to the zones, posts,
 //              boats and waters 70-230 m from the player: the Kazan lawn is full when the player is at Kazan, the Neva parapet when he walks the Palace Embankment.
 //   boats.js   one descriptor per boat of the map (landmarksC Fontanka boats + environment boats of the Moika / Griboedov / Winter Canal / Neva): roof / railing slots, hull boxes.
-//   ducks.js   six groups of mallards (pairs, a trio, hens with 4-7 ducklings) swimming slow lanes 4-5 m off the quay walls of the Fontanka, the Moika and the Griboedov Canal (71 validated
+//   ducks.js   six groups of mallards (pairs, a trio, hens with 4-7 ducklings) swimming slow lanes 4-5 m off the quay walls of the Fontanka, the Moika and the Griboedov Canal (validated
 //              lanes: clear of every boat hull of every lap, the landing stages, the bridges and the descents), with a wake each; the groups follow the player like the birds.
 //   world.js   placement tests (play area union, building / trunk / solid (physics columns) / carriageway / water / obelisk steps / bridge pavement), perch list (lamp tops, parapet posts of
 //              every embankment, Neva roll, lions, tree tops, cornices), ground level (square paving, pavements +0.12, low steps read from the physics, humped bridge deck), water points.
@@ -30,40 +30,22 @@
 // Services: ctx.services.wildlife = { birds, dogs: [], spots, crowds ([{ x, z, r, f, l }]: the tourist squares for core/audio.js 'crowd'), cafes (the cafe pavements where crumbs fall: core/audio.js plays a terrace murmur near them), ducks, perches, flocks, zones, sites,
 //   debug } - `birds` are the live state objects ({ sp, st, x, y, z, yaw, ... }); `spots` are viewpoints { name, x, z, yaw, kind, target } from which a flock / the gulls / the ducks can be watched
 //   (stand there, look along yaw; the flocks move with the player, so a flock zone spot shows its flock only when the player has been about for a few seconds).
-// Quality: ctx.quality.name 'medium' = 70 %, 'low' = 45 % of the animals.  Triangles: ~40 k static-equivalent (instanced), budget 100 k.  Draw calls: 16 birds + 7 ducks meshes (instanced), unchanged by the island.
-// Build time: 0.45 - 0.6 s on the whole map (svc.debug.timing: per part and per phase; tools/wildlife-test.mjs prints it and limits it to 700 ms). It was 1.8 s once the map had the island: the sparrow shelters scanned every tree of the map per
+// Quality: ctx.quality.name 'medium' = 70 %, 'low' = 45 % of the animals.  Triangles: ~40 k static-equivalent (instanced), budget 100 k.  Draw calls: 16 birds + 7 ducks meshes (instanced).
+// Build time: 0.25 - 0.6 s (svc.debug.timing: per part and per phase; tools/wildlife-test.mjs prints it and limits it to 700 ms). It was 1.8 s once the map had the island: the sparrow shelters scanned every tree of the map per
 //   candidate, the lane test of the streets ran five full grid scans per 0.25 m memo cell (now one pass: world.js onLane), the foraging sites (~2 000) were validated one by one at build (now lazily: birds.js siteOk), the duck obstacles
 //   were tested linearly (now a 40 m hash), the cafe search scanned its taken points linearly, and the roof / water lattices were denser than the animals need.
-// THE PETROGRAD SIDE / THE SPIT (docs/PETRO-BRIEF.md): the same ~130 birds follow the player there (the budget does not grow): zones.js adds the flock zones (pigeons on the cathedral square of the
-//   fortress, Troitskaya and Lev Tolstoy squares, the Spit garden, Gorkovskaya, the Aurora quay ...; sparrows and crow haunts in Alexander Park and the gardens), world.js the perches (the Neva roll of the new
-//   embankments and the Zhdanovka posts come from the quay segments; natural banks and the moat have none; ground perches at the water line of the fortress beach and on the edge of the Spit descent landing;
-//   the lanterns and trees the sights publish), ducks.js the lanes of the Kronverksky strait, the Kronverk moat, the Zhdanovka and the two ponds of Alexander Park; two / three positional 'lake' loops
-//   (the Spit descent, the beach). ?petro=off switches all of it off.
-// VASILIEVSKY ISLAND (docs/VO-HANDOFF.md; requests in docs/research/vo-requests-wildlife.md and the "-> wildlife" sections of the sight request files): the same ~140 animals follow the player there. zones.js adds the pigeon zones at the
-//   Academy of Arts and Trezzini Square, the Andreevsky market and boulevard, Sevkabel Port (and its pier plaza), the forecourt of St Xenia's chapel (the Smolensky service `birds`: the BIG flock of the map, 11 - 13 pigeons) and the
-//   Menshikov Palace, the Lutheran church, Gorny Institut, Pribaltiyskaya, the Mining University, the Naval Cadet Corps; sparrows in the Rumyantsev, Academy and Vasileostrovets gardens and on the Andreevsky boulevard; crow haunts
-//   in the old trees of the Smolensky cemetery. world.js takes the trees the island sights publish (services.landmarksX.trees: the 6 566 cemetery trunks above all) as tree-top perches and as trunks, and puts gull perches on the red rail
-//   and the deck of the scenery pier w74745049. boats.js gives the river-sea cargo ships of the Bolshaya Neva (environment boats cargo / cargo2: deckhouse roofs, wheelhouse, bare mast, crane jibs, hatches, forecastle) and the two
-//   moored liners of the Marine Facade (landmarksMarineFacade.ships: wheelhouse wings, bridge roof, funnel caps, solarium, tender roofs, mast bars) their gull slots. ducks.js swims lanes on the Smolenka and in Galerny Harbour.
-//   birds.js has the western JACKDAW: the crow meshes at 0.66 size, tinted (no new mesh); 3 of the budget. Sounds are the existing ones (crow / gull / duck calls, wing claps, the ambient 'lake' and boat hum): nothing new, nothing sharp.
-// THE ISLANDS OF ROUND 2 (docs/research/people-isl2.md; the "-> wildlife" sections of docs/research/islands2-requests-*.md): zones.js adds 19 flock zones (pigeons on the Yelagin west spit terrace, at the palace stair, the Kitchen portico, the
-//   East pavilion, Green Beach, the Kamenny church forecourt and Starogo Teatra square, the Palm House portal of the Botanical Garden, Betancourt Plaza, the Krestovsky arena; sparrows at the theatre, the Hercules, the
-//   Botanical Institute and its north court, Petrovsky Park), five crow haunts (the old oaks of the park, the palace lawn, the Botanical Garden, Kamenny, Petrovsky Park), the audio crowds; world.js puts GULL perches on every ninth pontoon of the yacht clubs and on the crown of the Yelagin spit
-//   parapet (the arc wall of landmarksYelaginSpits/frame.js); ducks.js swims lanes on the ponds of the islands (the Yelagin ponds, Kamenny, the Lopukhinsky pond, the Petrovsky pond, the two ponds of the Botanical Garden; only where the environment
-//   draws water) and brings the SWANS (models.js swan: a pair with three grey cygnets on the 4th Southern pond by the Hercules cape / the 3rd Northern pond, a pair on the Petrovsky pond; the three swan meshes are drawn only while a swan is within 320 m of
-//   the player). ?isl=off (tools: --isloff) switches it all off; ?petro=off does too. Not built: squirrels, geese, the pony, the monkey islet (no model, no photo check).
 // URL switches: ?wl=nofear (animals ignore the player: close-ups), ?wl=gallery (one of each species in a row in front of the start view, implies nofear and swifts),
 //               ?wl=nobirds, ?wl=noducks, ?wl=swifts (swifts at any time of day), ?wl=nodirector (the animals stay where they were put).
 // Update-safe: every per-frame call is wrapped; a failing part switches itself off and logs once.
 // TODO (not built): no pigeons on the Klodt horses / the Admiralty spire, the swifts do not scream at the player's position (the ambient 'birds' loop has them), no birds on the bridge decks
 //   other than the Anichkov Bridge pavements, no tree-top perches in the gardens of the west whose trees the landmark modules draw themselves (they could publish services.landmarksX.treeList = [{ x, z, h }]; the island sights do),
-//   the jackdaw has no grey nape / pale eye and no call of its own (it uses the crow call: a 'jackdaw' voice in core/audio.js would be the owner's), no squirrels (no photo check: the dossier says none), no gulls on the Gulf shore
+//   no squirrels (no photo check: the dossier says none), no gulls on the Gulf shore
 //   rocks (the shore is the Neva quay type: the gulls use its posts and the sky over the water), no bathers, no beach.
 // Tests: node tools/wildlife-test.mjs (behaviour, headless), node tools/check.mjs wildlife; ?wl=gallery + shot.mjs for the models.
 import { makeWorld } from './wildlife/world.js';
 import { buildBirds } from './wildlife/birds.js';
 import { buildDucks } from './wildlife/ducks.js';
-import { crowdTable, PETRO_OFF } from './wildlife/zones.js';
+import { crowdTable } from './wildlife/zones.js';
 
 export async function build(ctx) {
   const svc = (ctx.services.wildlife = { birds: [], dogs: [], spots: [], ducks: [], perches: [], flocks: [], debug: {} });
@@ -110,17 +92,6 @@ export async function build(ctx) {
     }
   } catch (e) { /* audio is optional */ }
 
-  // the Petrograd side: the Neva lapping on the granite of the Spit descent and on the sand of the fortress beach (the calm 'lake' loop of core/audio.js as point sources: no new sounds)
-  try {
-    if (ctx.audio && ctx.audio.loop && !PETRO_OFF && !flags.has('nowater')) {
-      const SK = ctx.services.landmarksStrelka, FO = ctx.services.landmarksFortress, pts = [];
-      const ld = SK?.descent?.landing; pts.push([ld?.x ?? -2453, (SK?.descent?.landingY ?? -2.8) + 0.3, ld?.z ?? -1326.1, 0.9]);
-      for (const c of (FO?.crowd || [{ kind: 'beach', x: -2040, z: -1740 }, { kind: 'beach', x: -1960, z: -1752 }]).filter((q) => q.kind === 'beach')) pts.push([c.x, -0.2, c.z + 22, 0.8]);
-      svc.waterLoops = [];
-      for (const [x, y, z, v] of pts) if (L.inPlay(x, z)) { ctx.audio.loop('lake', { position: { x, y, z }, volume: v }); svc.waterLoops.push({ x, y, z, v }); }
-    }
-  } catch (e) { /* audio is optional */ }
-
   const off = new Set();
   ctx.onUpdate((dt, t) => {
     for (const [name, P] of parts) {
@@ -153,9 +124,6 @@ function makeSpots(ctx, W, svc) {
   const g2 = byKey('moika'); if (g2) add('Чайки на ограде Мойки · Gulls on the Moika railing', 'gull', g2.x, g2.z, g2.y, 5);
   const ln = W.perches.find((p) => p.kind === 'lion'); if (ln) add('Чайка на льве Дворцовой пристани · A gull on the Palace Pier lion', 'gull', ln.x, ln.z, ln.y, 8);
   const bt = svc.debug?.birds?.boatList?.find((b) => b.key === 'neva' && !b.moving); if (bt) { const a = bt.at(0); add('Чайки на лодках у пристани · Gulls on the boats at the pier', 'gull', a.x, a.z, bt.y0 + 2, 9); }
-  // Vasilievsky Island: the gulls on the red rail of the scenery pier by the Naval Cadet Corps, a crow of the Smolensky cemetery on its tree top
-  const pr = W.perches.find((p) => p.kind === 'post' && p.key === 'pier'); if (pr) add('Чайки на пирсе у Морского корпуса · Gulls on the pier by the Naval Cadet Corps', 'gull', pr.x, pr.z, pr.y, 9);
-  const ct = W.perches.find((p) => p.kind === 'tree' && p.x > -6300 && p.x < -5300 && p.z > -1700 && p.z < -1100); if (ct) add('Вороны и галки на старых деревьях Смоленского кладбища · Crows and jackdaws in the old trees of the Smolensky cemetery', 'crow', ct.x, ct.z, ct.y, 12);
   const dk = svc.debug?.ducks?.groups?.[0]; if (dk) { const p = svc.debug.ducks.groupPose(dk, 0); out.push({ name: 'Утки у набережной · Ducks by the quay', kind: 'duck', x: p.x, z: p.z, yaw: 0, pitch: 4, target: { x: p.x, z: p.z, y: L.RIVER_Y.water }, note: 'stand on the quay above the lane of the first group' }); }
   return out;
 }

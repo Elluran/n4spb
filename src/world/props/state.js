@@ -9,9 +9,6 @@ import { AREAS, GREEN } from '../data/city.js';
 import { buildWorld, F } from './world.js';
 import { placeM, vcMat, instanced, hash01, clamp, makePanels, nightMat, staticMesh, ringHas } from './kit.js';
 import { signTextures } from './signs.js';
-import { PETRO_SIGHTS, VO_SIGHTS, inCurated } from './petro.js';
-import { PAVED_RINGS as ANDREW_RINGS } from '../landmarksAndrew/groups.js';
-import { PAVED_RINGS as BRIDGE_RINGS } from '../bridges/groups.js';
 import { streetTrackDist } from '../streets/net.js';
 
 const BENCH_LENGTHS = { benchPark: 1.8, benchParkD: 1.8, benchParkL: 2.1, benchWhite: 1.9, benchWhiteL: 2.3, benchGranite: 2.0 };
@@ -52,8 +49,8 @@ export function makeState(ctx) {
   };
   /** disc registry + raster reservation in one call */
   S.occupy = (x, z, r, tag = '') => { S.placed.add(x, z, r, tag); S.W.reserve(x, z, Math.min(r, 2.5)); };
-  S.solidBox = (cx, cz, w, d, rotY, h = 1.0, y0 = 0) => { const it = ctx.physics.addBox(cx, cz, w, d, rotY, y0, h); if (S._noteHit) S._noteHit(cx, cz, it); };
-  S.solidCyl = (x, z, r, h = 1.0) => { const it = ctx.physics.addCylinder(x, z, r, 0, h); if (S._noteHit) S._noteHit(x, z, it); };
+  S.solidBox = (cx, cz, w, d, rotY, h = 1.0, y0 = 0) => { ctx.physics.addBox(cx, cz, w, d, rotY, y0, h); };
+  S.solidCyl = (x, z, r, h = 1.0) => { ctx.physics.addCylinder(x, z, r, 0, h); };
   S.box = (cx, cz, w, d, rotY, h, o = {}) => {                 // collider + raster reservation + registry for an oriented box
     if (o.collide !== false) S.solidBox(cx, cz, w, d, rotY, h);
     S.W.reserveBox(cx, cz, w, d, rotY); S.placed.add(cx, cz, Math.min(Math.hypot(w, d) / 2, o.r ?? 1.2), o.tag || '');
@@ -136,68 +133,6 @@ export function makeState(ctx) {
   for (const h of L.GROUND_HOLES || []) S.placed.add(h.x, h.z, Math.hypot(h.w, h.d) / 2 + 3, 'metro');
   // landmarksA's two advertising pillars (the island beside the obelisk + the forecourt) and its lamp groups, planters, racks (positions known from its frame)
   S.placed.add(609.5, 171.5, 0.7, 'pillar'); { const p = S.stationW(-58, -26); S.placed.add(p[0], p[1], 0.7, 'pillar'); }
-  // ---- the sights of the Petrograd side / Spit extension (docs/PETRO-BRIEF.md) publish what they draw, all in one shape: their benches are not drawn again (S.lmBench), their lamps, photo
-  // spots, monuments, exhibits and gathering places stay free, their doors get the porch box, and a published ground ring (the fortress island) is theirs like a claimed garden (PLAZA).
-  // S.claimedPetro(x, z): ground of the new area that a sight paves or plants itself: the generic generators put nothing there (petro.js places the few things the brief asks for)
-  const each = (list, fn) => { if (Array.isArray(list)) for (const o of list) if (o && typeof o.x === 'number' && typeof o.z === 'number') fn(o); };
-  const seedSight = (sv) => {
-    each(sv.benches, (b) => { S.lmBench.push([b.x, b.z]); S.placed.add(b.x, b.z, 0.5, 'bench'); });
-    each(sv.lamps, (l) => S.placed.add(l.x, l.z, 0.9, 'lamp'));
-    each(sv.monuments, (m) => S.placed.add(m.x, m.z, Math.min(6, m.r || 3), 'mon'));
-    each(sv.exhibits, (e) => S.placed.add(e.x, e.z, Math.max(1.2, Math.min(5, (e.len || 2) / 2)), 'mon'));
-    each(sv.photoSpots, (p) => S.placed.add(p.x, p.z, 1.6, 'photo'));
-    each(sv.crowd, (c) => S.placed.add(c.x, c.z, Math.min(3.5, (c.r || 3) * 0.5), 'crowd'));
-    each(sv.entrances, (e) => { if (typeof e.rotY !== 'number') return; const c = Math.cos(e.rotY), s = Math.sin(e.rotY); S.W.reserveBox(e.x + s * 0.9, e.z + c * 0.9, 3.0, 3.2, e.rotY, F.DOOR, 0.0); addDoorBox({ cx: e.x + s * 0.9, cz: e.z + c * 0.9, c, s, hw: 1.5, hd: 1.6 }); });
-    if (Array.isArray(sv.ring) && sv.ring.length >= 6) { const flat = typeof sv.ring[0] === 'number' ? sv.ring : sv.ring.flatMap((p) => [p[0] ?? p.x, p[1] ?? p.z]); if (flat.length >= 6 && flat.every(Number.isFinite)) S.W.mark([flat], F.PLAZA); }
-  };
-  for (const name of PETRO_SIGHTS) { const sv = ctx.services[name]; if (sv) seedSight(sv); }
-  S.seedSight = seedSight;                                             // props/islands.js registers the island sights the list above misses (another service key, a sight not listed) AFTER the generic phases (the shared random stream must not move)
-  // S.claimedPetro(x, z): ground of the new area that a sight paves or plants itself: the generic generators put nothing there (petro.js places the few things the brief asks for). NOT the island
-  // (V3..V12): the generic phases treat the island exactly as before the island round (the shared random stream S.R must not move: the older districts stay as they were); props/vo.js, which
-  // runs last, takes the island sights into account (S.seedVO) and removes what they draw themselves (S.removeWhere).
-  S.claimedPetro = (x, z) => inCurated(x, z) && !!(S.W.at(x, z) & (F.PLAZA | F.PAVED));
-
-  // ---- colliders of the generic phases by position, so that S.removeWhere can take a prop and its collider away together
-  const hit = new Map();
-  S._noteHit = (x, z, it) => { const k = Math.round(x * 2) + ',' + Math.round(z * 2); let a = hit.get(k); if (!a) hit.set(k, (a = [])); a.push(it); return it; };
-  /** remove every instance (and its collider) whose (x, z, type) satisfies pred, and the entries of the published lists (S.svc.*: type = the list name); returns the number of instances removed */
-  S.removeWhere = (pred) => {
-    let n = 0;
-    for (const [name, list] of S.inst) {
-      const keep = [];
-      for (const m of list) {
-        const e = m.elements, x = e[12], z = e[14];
-        if (!pred(x, z, name)) { keep.push(m); continue; }
-        n++;
-        for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-          const k = (Math.round(x * 2) + i) + ',' + (Math.round(z * 2) + j), a = hit.get(k); if (!a) continue;
-          const rest = a.filter((it) => { if (Math.abs(it.cx - x) < 0.3 && Math.abs(it.cz - z) < 0.3) { ctx.physics.remove(it); return false; } return true; });
-          if (rest.length) hit.set(k, rest); else hit.delete(k);
-        }
-      }
-      if (keep.length !== list.length) S.inst.set(name, keep);
-    }
-    for (const k of Object.keys(S.svc)) if (Array.isArray(S.svc[k])) S.svc[k] = S.svc[k].filter((o) => !(o && typeof o.x === 'number' && pred(o.x, o.z, k)));
-    return n;
-  };
-
-  // ---- ISLAND (V3..V12), called by props/vo.js AFTER every generic phase: the published benches / lamps / monuments / photo spots / crowd discs / entrances / rings of the island sights are registered like the
-  // ones above; the stair pits of the island bridges (bridges/groups.js PAVED_RINGS = pit + 1.6 m) and the grass banks of the WHSD cutting are closed to props (vo-requests-bridges.md "-> props").
-  // S.claimedVO(x, z): claimed paving where the sight draws benches itself (one of its published benches within 45 m: the OSM node is then the same bench or one it replaced). The Andreevsky boulevard and the
-  // Annunciation garden are claimed, but landmarksAndrew publishes NO benches and asks props to draw the OSM ones (docs/research/vo-requests-landmarksAndrew.md item 4): they stay. The paved pocket of the
-  // Korchmin monument stays free of generic props (item 5).
-  const flatRing = (r) => { const o = (r && (r.ring || r.o)) || r; return o && typeof o[0] === 'number' ? o : (o || []).flatMap((q) => [q[0] ?? q.x, q[1] ?? q.z]); };
-  S.seedVO = () => {
-    const n0 = S.lmBench.length;
-    for (const name of VO_SIGHTS) { const sv = ctx.services[name]; if (sv) seedSight(sv); }
-    S.voBench = S.lmBench.slice(n0);
-    S.voPit = (BRIDGE_RINGS || []).map(flatRing).filter((o) => o.length >= 6 && o.every(Number.isFinite));
-    if (S.voPit.length) S.W.mark(S.voPit, F.MISC);
-    S.voPocket = [ANDREW_RINGS[4]].filter(Array.isArray).map((r) => r.flat());
-    S.inPit = (x, z) => S.voPit.some((r) => ringHas(r, x, z));
-    S.inPocket = (x, z) => S.voPocket.some((r) => ringHas(r, x, z));
-    S.claimedVO = (x, z) => !!(S.W.at(x, z) & (F.PLAZA | F.PAVED)) && S.voBench.some((b) => Math.hypot(b[0] - x, b[1] - z) < 45);
-  };
   return S;
 }
 

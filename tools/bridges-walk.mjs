@@ -1,4 +1,4 @@
-// (copy of tools/qa-walk.mjs + a Troitsky Bridge route: node tools/bridges-walk.mjs --only bridge-troitsky,bridge-pantel ...)
+// (copy of tools/qa-walk.mjs + the bridge routes of the strip: node tools/bridges-walk.mjs --only bridge-palace,bridge-green ...)
 // QA walk test in the real scene (headless Edge + puppeteer-core, like tools/shot.mjs): a simulated player (the real Player.update with W / Shift held, yaw pointed at the next waypoint,
 // a sidestep when blocked) walks named routes of the west and reports: reached / stuck (where, what is ahead), fell through the ground, rescue events, max climb.
 //   node tools/qa-walk.mjs [--only routeName,routeName] [--list] [--edge N]       default: all routes
@@ -82,19 +82,11 @@ routes['winter-palace-right-gate'] = [-30, -70, -100, -115, -140, -170, -200].ma
   }
 }
 
-// Troitsky Bridge (bridges/troitsky.js), bank to bank and back: both pavements (-left = west / downstream, -right = east) and both carriageways, from 12 m before the Mars Field bank line to 12 m beyond
-// the Petrograd bank line (the whole 554 m deck)
-{
-  const { TROITSKY, LEN } = await import(pathToFileURL(path.join(root, 'src/world/bridges/troitsky.js')).href), S = await import(pathToFileURL(path.join(root, 'src/world/bridges/sites.js')).href);
-  for (const [nm, v] of [['', 5.8], ['-road-west', -5.8], ['-left', -10.75], ['-right', 10.75]]) { const pts = []; for (const u of [-12, 4, 40, 100, 170, 250, 330, 410, 480, 530, LEN - 4, LEN + 12, LEN - 4, 480, 330, 170, 40, 4, -12]) { const q = S.toWorld(TROITSKY, u, v); pts.push([q.x, q.z]); } routes['bridge-troitsky' + nm] = pts; }
-}
-// the long bridges of the Petrograd side / the Spit (bridges/long.js LONG + the Palace Bridge): both pavements and both carriageways, bank to bank and back
+// the Palace Bridge (bridges/palace.js): both pavements and both carriageways, bank to bank and back (the part inside the play area)
 {
   const S = await import(pathToFileURL(path.join(root, 'src/world/bridges/sites.js')).href);
-  let LONG = []; try { LONG = (await import(pathToFileURL(path.join(root, 'src/world/bridges/long.js')).href)).LONG || []; } catch (e) { /* not built yet */ }
   const { PALACE } = await import(pathToFileURL(path.join(root, 'src/world/bridges/palace.js')).href);
-  let VOB = []; try { VOB = [(await import(pathToFileURL(path.join(root, 'src/world/bridges/sites-vo.js')).href)).BLAG]; } catch (e) { /* not built yet */ }     // the Blagoveshchensky Bridge (bridges/blag.js)
-  for (const b of [{ ...PALACE, len: 254.5, hw: 13.85, road: 11.0 }, ...LONG, ...VOB]) {
+  for (const b of [{ ...PALACE, len: 254.5, hw: 13.85, road: 11.0 }]) {
     const vp = b.walk ? b.walk[1] : (b.hw + b.road + (b.kerbW || 0.3)) / 2, vr = b.walk ? b.walk[0] : b.road * 0.55, n = Math.max(3, Math.round(b.len / 45));
     for (const [nm, v] of [['', vr], ['-road-west', -vr], ['-left', -vp], ['-right', vp]]) {
       const us = [-10, 3]; for (let i = 1; i < n; i++) us.push(b.len * i / n); us.push(b.len - 3, b.len + 10);
@@ -130,62 +122,6 @@ for (const k of Object.keys(routes)) { const m = /^bridge-(.+)-(left|right)$/.ex
     const us = straight ? [-9, -4, 0, 4, 9, 4, 0, -4, -9] : [w[0] - 3, w[0] + 1, (w[0] + w[1]) / 2, w[1] - 1, w[1] + 3, w[1] - 1, (w[0] + w[1]) / 2, w[0] + 1, w[0] - 3], pts = [];
     for (const u of us) { const q = S.toWorld(st, u, v); pts.push([q.x, q.z]); }
     routes['bridge-' + st.id + '-' + nm] = pts;
-  }
-}
-// the Betancourt Bridge head (bridges/long.js buildViaduct): both pavements and both carriageways along the curved centre line, from the street up to the last station inside the play area and back
-{
-  try {
-    const LG = await import(pathToFileURL(path.join(root, 'src/world/bridges/long.js')).href);
-    if (LG.BETANCOURT) { const V = LG.viaductLine(LG.BETANCOURT); for (const [nm, v] of [['', 6], ['-road-west', -6], ['-left', -15], ['-right', 15]]) { const pts = []; for (let i = 0; i < V.pts.length; i += 4) { const q = V.at(i, v); if (L.inPlay(q[0], q[1], 3)) pts.push(q); else break; } if (pts.length >= 4) routes['bridge-betancourt' + nm] = pts.concat(pts.slice(0, -1).reverse()); } }
-  } catch (e) { console.log('betancourt routes skipped:', e.message); }
-}
-// the stair pits (bridges/pits.js, third pass): from the street 9 m landward of the head of each flight down the middle of the flight to the bottom step (y about -3.2 / -3.1) and back to the street
-{
-  const PI = await import(pathToFileURL(path.join(root, 'src/world/bridges/pits.js')).href), SV = await import(pathToFileURL(path.join(root, 'src/world/bridges/sites-vo2.js')).href);
-  for (const p of PI.STAIR_PITS) {
-    const st = SV.VO2_SITES.find((q) => q.id === p.site), Tt = (st.b - 90) * Math.PI / 180, cs = Math.cos(Tt), sn = Math.sin(Tt), PIt = PI.PIT;
-    const ds = [p.Lr + 9, p.Lr + 3, p.Lr - 0.5, p.Lr - 3, PIt.runLow * p.low + PIt.landing + 1.5, PIt.runLow * p.low + PIt.landing / 2, PIt.runLow * p.low - 0.2, -1.0];
-    const pts = ds.map((d) => { const u = p.uB + p.s * d; return [st.cx + u * cs - p.vc * sn, st.cz + u * sn + p.vc * cs]; });
-    routes['bridge-pit-' + p.id] = [...pts, ...pts.slice(0, -1).reverse()];
-  }
-}
-// (review of bridges-3) every OSM crossing of the at-grade WHSD corridor must stay walkable end to end: the footbridge w345740719 (z -1021 .. -988, 2.4 m wide, layer 1) is a deck over the dry motorway cutting;
-// the walker follows the way from 14 m before its first point to 14 m beyond its last and back (the grass embankments of cutting.js and the median barrier of whsd-ground.js must leave it open).  The park footbridges
-// and the Mikhmanskaya overpass are decks of the same kind (WHSD.ground.decks / gap) and are proved by `node tools/environment-vo-seal.mjs --decks`.
-for (const id of ['w345740719']) {
-  const w = D.ROADS.find((r) => r.id === id); if (!w) continue;
-  const q = flat(w.pts), a = q[0], b = q[q.length - 1], l = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / l, uz = (b[1] - a[1]) / l;
-  const pts = [[a[0] - ux * 14, a[1] - uz * 14], a]; for (let s = 15; s < l - 5; s += 15) pts.push([a[0] + ux * s, a[1] + uz * s]); pts.push(b, [b[0] + ux * 14, b[1] + uz * 14]);
-  routes['whsd-cross-' + id] = [...pts, ...pts.slice(0, -1).reverse()];
-}
-// the Novo-Andreevsky footbridge (bridges/foot3.js, data sites-vo2.js FOOT; no SITES record): along its axis from 26 m before the deck to 26 m beyond and back, on the axis and beside both railings
-{
-  const SV = await import(pathToFileURL(path.join(root, 'src/world/bridges/sites-vo2.js')).href), F0 = SV.FOOT, Tt = (F0.b - 90) * Math.PI / 180, cs = Math.cos(Tt), sn = Math.sin(Tt);
-  // the real approach paths (OSM footways w1106782931 / w106950724 / w325624131) in the footbridge frame: west (-45, -5.9) (-27.8, 1.5) (-15.7, 0); east (17.9, 0.3) (24.5, 9.6) (34, 23)
-  for (const [nm, dv] of [['', 0], ['-left', -0.8], ['-right', 0.8]]) {
-    const uv = [[-45, -5.9], [-27.8, 1.5], [-17, 0.4], [-8, dv], [0, dv], [8, dv], [15.5, dv], [18.5, 0.6], [24.5, 9.6], [34, 23], [24.5, 9.6], [18.5, 0.6], [15.5, dv], [8, dv], [0, dv], [-8, dv], [-17, 0.4], [-27.8, 1.5], [-45, -5.9]];
-    routes['bridge-novo-andreevsky' + nm] = uv.map(([u, v]) => [F0.cx + u * cs - v * sn, F0.cz + u * sn + v * cs]);
-  }
-  // halves (second pass review): from the south bank onto the deck to u -14 and back (the north end needs the hedge gap of bridges/gaps.js), and the deck alone
-  const half = [[34, 23], [24.5, 9.6], [18.5, 0.6], [15.5, 0], [8, 0], [0, 0], [-8, 0], [-14, 0], [-8, 0], [0, 0], [8, 0], [15.5, 0], [18.5, 0.6], [24.5, 9.6], [34, 23]];
-  routes['bridge-novo-andreevsky-south'] = half.map(([u, v]) => [F0.cx + u * cs - v * sn, F0.cz + u * sn + v * cs]);
-  routes['bridge-novo-andreevsky-deck'] = [[-14, 0], [-8, 0], [0, 0], [8, 0], [14, 0], [8, 0], [0, 0], [-8, 0], [-14, 0]].map(([u, v]) => [F0.cx + u * cs - v * sn, F0.cz + u * sn + v * cs]);
-}
-// (review) the WHSD viaduct must NOT be walkable: a pedestrian that follows a carriageway of the at-grade stretch into the start of the viaduct (z -330 .. 200) has to be stopped by the deck bodies / barriers
-// (expected: the route ends BLOCKED at the low deck body near z -250 with y 0.0; a walker that climbs the deck would reach y > 3 and walk to the Gulf.  Only added with `--only whsd-viaduct-w,whsd-viaduct-e`: a
-// BLOCKED result is the PASS of this probe, so it must not run in the default list)
-if (String(args.only || '').includes('whsd-viaduct')) {
-  const SV = await import(pathToFileURL(path.join(root, 'src/world/bridges/sites-vo2.js')).href), W = SV.WHSD;
-  for (const k of ['W', 'E']) routes['whsd-viaduct-' + k.toLowerCase()] = [...W.ground[k].slice(-3), ...W.lines[k].filter((p) => p[1] < 250)];
-}
-// (third pass) the grass embankments of the open cutting (bridges/cutting.js) must keep a pedestrian off the at-grade motorway: a walker from 30 m outside the west / east bank straight at the carriageway has
-// to end BLOCKED at the foot of the embankment (y stays about 0, the route never reaches the carriageway).  Like the viaduct probe, a BLOCKED result is the PASS: only added with `--only cut-block-w,cut-block-e`.
-if (String(args.only || '').includes('cut-block')) {
-  const CU = await import(pathToFileURL(path.join(root, 'src/world/bridges/cutting.js')).href);
-  for (const [k, s0] of [['W', 500], ['E', 700]]) {
-    const S = CU.stations(k); let i = 0; while (i + 1 < S.st.length && S.st[i].s < s0) i++;
-    const a = S.st[i], pt = (q) => [a.x + a.nx * S.so * q, a.z + a.nz * S.so * q];
-    routes['cut-block-' + k.toLowerCase()] = [pt(32), pt(26), pt(20), pt(14), pt(8), pt(2), pt(-3)];
   }
 }
 if (args.list) { console.log(Object.keys(routes).join('\n')); process.exit(0); }

@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { frameOf, toUV, frameBounds } from './sites.js';
 import { lampBlack } from './sculpt.js';
-import { profile, closeBank } from './long.js';
+import { profile, closeBank } from './deck.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const PALACE = { id: 'palace', cx: -2339.5, cz: -875.0, b: 323.5 };

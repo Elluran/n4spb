@@ -105,7 +105,7 @@ export function buildGdHall(ctx, M, S, cfg) {
   // ---- platform furniture: hanging pill signs, SOS pillars, LED clocks over the arches
   const pill = (z, text, sub, key, bg, f) => { const p = k.plane(2.7, 0.62, M.board(M.blueBoard(text, sub, null, key, { bg }), 1.0), [0, FY + 3.1, z + f * 0.06], [0, f > 0 ? 0 : Math.PI, 0]); p.castShadow = false; for (const dx of [-1.1, 1.1]) k.cyl(0.012, 0.012, 1.7, M.steelBlack, [dx, FY + 4.2, z], null, 4); };
   if (cfg.pills) { for (const f of [1, -1]) for (const [i, p] of cfg.pills.entries()) pill(p.z, p.text, p.sub, ID + '-pill-' + i, p.bg, f); }
-  else for (const f of [1, -1]) { pill(-44, 'Рыбацкое · Rybatskoye', 'Линия 3 · Гостиный двор', 'gd-pill-1', '#14a04f', f); pill(-8, 'Выход · Way out', 'Невский проспект · Садовая', 'gd-pill-2', '#1b35d8', f); pill(30, 'Беговая · Begovaya', 'Линия 3 · Гостиный двор', 'gd-pill-3', '#14a04f', f); }
+  else for (const f of [1, -1]) { pill(-44, 'Василеостровская · Vasileostrovskaya', 'Линия 3 · Гостиный двор', 'gd-pill-1', '#14a04f', f); pill(-8, 'Выход · Way out', 'Невский проспект · Садовая', 'gd-pill-2', '#1b35d8', f); pill(30, 'Площадь Александра Невского 1 · Ploshchad Aleksandra Nevskogo 1', 'Линия 3 · Гостиный двор', 'gd-pill-3', '#14a04f', f); }
   for (const [x, z] of cfg.sos || [[3.2, -48], [-3.2, 36]]) { k.box(0.5, 2.2, 0.5, M.marbleWhite, [x, FY + 1.1, z]); k.box(0.52, 0.2, 0.52, M.green, [x, FY + 2.0, z]); S.col(x - 0.25, x + 0.25, FY, FY + 2.3, z - 0.25, z + 0.25); }
   for (const zz of [-PZ + 1.0, PZ - 1.0]) k.box(0.7, 0.28, 0.06, M.lampAmber, [0, FY + 5.2, zz]);
   void physics;

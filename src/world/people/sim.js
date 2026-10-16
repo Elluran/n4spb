@@ -26,7 +26,7 @@ export const STEP = 0.1;
 export const MICRO = 6;
 
 export function createSim(ctx, nav, crowd, opts = {}) {
-  const { L } = ctx, svc = ctx.services, R = ctx.rng('people-sim'), PLAY = L.WORLD.play, N = nav.N, st = svc.streets;
+  const { L } = ctx, svc = ctx.services, R = ctx.rng('people-sim'), N = nav.N, st = svc.streets;
   const PAVE = nav.PAVE, ROAD_Y = nav.ROAD_Y;
   const agents = [], sim = { agents, nav, t: 0, steps: 0 };
   const rr = (a, b) => a + (b - a) * R();
@@ -173,19 +173,18 @@ export function createSim(ctx, nav, crowd, opts = {}) {
   // ------------------------------------------------------------------ goals
   /** inside the station zone a cell may hold at most ~12 x factor people (3 x 3 hash cells): the absolute density cap that keeps the player-following crowd out of the zone */
   // plus an absolute head count: at most DENSITY.station.maxPeople people may be inside the zone (sf < 0.5); while it is full nobody picks / is placed at a target in it
-  let gardenCount = 0;
-  // the quiet zones of the Mars Field / Summer Garden / castle (people.js DENSITY.mars.zones: a head count cap per zone, nav.marsZone(x, z) = zone index or -1): while a zone is full nobody picks / is re-placed at a target in it
+  // the quiet zone of the castle (people.js DENSITY.mars.zones: a head count cap per zone, nav.marsZone(x, z) = zone index or -1): while a zone is full nobody picks / is re-placed at a target in it
   const mZones = (nav.marsCfg && nav.marsCfg.zones) || [], marsCount = new Int32Array(Math.max(1, mZones.length)), marsFull = (x, z, m = 0) => { if (!mZones.length) return false; const k = nav.marsZone(x, z, m); return k >= 0 && k < mZones.length && (marsCount[k] >= mZones[k].maxPeople || (mZones[k].shut && night() > 0.55)); };   // (the Summer Garden is shut at night: 22:00 - 10:00)
   let zoneCount = 0; const zoneMax = (nav.stationCfg && nav.stationCfg.maxPeople) || 1e9;
   // a FULL zone is a soft barrier for the routes of the people who do not live there: every edge inside it costs 2.5 x its length more (they walk round it when the detour is shorter than ~2.5 x the way through)
-  const shutHere = (x, z) => { const k = nav.marsZone(x, z); return k >= 0 && k < mZones.length && !!mZones[k].shut; };          // zones that are shut at night (the Summer Garden, New Holland)
+  const shutHere = (x, z) => { const k = nav.marsZone(x, z); return k >= 0 && k < mZones.length && !!mZones[k].shut; };          // zones that are shut at night (none in the strip)
   const nodeMZ = new Int8Array(mZones.length ? N.x.length : 0).fill(-2), mzOf = (i) => { if (i >= nodeMZ.length) return -1; let k = nodeMZ[i]; if (k === -2) k = nodeMZ[i] = nav.marsZone(N.x[i], N.z[i]); return k; };
   const EC0 = nav.E.columns; const zoneNoise = mZones.length ? (ei) => { const c = EC0, e = c ? null : nav.E[ei], k = mzOf(c ? c.a[ei] : e.a); return k >= 0 && k < mZones.length && (marsCount[k] >= mZones[k].maxPeople || (mZones[k].shut && night() > 0.55)) ? (c ? c.len[ei] : e.len) * 2.5 : 0; } : null;
   const ROUTE_OPTS = zoneNoise ? { noise: zoneNoise } : undefined;
   if (zoneNoise) FAR_OPTS_N.noise = zoneNoise;
   const zoneFullFor = (x, z, m, own) => { if (!mZones.length) return false; const k = nav.marsZone(x, z, m); if (k < 0 || k >= mZones.length) return false; if (mZones[k].shut && night() > 0.55) return true; return !(k === own && mZones[k].stay) && marsCount[k] >= mZones[k].maxPeople; };
   const ownZone = (a) => (a.zHome > -2 ? a.zHome : mZones.length && !a.hidden ? nav.marsZone(a.x, a.z) : -1);       // (zHome: set at the start, by a re-placement and by every goal)
-  const crowdedAt = (x, z, m = 0, own = -2) => { const f = nav.densityFactor(x, z); return (own > -2 ? zoneFullFor(x, z, m, own) : marsFull(x, z, m)) || (nav.inTauride(x, z) && gardenCount >= nav.taurideCfg.maxPeople) || (f < 0.99 && (localCount(x, z) >= 12 * f || (nav.stationFactor(x, z) < 0.5 && zoneCount >= zoneMax))); };
+  const crowdedAt = (x, z, m = 0, own = -2) => { const f = nav.densityFactor(x, z); return (own > -2 ? zoneFullFor(x, z, m, own) : marsFull(x, z, m)) || (f < 0.99 && (localCount(x, z) >= 12 * f || (nav.stationFactor(x, z) < 0.5 && zoneCount >= zoneMax))); };
   const pickNode = (a) => {
     const arr = compNodes.get(a.comp); if (!arr || !arr.length) return -1;
     let best = -1, bw = -1, bestOut = -1, bwOut = -1;
@@ -414,21 +413,19 @@ export function createSim(ctx, nav, crowd, opts = {}) {
   // preferring the busy zones, so the avenue is as dense around the player as the research says (8-14 people per 10 m of pavement) with ~1200 people on the whole map.
   // A group (pair / family / tour) moves as a unit. Nobody is placed within 110 m (the 'visible' radius is 75 m).
   const allIds = []; for (const [c, arr] of compNodes) if (bigComps.has(c)) for (const id of arr) { const k = N.k[id]; if (k === 's' || k === 'a' || k === 'p') allIds.push(id); }
-  const FAR2 = 270 * 270, placed = new Map(), longK = nav.longK && nav.longK.size ? nav.longK : null;
+  const FAR2 = 270 * 270, placed = new Map();
   /** agents within the 3 x 3 hash cells (7.5 m square) of (x, z) plus the ones recycled to the same cell during this micro step */
   const localCount = (x, z) => { const cx = Math.floor(x / HC), cz = Math.floor(z / HC); let n = placed.get(cellHash(cx, cz)) || 0; for (let q = heads[cellHash(cx, cz)]; q >= 0; q = nexts[q]) { const b = agents[q]; if (b.cx === cx && b.cz === cz) n++; } for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let q = heads[cellHash(cx + dx, cz + dz)]; q >= 0; q = nexts[q]) { const b = agents[q]; if (b.cx === cx + dx && b.cz === cz + dz) n += 0.5; } return n; };
   /** mass: place anywhere 6-250 m around the camera (start / teleport); otherwise 60-290 m and never in view */
   const recycle = (a, t, mass = false) => {
     const party = [a, ...a.followers.filter(f => f.kind !== 'inside')];
-    const gardenBefore = party.filter(p => !p.hidden && nav.inTauride(p.x, p.z)).length;
     let best = -1, tot = 0; const lo = mass ? 6 : 60, hi = mass ? 250 : 290, ids = [], ws = [], zOwn = ownZone(a);
     for (let k = 0, kn = mass ? 26 : 14; k < kn; k++) {              // candidate points on the annulus around the camera, snapped to the nearest pavement node (more tries at a teleport: an avenue between quiet side streets fills only a few per cent of the disc)
       const r = lo + (hi - lo) * Math.pow(R(), mass ? 0.85 : 1), ang = R() * TAU, px = camPos.x + Math.sin(ang) * r, pz = camPos.z + Math.cos(ang) * r;
-      const id = nav.nearestNode(px, pz, 9, (q) => { const kq = N.k[q]; return (kq === 's' || kq === 'a' || kq === 'p' || (kq === 'k' && longK && longK.has(q))) && nav.mainOK(q); }); if (id < 0) continue;      // (the pavements of the long Neva bridges count: the deck is 550 m long)
+      const id = nav.nearestNode(px, pz, 9, (q) => { const kq = N.k[q]; return (kq === 's' || kq === 'a' || kq === 'p') && nav.mainOK(q); }); if (id < 0) continue;
       const dx = N.x[id] - camPos.x, dz = N.z[id] - camPos.z, d = hyp(dx, dz);
       if (mass ? (d < 6 || d > 250) : (d < 60 || d > 290 || (d < 110 && visible(N.x[id], N.z[id])))) continue;
       if (localCount(N.x[id], N.z[id]) >= 5 || crowdedAt(N.x[id], N.z[id], 0, zOwn)) continue;      // never pile people up: at most 5 within 2.5 m (a move inside the walker's own zone does not fill it)
-      if (nav.inTauride(N.x[id], N.z[id]) && gardenCount - gardenBefore + party.length > nav.taurideCfg.maxPeople) continue;
       const zw = nav.zoneW(N.x[id], N.z[id]), w = Math.pow(zw, 0.8) * (1 + 4.5 * Math.exp(-(d * d) / (120 * 120)));
       ids.push(id); ws.push(w); tot += w;
     }
@@ -438,7 +435,6 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     for (const f of a.followers) { if (f.kind === 'inside') continue; leaveQueue(f); sim.placeAtNode(f, best, 2.2); f.speed = f.vpref * 0.8; f.kind = 'walk'; f.crossIdx = -1; f.stuck = 0; f.comp = a.comp; }
     // Reserve immediately: a camera teleport can place hundreds of agents in
     // one micro-step, before the periodic population recount runs again.
-    gardenCount += party.filter(p => !p.hidden && nav.inTauride(p.x, p.z)).length - gardenBefore;
     if (mZones.length) { const k = nav.marsZone(N.x[best], N.z[best]); if (k >= 0 && k < mZones.length && k !== zOwn) marsCount[k] += party.length; for (const q of party) q.zHome = k; }
     placed.set(cellHash(Math.floor(a.x / HC), Math.floor(a.z / HC)), (placed.get(cellHash(Math.floor(a.x / HC), Math.floor(a.z / HC))) || 0) + 1 + a.followers.length);
     newGoal(a, t); a.recycled = (a.recycled || 0) + 1; sim.recycled++; return true;
@@ -540,7 +536,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     if ((d > 7 || a.stuck > 60) && !visible(a.x, a.z) && !cross && nav.cover(bx, bz) < -0.5) { a.x = bx; a.z = bz; a.stuck = 0; a.blk = 0; }
     turnAndGo(a, dt, dx, dz, v, cross);
     if (d < 0.4 && !moving) { const toL = a.arc ? Math.atan2(l.x - a.x, l.z - a.z) : l.yaw, dy = wrap(toL - a.yaw); a.yaw += clamp(dy, -2.5 * dt, 2.5 * dt); }
-    groundY(a, longK && a.x < -600 && nav.longDeck(a.x, a.z) ? nav.surfaceY(a.x, a.z, l.y) : l.y);
+    groundY(a, l.y);
   };
   // children in the dry fountain
   const stepPlay = (a, t, dt) => {
@@ -582,7 +578,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     updateCamera(); slowR2 = (sim.renderR + 90) * (sim.renderR + 90); sleepR2 = (sim.renderR + 290) * (sim.renderR + 290); far2R2 = sleepR2;
     nav.activeFrac = 1 - 0.78 * clamp((night() - 0.15) / 0.7, 0, 1);
     rebuildHash();
-    if (sim.steps % MICRO === 0 || sim.steps === 1) { let zc = 0, gc = 0; marsCount.fill(0); for (let i = 0; i < agents.length; i++) { const a = agents[i]; if (!a.hidden) { if (a.inZone) zc++; if (nav.inTauride(a.x, a.z)) gc++; if (mZones.length) { const k = zoneOf(a, a.x, a.z); if (k >= 0 && k < mZones.length) marsCount[k]++; } } else if (mZones.length && a.kind === 'inside' && a.emerge && !a.ug) { const k = zoneOf(a, a.emerge.x, a.emerge.z); if (k >= 0 && k < mZones.length && mZones[k].stay) marsCount[k]++; } } zoneCount = zc; gardenCount = gc; }
+    if (sim.steps % MICRO === 0 || sim.steps === 1) { let zc = 0; marsCount.fill(0); for (let i = 0; i < agents.length; i++) { const a = agents[i]; if (!a.hidden) { if (a.inZone) zc++; if (mZones.length) { const k = zoneOf(a, a.x, a.z); if (k >= 0 && k < mZones.length) marsCount[k]++; } } else if (mZones.length && a.kind === 'inside' && a.emerge && !a.ug) { const k = zoneOf(a, a.emerge.x, a.emerge.z); if (k >= 0 && k < mZones.length && mZones[k].stay) marsCount[k]++; } } zoneCount = zc; }
     placed.clear(); const phase = sim.steps % MICRO; routeBudget = sim.steps < 2 ? 1e9 : 3; farBudget = sim.steps < 2 ? 1e9 : FAR_ROUTES; farR2 = sim.steps < 2 ? -1 : slowR2;
     if (sim.steps > 1 && hyp(camPos.x - sim.lastCam.x, camPos.z - sim.lastCam.z) > 90) sim.mass = MICRO;
     sim.lastCam.x = camPos.x; sim.lastCam.z = camPos.z;
@@ -593,17 +589,15 @@ export function createSim(ctx, nav, crowd, opts = {}) {
       if (a.sl === undefined) a.sl = (a.leader ? a.leader.i : a.i) % MICRO;
       if (a.sl !== phase) continue;
       // beyond the render radius (+ a margin) an agent is not drawn: it steps on every 6th turn only (sim.slowFar; the whole city's ~1 400 people cost ~10 ms a frame otherwise)
-      // (a GROUP was exempt, except the groups of the islands of round 2 (a.isl, people/isl2.js: ~30 pairs / families / tour groups far from the player): the whole group steps on the same turns, decided by its LEADER's distance, so the formation stays whole)
       // (2026-10-15, plan item 3: sim.grpFar puts every other group under the same budget, decided by its leader, so its followers replay the leader's trail on the leader's turns. The groups of the
-      // vignettes stay at the full rate: a scripted / fixed leader (a.script or a.noMass) that is not a zone resident (a.home >= 0: the Mars Field / Garden / Petrograd / island residents wander
+      // vignettes stay at the full rate: a scripted / fixed leader (a.script or a.noMass) that is not a zone resident (a.home >= 0: the zone residents wander
       // their zones by homeScript). sim.far2: beyond the render radius + 290 m (sleepR2) the turn comes once in 12 (a subset of the 1-in-6 turns: no agent steps twice as it crosses the line);
       // neither of the two applies during a mass placement (sim.mass, the start / a teleport: every far group and far single is re-placed round the camera as before; without this the
       // start put 1/6 of the far groups round the camera and the station crowd was ~20 % thinner))
       // rf: how many times rarer than before this agent now steps out there (a group newly under the budget 6 x, the second tier 2 x more): its far-walker recycling chance (below) is multiplied
       // by it, so the stream of people re-placed round the camera per second (the crowd the player sees) stays the old one
       let tier2 = false, rf = 1;
-      if (sim.slowFar) { const r0 = a.leader || a, single = (r0 === a && !a.followers.length) || a.isl || r0.isl; if (single || (sim.grpFar && sim.mass <= 0 && !((r0.noMass || r0.script) && !(r0.home >= 0)))) { const dx = r0.x - camPos.x, dz = r0.z - camPos.z, d2 = dx * dx + dz * dz; if (d2 > slowR2) { tier2 = sim.far2 && sim.mass <= 0 && d2 > far2R2; if (tier2 ? turn % 12 !== r0.i % 12 : turn % 6 !== r0.i % 6) continue; rf = (single ? 1 : 6) * (tier2 ? 2 : 1); } } }
-      if (a.isl && sim.slowFar && (a.kind === 'stand' || a.kind === 'sit') && !a.leader && !a.followers.length) { const dx = a.x - camPos.x, dz = a.z - camPos.z; if (dx * dx + dz * dz > sleepR2) continue; }          // (a scripted stander of the islands of round 2 far beyond the render radius sleeps: nobody sees its gestures; it wakes when the player comes within ~540 m)
+      if (sim.slowFar) { const r0 = a.leader || a, single = (r0 === a && !a.followers.length) ; if (single || (sim.grpFar && sim.mass <= 0 && !((r0.noMass || r0.script) && !(r0.home >= 0)))) { const dx = r0.x - camPos.x, dz = r0.z - camPos.z, d2 = dx * dx + dz * dz; if (d2 > slowR2) { tier2 = sim.far2 && sim.mass <= 0 && d2 > far2R2; if (tier2 ? turn % 12 !== r0.i % 12 : turn % 6 !== r0.i % 6) continue; rf = (single ? 1 : 6) * (tier2 ? 2 : 1); } } }
       sim.stat.stepped++; if (a.leader) sim.stat.followers++;
       a.tu = t; a.px = a.x; a.inZone = nav.stationFactor(a.x, a.z) < 0.5; a.pz = a.z; a.py = a.y; a.pyaw = a.yaw; a.pdist = a.dist; a.pspeed = a.speed;
       if (a.followers.length && !a.hidden) recordTrail(a);

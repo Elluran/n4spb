@@ -71,8 +71,7 @@ export async function build(ctx) {
   const root = new THREE.Group(); root.name = 'city'; ctx.addStatic(root);
   const owned = await ownedGroups(ctx);
   LOD.items.length = 0; LOD.scale = (ctx.quality && ctx.quality.lod) || 1;
-  const P = L.WORLD.play;
-  const near = (x, z, m) => x > P.x0 - m && x < P.x1 + m && z > P.z0 - m && z < P.z1 + m;
+  const near = (x, z, m) => L.inPlay(x, z, -m);                              // within m metres of the play area (the union of the eight rectangles, not its bounding box: the notches stay plain scenery)
 
   // ---- 1. classification
   // draw records: raised parts get their real thickness, bodies under raised parts that have none are synthesised (prep.js); owned buildings only act as occluders

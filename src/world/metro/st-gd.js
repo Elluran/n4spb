@@ -10,7 +10,6 @@ import { Space, extrudeX, extrudeZ, archRing, floorGeo, smoothPath, minRadius } 
 import { buildGdHall, GDH } from './hall-gd.js';
 import { buildEscalator } from './escalator.js';
 import { buildLongTunnel } from './tunnel.js';
-import { registerDisc } from './stubs.js';
 import { buildPolyRoom } from './proom.js';
 import { turnstile } from './st-nevsky.js';
 import { createPlatform } from './platform.js';
@@ -33,9 +32,8 @@ export function buildGostiny(ctx, M, X) {
   const hall = buildGdHall(ctx, M, S, { FY, PZ, name, nameEn, stock: 'neva', pills: [], stairHole: sh, endE: { halfW: 4.0, spring: 1.0 }, endW: { halfW: 4.5, spring: 1.2 } });
   const k = S.k;
   // west end: short dead stubs (the Nevsky chamber lies under them); east end: the real tunnel to Mayakovskaya (discs at 70 m)
-  const westReal = !!(X.realEnd && X.realEnd('gostiny:-1'));                 // the real tunnel to Vasileostrovskaya (links-vo.js) leaves the west end: a black disc just behind each mouth (hidden while a ride runs) replaces the 3.5 m dead stub
-  for (const m of hall.mouths) if (m.zs < 0) { if (westReal) { const dd = new THREE.Mesh(new THREE.CircleGeometry(2.78, 28), M.discBlack); dd.position.set(m.sx * TRK, hall.BED + 2.0, -(PZ + 0.6) - 0.5); S.group.add(dd); registerDisc(ctx, dd, { kind: 'real', space: S.name, x: m.sx * TRK, out: -1 }); } else X.buildStub(ctx, M, S, m.sx * TRK, m.zs * (PZ + 0.6), m.zs, hall.BED, { visible: 3.5 }); }
-  const vInfo = { openings: hall.openings, FY, TRK, EDGE: GDH.EDGE, PZ, mouth: PZ + 0.6, discNeg: PZ + 0.6 + (westReal ? 0.5 : 3.5), discPos: PZ + 0.6 + X.STUB_VISIBLE, activeRadius: 260 };
+  for (const m of hall.mouths) if (m.zs < 0) X.buildStub(ctx, M, S, m.sx * TRK, m.zs * (PZ + 0.6), m.zs, hall.BED, { visible: 3.5 });
+  const vInfo = { openings: hall.openings, FY, TRK, EDGE: GDH.EDGE, PZ, mouth: PZ + 0.6, discNeg: PZ + 0.6 + 3.5, discPos: PZ + 0.6 + X.STUB_VISIBLE, activeRadius: 260 };
   // the sunk stair in the middle of the platform: opening 5 m wide, dark granite parapets 0.9 m, yellow tactile panel; the stair goes down 7 m toward the west into the passage under the platform
   {
     const stairRun = (FY - NV_CH.y) / Math.tan(Math.PI / 6), n = 40, z1 = sh.z1, zF = z1 - stairRun, rotY = GD.yaw + Math.PI;

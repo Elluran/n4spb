@@ -13,8 +13,6 @@ export const GROUPS_LIST = [
     note: 'OSM w28893849 (body u 332-374, v 216-293 + the two 8-column side porticoes)' },
   { key: 'national-library', name: 'Российская национальная библиотека', nameEn: 'Russian National Library (corner, Rossi wing)', ids: ['r419489'], osm: [], at: [-889, -116],
     note: 'OSM r419489 (Nevsky 37 / Ostrovsky 1-3): the Sokolov corner with 6 Ionic columns, the Nevsky wing, the Rossi wing on the square' },
-  { key: 'rossi-street', name: 'Улица Зодчего Росси', nameEn: 'Zodchego Rossi Street (Nos 1-3, 2, 4)', ids: ['r8222552', 'r6749936', 'w134868630'], osm: [], at: [-870, 240],
-    note: 'the two facades of the street (west No 1-3 r8222552, east No 2 r6749936, No 4 w134868630); the plug closing the vista is drawn by landmarksE' },
   { key: 'anichkov', name: 'Аничков дворец, Кабинет, павильоны Росси, ограда', nameEn: 'Anichkov Palace, Cabinet building, Rossi pavilions, fence and gate', ids: ['r1517638', 'r1517637', 'r3798383', 'r6754929', 'r6754928'],
     osm: ['w457093010', 'w20941243', 'w131817482', 'w131817483', 'w131817484', 'w131820046', 'w830713071', 'w350948211', 'w753246200'], at: [-640, -60],
     note: 'Cabinet building r1517638 + Fontanka 39 litV r1517637, the palace r3798383 (garden front west), the two pavilions, the eagle fence along the square and Nevsky, the gate, the 4 m walls' },

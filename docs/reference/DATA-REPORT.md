@@ -1,5 +1,7 @@
 # DATA REPORT - OSM pipeline and baked map data (Saint Petersburg centre)
 
+> **Report of the first, un-stripped extract.** The counts, gaps and tool names below describe the original centre build. In the Nevsky strip the data was clipped to the eight rectangles (`tools/strip-data-clip.mjs`, [`../STRIP.md`](../STRIP.md)); `tools/fetch-osm.mjs`, `plan.mjs`, `landmarks.mjs` and `overlay.mjs` (and the raw OSM cache) were removed, `bake-osm.mjs` / `osm-lib.mjs` are kept only for the clip functions.
+
 Owner: the DATA agent. Files: `tools/osm-lib.mjs`, `tools/fetch-osm.mjs`, `tools/bake-osm.mjs`, `tools/plan.mjs`, `tools/landmarks.mjs`, `tools/overlay.mjs`,
 `src/world/data/city.js` (baked, 3.3 MB, ONE ES module - no split needed), `docs/reference/{calibration.md,calibration.json,landmarks.json,plan-overlay.png,DATA-REPORT.md}`,
 `docs/images/plan.{svg,png}`, `docs/research/osm-landmarks.md`. Map data (c) OpenStreetMap contributors, ODbL (downloaded 2026-10-02 from overpass-api.de; raw JSON in `data/osm-raw/`, git-ignored).

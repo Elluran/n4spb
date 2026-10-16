@@ -11,27 +11,15 @@ import { birdModel, shadowGeometry } from './models.js';
 import { instanced } from './geom.js';
 import { collectBoats, hullBoxes, makeHullIndex } from './boats.js';
 import { allBanks } from '../environment/waterways.js';
-import { WATER as WATER_POLYS } from '../data/city.js';
-import { PETRO_OFF, ISL_OFF } from './zones.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const sm = (u) => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
-const LANE_KEYS = new Set(['fontanka', 'moika', 'griboedov', 'winter-canal', 'swan-canal', 'smolenka', 'gavan']);       // (+ Vasilievsky Island: the Smolenka and Galerny Harbour; the Kovsh is an open 330 m basin of the reclaimed land, ducks keep to the banks of the first two)
-// the Petrograd side: the quiet waters only (the Zhdanovka, the moat of the Kronverk, the Kronverksky strait behind the fortress: its banks are part of the 'neva' chains, a lane must lie inside the box),
-// and the two ponds of Alexander Park (still water 0.35 m below the lawn: environment/river.js POND_Y; a lane is a stretch of the pond outline pulled towards the middle)
-const PETRO_KEYS = new Set(['zhdanovka', 'kronverk-moat', 'karpovka']), STRAIT = [-2385, -1575, -2300, -1985], PARK_PONDS = ['w138155241', 'w609619503'], POND_Y = -0.35;
-const ISLAND_KEYS = new Set(['smolenka', 'gavan']);      // their banks are slopes and grass: a lane sample must also be on the water surface the environment draws (waterAt), not only inside the data polygon
-// the ponds of the islands of round 2 (WATER ids of data/city.js): the Yelagin ponds (the 1st - 5th Northern and Southern: a lane each, two on the biggest), the ponds of Kamenny, the Lopukhinsky pond (Aptekarsky), the Petrovsky pond. A lane is a stretch of the pond
-// outline pulled towards the middle (like the ponds of Alexander Park), validated sample by sample against the water surface the environment really draws (waterAt: a pond without water in the world gives no lane) and the pedal-boat piers.
-// The SWANS (models.js swan: a pair with three grey cygnets / a pair) live on SWAN_PONDS only: the 4th Southern pond (the cape of the Hercules), the 3rd Northern pond, the Petrovsky pond, the 3rd Southern, the Lopukhinsky.
-const ISL_PONDS = ['r9176723', 'r1567031', 'r1567613', 'r9176724', 'r18509887', 'r1567678', 'r18509892', 'r17596784', 'r17596789', 'r9176722', 'r943898', 'r943899', 'w10372677', 'w100139287', 'r20743485', 'w5052616', 'r8605286', 'r8605286#1', 'w141260105', 'w414026238'];      // (r8605286: the two ponds of the Botanical Garden, `#k` = the k-th polygon of the record); w141260105 / w414026238 the two small garden ponds at the east end of Aptekarsky (2026-10-15: aptekarsky request 26; lanes only where the environment draws the water; the Lopukhinsky pond r1312676 is NOT drawn as one pond: 7 of 22 lane samples fell outside its water, left out)
-const SWAN_PONDS = new Set(['r9176723', 'r1567031', 'w5052616', 'r1567613', 'r20743485']);
-const ISL_OBST = [[-5546, -5409, 46], [-4871, -4967, 26]];      // the boat rental of the 4th Northern pond (trunk 33 m + T-bar 68 m, ~25 pedal boats), the catamaran pier of the 2nd Southern pond
+const LANE_KEYS = new Set(['fontanka', 'moika', 'griboedov', 'winter-canal', 'swan-canal']);
 const STEP = 2.5;
 
 export function buildDucks(ctx, W, say, opts = {}) {
-  const T = THREE, rng = ctx.rng('wildlife-ducks'), rngI = ctx.rng('wildlife-ducks-isl'), L = ctx.L, WATER = L.RIVER_Y.water;
+  const T = THREE, rng = ctx.rng('wildlife-ducks'), L = ctx.L, WATER = L.RIVER_Y.water;
   const qn = ctx.quality?.name, Q = qn === 'low' ? 0.5 : qn === 'medium' ? 0.75 : 1;
   const group = new T.Group(); group.name = 'wildlife-ducks';
   const out = { group, ducks: [], groups: [], lanes: [], update() {}, triangles: 0 };
@@ -70,11 +58,8 @@ export function buildDucks(ctx, W, say, opts = {}) {
     return o;
   }
   const lanes = [];
-  const nearStrait = (pts) => { for (const p of pts) if (p[0] > STRAIT[0] - 30 && p[0] < STRAIT[1] + 30 && p[1] > STRAIT[2] - 30 && p[1] < STRAIT[3] + 30) return true; return false; };
   for (const bank of allBanks()) {
-    const petro = !PETRO_OFF && (PETRO_KEYS.has(bank.key) || bank.key === 'neva');
-    if ((!LANE_KEYS.has(bank.key) && !petro) || bank.far || bank.len < 60) continue;
-    if (bank.key === 'neva' && !nearStrait(bank.pts)) continue;                     // of the Neva chains only the Kronverksky strait is used: the other chains (tens of km) are not even resampled
+    if (!LANE_KEYS.has(bank.key) || bank.far || bank.len < 60) continue;
     const P = resample(bank.pts);
     const d0 = bank.key === 'fontanka' ? 4.6 : 3.9;
     for (let i0 = Math.floor(rng.range(6, 22)); i0 + 20 < P.length; i0 += Math.floor(rng.range(26, 38))) {
@@ -85,42 +70,11 @@ export function buildDucks(ctx, W, say, opts = {}) {
         const x = p.x + p.wx * d, z = p.z + p.wz * d;
         if (!L.inPlay(x, z, 6) || !L.inRiver(x, z) || !L.inRiver(p.x + p.wx * (d + 2.5), p.z + p.wz * (d + 2.5)) || !L.inRiver(x + p.tx * 2, z + p.tz * 2)) { good = false; break; }
         if (hullGap(x, z) < 3.6 || blocked(x, z)) { good = false; break; }
-        if (bank.key === 'neva' && (x < STRAIT[0] || x > STRAIT[1] || z < STRAIT[2] || z > STRAIT[3])) { good = false; break; }
-        if ((ISLAND_KEYS.has(bank.key) || petro && !LANE_KEYS.has(bank.key)) && env?.waterAt && !env.waterAt(x, z)) { good = false; break; }                              // (a deck / a bank the water surface does not reach)          // of the Neva chains only the Kronverksky strait
         xs.push(x); zs.push(z); tx.push(p.tx); tz.push(p.tz);
       }
       if (!good) continue;
       const mid = (xs.length >> 1);
       lanes.push({ id: lanes.length, key: bank.key, n: xs.length, span: (xs.length - 1) * STEP, xs, zs, tx, tz, cx: xs[mid], cz: zs[mid], taken: null, bank: bank.id });
-    }
-  }
-  if (!PETRO_OFF) for (const id of PARK_PONDS) {                      // the ponds of Alexander Park: one lane each
-    const w = WATER_POLYS.find((q) => q.id === id), o = w && w.polys[0] && w.polys[0].o; if (!o || o.length < 8) continue;
-    let cx = 0, cz = 0; const n0 = o.length / 2; for (let i = 0; i < n0; i++) { cx += o[2 * i]; cz += o[2 * i + 1]; } cx /= n0; cz /= n0;
-    if (!L.inPlay(cx, cz, 6)) continue;
-    const ring = []; for (let i = 0; i <= n0; i++) { const j = i % n0, dx = o[2 * j] - cx, dz = o[2 * j + 1] - cz, d = Math.hypot(dx, dz) || 1, k = Math.max(0.25, (d - 3.2) / d) * 0.86; ring.push([cx + dx * k, cz + dz * k]); }
-    const P = resample(ring), n = Math.min(P.length, 22); if (n < 8) continue;
-    const i0 = Math.floor(rng() * Math.max(1, P.length - n)), xs = [], zs = [], tx = [], tz = [];
-    for (let k = 0; k < n; k++) { const p = P[i0 + k]; xs.push(p.x); zs.push(p.z); tx.push(p.tx); tz.push(p.tz); }
-    const mid = xs.length >> 1; lanes.push({ id: lanes.length, key: 'pond', y: POND_Y, n: xs.length, span: (xs.length - 1) * STEP, xs, zs, tx, tz, cx: xs[mid], cz: zs[mid], taken: null, bank: id });
-  }
-  if (!ISL_OFF) for (const id of ISL_PONDS) {                      // the ponds of the islands: one lane each (two on the biggest), only where the environment draws water
-    const [pid, pk] = String(id).split('#'), w = WATER_POLYS.find((q) => q.id === pid), o = w && w.polys[Number(pk || 0)] && w.polys[Number(pk || 0)].o; if (!o || o.length < 8) continue;
-    let cx = 0, cz = 0, ar = 0; const n0 = o.length / 2; for (let i = 0; i < n0; i++) { cx += o[2 * i]; cz += o[2 * i + 1]; const j = (i + 1) % n0; ar += o[2 * i] * o[2 * j + 1] - o[2 * j] * o[2 * i + 1]; } cx /= n0; cz /= n0; ar = Math.abs(ar) / 2;
-    if (!L.inPlay(cx, cz, 6)) continue;
-    const ring = []; for (let i = 0; i <= n0; i++) { const j = i % n0, dx = o[2 * j] - cx, dz = o[2 * j + 1] - cz, d = Math.hypot(dx, dz) || 1, k = Math.max(0.25, (d - 3.2) / d) * 0.86; ring.push([cx + dx * k, cz + dz * k]); }
-    const P = resample(ring), nl = ar > 20000 ? 2 : 1, n = Math.min(P.length >> 1, 22); if (n < 8) continue;
-    for (let q = 0; q < nl; q++) {
-      for (let tries = 0; tries < 6; tries++) {
-        const i0 = Math.floor(rngI() * Math.max(1, P.length - n)), xs = [], zs = [], tx = []; const tz = []; let good = true;
-        for (let k = 0; k < n && good; k++) {
-          const p = P[i0 + k]; if (!p) { good = false; break; }
-          if (!L.inPlay(p.x, p.z, 4) || !(env?.waterAt && env.waterAt(p.x, p.z)) || !env.waterAt(p.x + p.tx * 2, p.z + p.tz * 2) || blocked(p.x, p.z) || ISL_OBST.some((b) => Math.hypot(b[0] - p.x, b[1] - p.z) < b[2])) { good = false; break; }
-          xs.push(p.x); zs.push(p.z); tx.push(p.tx); tz.push(p.tz);
-        }
-        if (!good || lanes.some((l) => l.key === 'pond' && Math.hypot(l.cx - xs[xs.length >> 1], l.cz - zs[zs.length >> 1]) < 30)) continue;
-        const mid = xs.length >> 1; lanes.push({ id: lanes.length, key: 'pond', y: POND_Y, n: xs.length, span: (xs.length - 1) * STEP, xs, zs, tx, tz, cx: xs[mid], cz: zs[mid], taken: null, bank: id, swan: SWAN_PONDS.has(id) }); break;
-      }
     }
   }
   out.lanes = lanes;
@@ -131,18 +85,13 @@ export function buildDucks(ctx, W, say, opts = {}) {
     return { x: lane.xs[i] * (1 - k) + lane.xs[i + 1] * k, z: lane.zs[i] * (1 - k) + lane.zs[i + 1] * k, tx: lane.tx[i], tz: lane.tz[i] };
   };
 
-  const rngMain = rng;
   const kinds = ['pair', 'family', 'pair', 'family', 'trio', 'family'];
   const nGroups = lanes.length ? Math.max(3, Math.round(kinds.length * Q)) : 0;
   const groups = [];
-  // the swans first (they take their ponds): a pair with three grey cygnets on the first swan pond that has a lane, a pair on the second (one group at 'low')
-  { const sl = lanes.filter((l) => l.swan); const sk = sl.length ? (Q < 0.6 ? ['swans'] : ['swans', 'swanpair']) : [];
-    for (const kind of sk) { const g = { kind, swan: true, lane: null, w: 0, phi: 0, seed: rngI(), members: [], span: 0 }; const cand = sl.filter((l) => !l.taken && free(l, g)); if (!cand.length) continue; assign(g, cand[Math.floor(rngI() * cand.length)]); groups.push(g); } }
-  const swanGroups = groups.slice();
   const dP = (l) => Math.hypot(l.cx - start.x, l.cz - start.z);
   for (let gi = 0; gi < nGroups; gi++) {
     const g = { kind: kinds[gi], lane: null, w: 0, phi: 0, seed: rng(), members: [], span: 0 };
-    const cand = lanes.filter((l) => !l.taken && free(l, g) && !l.swan).sort((a, b) => dP(a) - dP(b));
+    const cand = lanes.filter((l) => !l.taken && free(l, g)).sort((a, b) => dP(a) - dP(b));
     const pick = cand.length ? cand[Math.min(cand.length - 1, Math.floor(rng() * rng() * Math.min(cand.length, 12)))] : null;
     if (!pick) continue;
     assign(g, pick);
@@ -150,18 +99,15 @@ export function buildDucks(ctx, W, say, opts = {}) {
   }
   function assign(g, lane) {
     if (g.lane) g.lane.taken = null;
-    const rg = g.swan ? rngI : rng;
-    g.lane = lane; lane.taken = g; g.span = lane.span; g.w = Math.PI * rg.range(0.28, 0.4) / lane.span; g.phi = rg() * TAU;
+    g.lane = lane; lane.taken = g; g.span = lane.span; g.w = Math.PI * rng.range(0.28, 0.4) / lane.span; g.phi = rng() * TAU;
   }
 
   // ---- members ------------------------------------------------------------------------------
   const specs = [];                                    // { model, scale, off:[ox, oz], tint }
   const addGroup = (g) => {
-    const m = [], rng = g.swan ? rngI : rngMain;                                   // (the swans draw from their own stream: the mallard groups of the older lanes stay as they were)
+    const m = [];
     if (g.kind === 'pair') m.push({ model: 'drake', scale: 1, off: [0.0, 0.0] }, { model: 'hen', scale: 1, off: [0.55, -0.7] });
     else if (g.kind === 'trio') m.push({ model: 'drake', scale: 1, off: [0.0, 0.2] }, { model: 'drake', scale: 1, off: [0.8, -0.6] }, { model: 'hen', scale: 1, off: [-0.7, -0.5] });
-    else if (g.kind === 'swans') { m.push({ model: 'swan', scale: 1, off: [0, 0.3] }, { model: 'swan', scale: 1, off: [1.4, -0.9] }); for (let i = 0; i < 3; i++) m.push({ model: 'swan', scale: 0.4, duck: true, cyg: true, off: [(i % 2 ? 0.45 : -0.45) + rng.range(-0.1, 0.1), -1.5 - 0.6 * Math.floor(i / 2) + rng.range(-0.1, 0.1)] }); }
-    else if (g.kind === 'swanpair') m.push({ model: 'swan', scale: 1, off: [0, 0.2] }, { model: 'swan', scale: 1, off: [1.5, -0.8] });
     else { m.push({ model: 'hen', scale: 1, off: [0, 0.3] }); const n = Math.max(3, Math.round(rng.range(4, 7) * (0.6 + 0.4 * Q))); for (let i = 0; i < n; i++) m.push({ model: 'hen', scale: 0.3, duck: true, off: [(i % 2 ? 0.28 : -0.28) + rng.range(-0.1, 0.1), -0.7 - 0.38 * Math.floor(i / 2) + rng.range(-0.1, 0.1)] }); }
     for (const q of m) { q.g = g; q.seed = rng(); q.ph = rng() * TAU; g.members.push(q); specs.push(q); }
   };
@@ -175,10 +121,10 @@ export function buildDucks(ctx, W, say, opts = {}) {
   }
   const wakeGeo = shadowGeometry();
   const wakes = instanced(wakeGeo, matWake, Math.max(1, specs.length), 'wl-wakes'); ctx.noOutline(wakes); group.add(wakes);
-  const tint = new T.Color(); const duckling = new T.Color('#e8d18a'), cygnet = new T.Color('#b9b1a2');
+  const tint = new T.Color(); const duckling = new T.Color('#e8d18a');
   for (const q of specs) {
     q.slot = M[q.model].n++;
-    if (q.duck) { const dc = q.cyg ? cygnet : duckling; for (const k of ['body', 'head']) M[q.model][k].setColorAt(q.slot, dc); M[q.model].wing.setColorAt(q.slot * 2, dc); M[q.model].wing.setColorAt(q.slot * 2 + 1, dc); }
+    if (q.duck) { for (const k of ['body', 'head']) M[q.model][k].setColorAt(q.slot, duckling); M[q.model].wing.setColorAt(q.slot * 2, duckling); M[q.model].wing.setColorAt(q.slot * 2 + 1, duckling); }
     else { tint.setRGB(1, 1, 1); for (const k of ['body', 'head']) M[q.model][k].setColorAt(q.slot, tint); M[q.model].wing.setColorAt(q.slot * 2, tint); M[q.model].wing.setColorAt(q.slot * 2 + 1, tint); }
   }
   for (const o of Object.values(M)) { o.body.count = o.n; o.head.count = o.n; o.wing.count = o.n * 2; for (const x of [o.body, o.head, o.wing]) if (x.instanceColor) x.instanceColor.needsUpdate = true; }
@@ -205,7 +151,7 @@ export function buildDucks(ctx, W, say, opts = {}) {
     const dab = (() => { const per = 17 + q.seed * 12, u = ((tt / per) % 1) * per; return u < 2.2 && !q.duck ? Math.sin(Math.PI * u / 2.2) : (q.duck ? Math.max(0, Math.sin(tt * 1.1)) * 0.5 * (Math.sin(tt * 0.13) > 0.6 ? 1 : 0) : 0); })();
     const bob = 0.012 * Math.sin(tt * 1.6 + q.ph), s = q.scale;
     const pitch = 0.04 * Math.sin(tt * 0.9 + q.ph) + 0.6 * dab, roll = 0.03 * Math.sin(tt * 1.15 + q.ph * 3);
-    const wl = g.lane.y ?? L.WATERWAYS[g.lane.key]?.water ?? WATER;
+    const wl = L.WATERWAYS[g.lane.key]?.water ?? WATER;
     const y = wl - 0.035 * s + bob - 0.02 * dab;
     _E.set(pitch, gp.yaw, roll, 'YXZ'); _Q.setFromEuler(_E);
     _M0.compose(_V.set(x, y, z), _Q, _S.set(s, s, s));
@@ -243,7 +189,7 @@ export function buildDucks(ctx, W, say, opts = {}) {
     for (const g of groups) {
       const d0 = Math.hypot(g.lane.cx - P.x, g.lane.cz - P.z);
       if (d0 < (init ? 150 : 230)) continue;
-      const cand = lanes.filter((l) => { const d = Math.hypot(l.cx - P.x, l.cz - P.z); return d > (init ? 10 : 60) && d < (init ? 300 : 190) && free(l, g) && (init || !seen(l)) && (!g.swan || l.swan) && (g.swan || !l.swan); });
+      const cand = lanes.filter((l) => { const d = Math.hypot(l.cx - P.x, l.cz - P.z); return d > (init ? 10 : 60) && d < (init ? 300 : 190) && free(l, g) && (init || !seen(l)); });
       if (!cand.length) continue;
       assign(g, cand[Math.floor(rng() * cand.length)]); moves++;
       if (!init) return;
@@ -252,14 +198,12 @@ export function buildDucks(ctx, W, say, opts = {}) {
   // an occasional quack, from the nearest group of the player
   function update(dt, t) {
     if (!opts.noDirector) direct(t);
-    let swanOn = true;
-    if (M.swan) { let nd = 1e9; for (const g of swanGroups) { groupPose(g, t); nd = Math.min(nd, Math.hypot(pose.x - P.x, pose.z - P.z)); } swanOn = nd < 320 || !(P.x || P.z); for (const k of [M.swan.body, M.swan.head, M.swan.wing]) k.visible = swanOn; }      // the swan meshes are drawn only while a swan group is within 320 m of the player: no draw call elsewhere
-    for (const q of specs) { if (q.g.swan && !swanOn) continue; write(q, t); }
+    for (const q of specs) write(q, t);
     for (const o of Object.values(M)) { o.body.instanceMatrix.needsUpdate = true; o.head.instanceMatrix.needsUpdate = true; o.wing.instanceMatrix.needsUpdate = true; }
     wakes.instanceMatrix.needsUpdate = true;
     if (t >= tcall.next) {
       tcall.next = t + 14 + rng.range(0, 26);
-      let best = null, bd = 1e9; for (const q of specs) { if (q.duck || q.model === 'drake' || q.model === 'swan') continue; groupPose(q.g, t); const d = Math.hypot(pose.x - W.player.x, pose.z - W.player.z); if (d < bd) { bd = d; best = { x: pose.x, y: WATER + 0.2, z: pose.z }; } }
+      let best = null, bd = 1e9; for (const q of specs) { if (q.duck || q.model === 'drake') continue; groupPose(q.g, t); const d = Math.hypot(pose.x - W.player.x, pose.z - W.player.z); if (d < bd) { bd = d; best = { x: pose.x, y: WATER + 0.2, z: pose.z }; } }
       if (best && bd < 90) say('duck', best, 0.7 + 0.3 * rng());
     }
   }

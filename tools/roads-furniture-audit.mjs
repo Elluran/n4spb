@@ -71,12 +71,7 @@ const { createAudio } = await imp('src/core/audio.js');
 const L = await imp('src/world/layout.js');
 const { AREAS } = await imp('src/world/data/city.js');
 const { deckAt } = await imp('src/world/streets/decks.js');
-const { segInfo, trackDist } = await imp('src/world/streets/net.js');
-const { isOpen } = await imp('src/world/streets/region.js');
-const { TRACK_CLEAR } = await imp('src/world/streets/furn.js');
-const { TRAMWAYS } = await imp('src/world/data/city.js');
-const railSegs = TRAMWAYS.filter((t) => !t.tunnel && t.layer >= 0 && !t.bridge).flatMap((t) => { const o = []; for (let i = 0; i + 3 < t.pts.length; i += 2) o.push([t.pts[i], t.pts[i + 1], t.pts[i + 2], t.pts[i + 3]]); return o; });       // the tracks of the streets (not the decks of the bridges modules)
-const railDist = (x, z) => { let b = 99; for (const [ax, az, bx, bz] of railSegs) { const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)); b = Math.min(b, Math.hypot(x - ax - dx * t, z - az - dz * t)); } return b; };
+const { segInfo } = await imp('src/world/streets/net.js');
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.1, 2500);
@@ -291,7 +286,7 @@ const catOfFile = (rel, line, h, kind) => {
   if (/props\/osm\.js/.test(rel)) return line === 54 ? 'bin' : line === 65 ? 'post_box' : 'prop';
   if (/props\//.test(rel)) return 'prop';
   if (/^world\/city\//.test(rel) || /world\/city\.js/.test(rel)) return 'building';
-  if (/northBridges|eastBridges|bridges/.test(rel)) return 'bridge_item';
+  if (/bridges/.test(rel)) return 'bridge_item';
   if (/landmarks|rail\//.test(rel)) return 'landmark_item';
   return 'other';
 };
@@ -387,12 +382,10 @@ const medianProbe = (x, z, cen) => {                                            
   if (!pl.w.name || pl.w.name !== pr.w.name || pl.tx * pr.tx + pl.tz * pr.tz > -0.5) return null;
   return { gap: +(kr + kl).toFixed(2), left: pl.w.id, right: pr.w.id, kl: +kl.toFixed(2), kr: +kr.toFixed(2), street: pl.w.name };
 };
-const railObjs = [];                                                                       // objects within 1.2 m of the axis of a tram track in the open districts (the rule of the tram round: nothing stands within 1.2 m of a rail)
 for (const o of objs) {
   if (NEAR && Math.hypot(o.x - NEAR[0], o.z - NEAR[1]) > NEAR[2]) continue;
   if (o.cat === 'building') { excluded.building++; continue; }
   if (o.ext > 6) { excluded.big++; continue; }
-  if (o.cat !== 'quay_rail' && isOpen(o.x, o.z)) { const td0 = trackDist(o.x, o.z), td = td0 < TRACK_CLEAR ? railDist(o.x, o.z) : 99; if (td < TRACK_CLEAR) railObjs.push({ cat: o.cat, x: +o.x.toFixed(1), z: +o.z.toFixed(1), axis: +td.toFixed(2), module: o.module, file: o.file, line: o.line }); }
   let ev = null;
   for (const s of o.samples) { const p = probe(s[0], s[1]); if (!p) continue; if (!ev || p.m > ev.p.m) ev = { p, s }; }
   const cen = probe(o.x, o.z);
@@ -431,7 +424,7 @@ const rcOf = (r) => {
   if (r.cat === 'zebra_pole') return 'ZEBRA_POLE/' + (r.fillet ? 'junction fillet' : r.inPocket ? 'parking pocket' : 'kerb offset vs widened asphalt');
   if (r.cat === 'quay_rail') return 'QUAY_RAIL/' + (r.road.bridge ? 'across a road bridge deck' : 'road on the quay edge');
   // FACADE_COLLIDER: the wall collider of a landmark house (landmarksD/house.js buildHouse -> lib/massing addPolyColliders, one box per footprint edge). The OSM footprint of that building overlaps a MAPPED lane
-  // (Monastyrki embankment, a junction fillet corner): the facade is the real building and stays; its collider cannot be cut against the lane because the callers (landmarksEast / landmarksTauride) build
+  // (Monastyrki embankment, a junction fillet corner): the facade is the real building and stays; its collider cannot be cut against the lane because the callers build
   // before streets and no net exists yet (a second buildNet costs 2.4 s). Documented residue, allowed by --strict; every OTHER landmark item on a road keeps failing.
   if (r.cat === 'landmark_item' && r.shape === 'box' && /landmarksD\/house\.js$/.test(r.file || '')) return 'FACADE_COLLIDER/' + r.file;
   if (r.cat === 'landmark_item') return 'LANDMARK_FURNITURE/' + r.file;
@@ -493,7 +486,7 @@ console.log(`  worst ${TOP} (status cat x,z clearance road free/total placer):`)
 for (const r of kept.slice(0, TOP)) console.log(`    ${r.status.padEnd(7)} ${r.cat.padEnd(13)} ${String(r.x).padStart(8)},${String(r.z).padStart(8)} ${String(r.clearance).padStart(6)}  ${(r.road.name || r.road.hw || 'fillet').slice(0, 26).padEnd(26)} w${r.road.w ?? '-'} rk${r.road.rank ?? '-'} free ${r.free ?? '-'}/${r.total ?? '-'}  ${site(r)}`);
 // ---------------------------------------------------------------- extra road checks (plan critic): things that are not objects but stand / stop on the carriageways
 const wayById = new Map(net.ways.map((w) => [w.id, w])), laneById = new Map(st.lanes.map((l) => [l.id, l]));
-const extras = { stopLinesForeign: [], lotSlotsInStreet: [], railObjects: railObjs };
+const extras = { stopLinesForeign: [], lotSlotsInStreet: [] };
 for (const sl of st.stopLines) {                                   // a signalised stop point (lane end) inside ANOTHER carriageway: the stop line paint / the cars stop in the cross road
   if (!sl.signal) continue;
   const c = net.cover(sl.x, sl.z, { skip: wayById.get(laneById.get(sl.lane)?.road), noFillets: true });
@@ -505,9 +498,6 @@ for (const ps of st.parkedSlots) {                                 // parking-lo
   if (hit) extras.lotSlotsInStreet.push({ x: +ps.x.toFixed(1), z: +ps.z.toFixed(1), inside: +hit.m.toFixed(1), road: hit.w.name || hit.w.hw });
 }
 console.log(`  extra: signalised stop points inside a foreign carriageway (> 1.5 m): ${extras.stopLinesForeign.length};  lot parking slots inside a street (rank >= 1, > 1 m): ${extras.lotSlotsInStreet.length}   (--strict fails on the lot slots, --extras-fail on both)`);
-const railBlocking = railObjs.filter((r) => !(opt('allow') === 'none' ? [] : [...(argv.includes('--strict') ? ['GUARD_STONE', 'PROP', 'BIN', 'TREE', 'FACADE_COLLIDER'] : []), ...(opt('allow') || '').split(',').filter(Boolean)]).some((a) => r.cat.toUpperCase() === a || r.cat.toUpperCase().startsWith(a)));
-console.log(`  extra: objects within TRACK_CLEAR (1.35 m) of a tram rail axis (open districts): ${railObjs.length}, failing ${railBlocking.length}   (--strict fails on them)` + (railObjs.length ? '  ' + by(railObjs, (r) => r.cat).map(([k, v]) => k + ' ' + v).join(', ') : ''));
-for (const r of railBlocking.slice(0, 20)) console.log(`      RAIL ${r.cat.padEnd(13)} ${String(r.x).padStart(8)},${String(r.z).padStart(8)} ${r.axis} m from the axis  ${r.file || ''}${r.line ? ':' + r.line : ''}`);
 // --allow a,b : on_road rows whose "<cat>" or "<rc>" starts with / contains one of the tokens do not fail the run (the whitelist of the plan: documented residue only)
 // DEFAULT_ALLOW is applied with --strict (the plain 'node tools/roads-furniture-audit.mjs --strict' of the briefs); explicit --allow tokens extend it;  --allow none switches everything off.
 // Documented residue (see docs/ROADS-FIX-PLAN.md): GUARD_STONE (kerb stones of the quays), PROP (osm props the props module owns), BIN (litter bins at the kerb), TREE (trunks in parking pockets / at the asphalt edge), FACADE_COLLIDER (wall collider of a landmark house whose OSM footprint overlaps a mapped lane; the facade stays).
@@ -523,7 +513,7 @@ if (ALLOW.length) {
 console.log(`  strict criteria: on_road failing ${blocking.length}, median gap<7.5 ${median.filter((r) => r.rc.includes('gap<7.5')).length}, lot slots in a street ${extras.lotSlotsInStreet.length}`);
 console.log(`  raised colliders skipped (bottom y0 > ${RAISED_Y0} m): ${raisedSkipped}; underground instances skipped (base y < -2 m): ${undergroundSkipped}; elevated instances skipped (base y > 2.5 m): ${elevatedSkipped}`);
 if (blocking.length) { console.log('  failing on_road rows:'); for (const r of blocking.slice(0, 40)) console.log(`      ${r.cat.padEnd(13)} ${String(r.x).padStart(8)},${String(r.z).padStart(8)} intrusion ${r.intrusion}  ${r.rc}  ${site(r)}`); }
-const fail = blocking.length > 0 || (argv.includes('--strict') && railBlocking.length > 0) || (EDGE_FAILS && edge.length > 0) || ((argv.includes('--median-fails') || argv.includes('--strict')) && median.filter((r) => r.rc.includes('gap<7.5')).length > 0)
+const fail = blocking.length > 0 || (EDGE_FAILS && edge.length > 0) || ((argv.includes('--median-fails') || argv.includes('--strict')) && median.filter((r) => r.rc.includes('gap<7.5')).length > 0)
   || ((argv.includes('--extras-fail') && extras.stopLinesForeign.length > 0) || ((argv.includes('--extras-fail') || argv.includes('--strict')) && extras.lotSlotsInStreet.length > 0));
 if (JSON_OUT) { fs.mkdirSync(path.dirname(path.resolve(JSON_OUT)), { recursive: true }); fs.writeFileSync(path.resolve(JSON_OUT), JSON.stringify({ summary, extras, offenders: kept, signalArms, simulateFix: globalThis.__simFix || null, excludedRows: exRows }, null, 1)); console.log('wrote ' + JSON_OUT); }
 console.log(fail ? 'RESULT: FAIL' : 'RESULT: OK');

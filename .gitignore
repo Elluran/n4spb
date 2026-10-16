@@ -1,7 +1,6 @@
 node_modules/
 shots/
 *.log
-data/osm-raw/
 
 # The repository-wide (Python template) .gitignore ignores folders named lib/, parts/, env/, build/, dist/, var/ ...
 # This JavaScript project uses such names for source folders, so re-include them.
@@ -14,10 +13,10 @@ data/osm-raw/
 !**/target/
 !**/downloads/
 
-# Third-party map screenshot (Yandex Maps) and the overlay built on it: private layout reference, kept out of the repository.
+# deploy copy (docs/STRIP.md section 7) and the unfinished chunks of an interrupted bake
+/dist/
+assets/baked/*.part
+
+# Guard: the third-party map screenshot (Yandex Maps) the original data was registered to is a private layout reference and must never be committed or deployed.
 docs/reference/yandex-center.png
 docs/reference/plan-overlay.png
-
-# fetch / bake side files of the west extension
-data/*.stdout
-data/*.err

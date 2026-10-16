@@ -1,44 +1,21 @@
-// Drive + traffic probe of the long bridges (in the real page, through tools/shot.mjs --eval): Trinity, Palace, Birzhevoy, Tuchkov (and what lies inside the play area of the Sampsonievsky).
+// Drive + traffic probe of the Palace Bridge, the one long bridge of the strip (in the real page, through tools/shot.mjs --eval; only its first spans lie inside the play area, the rest is scenery).
 //   1. DRIVE: the player's red car (ctx.drive test hooks: teleport + sim) is put on the east carriageway 8 m before the first bank line, a lane-keeping controller drives it across to 8 m beyond the
 //      far bank line, then back on the west carriageway. Asserts: it arrives both times, never leaves the roadway (|lateral error| <= 2.5 m), rides the deck (car.y = services.bridges.deckY + 0.03
 //      within 12 cm at every sample over the water, the crown is reached), no step steeper than 8 % between samples, no collision events.
 //   2. TRAFFIC COVER: traffic.js lifts a vehicle through services.bridges.deckY only within 190 m of an entry of services.bridges.list: every 5 m of every carriageway must have such an entry and a
 //      deck height (the whole length is served), and the lanes of the streets lane graph that run over the deck (lane.bridge) must lie on the roadway (|v| <= road half width).
-//   3. TRAFFIC LIVE: the vehicles of services.traffic that are over a deck right now (after --t seconds round the camera on the Trinity Bridge): count, |v| inside the roadway.
+//   3. TRAFFIC LIVE: the vehicles of services.traffic that are over a deck right now (after --t seconds round the camera on the Palace Bridge): count, |v| inside the roadway.
 // usage: node tools/bridges-drive.mjs [--t 60] [--only id,id]
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = {}; for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; }
-const TR = await import(pathToFileURL(path.join(root, 'src/world/bridges/troitsky.js')).href), PA = await import(pathToFileURL(path.join(root, 'src/world/bridges/palace.js')).href);
-let LONG = []; try { LONG = (await import(pathToFileURL(path.join(root, 'src/world/bridges/long.js')).href)).LONG; } catch (e) { /* none */ }
+const PA = await import(pathToFileURL(path.join(root, 'src/world/bridges/palace.js')).href);
 const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href), S = await import(pathToFileURL(path.join(root, 'src/world/bridges/sites.js')).href);
-let VO = null; try { VO = (await import(pathToFileURL(path.join(root, 'src/world/bridges/sites-vo.js')).href)).BLAG; } catch (e) { /* not built yet */ }
-let specs = [{ ...TR.TROITSKY, len: TR.LEN, hw: TR.HW, road: TR.ROAD, lane: 5.8 }, { ...PA.PALACE, len: 254.5, hw: 13.85, road: 11.0, lane: 5.5 }, ...LONG.filter((b) => !b.ped).map((b) => ({ id: b.id, cx: b.cx, cz: b.cz, b: b.b, len: b.len, hw: b.hw, road: b.road, lane: b.road * 0.55 })),
-  ...(VO ? [{ id: VO.id, cx: VO.cx, cz: VO.cz, b: VO.b, len: VO.len, hw: VO.hw, road: VO.road, lane: 8.2 }] : [])];
-// the two Smolenka bridges are ordinary sites of bridges/sites.js (arch.js decks): a frame at the south-east bank line, len = the bank interval + the approach overlap
-for (const [id, len] of [['uralsky', 17], ['smolensky', 18]]) {
-  const st = S.SITES.find((q) => q.id === id); if (!st) continue;
-  const bb = st.b * Math.PI / 180, ux = Math.sin(bb), uz = -Math.cos(bb), road = st.zones.find((z) => z[2] === 'asphalt')[1];
-  specs.push({ id, cx: st.cx - ux * len / 2, cz: st.cz - uz * len / 2, b: st.b, len, hw: st.v1, road, lane: 5.5 });
-}
-// the second pass (sites-vo2.js): Nalichny / Korablestroiteley (carriageways v +12.2 / -13.4 and +10.3 / -9.0, side lanes out to 25.3) and the four mouth bridges (an asphalt strip +-6.3, no lane graph: the free road test only)
-for (const [id, len, lane, road] of [['nalichny', 41, 12.8, 26], ['korablestroiteley', 40, 9.7, 16], ['smol1', 30, 3.0, 6.3], ['smol2', 31, 3.0, 6.1]]) {
-  const st = S.SITES.find((q) => q.id === id); if (!st) continue;
-  const bb = st.b * Math.PI / 180, ux = Math.sin(bb), uz = -Math.cos(bb);
-  specs.push({ id, cx: st.cx - ux * len / 2, cz: st.cz - uz * len / 2, b: st.b, len, hw: st.v1, road, lane });
-}
-// the wide mouth decks (3rd / 4th Smolensky: a 47 m granite plaza, driven along the centre) and the Shkipersky bridge (sight-gavan's: until it is claimed its deck is the environment's invisible FALLBACK, which
-// services.bridges.deckY answers with 0 so that the car can cross: centre (-7009.5, -30.3), bearing 79.3, 34.6 x 7.7 m, one lane; the polygon is the opening of the quay)
-for (const [id, len, lane, road] of [['smol3', 31, 3.0, 23], ['smol4', 30, 3.0, 23]]) {
-  const st = S.SITES.find((q) => q.id === id); if (!st) continue;
-  const bb = st.b * Math.PI / 180, ux = Math.sin(bb), uz = -Math.cos(bb);
-  specs.push({ id, cx: st.cx - ux * len / 2, cz: st.cz - uz * len / 2, b: st.b, len, hw: st.v1, road, lane });
-}
-specs.push({ id: 'shkipersky', cx: -7009.5 - Math.sin(79.3 * Math.PI / 180) * 17.3, cz: -30.3 + Math.cos(79.3 * Math.PI / 180) * 17.3, b: 79.3, len: 34.6, hw: 5.5, road: 4.5, lane: 0.1 });
+let specs = [{ ...PA.PALACE, len: 254.5, hw: 13.85, road: 11.0, lane: 5.5 }];
 if (args.only) specs = specs.filter((s) => args.only.split(',').includes(s.id));
-// the stretch of each bridge the car may drive: inside the play area (the Sampsonievsky starts in a notch outside it)
+// the stretch of each bridge the car may drive: inside the play area (the far spans of the Palace Bridge lie outside it)
 for (const s of specs) { let u0 = -8, u1 = s.len + 8; const inP = (u) => { const w = S.toWorld(s, u, s.lane), w2 = S.toWorld(s, u, -s.lane); return L.inPlay(w.x, w.z, 4) && L.inPlay(w2.x, w2.z, 4); }; while (u0 < u1 && !inP(u0)) u0 += 2; while (u1 > u0 && !inP(u1)) u1 -= 2; s.u0 = u0; s.u1 = u1; }
 const expr = (mode) => `(() => {
   const MODE = '${mode}';
@@ -86,7 +63,7 @@ const expr = (mode) => `(() => {
   if (D && D.active) D.exit(true);
   return out;
 })()`;
-const cam = S.toWorld(TR.TROITSKY, 270, 9), camStr = args.cam || `${cam.x.toFixed(1)},7,${cam.z.toFixed(1)},23,-8`;     // --cam "x,y,z,yaw,pitch": where the traffic simulation region follows the camera (default: on the Trinity Bridge)
+const cam = S.toWorld(PA.PALACE, 60, 9), camStr = args.cam || `${cam.x.toFixed(1)},7,${cam.z.toFixed(1)},23,-8`;     // --cam "x,y,z,yaw,pitch": where the traffic simulation region follows the camera (default: on the Palace Bridge)
 // two page runs: the drive without the traffic module (a free road), the traffic checks with it
 const run = (mode, only, t) => {
   const r = spawnSync('node', [path.join(root, 'tools/shot.mjs'), '--only', only, '--cams', camStr, '--out', 'shots/bridges/_drive_' + mode, '--t', t, '--eval', expr(mode)], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 26 });
@@ -102,7 +79,7 @@ console.log('DRIVE (the red car, there on the east carriageway / back on the wes
 for (const d of res.drive) { const sp = specs.find((s) => s.id === d.id), ok = d.reached && d.maxErr <= 2.5 && d.yErr <= 0.12 && d.jump <= 0.08 && d.hits === 0; if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${d.id.padEnd(10)} ${d.dir > 0 ? '->' : '<-'} u ${d.from} .. ${d.to}: reached ${d.reached} in ${d.t} s, lateral error max ${d.maxErr} m, deck height error max ${d.yErr} m, top y ${d.maxY}, steepest step ${(d.jump * 100).toFixed(1)} %, hits ${d.hits}, end uv ${JSON.stringify(d.end)}`); void sp; }
 console.log('TRAFFIC COVER (deckY + a list entry within 190 m every 5 m of both carriageways; lane graph lanes over the deck)');
 for (const c of res.cover) { const ok = c.holes === 0 && c.far === 0 && c.off === 0; if (!ok) bad++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${c.id.padEnd(10)} samples ${c.samples}: deck holes ${c.holes}, outside the 190 m prefilter ${c.far}; lanes over the deck ${c.lanes} (${c.laneLen} m), lane points off the roadway ${c.off}`); }
-console.log('TRAFFIC LIVE (vehicles over the decks at the end of the run; the simulation region follows the camera on the Trinity Bridge)');
+console.log('TRAFFIC LIVE (vehicles over the decks at the end of the run; the simulation region follows the camera on the Palace Bridge)');
 for (const l of res.live) { if (l.offRoad) bad++; console.log(`  ${l.offRoad ? 'FAIL' : 'ok  '} ${l.id.padEnd(10)} vehicles on the deck ${l.vehicles}, off the roadway ${l.offRoad} ${l.kinds.join(' ')}`); }
 console.log(bad ? 'RESULT: FAIL' : 'RESULT: OK');
 process.exit(bad ? 1 : 0);

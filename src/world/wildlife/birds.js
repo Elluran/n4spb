@@ -28,9 +28,6 @@ const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if
 /** species table: model = geometry family, scale = size vs the model, speeds in m/s, scare = flight distance (m), kinds = perch kinds a bird may fly to */
 export const SP = {
   crow: { model: 'crow', scale: 0.84, walk: 0.6, fly: 9.5, flap: 3.4, scare: 5.5, perchScare: 7, call: 'crow', legs: '#23252c', kinds: ['lamp', 'tree', 'roof'] },
-  // the western jackdaw (галка) of the old trees of the Smolensky cemetery and the roofs of the island: the crow model, 0.66 of its size and tinted down to a black body with a dark grey back (the grey nape and the pale eye of the real bird are
-  // below the pixel size at the distances where it is seen); a variant of the crow (sp 'crow', b.jack): same state machine, same call
-  jackdaw: { model: 'crow', scale: 0.66, walk: 0.55, fly: 9.5, flap: 4.4, scare: 5, perchScare: 6.5, call: 'crow', legs: '#23252c', kinds: ['tree', 'roof', 'lamp'], tint: [0.5, 0.5, 0.56] },
   pigeon: { model: 'pigeon', scale: 0.9, walk: 0.5, fly: 11, flap: 7.5, scare: 4.5, legs: '#c76f78' },
   sparrow: { model: 'sparrow', scale: 0.75, hop: 1.6, fly: 8, flap: 14, scare: 3.2, legs: '#b48c78' },
   gull: { model: 'gull', scale: 1.0, walk: 0.45, fly: 10.5, flap: 3.2, scare: 6, perchScare: 8, call: 'gull', legs: '#c4372f', kinds: ['post', 'lion', 'roof'] },
@@ -62,7 +59,6 @@ export function buildBirds(ctx, W, say, opts = {}) {
   const plan = [];
   const add = (sp, count, extra) => { for (let i = 0; i < count; i++) plan.push({ sp, ...extra }); };
   add('crow', n(9), { mode: 'solo' });
-  add('crow', n(3), { mode: 'solo', jack: true });
   const nPost = W.perches.some((p) => p.kind === 'post') ? n(12) : 0;
   add('gull', nPost, { mode: 'post' });
   if (boatList.length) add('gull', Math.min(n(6), boatList.reduce((s, b) => s + boatSlots(b), 0)), { mode: 'boat' });
@@ -74,17 +70,16 @@ export function buildBirds(ctx, W, say, opts = {}) {
   const models = {};      // model name -> { body, head, wing, list: [bird] }
   const legGeo = legGeometry(), shGeo = shadowGeometry();
   const need = {};        // model -> count (birds + flock members)
-  const countFor = (sp) => { need[SP[sp].model] = (need[SP[sp].model] || 0) + 1; };      // (a jackdaw is a crow here: the same meshes)
+  const countFor = (sp) => { need[SP[sp].model] = (need[SP[sp].model] || 0) + 1; };
 
   // ------------------------------------------------------------------ sites
-  const R = rng, Ri = ctx.rng('wildlife-birds-isl');          // Ri: the sites of the island zones (zones.js `isl`) draw from their own stream: the draws of the older zones, flocks and birds stay as they were
+  const R = rng;
   /** a free spot within [r0,r1] of (cx,cz) whose ground kind is in `kinds` (default any); tries up to 60 times */
   function spot(cx, cz, r0, r1, kinds, o = {}) {
     for (let k = 0, kn = o.tries || 60; k < kn; k++) {
-      const Rg = o.rng || R, a = Rg() * TAU, d = r0 + (r1 - r0) * Math.sqrt(Rg()), x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
+      const a = R() * TAU, d = r0 + (r1 - r0) * Math.sqrt(R()), x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
       if (!W.ok(x, z, o)) continue;
       if (kinds && !kinds.includes(W.kind(x, z))) continue;
-      if (o.avoid && o.avoid.includes(W.kind(x, z))) continue;                    // (a zone may keep its flock off a ground kind: the island squares are paved, the car parks beside them are not a feeding floor)
       return { x, z };
     }
     return null;
@@ -125,7 +120,7 @@ export function buildBirds(ctx, W, say, opts = {}) {
   for (const b of [...(ctx.services.rail?.benches || []), ...(ctx.services.props?.benches || []), ...(ctx.services.landmarksF?.benchPoints || [])]) if (Number.isFinite(b.x) && L.inPlay(b.x, b.z)) fsites.push({ x: b.x, z: b.z, r: 4, tag: 'bench' });
   for (let i = 0; i < 10; i++) { const s = spot(sq.x, sq.z, 12, 80, null, { road: 1.5 }); if (s) fsites.push({ x: s.x, z: s.z, r: 6, tag: 'open' }); }
   const Z = zoneTable(ctx);
-  for (const zn of Z) { if (zn.isl) continue; const s = spot(zn.x, zn.z, zn.min || 0, zn.spread + 6, null, { road: 1.5 }); if (s) fsites.push({ x: s.x, z: s.z, r: 6, tag: 'open' }); }          // (the zones of the islands add no foraging site: the crows forage on the cafes / benches / bins the sights publish)
+  for (const zn of Z) { const s = spot(zn.x, zn.z, zn.min || 0, zn.spread + 6, null, { road: 1.5 }); if (s) fsites.push({ x: s.x, z: s.z, r: 6, tag: 'open' }); }
   // the foraging sites are validated LAZILY, when a bird picks one (s.v: 1 = free ground, -1 = no free ground within 4 m): ~2 000 candidates were tested at build time, of which a flock of crows uses a handful
   const okSites = fsites;
   function siteOk(s) {
@@ -147,10 +142,10 @@ export function buildBirds(ctx, W, say, opts = {}) {
   lapB('forage sites');
   // pigeon sites: every pigeon zone of zones.js (Kazan, Palace Square, the gardens, Gostiny Dvor, the obelisk, the station forecourt, the Anichkov Bridge ...) becomes a few free sites
   const pgSites = [], pgFar = (x, z, d = 10) => far(pgSites, x, z, d);
-  const addPg = (s, r, tag, extra) => { if (s && pgFar(s.x, s.z)) pgSites.push({ x: s.x, z: s.z, r, tag, w: 1, ...extra }); };
+  const addPg = (s, r, tag, extra) => { if (s && pgFar(s.x, s.z)) { pgSites.push({ x: s.x, z: s.z, r, tag, w: 1, ...extra }); return true; } return false; };
   for (const zn of Z) {
     if (zn.kind !== 'pigeon') continue;
-    for (let k = 0; k < zn.n; k++) addPg(spot(zn.x, zn.z, zn.min || 0, zn.spread, null, { road: 1.5, avoid: zn.avoid, rng: zn.isl ? Ri : undefined, tries: zn.isl ? 30 : undefined }), zn.r, zn.tag, { w: zn.w, name: zn.name, cnt: zn.cnt, avoid: zn.avoid });
+    for (let k = 0; k < zn.n; k++) for (let tries = 0; tries < 4; tries++) if (addPg(spot(zn.x, zn.z, zn.min || 0, zn.spread, null, { road: 1.5 }), zn.r, zn.tag, { w: zn.w, name: zn.name })) break;      // (a spot within 10 m of a site of the zone is tried again: a zone keeps its n sites)
   }
   const bridge = ctx.services.landmarksC?.bridge;
   if (bridge?.frame) {
@@ -184,7 +179,7 @@ export function buildBirds(ctx, W, say, opts = {}) {
   };
   for (const zn of Z) {
     if (zn.kind !== 'sparrow') continue;
-    const q = spot(zn.x, zn.z, 0, zn.spread, null, { road: 1.5, rng: zn.isl ? Ri : undefined }); if (!q) continue;
+    const q = spot(zn.x, zn.z, 0, zn.spread, null, { road: 1.5 }); if (!q) continue;
     const sh = shelterOf(q, 48); if (sh) spSites.push({ x: q.x, z: q.z, r: zn.r, shelter: sh, tag: 'garden', w: zn.w, name: zn.name });   // a garden whose trees / lamps nobody publishes has no sparrow flock
   }
   const benchC = [...(ctx.services.props?.benches || []), ...(ctx.services.landmarksF?.benchPoints || [])].filter((b) => Number.isFinite(b.x) && L.inPlay(b.x, b.z));
@@ -208,12 +203,10 @@ export function buildBirds(ctx, W, say, opts = {}) {
   const nSparrowFlocks = Math.min(spSites.length, Math.max(1, Math.round(4 * Q)));
   const fspec = [];
   for (const site of bestSites(pgSites, nPigeonFlocks)) fspec.push({ sp: 'pigeon', site, cnt: Math.max(3, Math.round(R.range(5, 7.5) * (0.6 + 0.4 * Q))), min: 4 });
-  // one BIG pigeon flock (a zone with a flock size: the 45 pigeons of the Xenia forecourt): the director sends it to such a zone when the player is about, else it is a larger flock of the squares
-  { const bigSite = pgSites.find((q) => q.cnt), last = fspec.filter((e) => e.sp === 'pigeon').pop(); if (bigSite && last) { last.cnt = Math.max(last.cnt, Math.round(bigSite.cnt * (0.6 + 0.4 * Q))); last.min = 6; last.big = true; } }
   for (const site of bestSites(spSites, nSparrowFlocks)) fspec.push({ sp: 'sparrow', site, cnt: Math.max(3, Math.round(R.range(3, 5) * (0.6 + 0.4 * Q))), min: 3 });
   for (let guard = 0; guard < 99 && plan.length + fspec.reduce((n2, e) => n2 + e.cnt, 0) > Math.round(140 * Math.max(Q, 0.45)); guard++) { const big = fspec.filter((e) => e.cnt > e.min).sort((x, y) => y.cnt - x.cnt)[0]; if (!big) break; big.cnt--; }
   for (const e of fspec) {
-    const f = { sp: e.sp, site: e.site, state: 'rest', t0: 0, away: 0, birds: [], scare: SP[e.sp].scare, big: !!e.big };
+    const f = { sp: e.sp, site: e.site, state: 'rest', t0: 0, away: 0, birds: [], scare: SP[e.sp].scare };
     e.site.taken = f; flocks.push(f); for (let k = 0; k < e.cnt; k++) plan.push({ sp: e.sp, mode: 'flock', flock: f });
   }
   for (const p of plan) countFor(p.sp);
@@ -238,11 +231,11 @@ export function buildBirds(ctx, W, say, opts = {}) {
   const WHITE = new T.Color(1, 1, 1), pigeonTint = [new T.Color(1, 1, 1), new T.Color(0.95, 0.95, 1.0), new T.Color(1.12, 1.08, 1.04), new T.Color(0.85, 0.86, 0.9), new T.Color(2.3, 2.3, 2.4)];
   let idc = 0;
   for (const p of plan) {
-    const cfg = p.jack ? SP.jackdaw : SP[p.sp], M = models[cfg.model];
+    const cfg = SP[p.sp], M = models[cfg.model];
     const b = {
       id: idc++, sp: p.sp, mode: p.mode, cfg, M, slot: M.list.length, x: 0, y: 0, z: 0, yaw: R() * TAU, st: 'ground', t0: 0, until: 0, ph: R() * TAU, seed: R(), flock: p.flock || null,
       act: 'idle', actEnd: 0, actT0: 0, tgt: null, home: null, perch: null, fl: null, orb: null, nextCall: 20 + R() * 80, callT0: -9, callDur: 0,
-      tint: p.sp === 'pigeon' ? (R() < 0.12 ? pigeonTint[4] : pigeonTint[Math.floor(R() * 4)]) : p.jack ? new T.Color(...cfg.tint) : null, jack: !!p.jack,
+      tint: p.sp === 'pigeon' ? (R() < 0.12 ? pigeonTint[4] : pigeonTint[Math.floor(R() * 4)]) : null,
       py: 0, gy: 0, sx: 1,
     };
     M.list.push(b); birds.push(b);
@@ -347,7 +340,7 @@ export function buildBirds(ctx, W, say, opts = {}) {
   /** lay the flock out on its (new) site: free slots in the site circle, the members on them */
   function layoutFlock(f, t = 0) {
     f.slots = [];
-    for (let k = 0; k < f.birds.length + 4; k++) { const q = spot(f.site.x, f.site.z, 0.3, f.site.r + (f.sp === 'pigeon' ? 1.5 : 0), null, { road: 1.5, avoid: f.site.avoid }); if (q) f.slots.push(q); }
+    for (let k = 0; k < f.birds.length + 4; k++) { const q = spot(f.site.x, f.site.z, 0.3, f.site.r + (f.sp === 'pigeon' ? 1.5 : 0), null, { road: 1.5 }); if (q) f.slots.push(q); }
     for (const b of f.birds) {
       const q = f.slots.length ? f.slots[Math.floor(R() * f.slots.length)] : { x: f.site.x, z: f.site.z };
       setGround(b, q.x + R.range(-0.4, 0.4), q.z + R.range(-0.4, 0.4), t, { x: f.site.x, z: f.site.z, r: f.site.r });
@@ -396,10 +389,10 @@ export function buildBirds(ctx, W, say, opts = {}) {
         si++; continue;
       }
       if (b.sp === 'crow') {
-        const onPerch = b.jack || ci++ % 2 === 0 || R() < 0.15;
-        const near = !b.jack && ci <= 6;
+        const onPerch = ci++ % 2 === 0 || R() < 0.15;
+        const near = ci <= 6;
         if (onPerch) {
-          const pool = b.jack ? CROW_HAUNTS.slice(-3) : CROW_HAUNTS, hz = pool[Math.floor(R() * pool.length)];      // jackdaws: the old trees of the cemetery, the Academy garden, the Rumyantsev garden (the island haunts are the last three)
+          const hz = CROW_HAUNTS[Math.floor(R() * CROW_HAUNTS.length)];
           const cand = W.perchesNear(near ? start.x : hz.x + R.range(-hz.r, hz.r), near ? start.z : hz.z + R.range(-hz.r, hz.r), 0, near ? 110 : 140, { kinds: b.cfg.kinds });
           if (cand.length) { setPerch(b, cand[Math.floor(R() * cand.length)], R.range(-20, 0)); b.until = R.range(4, 30); continue; }
         }

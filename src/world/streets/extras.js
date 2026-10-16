@@ -6,38 +6,11 @@ import { pairs, chaikin, densify, rgb, UP } from './util.js';
 import { addCap, polyArea } from '../lib/massing.js';
 import { ROAD_Y, WALK_Y, LIFT, KERB_W } from './surface.js';
 import * as L from '../layout.js';
-import { wayAt, nearestWay, slabAt } from './net.js';
+import { wayAt, nearestWay } from './net.js';
 import { nudgeClear, poleClear } from './furn.js';
-import { isOpen } from './region.js';
 
 /** asphalt of the PARKING polygons (not inside a building; > 40 m2) into a massing MeshBuilder; returns the number of lots */
-/** ASPHALT BANDS that a sight asked for where no OSM polygon covers the ground (third pass, docs/research/vo-requests-landmarksKirova.md "streets": the strip q -42 .. -50 in front of the Kirov Palace of Culture, between the module's slab
- *  pavement (outer edge q -42) and the pavement of streets, was blotchy generic ground: the cars of the Sobchak Square car park stand up to the pavement). Plan frame FD of landmarksKirova (origin (-5449, -145), rotation 30.57 deg,
- *  world = O + r (c, -s) + (-q) (s, c)); each band is cut into 1.5 m cells, a cell is laid when its centre is clear of every carriageway (net.cover < -0.8: the asphalt of the roads stays whole) and outside the OSM parking polygons
- *  (no second coplanar lot); under a pavement strip of streets (raised 0.12 m) a cell is hidden. Only when the owner module is in the build list. */
-const EXTRA_LOTS = [{ owner: 'landmarksKirova', o: [-5449, -145], rot: 30.57 * Math.PI / 180, bands: [[-71.2, -10, -42.0, -50.5], [85, 129, -42.0, -50.5]], cell: 1.5 }];
-function buildExtraLots(B, ctx, net) {
-  let n = 0;
-  const ringHas = (o, x, z) => { let ins = false; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const xi = o[i], zi = o[i + 1], xj = o[j], zj = o[j + 1]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) ins = !ins; } return ins; };
-  for (const L0 of EXTRA_LOTS) {
-    if (ctx && ctx.buildList && !ctx.buildList.includes(L0.owner)) continue;
-    const c = Math.cos(L0.rot), s = Math.sin(L0.rot), W = (r, q) => [L0.o[0] + c * r - s * q, L0.o[1] - s * r - c * q];
-    for (const [r0, r1, q0, q1] of L0.bands) {
-      const nr = Math.max(1, Math.round((r1 - r0) / L0.cell)), nq = Math.max(1, Math.round(Math.abs(q1 - q0) / L0.cell));
-      for (let i = 0; i < nr; i++) for (let j = 0; j < nq; j++) {
-        const ra = r0 + (r1 - r0) * i / nr, rb = r0 + (r1 - r0) * (i + 1) / nr, qa = q0 + (q1 - q0) * j / nq, qb = q0 + (q1 - q0) * (j + 1) / nq;
-        const m = W((ra + rb) / 2, (qa + qb) / 2);
-        if (!isOpen(m[0], m[1]) || net.cover(m[0], m[1], {}) > -0.8 || L.insideBuilding(m[0], m[1], 0.5) || deckAt(m[0], m[1])) continue;
-        if (PARKING.some((p) => (p.polys || []).some((poly) => ringHas(poly.o, m[0], m[1])))) continue;
-        const A = W(ra, qa), Bq = W(rb, qa), C = W(rb, qb), D = W(ra, qb);
-        addCap(B, { o: [...A, ...Bq, ...C, ...D], h: [] }, ROAD_Y - 0.002, { uvScale: 8 }); n++;
-      }
-    }
-  }
-  return n;
-}
-
-export function buildLots(B, ctx, net) {
+export function buildLots(B) {
   let n = 0;
   for (const p of PARKING) for (const poly of p.polys || []) {
     if (polyArea(poly) < 40 || p.id === 'r13353280') continue;                // the station forecourt is paved plaza (landmarksA), not an asphalt lot
@@ -45,7 +18,6 @@ export function buildLots(B, ctx, net) {
     if (L.insideBuilding(cx, cz, 0)) continue;
     addCap(B, poly, ROAD_Y - 0.002, { uvScale: 8 }); n++;
   }
-  if (net) n += buildExtraLots(B, ctx, net);
   return n;
 }
 
@@ -106,7 +78,6 @@ export function buildStopMarks(P, stops) {
   const col = [0.89, 0.78, 0.29];
   let n = 0;
   for (const st of stops) {
-    if (st.noMark) continue;                                              // a tram platform beside its track (stops.js): no kerb lane, no zigzag
     const w = st.w, a = st.s - 6, b = st.s + 6; if (a < 3 || b > w.L - 3) continue;
     const pts = [];
     for (let i = 0, s = a; s <= b + 0.01; s += 0.7, i++) {
@@ -126,14 +97,11 @@ export function buildStopMarks(P, stops) {
 
 
 /** Tram rails flush in the asphalt (docs/research/streets.md section 2: two dark grooves with a steel rail head, gauge 1.52 m): decal strips along TRAMWAYS, hidden under buildings;
- *  where a track runs beside the asphalt (a median) a 3.2 m wide setts bed is laid under it (bed: MeshBuilder-compatible MB with the cobble material). Returns the number of ways.
- *  Open districts, with X = { slab, ballast } (MBs of the materials pt-tramslab / pt-ballast):
- *    * the slab medians of net.js (Nalichnaya ulitsa): one ribbon of grey concrete slabs per carriageway half, 1.4 cm under the asphalt that overlaps its edges, and no setts bed on it;
- *    * the DEPOT YARD tracks (service=yard: Sredny pr. 77, 81 tracks): steel rails (not the dark grooves of a street) on a 2.8 m ballast strip with sleepers, where no asphalt lies. */
+ *  where a track runs beside the asphalt (a median) a 3.2 m wide setts bed is laid under it (bed: MeshBuilder-compatible MB with the cobble material). Returns the number of ways. */
 const BED_Y = 0.016;
-export function buildTramRails(net, P, Bed, owned = () => false, X = null) {
-  const GROOVE = rgb('#2a2c2f'), STEEL = rgb('#8f949a');
-  let n = 0, nSlab = 0, nBallast = 0, ti = 0;
+export function buildTramRails(net, P, Bed) {
+  const GROOVE = rgb('#2a2c2f');
+  let n = 0;
   // the bed of a tram reservation (net.js tramReservation: Kronverksky pr. along the Alexander Park): ONE ribbon of setts over the whole width of the double track instead of a road
   if (Bed) for (const w of net.ways) {
     if (!w.tramBed) continue;
@@ -145,27 +113,14 @@ export function buildTramRails(net, P, Bed, owned = () => false, X = null) {
       prev = [v0, v1];
     }
   }
-  // the slab medians (net.slabs: every carriageway draws its half of the gap, from 0.35 m under its own asphalt to the middle)
-  if (X && X.slab) for (const r of net.slabs || []) {
-    let prev = null;
-    for (const q of r.pts) {
-      const du = Math.hypot(q.mx - q.ax, q.mz - q.az) / 6, v = q.s / 6;
-      const A = X.slab.vert(q.ax, BED_Y, q.az, 0, v), M = X.slab.vert(q.mx, BED_Y, q.mz, du, v);
-      if (prev) { X.slab.quad(prev[0], prev[1], M, A); nSlab++; }
-      prev = [A, M];
-    }
-  }
   for (const t of TRAMWAYS) {
     if (t.tunnel || t.layer < 0) continue;
-    // a track on a long bridge whose module claims the tram way lays the rails on its own (humped) deck: nothing of ours under it. Open districts only (region.js): the reviewed bridges keep their flat rails
-    if (owned(t.id) && (isOpen(t.pts[0], t.pts[1]) || isOpen(t.pts[t.pts.length - 2], t.pts[t.pts.length - 1]))) continue;
     let pts = pairs(t.pts); if (pts.length < 2) continue;
     if (pts.length > 2) pts = chaikin(pts, 2, 40);
     pts = densify(pts, 2);
-    const yard = !!X && t.service === 'yard', tk = ti++;
     const run = []; const flush = () => { if (run.length >= 2) draw(run.slice()); run.length = 0; };
     const draw = (r) => {
-      const steel = yard && isOpen(r[0][0], r[0][1]), col = steel ? STEEL : GROOVE, rw = steel ? 0.11 : 0.14;
+      const col = GROOVE, rw = 0.14;
       for (const off of [-0.76, 0.76]) {
         let prev = null;
         for (let i = 0; i < r.length; i++) {
@@ -178,29 +133,21 @@ export function buildTramRails(net, P, Bed, owned = () => false, X = null) {
       }
       n++;
       if (Bed) {
-        let prev = null, prevB = null, sAcc = 0;
+        let prev = null;
         for (let i = 0; i < r.length; i++) {
           const a = r[Math.max(0, i - 1)], b = r[Math.min(r.length - 1, i + 1)]; let tx = b[0] - a[0], tz = b[1] - a[1]; const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l;
-          if (i) sAcc += Math.hypot(r[i][0] - r[i - 1][0], r[i][1] - r[i - 1][1]);
-          if (net.cover(r[i][0], r[i][1], {}) > -0.3 || (X && slabAt(net, r[i][0], r[i][1]))) { prev = null; prevB = null; continue; }               // over asphalt / on a slab median: no bed
-          const nx = -tz, nz = tx, x = r[i][0], z = r[i][1], open = isOpen(x, z);
-          if (steel && open) {                                                                                 // the depot yard: ballast with sleepers
-            const h = 1.4, by = 0.010 + (tk % 3) * 0.0055;       // (2.8 m strips, three levels 5.5 mm apart: the depth buffer separates 5 mm at 90 m; neighbouring yard tracks overlap in the fans)
-            const v0 = X.ballast.vert(x + nx * h, by, z + nz * h, 1, sAcc / 3.6), v1 = X.ballast.vert(x - nx * h, by, z - nz * h, 0, sAcc / 3.6);
-            if (prevB) { X.ballast.quad(prevB[0], prevB[1], v1, v0); nBallast++; }
-            prevB = [v0, v1]; prev = null; continue;
-          }
-          const h = 1.6, by = open ? BED_Y : 0.027;       // (open districts: under a service road that the 3.2 m bed overlaps)
+          if (net.cover(r[i][0], r[i][1], {}) > -0.3) { prev = null; continue; }               // over asphalt: no bed
+          const nx = -tz, nz = tx, x = r[i][0], z = r[i][1];
+          const h = 1.6, by = 0.027;
           const v0 = Bed.vert(x + nx * h, by, z + nz * h, (x + nx * h) / 3.2, (z + nz * h) / 3.2), v1 = Bed.vert(x - nx * h, by, z - nz * h, (x - nx * h) / 3.2, (z - nz * h) / 3.2);
           if (prev) Bed.quad(prev[0], prev[1], v1, v0);
-          prev = [v0, v1]; prevB = null;
+          prev = [v0, v1];
         }
       }
     };
     for (const p of pts) { if (L.insideBuilding(p[0], p[1], 0)) flush(); else run.push(p); }
     flush();
   }
-  buildTramRails.last = { ways: n, slabQuads: nSlab, ballastQuads: nBallast };
   return n;
 }
 

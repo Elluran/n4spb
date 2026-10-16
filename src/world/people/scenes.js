@@ -18,7 +18,7 @@ export function populate(ctx, nav, sim, opts = {}) {
   // weighted random start node over the big components (zone weights: the avenue, the square and the station are busy)
   const comps = []; let totW = 0;
   for (const c of sim.bigComps) { const ids = sim.compNodes.get(c), cum = new Float32Array(ids.length); let w = 0; ids.forEach((id, i) => { w += nav.zoneW(N.x[id], N.z[id]); cum[i] = w; }); comps.push({ c, ids, cum, w }); totW += w; }
-  // the Mars Field / Summer Garden / castle zones (people.js DENSITY.mars): the generic walkers start in them only up to 40 % of the head-count cap (the scripted places of mars.js come on top)
+  // the castle zone (people.js DENSITY.mars): the generic walkers start in them only up to 40 % of the head-count cap (the scripted places of mars.js come on top)
   const mz = (nav.marsCfg && nav.marsCfg.zones) || [], mzN = mz.map(() => 0);
   const startNode = (pred) => {
     for (let tries = 0; tries < 12; tries++) {
@@ -130,9 +130,9 @@ export function populate(ctx, nav, sim, opts = {}) {
     }
   }
   // ---- the scripted places: the station, the forecourt, the platforms, performers, the wedding, the police pair ...
-  const S2 = { R, rr, n, f, west: opts.west || { scale: 1, platforms: 1 }, mars: opts.mars || { scale: 1 }, petro: opts.petro || null, vo: opts.vo || null, isl: opts.isl || null, qf: opts.qf ?? 1, stats, count, walker, startNode, nextTo, P: { P_STROLL, P_BUSY, P_TOURIST, P_TOUR, P_ELDER, P_RIDER, P_COURIER, P_METRO } };
+  const S2 = { R, rr, n, f, west: opts.west || { scale: 1, platforms: 1 }, mars: opts.mars || { scale: 1 }, qf: opts.qf ?? 1, stats, count, walker, startNode, nextTo, P: { P_STROLL, P_BUSY, P_TOURIST, P_TOUR, P_ELDER, P_RIDER, P_COURIER, P_METRO } };
   addVignettes(ctx, nav, sim, S2);
   stats.total = sim.agents.length;
-  if (S2.westInfo) { stats.west = S2.westInfo.places; stats.westMs = S2.westInfo.ms; } if (S2.marsInfo) { stats.mars = S2.marsInfo.places; stats.marsMs = S2.marsInfo.ms; } if (S2.swInfo) { stats.sw = S2.swInfo.places; stats.swMs = S2.swInfo.ms; } if (S2.petroInfo) { stats.petro = S2.petroInfo.places; stats.petroMs = S2.petroInfo.ms; stats.petroTotal = S2.petroInfo.total; } if (S2.voInfo) { stats.vo = S2.voInfo.places; stats.voMs = S2.voInfo.ms; stats.voTotal = S2.voInfo.total; stats.voFailed = S2.voInfo.failed; } if (S2.islInfo) { stats.isl = S2.islInfo.places; stats.islMs = S2.islInfo.ms; stats.islTotal = S2.islInfo.total; stats.islFailed = S2.islInfo.failed; } if (S2.metroInfo) { stats.metroPlatforms = S2.metroInfo.stations; stats.metroMs = S2.metroInfo.ms; }
+  if (S2.westInfo) { stats.west = S2.westInfo.places; stats.westMs = S2.westInfo.ms; } if (S2.marsInfo) { stats.mars = S2.marsInfo.places; stats.marsMs = S2.marsInfo.ms; } if (S2.metroInfo) { stats.metroPlatforms = S2.metroInfo.stations; stats.metroMs = S2.metroInfo.ms; }
   return stats;
 }

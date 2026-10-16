@@ -1,5 +1,7 @@
 # Scene loading measurements and next optimizations
 
+> **Full-city numbers.** Every measurement in this file (60 s intro, 20 of 129 regions, 115.5 MiB bake, 7993 x 6137 roof grid) was taken on the whole 102_3d_piter city before it was cut down to the Nevsky strip. They are kept for the method and the reasoning. The strip has about 25 regions (23 city-base + about 25 street-surface region files), a bake of an estimated 50-75 MiB gzip in about 65-70 files and a roof grid of about 7.8k x 5.0k at 0.5 m; the real strip figures appear only after the first strip bake and are recorded in [STRIP.md](STRIP.md).
+
 Measured 2026-10-04 on Edge headless, RTX 3090 Ti / ANGLE D3D11,
 1280 × 720, a new browser profile per run. Full city, normal intro path,
 including roof capture and the initial ten seconds of simulation. These are
@@ -109,10 +111,11 @@ network SLA or an under-15-second result. The complete shipping bake is about
 traffic and crowds still build at startup. Further reducing those costs and
 network payload is necessary for a much faster first visit.
 
-After adding Muruzi, differential checks passed all three quality tiers
+Differential checks (`tools/baked-check.mjs`) pass all three quality tiers
 (every node/edge, 20 routes, 1,000 field samples, destination and all-region
-loading). The Muruzi GPU check also loads the scene under `/102_3d_piter/`
-to verify that binary asset paths work on subfolder hosting.
+loading). Subfolder hosting is verified with
+`node tools/shot.mjs --base /n4spb --load --q medium --out shots/load/subpath`,
+which serves the repository under `/n4spb/` and loads the baked assets from there.
 
 Run `node tools/baked-check.mjs high` (or medium/low) to compare hydrated
 navigation, routes and field queries against the original generators and to
@@ -159,7 +162,7 @@ that is a target for the next architecture change, not an achieved result.
 
 ## Reproduce
 
-Run from `102_3d_piter`:
+Run from the repository root:
 
 ```sh
 npm run load -- --q high --network --out shots/load/high-network

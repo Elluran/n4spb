@@ -15,15 +15,13 @@
 import * as THREE from 'three';
 import { bakedData } from '../../core/baked-world.js';
 import * as L from '../layout.js';
-import { BUILDINGS, ROADS, AREAS, GREEN, LANDUSE, PARKING, CROSSINGS, CROSSING_NODES, SIGNALS, BUS_STOPS, DOORS, FURNITURE, MONUMENTS, BARRIERS, RAILS, ENTRANCES, EXTENT, EXTENT_RECTS, RECT_NAMES } from '../data/city.js';
+import { BUILDINGS, ROADS, AREAS, GREEN, LANDUSE, PARKING, CROSSINGS, CROSSING_NODES, SIGNALS, BUS_STOPS, DOORS, FURNITURE, MONUMENTS, BARRIERS, RAILS, ENTRANCES, EXTENT } from '../data/city.js';
 import { isOwned } from '../lib/claims.js';
-import { LATE_ROADS } from '../data/late-roads.js';
 import { waterPolys } from './river.js';
-import { slopeQuads, petroAt } from './waterways.js';
-import { extraClaimRings, extraClaimEdges } from './claims.js';
-import { clamp, hash2, polyArea, distToRing, pointInRing } from './util.js';
+import { slopeQuads } from './waterways.js';
+import { extraClaimRings } from './claims.js';
+import { clamp, hash2 } from './util.js';
 import { classLayer } from './class-palette.js';
-import { inIslands, ISLAND_RECTS, sightStrips } from './islands.js';
 import { bytePlane } from './sparse-byte-plane.js';
 import { distanceLayer } from './distance-atlas.js';
 
@@ -203,7 +201,6 @@ export const CLASS = {
   garages: [0.01, 0.48, 0.08, 0.43],
   construction: [0.03, 0.12, 0.05, 0.80],
   industrial: [0.06, 0.40, 0.10, 0.44],
-  port: [0.02, 0.84, 0.04, 0.10],             // (review-water-3b 2026-10-09) the fenced passenger port "Морской фасад" (LANDUSE w704134882): a flat grey asphalt / concrete territory, not the yard patchwork of `industrial`
   railway: [0.00, 0.03, 0.01, 0.96],
   sports_centre: [0.05, 0.55, 0.30, 0.10],
   lawn: [0.90, 0.00, 0.02, 0.08],
@@ -211,14 +208,10 @@ export const CLASS = {
   parking: [0.01, 0.90, 0.05, 0.04],
   play: [0.02, 0.06, 0.10, 0.82],             // playground / pitch surface: dark earth + rubber crumbs
   paved: [0.00, 0.04, 0.94, 0.02],
-  plaza: [0.00, 0.84, 0.14, 0.02],          // (islands 2026-10-14) the plot of a stadium (Krestovsky arena plaza): flat grey concrete / asphalt with a few slabs, no lawn blots, few red pavers
-  yard: [0.00, 0.97, 0.03, 0.00],             // (islands 2026-10-14) an unmapped courtyard / block ground on the islands: pure worn grey asphalt (ground.js and categoryAt force asphalt where W.y > 0.955; the default mix gave grey + green + red patchwork)
-  mown: [1.00, 0.00, 0.00, 0.00],             // (islands 2026-10-14) a named meadow / mapped lawn of the islands (Oil Meadow, the lawn east of the palace, the Kamenny garden lawns): the ground shader and categoryAt force pure grass (W.x > 0.93 only this class reaches it), no grey / red blots
   asphalt: [0.00, 0.94, 0.03, 0.03],
   trail: [0.02, 0.06, 0.10, 0.82],          // compacted / fine gravel footways of the parks
   rail: [0.00, 0.02, 0.00, 0.98],
 };
-const PORT_LANDUSE = new Set(['w704134882']);      // land-use polygons drawn with CLASS.port (see buildField)
 
 // ---------------------------------------------------------------- noise tile
 const NT = 256;
@@ -293,10 +286,7 @@ export function buildField(ctx, owned, baked = null) {
     if (b.skip || (b.minH || 0) > 6) continue;
     for (const p of b.polys) fillPoly(dg, bld, p, 1);
   }
-  // the three LATE ROADS (Birzhevoy proezd, the 6-7 line stub, Kadetsky pereulok: highway=construction in the bake, drawn by streets from data/late-roads.js; water-2 2026-10-08, streets request 2): until a bake holds them
-  // in ROADS they are road for the trunks, hedges, tufts and the ground paint like any other road (ids that ROADS holds are skipped)
-  const roadIds = new Set(ROADS.map((r) => r.id)), lateRoads = LATE_ROADS.filter((r) => !roadIds.has(r.id));
-  for (const r of [...ROADS, ...lateRoads]) {
+  for (const r of ROADS) {
     if (r.tunnel) continue;
     const w = L.roadWidth(r);
     if (L.isDrivable(r)) {
@@ -313,8 +303,7 @@ export function buildField(ctx, owned, baked = null) {
   for (const g of GREEN) if (L.isClaimed(g.id)) for (const p of g.polys) fillPoly(dg, claim, p, 1);                 // the landmark owners' lawn beds: they plant them
   for (const b of BUILDINGS) if (isOwned(owned, b.id)) for (const p of b.polys) for (const h of p.h) fillPoly(dg, claim, { o: h, h: [] }, 1);   // courtyards of owned buildings (Great Courtyard of the Winter Palace): the owner lays the floor
   for (const w of waterPolys()) fillPoly(dg, wat, { o: w.o, h: w.h }, 1);
-  for (const ring of extraClaimEdges(ctx)) stamp(dg, claim, ring.concat([ring[0], ring[1]]), 0.6, 1);                  // (water-3) the outline of the island sights' paving (see claims.js extraClaimEdges)
-  for (const ring of extraClaimRings(ctx)) fillPoly(dg, claim, { o: ring, h: [] }, 1);                                 // Summer Garden ring / Marble Palace forecourt (their owner modules plant and pave them)
+  for (const ring of extraClaimRings(ctx)) fillPoly(dg, claim, { o: ring, h: [] }, 1);                                 // the Kapodistrias promenade of landmarksOktyabrsky (the module paves it)
   for (const sq of slopeQuads()) fillPoly(dg, claim, { o: sq.q.flat(), h: [] }, 1);                                  // grass slopes of the Swan Canal / Moika (quay.js draws them): no trunks, hedges, beds or tufts
   for (const g of GREEN) if (g.kind === 'pitch' || g.kind === 'playground' || g.kind === 'garden' || g.kind === 'flowerbed' || g.kind === 'fitness_station') for (const p of g.polys) fillPoly(dg, hard, p, 1);
   for (const g of PARKING) for (const p of g.polys) fillPoly(dg, hard, p, 1);
@@ -325,10 +314,7 @@ export function buildField(ctx, owned, baked = null) {
   for (const d of DOORS) disc(dg, pts, d.x, d.z, 3.0, 1);
   for (const e of ENTRANCES) disc(dg, pts, e.x, e.z, 7.0, 1);                                                     // metro entrances
   for (const f of FURNITURE) disc(dg, pts, f.x, f.z, 1.4, 1);
-  // (water-3 2026-10-09, request of landmarksKirova) the Sobchak monument n793463299 (-5296.8, 65.8) is judged at 2 - 3 m: no generic trunk within 8 m, so that no crown hangs over the bronze (the others keep 4.5 m)
-  // (islands round 2, 2026-10-15, request R4 of landmarksVOStatues: the sculptures are judged at 2 - 4 m) Zmei Gorynych (8 m long) 6 m, the Musa Jalil apron (r 4.4) 5 m, the Little Prince drum 5.5 m
-  const MON_CLEAR = { n793463299: 8, n935201442: 6, n2101529725: 5, n5808194411: 5.5 };
-  for (const m of MONUMENTS) disc(dg, pts, m.x, m.z, MON_CLEAR[m.id] || 4.5, 1);
+  for (const m of MONUMENTS) disc(dg, pts, m.x, m.z, 4.5, 1);
   for (const b of BARRIERS) if (b.kind === 'fence' || b.kind === 'wall' || b.kind === 'chain') stamp(dg, hard, b.closed ? b.pts.concat(b.pts.slice(0, 2)) : b.pts, 0.9, 1);
   for (const h of L.GROUND_HOLES) stampRect(dg, pts, h.x, h.z, h.w, h.d, h.rotY || 0, 1, 6);                      // metro shafts + 6 m around them
   { // the station forecourt (Vosstaniya Square paving is an AREA already): keep trunks off the facade apron
@@ -356,33 +342,12 @@ export function buildField(ctx, owned, baked = null) {
   const cls = new Uint32Array(cg.W * cg.H);
   const vec = (k) => pack(...CLASS[k]);
   cls.fill(vec('default'));
-  // (review-water-3b 2026-10-09, request of landmarksMarineFacade: "the generic ground round the berth apron is a blotchy mud / grey / green patchwork next to the module's flat asphalt apron") the one port
-  // polygon of Vasilievsky Island gets the calm `port` mix; every other land-use polygon keeps its kind
-  for (const u of LANDUSE) { const v = vec(PORT_LANDUSE.has(u.id) ? 'port' : CLASS[u.kind] ? u.kind : 'default'); for (const p of u.polys) fillPoly(cg, cls, p, v); }
+  for (const u of LANDUSE) { const v = vec(CLASS[u.kind] ? u.kind : 'default'); for (const p of u.polys) fillPoly(cg, cls, p, v); }
   const greenClass = (g) => (g.kind === 'wood' || g.kind === 'forest' || g.kind === 'scrub' ? vec('wood') : g.kind === 'pitch' || g.kind === 'playground' || g.kind === 'fitness_station' || g.kind === 'track' ? vec('play') : vec('lawn'));
   for (const a of AREAS) if (isOwned(owned, a.id)) for (const p of a.polys) fillPoly(cg, cls, p, vec('paved'));         // owned squares: paving first, the lawns mapped inside (owned or not) are painted over it
-  // (islands 2026-10-14, request of landmarksKrestovsky) the plot of a stadium on the islands (GREEN kind `stadium`, Gazprom Arena r8841754: the arena, its plaza and the service lawns inside it) is the plaza class,
-  // painted FIRST so that the lawns / pitches mapped inside it still win; the older districts have no such plot
-  const islStadium = (g, p) => g.kind === 'stadium' && inIslands(p.o[0], p.o[1]);
-  // (islands 2026-10-14) a mapped lawn / meadow of the islands (GREEN grass / grassland / meadow / village_green above MOWN_MIN m2) is the pure `mown` class: the competition of the four ground categories
-  // gave grey patch paving and red pavers inside the Oil Meadow, the lawn east of the Yelagin Palace and the Kamenny garden lawns (the sights stand on them). Old districts keep their `lawn` mix.
-  const allIslands = (o) => { for (let i = 0; i < o.length; i += 2) if (!inIslands(o[i], o[i + 1])) return false; return true; };       // a polygon that touches an older play rectangle keeps its old class
-  const MOWN_MIN = 800, MOWN_PARK = 120000, islMown = (g, p) => (g.kind === 'grass' || g.kind === 'grassland' || g.kind === 'meadow' || g.kind === 'village_green' || (g.kind === 'park' && polyArea(p) < MOWN_PARK)) && polyArea(p) >= MOWN_MIN && allIslands(p.o);
-  const greenVec = (g, p) => (islMown(g, p) ? vec('mown') : greenClass(g));
-  for (const g of GREEN) if (g.kind === 'stadium') for (const p of g.polys) if (islStadium(g, p)) fillPoly(cg, cls, p, vec('plaza'));
-  for (const g of GREEN) for (const p of g.polys) if (!islStadium(g, p) && !islMown(g, p)) fillPoly(cg, cls, p, greenClass(g));
-  for (const g of GREEN) for (const p of g.polys) if (islMown(g, p)) fillPoly(cg, cls, p, vec('mown'));            // the mown meadows last: a lawn inside a mapped park keeps the pure class
+  for (const g of GREEN) for (const p of g.polys) fillPoly(cg, cls, p, greenClass(g));
   for (const g of PARKING) if (g.polys.length && g.amenity === 'parking') for (const p of g.polys) fillPoly(cg, cls, p, vec('parking'));
   for (const a of AREAS) if (!isOwned(owned, a.id)) for (const p of a.polys) fillPoly(cg, cls, p, vec('paved'));
-  // PETROGRAD SIDE (2026-10-06): the lawns, parks and playgrounds mapped INSIDE an unowned AREA (a named square such as Mytninskaya / Akademika Likhacheva / Akademika Sakharova squares, a pedestrian area) are
-  // gardens, not paving: in the Petrograd-only data the GREEN polygons are painted once more over the AREAS paving (they were grey setts with trees on them), then the car parks of the same data again.
-  // The masks of the older areas stay as they were reviewed (there the squares with gardens belong to landmark modules).
-  {
-    const petroPoly = (p) => petroAt(p.o[0], p.o[1]) && petroAt((p.o[0] + p.o[2] + p.o[4]) / 3, (p.o[1] + p.o[3] + p.o[5]) / 3);
-    for (const g of GREEN) for (const p of g.polys) if (petroPoly(p) && !islStadium(g, p)) fillPoly(cg, cls, p, greenVec(g, p));
-    for (const g of GREEN) for (const p of g.polys) if (islMown(g, p)) fillPoly(cg, cls, p, vec('mown'));            // (the giant park polygons were painted again just above: the meadows inside them last)
-    for (const g of PARKING) if (g.polys.length && g.amenity === 'parking') for (const p of g.polys) if (petroPoly(p)) fillPoly(cg, cls, p, vec('parking'));
-  }
   // mapped surfaces of the pedestrian ways: a pedestrian street (Griboedov east bank, Italyanskaya) is setts / slabs, not a courtyard patchwork; footways follow their surface tag
   // (paving stones / setts: granite, compacted / fine gravel: park gravel). Streets draws only the footway strip itself, the rest of such a street shows this ground.
   for (const r of ROADS) {
@@ -393,68 +358,6 @@ export function buildField(ctx, owned, baked = null) {
     else if ((r.hw === 'footway' || r.hw === 'path') && (sf === 'compacted' || sf === 'fine_gravel' || sf === 'gravel' || sf === 'ground')) stamp(cg, cls, r.pts, 1.4, vec('trail'));
   }
   for (const r of RAILS) if (!r.tunnel && !r.bridge) stamp(cg, cls, r.pts, 4.2, vec('rail'));                       // the ballast bed of every track (the rail module draws rails / sleepers)
-  // ISLANDS (round 2, 2026-10-14, gap audit G05 / PG05: "unmapped courtyards render as grey blotched patch paving with green and red blots"): on the ground of the islands (islands.js inIslands: the rectangles after
-  // K1 minus every older play rectangle) the unmapped ground (the default mix) and the block land-uses with the same patchy courtyard mix (residential / commercial / retail / industrial / garages / sports_centre) become the calm `yard` class: worn grey
-  // asphalt (forced asphalt in ground.js, no lawn / red-paver blots), except water and the 6 m of shore. A cell is changed only when its class IS one of those seven vectors, so the mapped lawns, parks, pitches, paving and trails painted above stay as they are; the older
-  // districts are never visited (ISLAND_RECTS lists the older rectangles that overlap each island rectangle).
-  {
-    const yardV = vec('yard'), fromV = new Set(['default', 'residential', 'commercial', 'retail', 'industrial', 'garages', 'sports_centre'].map(vec)); let n = 0;
-    for (const r of ISLAND_RECTS) {
-      const i0 = Math.max(0, Math.floor(r.x0 - x0)), i1 = Math.min(W - 1, Math.ceil(r.x1 - x0) - 1), j0 = Math.max(0, Math.floor(r.z0 - z0)), j1 = Math.min(H - 1, Math.ceil(r.z1 - z0) - 1);
-      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-        const k = j * W + i; if (!fromV.has(cls[k]) || qW[k] < 176) continue;                 // (the water and the 6 m of shore keep the old mix: natural banks, quays)
-        const x = x0 + i + 0.5, z = z0 + j + 0.5; let inOld = false;
-        for (const o of r.old) if (x >= o.x0 && x <= o.x1 && z >= o.z0 && z <= o.z1) { inOld = true; break; }
-        if (!inOld) { cls[k] = yardV; n++; }
-      }
-    }
-    if (typeof process !== 'undefined' && process.env && process.env.ENV_DEBUG) console.log('[field] island yard cells', n);
-    // (islands 2026-10-15, requests of landmarksTVTower 4 / KamennyPalace 6 / KamennyDachasEast 2) the SIGHT LOTS that the photos show as lawn: the TV tower territory (a lawn with trees; the module draws the tower and
-    // its 34 m fence but no ground), the Kamenny palace compound (mown lawns and gravel alleys behind the closed fence), the church and the dacha plots (lawn and gravel under old trees). Their land is unmapped ground,
-    // which the yard rule just made worn asphalt: every yard cell within LAWN_AROUND[module] m of the footprint of a building that the module draws becomes `mown` (not under the road / sidewalk masks).
-    const LAWN_AROUND = { landmarksTVTower: 9, landmarksKamennyPalace: 50, landmarksKamennyChurch: 30, landmarksKamennyDachasEast: 32 };
-    // landmarksKamennyDachasWest (request of the module): the Polovtsov and Follenweider plots are lawn plots; the court of the Gauswald dacha is red-brown setts (photos G01 / G03 / G04), `paved`, inside x -3850..-3730, z -5075..-4965
-    const LAWN_GROUP = { 'kamenny-polovtsov': 30, 'kamenny-follenweider': 30 }, COBBLE_GROUP = { 'kamenny-gauswald': 28 };
-    for (const b of BUILDINGS) {
-      const grp = L.groupOf(b.id), mod = L.claimedBy(b.id), cobble = !!COBBLE_GROUP[grp], R = COBBLE_GROUP[grp] || LAWN_GROUP[grp] || (mod && LAWN_AROUND[mod]); if (!R || !isOwned(owned, b.id)) continue;
-      const paint = cobble ? vec('paved') : vec('mown');
-      for (const p of b.polys) {
-        if (!inIslands(p.o[0], p.o[1])) continue;
-        let bx0 = 1e9, bx1 = -1e9, bz0 = 1e9, bz1 = -1e9; for (let i = 0; i < p.o.length; i += 2) { bx0 = Math.min(bx0, p.o[i]); bx1 = Math.max(bx1, p.o[i]); bz0 = Math.min(bz0, p.o[i + 1]); bz1 = Math.max(bz1, p.o[i + 1]); }
-        const i0 = Math.max(0, Math.floor(bx0 - R - x0)), i1 = Math.min(W - 1, Math.ceil(bx1 + R - x0)), j0 = Math.max(0, Math.floor(bz0 - R - z0)), j1 = Math.min(H - 1, Math.ceil(bz1 + R - z0));
-        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-          const k = j * W + i; if (cls[k] !== yardV || road[k] || pave[k]) continue;
-          const x = x0 + i + 0.5, z = z0 + j + 0.5;
-          if (cobble && (x < -3850 || x > -3730 || z < -5075 || z > -4965)) continue;
-          if (pointInRing(x, z, p.o) || distToRing(x, z, p.o) <= R) cls[k] = paint;
-        }
-      }
-    }
-    // the lawn strips in front of the end walls of Corpus 7 of LETI (islands.js SIGHT_STRIPS): yard / parking cells inside the quad
-    const parkV = vec('parking');
-    for (const st of sightStrips(BUILDINGS, (id) => isOwned(owned, id))) {
-      const q = st.quad, xs = [q[0], q[2], q[4], q[6]], zs = [q[1], q[3], q[5], q[7]];
-      const i0 = Math.max(0, Math.floor(Math.min(...xs) - x0)), i1 = Math.min(W - 1, Math.ceil(Math.max(...xs) - x0)), j0 = Math.max(0, Math.floor(Math.min(...zs) - z0)), j1 = Math.min(H - 1, Math.ceil(Math.max(...zs) - z0));
-      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-        const k = j * W + i; if ((cls[k] !== yardV && cls[k] !== parkV) || road[k]) continue;
-        if (pointInRing(x0 + i + 0.5, z0 + j + 0.5, q)) cls[k] = vec('mown');
-      }
-    }
-  }
-
-  // PETROGRAD SIDE (2026-10-06): NO LAWN PATCHES ON PUBLIC PAVEMENT. The unmapped ground is a courtyard mix with 2-12 % lawn, and the shader turns that share into lawn blobs: right for a yard, wrong for the
-  // strip between a carriageway and the house fronts, which is pavement (a green blob lay at the doors of Petrogradskaya metro, under the canopy of the House of Fashion). In the Petrograd-only data
-  //   * unmapped ground (the default / land-use mixes) within PAVE_BAND of a carriageway edge loses its lawn share (the asphalt / setts / gravel shares keep their proportion);
-  //   * the forecourt of a metro entrance (METRO_R round the door node) is paving whatever is mapped under it.
-  // The masks of the older areas stay as they were reviewed.
-  {
-    const PAVE_BAND = 12, METRO_R = 12, lim = Math.round(PAVE_BAND * QD), swap = new Map();
-    for (const k of ['default', 'residential', 'commercial', 'retail', 'sports_centre', 'industrial', 'garages', 'port', 'yard']) { const c = CLASS[k], t = c[1] + c[2] + c[3] || 1; swap.set(vec(k), pack(0, c[1] / t, c[2] / t, c[3] / t)); }
-    const pr = EXTENT_RECTS.filter((r, i) => /^(P|V|K|YE|KA|AP|PE)\d+$/.test(RECT_NAMES[i]));                         // appended islands inherit the same road-side pavement rule
-    const i0 = Math.max(0, Math.floor(Math.min(...pr.map((r) => r.x0)) - x0)), i1 = Math.min(W - 1, Math.ceil(Math.max(...pr.map((r) => r.x1)) - x0)), j0 = Math.max(0, Math.floor(Math.min(...pr.map((r) => r.z0)) - z0)), j1 = Math.min(H - 1, Math.ceil(Math.max(...pr.map((r) => r.z1)) - z0));
-    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * W + i; if (qR[k] >= lim) continue; const nv = swap.get(cls[k]); if (nv !== undefined && petroAt(x0 + i + 0.5, z0 + j + 0.5)) cls[k] = nv; }
-    for (const e of ENTRANCES) if (e.kind === 'entrance' && e.network && petroAt(e.x, e.z)) disc(cg, cls, e.x, e.z, METRO_R, vec('paved'));
-  }
   const clsB = new Uint8Array(cls.buffer);
 
   lap('classes');
@@ -520,8 +423,6 @@ function hydrateField(p, keepRawField = false) {
   /** which ground the shader paints at x, z: 'grass' | 'asphalt' | 'setts' | 'gravel' (the same competition of four noise fields as the shader) */
   field.categoryAt = (x, z) => {
     const w = field.clsAt(x, z, tmp), sum = w[0] + w[1] + w[2] + w[3] + 1e-4;
-    if (w[0] / sum > 0.93) return 'grass';                                          // the pure `mown` class (islands): only it reaches 0.93 (lawn 0.90, wood 0.86); ground.js forces grass the same way
-    if (w[1] / sum > 0.955) return 'asphalt';                                       // the island `yard` class (asphalt 0.97; the old asphalt class is 0.94, parking 0.90); ground.js forces asphalt the same way
     const a0 = noise.noiseAt(0, x, z, 0.021), a1 = noise.noiseAt(1, x, z, 0.021), b0 = noise.noiseAt(0, x + 61, z + 37, 0.021), b1 = noise.noiseAt(1, x + 61, z + 37, 0.021);
     const s = [Math.log(w[0] / sum + 0.04) + 9 * (a0 - 0.5), Math.log(w[1] / sum + 0.04) + 9 * (a1 - 0.5), Math.log(w[2] / sum + 0.04) + 9 * (b0 - 0.5), Math.log(w[3] / sum + 0.04) + 9 * (b1 - 0.5)];
     let k = 0; for (let i = 1; i < 4; i++) if (s[i] > s[k]) k = i;

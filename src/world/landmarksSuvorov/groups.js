@@ -1,1 +1,0 @@
-export const GROUPS_LIST = [{key:'north-suvorov-museum',name:'Музей А. В. Суворова',nameEn:'Suvorov Memorial Museum',ids:['w30198549','w232918746','w232918749','w232918766','w232918767','w232918770','w232918786'],osm:[],at:[1412.8,-1206.3]}];

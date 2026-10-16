@@ -15,10 +15,9 @@
 //                   signalised approach and every give-way approach of a public street (the lane graph's `give`: the minor street meeting a higher-ranked one).
 //   arrows          straight-ahead arrows 30 m before the stop line, one per lane, on the approaches of the wide streets (rank >= 3, carriageway >= 10 m) to a junction.
 //   nothing on      rank-0 ways (courtyards, service), living streets, pedestrian ways, bridge decks drawn by the bridges module (decks.js).
-import { wayAt, nearCrossing, trackDist } from './net.js';
+import { wayAt, nearCrossing } from './net.js';
 import { prepLanes, latAt } from './lanes.js';
 import { deckAt } from './decks.js';
-import { isOpen } from './region.js';
 import { UP, rgb, dpKeep, clamp } from './util.js';
 import { ROAD_Y, LIFT, WEST_X } from './surface.js';
 
@@ -141,9 +140,6 @@ export function planMarkings(net, graph, o = {}) {
     }
     if (rec.want > 0.01) rules.push(rec);
   };
-  /** TRAM CORRIDOR (open districts, region.js): a centre line / the shared edge of two merged carriageways is not painted where a tram track runs within 2.6 m: the double track lies in the middle of
-   *  the roadway (Sredny pr., Nalichnaya st., Kosaya liniya), the rails divide the two directions, a solid line between or along them is wrong ('gate': the rule does not ask for it there) */
-  const tramHid = (hid) => (p) => (isOpen(p.x, p.z) && trackDist(p.x, p.z) < 2.6 ? 'gate' : hid(p));
   const DBL = [-(RULES.thin + RULES.gap) / 2, (RULES.thin + RULES.gap) / 2];
 
   for (const w of net.ways) {
@@ -163,9 +159,9 @@ export function planMarkings(net, graph, o = {}) {
       // ---- centre line of a two-way carriageway
       if (centre && rng) {
         const lat = (q) => latAt(w, q, mid);
-        if (centre === 'double') ask('centre-double', w, rng.lo, rng.hi, lat, RULES.thin, { hid: tramHid(hid), offs: DBL });
-        else if (centre === 'solid') ask('centre-solid', w, rng.lo, rng.hi, lat, RULES.lane, { hid: tramHid(hid) });
-        else ask('centre-dash', w, rng.lo, rng.hi, lat, RULES.lane, { hid: tramHid(hid), dash: true, anchor });
+        if (centre === 'double') ask('centre-double', w, rng.lo, rng.hi, lat, RULES.thin, { hid, offs: DBL });
+        else if (centre === 'solid') ask('centre-solid', w, rng.lo, rng.hi, lat, RULES.lane, { hid });
+        else ask('centre-dash', w, rng.lo, rng.hi, lat, RULES.lane, { hid, dash: true, anchor });
       }
       // ---- lane lines between lanes of the same direction (the kerb lane of west Nevsky is the bus lane: solid)
       if (w.bnd[0].lw >= RULES.laneMin) for (let j = 1; j < K - 1; j++) {
@@ -185,9 +181,9 @@ export function planMarkings(net, graph, o = {}) {
         if (kind) {
           const gate = (p) => { const k = p.q.k, k1 = Math.min(w.n - 1, k + 1); return !w.med[k] || !w.med[k1] || partnerDraws(w, w.medPartner[k], p.x, p.z); };
           const mo = medOffsets(w), hidM = (p) => hidOf(w, w.medPartner && w.medPartner[p.q.k], gate)(p), lat = (q) => mo[q.k] + (mo[Math.min(w.n - 1, q.k + 1)] - mo[q.k]) * q.f;
-          if (kind === 'double') ask('median-double', w, e.f.lo, e.f.hi, lat, RULES.thin, { hid: tramHid(hidM), offs: DBL });
-          else if (kind === 'solid') ask('median-solid', w, e.f.lo, e.f.hi, lat, RULES.lane, { hid: tramHid(hidM) });
-          else ask('median-dash', w, e.f.lo, e.f.hi, lat, RULES.lane, { hid: tramHid(hidM), dash: true, anchor });
+          if (kind === 'double') ask('median-double', w, e.f.lo, e.f.hi, lat, RULES.thin, { hid: hidM, offs: DBL });
+          else if (kind === 'solid') ask('median-solid', w, e.f.lo, e.f.hi, lat, RULES.lane, { hid: hidM });
+          else ask('median-dash', w, e.f.lo, e.f.hi, lat, RULES.lane, { hid: hidM, dash: true, anchor });
         }
       }
       // ---- the continuous line between the lane and a parking pocket (where the pocket is deeper than 1.8 m)

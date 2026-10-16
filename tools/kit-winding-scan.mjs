@@ -5,7 +5,7 @@
 //        node tools/kit-winding-scan.mjs --detail <module>    which materials own the remaining against-normal triangles
 //        node tools/kit-winding-scan.mjs --kits               only the table by kit.js copy, no per-module lines
 // Double-sided materials are counted apart ("double"): they are harmless. Heavy: one process, modules built one after the other; use NODE_OPTIONS=--max-old-space-size=14000.
-// (written 2026-10-10 for the cylinder-cap fix of Parts.cyl() in the kit.js copies; the single-module ancestor is tools/landmarksKirova-winding.mjs)
+// (written 2026-10-10 for the cylinder-cap fix of Parts.cyl() in the kit.js copies)
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';

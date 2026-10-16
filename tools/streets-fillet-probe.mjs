@@ -1,7 +1,7 @@
 // tools/streets-fillet-probe.mjs - fast (data only, ~20 s, no scene) answer to "which way / corner patch draws pavement over this point?" (streets/walks.js buildWalks run against a collecting builder).
-// Written for the roads-surface-audit cause `pavement-paver/paired-carriageway` / `corner-patch` on a fillet sample (islands round 2, streets owner 2): the audit needs the whole scene (12 min), this
+// Written for the roads-surface-audit cause `pavement-paver/paired-carriageway` / `corner-patch` on a fillet sample: the audit needs the whole scene (12 min), this
 // probe needs the street network only.
-//   usage: node tools/streets-fillet-probe.mjs x,z [x,z ...] [--r 1.5] [--noisl] [--all]
+//   usage: node tools/streets-fillet-probe.mjs x,z [x,z ...] [--r 1.5] [--all]
 //   per point: the net.cover value, the ways within 25 m (id, class, half widths) and every pavement triangle (strip of a way side / corner patch of a fillet) that contains the point or lies within --r metres of it;
 //   with --all (and no point) every pavement triangle whose centroid is on asphalt (net.cover > 0.15, the fillets included) is listed per way: the audit's offenders of this kind for the whole network.
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -11,7 +11,6 @@ const imp = (p) => import(pathToFileURL(path.join(root, p)).href);
 globalThis.window = globalThis; globalThis.self = globalThis;
 const argv = process.argv.slice(2);
 const flag = (k, d) => { const i = argv.indexOf('--' + k); return i < 0 ? d : (argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : true); };
-if (argv.includes('--noisl')) globalThis.location = { search: '?st=noisl' };
 const R = Number(flag('r', 1.5)), ALL = !!flag('all', false);
 const pts = argv.filter((a) => /^-?\d/.test(a) && a.includes(',')).map((a) => a.split(',').map(Number));
 const L = await imp('src/world/layout.js');

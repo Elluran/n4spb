@@ -116,24 +116,8 @@ const SPECIES = {
   },
 };
 
-SPECIES.swan = {                                               // mute swan (лебедь-шипун) of the Yelagin / Petrovsky ponds: white, orange bill with a black knob, a long S-curved neck (cygnets: the same model grey-tinted at 0.4)
-  name: 'swan', y: 0.2, bs: [0.17, 0.15, 0.4], pitch: 0.12, neck: [0.31, 0.82],
-  c: { back: '#f4f2ec', belly: '#ecebe4', breast: '#f1f0ea', tail: '#ecebe4', head: '#f4f2ec', neck: '#f4f2ec', bill: '#e4782e', wing: '#f2f0ea', wingTip: '#e3e0d6', eye: '#14161a' },
-  tail: { len: 0.22, w: 0.1, tilt: 0.3 },
-  head: { r: 0.045, s: [0.95, 0.95, 1.1], bill: { l: 0.085, r: 0.022, tip: 0.012 } },
-  wing: { S: 0.52, lead: 0.1, trail: 0.17, tipZ: -0.08, fingers: 3, shoulder: [0.13, 0.22, 0.05] },
-  legs: null,
-  bodyExtra(B, sp) {                                           // the neck: eight spheres along an S curve (forward at the base, back above), the head pivots at its top (sp.neck = [z, y])
-    const n = 8, zy = (u) => [0.27 + 0.11 * Math.sin(Math.PI * u) + 0.04 * u, 0.27 + 0.55 * u];
-    for (let i = 0; i <= n; i++) { const u = i / n, [z, y] = zy(u), r = 0.058 - 0.022 * u; B.sph(r, r, r * 1.25, '#f4f2ec', { y, z }, 6, 4); }
-    const top = zy(1); sp.neck = [top[0], top[1]];
-    B.sph(0.09, 0.07, 0.07, '#f6f4ee', { y: sp.y + 0.1, z: -0.2, rx: -0.4 }, 6, 4);
-  },
-  headExtra(H, sp, sy, sz) { H.sph(0.016, 0.016, 0.022, '#16171b', { y: sy + 0.016, z: sz + sp.head.r * 1.05 }, 5, 3); },
-};
-
 const cacheM = new Map();
-/** { body, head, wing, sp } for 'crow' | 'pigeon' | 'sparrow' | 'swift' | 'gull' | 'drake' | 'hen' | 'swan' (geometries are shared, never mutate them) */
+/** { body, head, wing, sp } for 'crow' | 'pigeon' | 'sparrow' | 'swift' | 'gull' | 'drake' | 'hen' (geometries are shared, never mutate them) */
 export function birdModel(name) {
   if (cacheM.has(name)) return cacheM.get(name);
   const sp = SPECIES[name];

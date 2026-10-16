@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Санкт-Петербург · Saint Petersburg</title>
+<title>Невский проспект · Saint Petersburg</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231c2a5a'/%3E%3Cpath d='M16 4v6M16 10l-5 4h10zM9 14h14v3H9zM10 17h12v2H10zM8 22h16v2H8z' fill='%23e6c36a'/%3E%3Cpath d='M16 4l1 6h-2z' fill='%23fff3dc'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +19,7 @@
   html, body { height: 100%; margin: 0; background: #cfd9e6; color: var(--ink); font-family: var(--sans); overflow: hidden; }
   canvas#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
 
-  /* ---------- loading: a compact splash window over a blurred copy of its picture (once loaded, over the live scene). The picture is one of ten sights at the golden evening
+  /* ---------- loading: a compact splash window over a blurred copy of its picture (once loaded, over the live scene). The picture is one of nine sights at the golden evening
      (assets/splash/, picked by the script after the markup: the sight its fact is about, else a random one) with the title and the fact as its caption; under it the progress line, the status, the start button and the keys */
   #intro { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; padding: 16px; overflow: hidden; background-color: #0b1230; transition: opacity .9s ease, visibility .9s, background-color .9s ease; }
   #intro::before { content: ""; position: absolute; inset: -48px; background: var(--art, none) 50% 50% / cover no-repeat; filter: blur(30px) brightness(.5); transition: opacity .9s ease; }
@@ -110,13 +110,13 @@
 </script>
 </head>
 <body>
-<canvas id="scene" tabindex="0" aria-label="Saint Petersburg 3D scene"></canvas>
+<canvas id="scene" tabindex="0" aria-label="Nevsky Prospekt, Saint Petersburg: 3D scene"></canvas>
 
 <div id="intro">
   <div class="card" role="dialog" aria-labelledby="stname">
     <div class="art">
       <div class="head">
-        <div class="kicker">Прогулка по городу</div>
+        <div class="kicker">Прогулка по Невскому проспекту</div>
         <h1 class="title" id="stname">Санкт-Петербург</h1>
       </div>
       <p id="fact"></p>
@@ -133,10 +133,10 @@
   </div>
 </div>
 <script>
-  // the splash shows one random fact about the city per visit, while the scene builds, over the picture of the sight the fact is about (a random one of the ten when the fact has no picture)
+  // the splash shows one random fact about the city per visit, while the scene builds, over the picture of the sight the fact is about (a random one of the nine when the fact has no picture)
   {
     const pick = (list) => list[Math.floor(Math.random() * list.length)];
-    const SIGHTS = ['moscow-station', 'obelisk', 'anichkov-bridge', 'kazan-cathedral', 'saviour-on-blood', 'palace-square', 'admiralty', 'st-isaac', 'bronze-horseman', 'smolny'];      // assets/splash/<name>.jpg, rendered by: node tools/tour.mjs --set splash
+    const SIGHTS = ['moscow-station', 'obelisk', 'anichkov-bridge', 'kazan-cathedral', 'saviour-on-blood', 'palace-square', 'admiralty', 'st-isaac', 'bronze-horseman'];      // assets/splash/<name>.jpg, rendered by: node tools/tour.mjs --set splash
     const FACTS = [      // [sentence, the sight whose picture shows what it tells about (one of SIGHTS), if any]
       ['Город основан 27 мая 1703 года: в этот день на Заячьем острове заложили Петропавловскую крепость.'],
       ['Петербург был столицей России с 1712 по 1918 год, с коротким перерывом в 1728–1732 годах.'],
@@ -185,9 +185,6 @@
       ['Голову Медного всадника вылепила Мари Анн Колло, ученица Фальконе, а змею под копытами коня Фёдор Гордеев.', 'bronze-horseman'],
       ['Медный всадник отлит из бронзы, а «медным» его сделала поэма Пушкина, написанная в 1833 году.', 'bronze-horseman'],
       ['На Сенатской площади у Медного всадника 14 декабря 1825 года выстроились восставшие полки декабристов.', 'bronze-horseman'],
-      ['Смольный собор Растрелли заложил в 1748 году, а достроил его Василий Стасов только в 1835-м.', 'smolny'],
-      ['Имя Смольного идёт от Смоляного двора, где при Петре I варили смолу для верфей.', 'smolny'],
-      ['Первое в России женское учебное заведение, Смольный институт благородных девиц, открыли в 1764 году при Смольном монастыре.', 'smolny'],
       ['Шпиль Петропавловского собора с ангелом поднимается на 122,5 метра, и больше двухсот лет выше него в городе не было ничего.'],
       ['Каждый день ровно в полдень с Нарышкина бастиона Петропавловской крепости стреляет пушка.'],
       ['В Петропавловском соборе похоронены почти все российские императоры, от Петра I до Николая II.'],
@@ -233,14 +230,14 @@
 <div class="hud" id="toast"><div class="sign"><span class="t-name"></span></div></div>
 <div class="hud" id="corner">
   <span id="clock">15:20</span>
-  <select id="places" aria-label="Перейти к месту · Visit a place" title="1–8, 9, 0: центр, восток, запад · Shift + 1–6: север центра · Shift + 7–9: запад · Alt + 1–7: Марсово поле, Летний сад, замок · Alt + 8, 9, 0, −: Мариинский, Юсупов, Новая Голландия, Никольский · Alt + Shift + 1–0, −, =: Петроградская сторона и Стрелка · Alt + Shift + [ ] ; ' , . / \ `: Васильевский остров (Академия, Эрарта, Смоленское кладбище, Горный университет, Меншиковский дворец, Андреевский собор, Морской вокзал, Севкабель Порт); остальные места острова в списке"><option value="">Места · Places</option></select>
+  <select id="places" aria-label="Перейти к месту · Visit a place" title="1–5: площадь Восстания, Невский, Аничков мост · 6–8: Спас на Крови, Гостиный Двор, Зимний дворец · 9, 0: Казанский собор, Дворцовая площадь · Shift + 1–9: Подписные Издания, Русский музей, Дворцовый мост, Дом Зингера, Аничков дворец, Михайловский сад, Адмиралтейство, Исаакиевский собор, Медный всадник · Alt + 1–4: входы метро · Alt + 5: Михайловский замок; остальные места в списке"><option value="">Места · Places</option></select>
   <button class="chip" id="fly" aria-pressed="false" title="F">Fly</button>
   <select id="quality" aria-label="Graphics quality"><option value="high">Качество: высокое · High</option><option value="medium">Качество: среднее · Medium</option><option value="low">Качество: низкое · Low</option></select>
   <button class="chip" id="mute" aria-pressed="false">Sound</button>
 </div>
 <div class="hud" id="help">
-  <span class="desk walk"><kbd>WASD</kbd> Walk · <kbd>Shift</kbd> Run · <kbd>Space</kbd> Jump · <kbd>F</kbd> Fly · <kbd>E</kbd> Use / car · <kbd>1</kbd> Пл. Восстания <kbd>2</kbd> Обелиск <kbd>3</kbd> Невский <kbd>4</kbd> Платформы <kbd>5</kbd> Аничков мост <kbd>6</kbd> Старо-Невский <kbd>7</kbd> Лавра <kbd>8</kbd> Нева <kbd>9</kbd> Казанский <kbd>0</kbd> Дворцовая пл. · <kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>6</kbd> Север · <kbd>Shift</kbd>+<kbd>7</kbd>–<kbd>9</kbd> Запад · <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd> <kbd>]</kbd> <kbd>;</kbd> <kbd>'</kbd> <kbd>,</kbd> <kbd>.</kbd> <kbd>/</kbd> <kbd>\</kbd> <kbd>`</kbd> Васильевский остров · <kbd>T</kbd> Time of day · <kbd>H</kbd> Hide UI · <kbd>M</kbd> Mute</span>
-  <span class="desk air"><kbd>W</kbd> Fly where you look · <kbd>A</kbd><kbd>D</kbd> Strafe · <kbd>Space</kbd>/<kbd>E</kbd> Up · <kbd>Q</kbd>/<kbd>C</kbd> Down · <kbd>Shift</kbd> Boost · <kbd>F</kbd> Land · <kbd>1</kbd>–<kbd>8</kbd> <kbd>9</kbd> <kbd>0</kbd> Places · <kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>6</kbd> North · <kbd>Shift</kbd>+<kbd>7</kbd>–<kbd>9</kbd> West · <kbd>T</kbd> Time of day · <kbd>H</kbd> Hide UI</span>
+  <span class="desk walk"><kbd>WASD</kbd> Walk · <kbd>Shift</kbd> Run · <kbd>Space</kbd> Jump · <kbd>F</kbd> Fly · <kbd>E</kbd> Use / car · <kbd>1</kbd> Пл. Восстания <kbd>2</kbd> Обелиск <kbd>3</kbd> Невский <kbd>4</kbd> Платформы <kbd>5</kbd> Аничков мост <kbd>6</kbd> Спас на Крови <kbd>7</kbd> Гостиный Двор <kbd>8</kbd> Зимний дворец <kbd>9</kbd> Казанский <kbd>0</kbd> Дворцовая пл. · <kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>9</kbd> Ещё места · <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>4</kbd> Метро · <kbd>Alt</kbd>+<kbd>5</kbd> Михайловский замок · <kbd>T</kbd> Time of day · <kbd>H</kbd> Hide UI · <kbd>M</kbd> Mute</span>
+  <span class="desk air"><kbd>W</kbd> Fly where you look · <kbd>A</kbd><kbd>D</kbd> Strafe · <kbd>Space</kbd>/<kbd>E</kbd> Up · <kbd>Q</kbd>/<kbd>C</kbd> Down · <kbd>Shift</kbd> Boost · <kbd>F</kbd> Land · <kbd>1</kbd>–<kbd>9</kbd> <kbd>0</kbd> Places · <kbd>Shift</kbd>+<kbd>1</kbd>–<kbd>9</kbd> More places · <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>4</kbd> Metro · <kbd>Alt</kbd>+<kbd>5</kbd> Castle · <kbd>T</kbd> Time of day · <kbd>H</kbd> Hide UI</span>
   <span class="touch">Drag left side to walk · drag right side to look · Fly button (top right) to take off</span>
 </div>
 <div class="hud" id="cross"></div>

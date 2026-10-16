@@ -1,5 +1,7 @@
 # `ctx.services.streets` - the road logic of Saint Petersburg (owner: `src/world/streets.js`, `src/world/streets/*`)
 
+> **Strip cut.** The service contract is unchanged. The sections about Vasilievsky Island, Petrograd, Krestovsky, the islands rounds and the late-roads allowlist describe data and code that are no longer in this repository (the strip keeps only the OLD / W1 / N1 / W2a..e regions, see [STRIP.md](STRIP.md)); `tools/late-roads-ids.mjs`, `tools/islands2-*` and `docs/research/` mentioned below were removed. Counts (ways, lanes, lamps, crossings) are the whole-city numbers.
+
 Everything below is plain data or a **pure function of the simulation time `t`** (seconds, the same `t` as `ctx.onUpdate((dt, t) => ...)`), so it is identical
 in screenshots and in the game. The geometry is built once; nothing here changes at run time except what you compute from `t`.
 Coordinates: metres, +X east, +Z south (north-up map). **Right-hand traffic.** Lane polylines are in the DRIVING direction. `rotY` follows three.js (0 faces +Z).

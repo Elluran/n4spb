@@ -1,7 +1,7 @@
 // tools/streets-wedge-probe.mjs - fast (data only, ~15 s, no scene) model of tools/roads-surface-audit.mjs for the STREETS asphalt: which audit samples (carriageway cross-sections, the strip between paired
-// one-way carriageways, junction fillets) lie on no asphalt that streets/surface.js buildAsphalt draws (way ribbons from the mitred edges, fillets, strip patches)?
-// The audit itself needs the whole scene (12 min); this probe answers the streets part in seconds, for the generator work on wedges / dead-end caps (docs/research/islands2-requests-bridges-petrovsky.md).
-//   usage: node tools/streets-wedge-probe.mjs x,z,r [x,z,r ...] [--step 3.5] [--list] [--noisl]      (no centre: the whole play area is probed)
+// one-way carriageways, junction fillets) lie on no asphalt that streets/surface.js buildAsphalt draws (way ribbons from the mitred edges, fillets)?
+// The audit itself needs the whole scene (12 min); this probe answers the streets part in seconds, for the generator work on wedges / dead-end caps.
+//   usage: node tools/streets-wedge-probe.mjs x,z,r [x,z,r ...] [--step 3.5] [--list]      (no centre: the whole play area is probed)
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -10,7 +10,6 @@ globalThis.window = globalThis; globalThis.self = globalThis;
 const argv = process.argv.slice(2);
 const flag = (k, d) => { const i = argv.indexOf('--' + k); return i < 0 ? d : (argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : true); };
 const STEP = Number(flag('step', 3.5)), LIST = !!flag('list', false);
-if (argv.includes('--noisl')) globalThis.location = { search: '?st=noisl' };                  // region.js: the islands round 2 rules off (the generator as before): before / after counts
 const circles = argv.filter((a) => /^-?\d/.test(a) && a.includes(',')).map((a) => a.split(',').map(Number));
 const L = await imp('src/world/layout.js');
 const { buildNet } = await imp('src/world/streets/net.js');
@@ -65,7 +64,7 @@ for (const f of net.fillets) {
   const a = f.arc;
   for (const k of new Set([0, Math.floor((a.length - 2) / 2), a.length - 2])) if (k >= 0 && k + 1 < a.length) sample((f.P[0] + a[k][0] + a[k + 1][0]) / 3, (f.P[1] + a[k][1] + a[k + 1][1]) / 3, { kind: 'fillet', id: f.ways[0].id });
 }
-console.log(`${n} samples, ${bad.length} on no drawn street asphalt (patches ${(net.patches || []).length}, fillets ${net.fillets.length})`);
+console.log(`${n} samples, ${bad.length} on no drawn street asphalt (fillets ${net.fillets.length})`);
 // clusters: group by kind + way id + 12 m
 const cl = [];
 for (const b of bad) { let c = cl.find((q) => q.kind === b.kind && q.id === b.id && Math.hypot(q.x - b.x, q.z - b.z) < 12); if (!c) cl.push(c = { kind: b.kind, id: b.id, x: b.x, z: b.z, n: 0, extra: b.with || '', gap: b.gap, s: b.s, L: b.L }); c.n++; }

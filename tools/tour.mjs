@@ -1,7 +1,7 @@
-// Scripted screenshot tour of the finished scene (one page load, several cameras and times of day) for QA and the docs gallery.
-//   node tools/tour.mjs [--out docs/images] [--w 1600] [--h 900] [--only hero,aerial] [--t 22 (overrides the per-shot sim time)] [--jpg 82]
+// Scripted screenshot tour of the finished scene (one page load, several cameras and times of day) for QA.
+//   node tools/tour.mjs [--out shots/tour] [--w 1600] [--h 900] [--only hero,aerial] [--t 22 (overrides the per-shot sim time)] [--jpg 82]
 // Writes <out>/<name>.jpg (day) and <out>/<name>-golden.jpg / -night.jpg for the shots that ask for them (Saint Petersburg cameras; the sim time is per shot).
-//   node tools/tour.mjs --set splash    the ten sights of the loading screen -> assets/splash/<name>.jpg (index.html shows one at random)
+//   node tools/tour.mjs --set splash    the nine sights of the loading screen -> assets/splash/<name>.jpg (index.html shows one at random)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,7 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { const k = a.slice(2); args[k] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; } }
 const W = Number(args.w || 1600), H = Number(args.h || 900), Q = Number(args.jpg || 82);
-const outDir = path.resolve(root, args.out || (args.set === 'splash' ? 'assets/splash' : 'docs/images')); fs.mkdirSync(outDir, { recursive: true });
+const outDir = path.resolve(root, args.out || (args.set === 'splash' ? 'assets/splash' : 'shots/tour')); fs.mkdirSync(outDir, { recursive: true });
 const only = args.only ? new Set(args.only.split(',')) : null;
 
 // name, camera, times of day, sim time t (s).
@@ -46,7 +46,7 @@ const SHOTS = [
 ];
 
 // The loading screen (index.html, SIGHTS) shows one of these at random: every sight at the golden evening, the sun outside the frame, a calm sky in the top left for the title.
-// The station is the start view from the square; the other nine are flying cameras (x,y,z,yaw,pitch) above the roofs, the Bronze Horseman in profile in front of the Senate and Synod.
+// The station is the start view from the square; the other eight are flying cameras (x,y,z,yaw,pitch) above the roofs, the Bronze Horseman in profile in front of the Senate and Synod.
 const SPLASH = [
   { name: 'moscow-station', cam: pose(L.HERO) },
   { name: 'obelisk', cam: '563,30,245,-19.9,-9' },
@@ -57,7 +57,6 @@ const SPLASH = [
   { name: 'admiralty', cam: '-2461,50,-485,-11.5,-6' },
   { name: 'st-isaac', cam: '-2649,60,-311,-135,-8' },
   { name: 'bronze-horseman', cam: '-2728.3,8.5,-458.3,130.5,-4' },
-  { name: 'smolny', cam: '2299,55,-1833,-90,-7' },
 ].map((s) => ({ ...s, tod: ['golden'], t: 20, file: s.name }));
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png' };

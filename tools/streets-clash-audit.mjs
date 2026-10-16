@@ -45,7 +45,6 @@ const imp = (p) => import(pathToFileURL(path.join(root, p)).href);
 const { createContext } = await imp('src/core/ctx.js');
 const { createAudio } = await imp('src/core/audio.js');
 const L = await imp('src/world/layout.js');
-const { isOpen } = await imp('src/world/streets/region.js');
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.1, 2500);
 let audio; try { audio = createAudio(); } catch { audio = null; }
@@ -96,15 +95,15 @@ for (const p of standing) {
   for (const s of G.get(K(p.it.cx, p.it.cz)) || []) {
     if (seen.has(s)) continue; seen.add(s);
     const d = hitDepth(p, s);
-    if (d > 0.05) rows.push({ x: +p.it.cx.toFixed(1), z: +p.it.cz.toFixed(1), r: p.it.r ?? p.it.hw, open: isOpen(p.it.cx, p.it.cz), mod: s.mod, where: s.where, depth: +d.toFixed(2), ph: [p.it.y0, p.it.y1], sy: [s.it.y0, s.it.y1], swhere: p.where, type: s.it.type });
+    if (d > 0.05) rows.push({ x: +p.it.cx.toFixed(1), z: +p.it.cz.toFixed(1), r: p.it.r ?? p.it.hw, mod: s.mod, where: s.where, depth: +d.toFixed(2), ph: [p.it.y0, p.it.y1], sy: [s.it.y0, s.it.y1], swhere: p.where, type: s.it.type });
   }
 }
 rows.sort((a, b) => b.depth - a.depth);
-const byMod = {}; for (const r of rows) { const k = r.mod + (r.open ? ' [open]' : ' [old]'); byMod[k] = (byMod[k] || 0) + 1; }
+const byMod = {}; for (const r of rows) { const k = r.mod; byMod[k] = (byMod[k] || 0) + 1; }
 console.log(`streets standing colliders ${standing.length}, solids ${solids.length}, overlapping rows ${rows.length}`);
 console.log(JSON.stringify(byMod));
 const outf = opt('json'); if (outf) fs.writeFileSync(outf, JSON.stringify(rows, null, 1));
-for (const r of rows.filter((q) => q.open).slice(0, Number(opt('top', 60)))) console.log(`${String(r.x).padStart(8)},${String(r.z).padStart(8)} depth ${r.depth} vs ${r.mod} ${r.type} ${r.where} (streets ${r.swhere})`);
+for (const r of rows.slice(0, Number(opt('top', 60)))) console.log(`${String(r.x).padStart(8)},${String(r.z).padStart(8)} depth ${r.depth} vs ${r.mod} ${r.type} ${r.where} (streets ${r.swhere})`);
 
 // ---------------------------------------------------------------- metro ground holes (layout.GROUND_HOLES: stair pits and escalator shafts): streets poles within --margin (default 2.0 m, the request of the metro owner) of a hole rectangle
 if (argv.includes('--holes')) {
@@ -114,31 +113,9 @@ if (argv.includes('--holes')) {
     for (const p of standing) {
       const dx = p.it.cx - h.x, dz = p.it.cz - h.z, lx = dx * c - dz * s, lz = dx * s + dz * c;
       const ex = Math.max(0, Math.abs(lx) - h.w / 2), ez = Math.max(0, Math.abs(lz) - h.d / 2), d = Math.hypot(ex, ez) - (p.it.r ?? 0.2);
-      if (d < mg) { n++; console.log(`  hole ${h.id} (${h.kind}${isOpen(h.x, h.z) ? ', open' : ', old'}): streets pole ${p.it.cx.toFixed(1)},${p.it.cz.toFixed(1)} clearance ${d.toFixed(2)} m  ${p.where}`); }
+      if (d < mg) { n++; console.log(`  hole ${h.id} (${h.kind}): streets pole ${p.it.cx.toFixed(1)},${p.it.cz.toFixed(1)} clearance ${d.toFixed(2)} m  ${p.where}`); }
     }
   }
   console.log(`holes: ${L.GROUND_HOLES.length}, streets poles within ${mg} m: ${n}`);
-}
-// ---------------------------------------------------------------- keep-clear zones (streets/furn.js FURN_CLEAR) against what the sight modules publish: every row should contain points of its sight (crowd discs, benches, lamps, photo spots,
-// entrances, monuments); a row with none is suspect (a frame typo puts the zone beside the sight). Also lists the streets poles that stand INSIDE a zone (the zone is the rule: there must be none).
-if (argv.includes('--zones')) {
-  const { FURN_CLEAR, furnZone } = await imp('src/world/streets/furn.js');
-  const inRow = (f, x, z) => { if (f.c) return Math.hypot(x - f.c[0], z - f.c[1]) < f.r; const dx = x - f.o[0], dz = z - f.o[1], u = dx * f.u[0] + dz * f.u[1], w = dx * f.w[0] + dz * f.w[1]; return u > f.u0 && u < f.u1 && w > f.w0 && w < f.w1; };
-  const pts = [];
-  for (const [k, svc] of Object.entries(ctx.services)) {
-    if (!svc || typeof svc !== 'object' || !(k.startsWith('landmarks') || k === 'metro')) continue;
-    for (const key of ['crowd', 'photoSpots', 'benches', 'lamps', 'monuments', 'entrances']) {
-      const a = svc[key]; if (!Array.isArray(a)) continue;
-      for (const q of a) { const x = q.x ?? (Array.isArray(q) ? q[0] : q.pos?.[0]), z = q.z ?? (Array.isArray(q) ? q[1] : q.pos?.[1]); if (Number.isFinite(x) && Number.isFinite(z)) pts.push({ x, z, svc: k, key, id: q.id || '' }); }
-    }
-  }
-  console.log(`zones: ${FURN_CLEAR.length} rows, ${pts.length} published sight points`);
-  for (const f of FURN_CLEAR) {
-    const hit = pts.filter((p) => inRow(f, p.x, p.z)), by = {}; for (const p of hit) by[p.svc + '.' + p.key] = (by[p.svc + '.' + p.key] || 0) + 1;
-    const inside = standing.filter((p) => inRow(f, p.it.cx, p.it.cz));
-    const c = f.c || [f.o[0] + (f.u0 + f.u1) / 2 * f.u[0] + (f.w0 + f.w1) / 2 * f.w[0], f.o[1] + (f.u0 + f.u1) / 2 * f.u[1] + (f.w0 + f.w1) / 2 * f.w[1]];
-    console.log(`  ${f.id.padEnd(24)} centre ${c[0].toFixed(0)},${c[1].toFixed(0)}  published points inside ${hit.length} ${JSON.stringify(by)}  streets poles inside ${inside.length}${inside.length ? ' ' + inside.slice(0, 4).map((p) => p.it.cx.toFixed(1) + ',' + p.it.cz.toFixed(1) + ' ' + p.where).join('; ') : ''}`);
-  }
-  void furnZone;
 }
 process.exit(0);

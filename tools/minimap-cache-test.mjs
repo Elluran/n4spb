@@ -64,8 +64,8 @@ const beforeDrive = tileBuilds;
 for (let i = 0; i < 160; i++) { state.x -= 10; state.z -= 3; state.yaw += 0.01; update(); }
 assert(tileBuilds > beforeDrive, 'moving into new map cells builds their tiles');
 settle('stopped after driving');
-state.x = -3900; state.z = -1100;
-settle('teleported to Vasilievsky Island');
+state.x = -2387; state.z = -565;
+settle('teleported to the Admiralty');
 state.car = false; state.diam = 640;
 // Largest flying view at tile corners exercises the least symmetric warm square.
 state.x = PLAY.x0 + 12 * 256 + 0.01; state.z = PLAY.z0 + 9 * 256 + 0.01;

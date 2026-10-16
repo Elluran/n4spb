@@ -6,9 +6,8 @@
 // The skirts (vertical faces under the pavement edges) are written LAST and cut: no wall on a carriageway (net.cover > -0.1) and none inside paving (a seam between two pavements of
 // the same height: the corner patch edges lie inside the strips of their two ways), see skirtKeep. tools/streets-ribbon-audit.mjs counts both (W1 / W2 / W3).
 import { UP, hash2, rgb, dpKeep } from './util.js';
-import { wayAt, nearCrossing, coverLocal, trackDist, slabAt } from './net.js';
-import { isOpen, isIsland, isIslandReach } from './region.js';
-import { clearance, waterVertices } from './bld.js';
+import { wayAt, nearCrossing, coverLocal } from './net.js';
+import { clearance } from './bld.js';
 import { ROAD_Y, WALK_Y, KERB_W, prepWay } from './surface.js';
 import { SLAB_TILE, PAVER_TILE, STRIP_TILE } from './tex.js';
 import { walkStyle, profMax, barrierAt } from './style.js';
@@ -57,31 +56,8 @@ const crossByWay = (net) => {
   return net._crossBy;
 };
 
-/** WATER STATIONS (open districts, bld.js waterRings: the stair pits / descents the sights cut into the quay, the Smolenka, the harbours ...): the arclengths { s, d } at which the normal of the way passes through
- *  a vertex of a water ring within 26 m of the way (d = distance). The strip's reach changes there (a stair pit in the pavement is a notch of the strip: the reach drops from the river edge to the pit rim
- *  and back), so planSide samples the way twice, 3 cm either side of each station: the notch has square shoulders instead of a diagonal across the pit. Bridge ways have none (they run over the water). */
-function waterStations(w) {
-  if (w._wst) return w._wst;
-  const out = []; w._wst = out;
-  if (w.bridge) return out;
-  const g = waterVertices(), seen = new Set();
-  for (let i = 0; i + 1 < w.n; i++) {
-    const ax = w.x[i], az = w.z[i], dx = w.x[i + 1] - ax, dz = w.z[i + 1] - az, l2 = dx * dx + dz * dz; if (l2 < 1e-9) continue;
-    const l = Math.sqrt(l2), mx = ax + dx / 2, mz = az + dz / 2;
-    g.cells(mx, mz, l / 2 + 26, (cell) => {
-      for (const p of cell) {
-        const t = ((p.x - ax) * dx + (p.z - az) * dz) / l2; if (t < 0 || t > 1) continue;
-        const d = Math.hypot(p.x - ax - dx * t, p.z - az - dz * t); if (d > 26) continue;
-        const key = p.i + ':' + i; if (seen.has(key)) continue; seen.add(key);
-        out.push({ s: w.s[i] + l * t, d });
-      }
-    });
-  }
-  return out;
-}
-
-/** samples of the pavement strip along one side of a way: [{ s, x, z, nx, nz, tx, tz, vis, reach, why, rng }] (x, z = the asphalt edge; why = the reason of vis = false: 'cut' (dropped kerb / deck),
- *  'road' (another carriageway lies in the strip), 'facade' (a wall too close), 'lawn'; rng = the strip ends at a water ring of a sight / the island: an owner skirt is due) + the zebra zones of the way */
+/** samples of the pavement strip along one side of a way: [{ s, x, z, nx, nz, tx, tz, vis, reach, why }] (x, z = the asphalt edge; why = the reason of vis = false: 'cut' (dropped kerb / deck),
+ *  'road' (another carriageway lies in the strip), 'facade' (a wall too close), 'lawn') + the zebra zones of the way */
 function planSide(net, w, side) {
   const key = w.i * 2 + (side === 'R' ? 1 : 0), cache = net._walkPlan || (net._walkPlan = new Map());
   let plan = cache.get(key); if (plan) return plan;
@@ -92,7 +68,6 @@ function planSide(net, w, side) {
   const nStep = Math.max(1, Math.ceil(w.L / STEP));
   for (let k = 0; k <= nStep; k++) S.push(w.L * k / nStep);
   for (const z of zones) S.push(z[0], z[1]);
-  { const ws = waterStations(w); if (ws.length) { let hm = 0; for (let i = 0; i < w.n; i++) hm = Math.max(hm, side === 'R' ? w.hR[i] : w.hL[i]); for (const q of ws) if (q.d < hm + KERB_W + Wmax + 2) S.push(Math.max(0, q.s - 0.03), Math.min(w.L, q.s + 0.03)); } }
   S.sort((a, b) => a - b);
   const smp = [];
   for (const s of S) {
@@ -101,22 +76,16 @@ function planSide(net, w, side) {
     const h = (side === 'R' ? q.hR : q.hL) * (w.mit[q.k] + (w.mit[q.k + 1] - w.mit[q.k]) * q.f);          // (the asphalt ribbon is mitred in the bends: the strip starts at its real edge)
     const ex = q.x + nx * h, ez = q.z + nz * h;
     let vis = !cuts.some((c) => s > c[0] + 0.12 && s < c[1] - 0.12) && !deckAt(ex, ez, 1.0), why = vis ? null : 'cut';          // (the bridges module draws the deck with its own pavements)
-    let reach = 0, rng = false;
+    let reach = 0;
     const own = { w, s, d: 40 };                                               // the other passes of a looping way (Poltavsky proezd) are foreign asphalt too
     if (vis) {
       const px = ex + nx * (KERB_W + 0.3), pz = ez + nz * (KERB_W + 0.3), fx = ex + nx * (KERB_W + 0.6 * Math.min(Wmax, 3)), fz = ez + nz * (KERB_W + 0.6 * Math.min(Wmax, 3));
       const cover = coverLocal(net, ex, ez, KERB_W + Wmax + 0.7, { own });          // (every probe below lies on the normal within KERB_W + Wmax + 0.5 of the edge point)
-      // a tram track that runs beside the carriageway (a reservation along a park: Kronverksky pr.) keeps its bed: the strip ends 1.75 m before the track axis like at another
-      // carriageway (the kerb stays: why 'bed'). Open districts (region.js).
-      const bedOpen = isOpen(ex, ez), TP = [0, 0], onBed = (x, z) => bedOpen && ((trackDist(x, z, 0, 0, 1, TP) < 1.75 && net.cover(TP[0], TP[1], {}) <= -0.3) || slabAt(net, x, z));       // (a track IN a carriageway is no bed; a slab median (net.js SLAB_MEDIAN) is one)
       if (cover(px, pz) > -0.3 || cover(fx, fz) > -0.3) { vis = false; why = 'road'; }
-      else if (onBed(px, pz) || onBed(fx, fz)) { vis = false; why = 'bed'; }
       else {
-        const info = {};
-        reach = clearance(ex + nx * KERB_W, ez + nz * KERB_W, nx, nz, Wmax + 0.5, !!w.bridge, info);
-        const reach0 = reach;
+        reach = clearance(ex + nx * KERB_W, ez + nz * KERB_W, nx, nz, Wmax + 0.5);
         let clipped = false;
-        const onRoad = (d) => cover(ex + nx * (KERB_W + d), ez + nz * (KERB_W + d)) > -0.1 || onBed(ex + nx * (KERB_W + d), ez + nz * (KERB_W + d));
+        const onRoad = (d) => cover(ex + nx * (KERB_W + d), ez + nz * (KERB_W + d)) > -0.1;
         for (let d = 1.2; ; d += 1.2) {                                         // the strip ends where the next carriageway begins (a wide gap between paired one-way roads, a service road beside an avenue)
           const dd = Math.min(d, reach);                                         // (the last probe is the outer edge of the strip itself: a service road that starts 5.6 m from the kerb)
           if (onRoad(dd)) {
@@ -126,12 +95,11 @@ function planSide(net, w, side) {
           }
           if (dd >= reach) break;
         }
-        rng = info.flag === 2 && !clipped && reach === reach0 && reach < Wmax + 0.5;                 // (the strip ends 0.45 m before a water ring of a sight / the island: its edge gets a skirt)
         if (reach < 0.9) { vis = false; why = clipped ? 'road' : 'facade'; }
         else if (T.inLawn(ex + nx * (KERB_W + 1.0), ez + nz * (KERB_W + 1.0)) && T.inLawn(ex + nx * (KERB_W + Math.max(Math.min(Wmax, 4) - 0.6, 1.2)), ez + nz * (KERB_W + Math.max(Math.min(Wmax, 4) - 0.6, 1.2)))) { vis = false; why = 'lawn'; }
       }
     }
-    smp.push({ s, x: ex, z: ez, nx, nz, tx: q.tx, tz: q.tz, vis, reach: Math.min(reach, Wmax + 0.5), why, rng });
+    smp.push({ s, x: ex, z: ez, nx, nz, tx: q.tx, tz: q.tz, vis, reach: Math.min(reach, Wmax + 0.5), why });
   }
   plan = { smp, zones, Wmax }; cache.set(key, plan);
   return plan;
@@ -145,8 +113,7 @@ function cornerPlan(net, f) {
   if ((X.w.rank < 1 && Y.w.rank < 1) || X.w.skipDraw || Y.w.skipDraw) return none('other');
   const Wn = Math.min(Math.max(profMax(X.w), profMax(Y.w)), 7);
   const nX = f.nA, nY = [-f.nB[0], -f.nB[1]];
-  const nw = !!(X.w.bridge || Y.w.bridge);                                       // (bridge ways ignore the water rings of the sights / the island: bld.js)
-  const clrX = clearance(f.TX[0] + nX[0] * KERB_W, f.TX[1] + nX[1] * KERB_W, nX[0], nX[1], Wn + 0.5, nw), clrY = clearance(f.TY[0] + nY[0] * KERB_W, f.TY[1] + nY[1] * KERB_W, nY[0], nY[1], Wn + 0.5, nw);
+  const clrX = clearance(f.TX[0] + nX[0] * KERB_W, f.TX[1] + nX[1] * KERB_W, nX[0], nX[1], Wn + 0.5), clrY = clearance(f.TY[0] + nY[0] * KERB_W, f.TY[1] + nY[1] * KERB_W, nY[0], nY[1], Wn + 0.5);
   let Wc = Math.min(Wn, clrX, clrY);
   const c = nX[0] * nY[0] + nX[1] * nY[1];
   const mitre = (W) => { const k = (KERB_W + W) / (1 + c); return [f.P[0] + (nX[0] + nY[0]) * k, f.P[1] + (nX[1] + nY[1]) * k]; };
@@ -161,10 +128,7 @@ function cornerPlan(net, f) {
   if (Wc < 1.0 || L.insideBuilding(qm0[0], qm0[1], 0) || T.inArea(qm0[0], qm0[1]) || 1 + c < 0.25) return none('other');
   // a patch must not lie on a carriageway (the four-node Nevsky / Sadovaya cluster, the Moika / Lebyazhya Kanavka junction, twin carriageways, a bend of its own street): narrow it until
   // its middle, the mitre point and the stretches from the mitre point to the outline are clear of asphalt, the outline itself of the foreign one; drop it when nothing of 1 m is left
-  // (open districts, region.js, 2026-10-07: also the fillet fans of OTHER junctions count: the wedge between two junction mouths is asphalt, a patch there is the 'pavement over side-street mouths' (S1 of tools/streets-ribbon-audit.mjs:
-  //  935 -> 492 triangles; WITHOUT the gate the reviewed districts change too: 23 cells, -457 pavement triangles on top of the kerb rule: the lead's call)
-  const fans = isOpen(f.P[0], f.P[1]);
-  const asphalt = (p) => net.cover(p[0], p[1], { noFillets: true }) > 0.15 || (fans && net.cover(p[0], p[1], { skip: X.w, skip2: Y.w }) > 0.5), foreign = (p) => net.cover(p[0], p[1], { skip: X.w, skip2: Y.w, noFillets: true }) > 0.3;
+  const asphalt = (p) => net.cover(p[0], p[1], { noFillets: true }) > 0.15, foreign = (p) => net.cover(p[0], p[1], { skip: X.w, skip2: Y.w, noFillets: true }) > 0.3;
   let Q, seq;
   for (; Wc >= 1.0; Wc -= 0.75) {
     Q = mitre(Wc); seq = outline(Wc);
@@ -172,21 +136,6 @@ function cornerPlan(net, f) {
   }
   if (Wc < 1.0) return none('road');
   return (f._cp = { ok: true, Wc, Q, seq, slab: walkStyle(X.w).walk === 'slab' || walkStyle(Y.w).walk === 'slab' });
-}
-
-/** ISLANDS ROUND 2 (streets owner 2, region.js isIsland): the outline of a corner patch with every outer point pulled back along its ray to the patch apex Q to the last point that is clear of the asphalt of the OTHER fillets and
- *  carriageways. cornerPlan tests the outline points against foreign carriageways and the middles of the rays against foreign fans, but a thin fan triangle (apex Q, two neighbouring arc points) can still run over a sliver of another
- *  junction fillet at its tip: the mouth fillet of a service way on the edge of the same link (secondary_link w31747288 at (-3441.5, -2267.7): the surface audit's 'pavement fillet' sample). The pavement ends before the sliver. */
-function clipFan(net, f, cp) {
-  const { Q, seq } = cp;
-  if (!isIslandReach(f.P[0], f.P[1])) return seq;
-  const X = f.arms[0].w, Y = f.arms[1].w, hit = (x, z) => net.cover(x, z, { skip: X, skip2: Y }) > 0.3;
-  return seq.map((p) => {
-    const dx = p[0] - Q[0], dz = p[1] - Q[1], l = Math.hypot(dx, dz); if (l < 0.3) return p;
-    const n = Math.ceil(l / 0.1);
-    for (let k = 1; k <= n; k++) { const t = k / n; if (hit(Q[0] + dx * t, Q[1] + dz * t)) { const tt = Math.max(0, (k - 2) / n); return [Q[0] + dx * tt, Q[1] + dz * tt]; } }
-    return p;
-  });
 }
 
 /** kerb stones that have nothing behind them: a function (run) -> boolean[] per point of a kerb run, true = do not draw. An edge kerb whose pavement strip is missing because another
@@ -250,9 +199,7 @@ export function buildWalks(net, MBs, opts = {}) {
   const pave = (B, points, col) => {
     for (const poly of coverage.take(points)) {
       const verts = poly.map(p => flat(B,p[0],WALK_Y,p[1],col));
-      // islands round 2: a fan piece of a pavement polygon whose middle lies on a carriageway is no pavement (a sliver of the corner patch of ploshchad Starogo Teatra lay 0.7 m over the parking pocket of its neighbour)
-      const isl = isIsland(poly[0][0], poly[0][1]);
-      for(let i=1;i+1<verts.length;i++) { if (isl && net.cover((poly[0][0]+poly[i][0]+poly[i+1][0])/3, (poly[0][1]+poly[i][1]+poly[i+1][1])/3, {}) > 0.1) continue; B.tri(verts[0],verts[i],verts[i+1],UP); }
+      for(let i=1;i+1<verts.length;i++) B.tri(verts[0],verts[i],verts[i+1],UP);
     }
   };
   const nearStop = opts.nearStop || (() => false);
@@ -322,7 +269,7 @@ export function buildWalks(net, MBs, opts = {}) {
           if (!paved) pave(B, [[a.x+a.nx*inner,a.z+a.nz*inner],[b.x+b.nx*inner,b.z+b.nz*inner],
             [b.x+b.nx*ob,b.z+b.nz*ob],[a.x+a.nx*oa,a.z+a.nz*oa]], col);
           if (!paved) { dA = Math.max(dA, oa); dB = Math.max(dB, ob); }
-          if (!paved && layer === prof[prof.length - 1] && (outerNom <= maxA - 0.05 || outerNom <= maxB - 0.05 || a.rng || b.rng)) {   // outer skirt (vertical edge down to the ground) only where the strip ends in the open, not at a facade (a strip that ends at a stair pit / a water ring of a sight keeps its skirt: the edge is seen from the stair)
+          if (!paved && layer === prof[prof.length - 1] && (outerNom <= maxA - 0.05 || outerNom <= maxB - 0.05)) {   // outer skirt (vertical edge down to the ground) only where the strip ends in the open, not at a facade
             skirtQuad(a.x + a.nx * oa, a.z + a.nz * oa, b.x + b.nx * ob, b.z + b.nz * ob, 0, WALK_Y, a.nx, a.nz, SKIRT);
           }
           if (layer === prof[prof.length - 1]) {
@@ -368,7 +315,7 @@ export function buildWalks(net, MBs, opts = {}) {
   for (const f of net.fillets) {
     const cp = cornerPlan(net, f); if (!cp.ok) continue;
     if (opts.trace) opts.trace(f);
-    const { Q } = cp, seq = clipFan(net, f, cp);
+    const { Q, seq } = cp;
     const B = cp.slab ? slab : paver;
     for (let i = 1; i < seq.length; i++) pave(B,[Q,seq[i-1],seq[i]],[1,1,1]);
     const e1 = seq[0], e2 = seq[seq.length - 1];

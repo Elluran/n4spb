@@ -66,7 +66,6 @@ const THREE = await import('three');
 const imp = (p) => import(pathToFileURL(path.join(root, p)).href);
 const { createContext } = await imp('src/core/ctx.js');
 const L = await imp('src/world/layout.js');
-const { isOpen } = await imp('src/world/streets/region.js');
 const { deckAt } = await imp('src/world/streets/decks.js');
 
 const scene = new THREE.Scene();
@@ -101,7 +100,7 @@ if (CENSUS || VERBOSE) for (const m of meshes) log(`  mesh ${m.name.padEnd(18)} 
 const V = (m, i) => { const k = m.idx ? m.idx[i] : i; return [m.P[k * 3], m.P[k * 3 + 1], m.P[k * 3 + 2]]; };
 const offenders = [];
 const poseOf = (x, z) => `${(x - 4).toFixed(1)},1.7,${(z + 4).toFixed(1)},-45,-12`;
-const zoneTag = (x, z) => (isOpen(x, z) ? 'new' : 'old');
+const zoneTag = () => 'strip';                                                      // (the eight regions of the strip are all reviewed districts: one zone)
 
 // ---------------------------------------------------------------- W1 / W2: walls
 const walls = new Map();

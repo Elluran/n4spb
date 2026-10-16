@@ -1,6 +1,6 @@
 // ============================================================================
-//  WORLD LAYOUT CONTRACT - central Saint Petersburg (Санкт-Петербург): Moscow Railway Station, Vosstaniya Square, Nevsky Prospekt,
-//  Fontanka + Anichkov Bridge, Ligovsky / Vladimirsky; single source of truth shared by every module.
+//  WORLD LAYOUT CONTRACT - the Nevsky strip of Saint Petersburg (Санкт-Петербург): Moscow Railway Station, Vosstaniya Square, Nevsky Prospekt,
+//  Fontanka + Anichkov Bridge, Kazan Cathedral, Palace Square + the Hermitage, the Admiralty and the Senate Square; single source of truth shared by every module.
 //  Units: metres. +Y up. +X = east, -Z = north, +Z = south.  Origin = 59.932421 N, 30.351279 E (data/city.js ORIGIN = the `ll` of the user's Yandex URL).
 //  Model convention: every model's "front / forward" is its local +Z.
 //  rotY follows three.js (rotation.y): rotY=0 faces +Z (south), rotY=PI faces -Z (north), +PI/2 faces +X (east),
@@ -10,6 +10,7 @@
 //
 //  ORIGIN is on the Nevsky roadway at Mayakovskogo ul., NOT in the middle of the play area. The Moscow station is ~300 m south-east of Vosstaniya Square's obelisk (592, 165).
 //  Always use the exports below, never raw numbers.
+//  The map is the strip Moscow station -> Nevsky -> Admiralty (8 play rectangles, data/city.js PLAY_RECTS) plus 120 m of scenery around it; the specialist modules of every other part of the city are not in this repo.
 //
 //  The city is FLAT (y = 0 = street level). The Fontanka lies in a granite trench: water surface y = RIVER_Y.water (-3.2), river bed RIVER_Y.bed; heightAt() returns the
 //  bed inside the river polygon (the quay walls enclose it, nobody can walk there). Sidewalks are +0.12 m visually only (SURFACE.sidewalk): the player's feet stay at y = 0.
@@ -17,12 +18,10 @@
 //  The street grid is not axis aligned: Nevsky runs at bearing ~104 deg (WNW-ESE), Ligovsky / Marata ~17 deg, Liteyny / Vladimirsky ~1.5 deg.
 // ============================================================================
 import * as CITY from './data/city.js';
-import { TAURIDE_WATER_UNION as TAURIDE_PONDS } from './landmarksTauride/terrain.js';
-const { ORIGIN, EXTENT, PLAY, BUILDINGS, ROADS, AREAS: AREA_DATA, GREEN, RIVER } = CITY;
+const { ORIGIN, EXTENT, PLAY, BUILDINGS, ROADS, AREAS: AREA_DATA, RIVER } = CITY;
 const PLAY_RECTS = CITY.PLAY_RECTS || [PLAY], EXTENT_RECTS = CITY.EXTENT_RECTS || [EXTENT];   // an old single-rectangle bake has no rectangle lists
 import { SHAFTS, DOORWAYS } from './data/metro.js';
 import { WATERWAYS, waterwayAt as _waterwayAt, shoreDistance as _shoreDistance } from './environment/waterways.js';
-import { inSouthPond } from './environment/south-ponds.js';
 import { GROUPS_LIST as G_E } from './landmarksE/groups.js';
 import { GROUPS_LIST as G_F } from './landmarksF/groups.js';
 import { GROUPS_LIST as G_G } from './landmarksG/groups.js';
@@ -32,77 +31,9 @@ import { GROUPS_LIST as G_J } from './landmarksJ/groups.js';
 import { GROUPS_LIST as G_K } from './landmarksK/groups.js';
 import { GROUPS_LIST as G_BELINSKY } from './landmarksBelinsky/groups.js';
 import { GROUPS_LIST as G_BR } from './bridges/groups.js';
-import { GROUPS_LIST as G_EAST } from './landmarksEast/groups.js';
-import { GROUPS_LIST as G_EAST_BRIDGES } from './eastBridges/groups.js';
 import { GROUPS_LIST as G_NORTH } from './landmarksNorth/groups.js';
-import { GROUPS_LIST as G_SMOLNY } from './landmarksSmolny/groups.js';
-import { GROUPS_LIST as G_KIROCHNAYA } from './landmarksKirochnaya/groups.js';
-import { paradnyDeckY } from './landmarksTauride/paradny-surface.js';
-import { GROUPS_LIST as G_SUVOROV } from './landmarksSuvorov/groups.js';
-import { GROUPS_LIST as G_TAURIDE } from './landmarksTauride/groups.js';
-import { GROUPS_LIST as G_NORTH_BRIDGES } from './northBridges/groups.js';
-import { GROUPS_LIST as G_MARS } from './landmarksMars/groups.js';
-import { GROUPS_LIST as G_GARDEN } from './landmarksGarden/groups.js';
 import { GROUPS_LIST as G_CASTLE } from './landmarksCastle/groups.js';
-import { GROUPS_LIST as G_NIK } from './landmarksNikolsky/groups.js';
-import { GROUPS_LIST as G_MARIINSKY } from './landmarksMariinsky/groups.js';
-import { GROUPS_LIST as G_NEWHOLLAND } from './landmarksNewHolland/groups.js';
-import { GROUPS_LIST as G_YUSUPOV } from './landmarksYusupov/groups.js';
-import { GROUPS_LIST as G_FORTRESS, ISLAND_RING as FORTRESS_ISLAND } from './landmarksFortress/groups.js';
-import { GROUPS_LIST as G_STRELKA } from './landmarksStrelka/groups.js';
-import { GROUPS_LIST as G_UNIVERSITY } from './landmarksUniversity/groups.js';
-import { GROUPS_LIST as G_TROITSKAYA } from './landmarksTroitskaya/groups.js';
-import { GROUPS_LIST as G_AURORA } from './landmarksAurora/groups.js';
-import { GROUPS_LIST as G_KRONVERK } from './landmarksKronverk/groups.js';
-import { GROUPS_LIST as G_KAMENNO } from './landmarksKamennoostrovsky/groups.js';
-import { GROUPS_LIST as G_VLADIMIR } from './landmarksVladimir/groups.js';
-import { GROUPS_LIST as G_KARPOVKA } from './landmarksKarpovka/groups.js';
 import { GROUPS_LIST as G_OKTYABRSKY } from './landmarksOktyabrsky/groups.js';
-import { GROUPS_LIST as G_MODERNVO } from './landmarksModernVO/groups.js';
-import { GROUPS_LIST as G_MARINEFACADE } from './landmarksMarineFacade/groups.js';
-import { GROUPS_LIST as G_PRIBALTIYSKAYA } from './landmarksPribaltiyskaya/groups.js';
-import { GROUPS_LIST as G_GAVAN } from './landmarksGavan/groups.js';
-import { GROUPS_LIST as G_SREDNY } from './landmarksSredny/groups.js';
-import { GROUPS_LIST as G_MAKAROVA } from './landmarksMakarova/groups.js';
-import { GROUPS_LIST as G_KIROVA } from './landmarksKirova/groups.js';
-import { GROUPS_LIST as G_SEVKABEL } from './landmarksSevkabel/groups.js';
-import { GROUPS_LIST as G_SEATERMINAL } from './landmarksSeaTerminal/groups.js';
-import { GROUPS_LIST as G_SMOLENSKY } from './landmarksSmolensky/groups.js';
-import { GROUPS_LIST as G_NAVALCORPS } from './landmarksNavalCorps/groups.js';
-import { GROUPS_LIST as G_ANDREW } from './landmarksAndrew/groups.js';
-import { GROUPS_LIST as G_MINING } from './landmarksMining/groups.js';
-import { GROUPS_LIST as G_MENSHIKOV } from './landmarksMenshikov/groups.js';
-import { GROUPS_LIST as G_ACADEMY } from './landmarksAcademy/groups.js';
-import { GROUPS_LIST as G_CENTRAL_SOUTH } from './landmarksCentralSouth/groups.js';
-import { GROUPS_LIST as G_MOSKOVSKY } from './landmarksMoskovsky/groups.js';
-import { GROUPS_LIST as G_VICTORY_PARK } from './landmarksVictoryPark/groups.js';
-import { GROUPS_LIST as G_PETRO_COMPLETION } from './landmarksPetroCompletion/groups.js';
-import { GROUPS_LIST as G_KRESTOVSKY } from './landmarksKrestovsky/groups.js';
-import { GROUPS_LIST as G_YE_PALACE } from './landmarksYelaginPalace/groups.js';
-import { GROUPS_LIST as G_YE_KITCHEN } from './landmarksYelaginKitchen/groups.js';
-import { GROUPS_LIST as G_YE_SERVICES } from './landmarksYelaginServices/groups.js';
-import { GROUPS_LIST as G_YE_ROSSI } from './landmarksYelaginRossi/groups.js';
-import { GROUPS_LIST as G_YE_SPITS } from './landmarksYelaginSpits/groups.js';
-import { GROUPS_LIST as G_YE_PARK } from './landmarksYelaginPark/groups.js';
-import { GROUPS_LIST as G_KAM_PALACE } from './landmarksKamennyPalace/groups.js';
-import { GROUPS_LIST as G_KAM_CHURCH } from './landmarksKamennyChurch/groups.js';
-import { GROUPS_LIST as G_BOT_GH } from './landmarksBotanicalGreenhouses/groups.js';
-import { GROUPS_LIST as G_BOT_GARDEN } from './landmarksBotanicalGarden/groups.js';
-import { GROUPS_LIST as G_PV_STADIUM } from './landmarksPetrovskyStadium/groups.js';
-import { GROUPS_LIST as G_PV_YACHT } from './landmarksPetrovskyYacht/groups.js';
-import { GROUPS_LIST as G_VO_STATUES } from './landmarksVOStatues/groups.js';
-import { GROUPS_LIST as G_PETRO_MON } from './landmarksPetroMonuments/groups.js';
-import { GROUPS_LIST as G_N_KAMENNYTHEATRE } from './landmarksKamennyTheatre/groups.js';
-import { GROUPS_LIST as G_N_KAMENNYDACHASEAST } from './landmarksKamennyDachasEast/groups.js';
-import { GROUPS_LIST as G_N_KAMENNYDACHASWEST } from './landmarksKamennyDachasWest/groups.js';
-import { GROUPS_LIST as G_N_TVTOWER } from './landmarksTVTower/groups.js';
-import { GROUPS_LIST as G_N_LETI } from './landmarksLETI/groups.js';
-import { GROUPS_LIST as G_N_TRANSFIGURATION } from './landmarksTransfiguration/groups.js';
-import { GROUPS_LIST as G_N_PETROVSKYWEST } from './landmarksPetrovskyWest/groups.js';
-import { GROUPS_LIST as G_N_ZHDANOVKA } from './landmarksZhdanovka/groups.js';
-import { KRESTOVSKY_ISLAND } from './environment/krestovsky-context.js';
-import { ISLANDS2_COAST } from './environment/islands2-context.js';
-import { inIsland } from './lib/vo-island.js';
 export { ORIGIN, EXTENT, PLAY, PLAY_RECTS, EXTENT_RECTS };
 
 export const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -141,7 +72,6 @@ export const WORLD = {
   rects: PLAY_RECTS,                                               // the play area = the union of these rectangles { x0, x1, z0, z1 } (first = the old area)
   data: EXTENT,                                                    // bounding box of the OSM data extent (= every play rectangle grown by 120 m of scenery)
   dataRects: EXTENT_RECTS,                                         // the data extent = the union of these rectangles
-  visual: { x0: -5000, x1: 5000, z0: -5000, z1: 5000 },           // far scenery (distant roofline, the rail yard, the sky)
 };
 // ---- unions of rectangles (the same tests as tools/osm-lib.mjs: inPlay / inExtent / clampToPlay)
 const _inR = (r, x, z) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
@@ -200,10 +130,8 @@ export const waterwayAt = _waterwayAt;
 export function waterLevelAt(x, z) { const k = _waterwayAt(x, z); return k ? WATERWAYS[k].water : null; }
 /** True when (x,z) lies on the water of a waterway (the trench between the granite quays). Bridges are decks above it (walk boxes), they do not change this. */
 export function inRiver(x, z) { return _waterwayAt(x, z) !== null; }
-/** True when (x,z) lies in a pond of the Tauride Garden (a shallow bed, -1.4 m: the ponds are not waterways, they have no quay). */
-export function inTauridePond(x, z) { return x > 1000 && x < 1500 && z > -1800 && z < -1200 && TAURIDE_PONDS.some((p) => ringHas(p.o, x, z) && !p.h.some((h) => ringHas(h, x, z))); }
-/** Terrain height: 0 (street level) everywhere, the stair / podium of the Paradny Quarter (3.3 m), the bed of the Tauride ponds, the bed of the waterway inside the water polygons. */
-export function heightAt(x, z) { const d = paradnyDeckY(x, z); if (d != null) return d; if (inTauridePond(x, z) || inSouthPond(x,z)) return -1.4; const k = _waterwayAt(x, z); return k ? WATERWAYS[k].bed : GROUND_Y; }
+/** Terrain height: 0 (street level) everywhere except the bed of the waterway inside the water polygons. */
+export function heightAt(x, z) { const k = _waterwayAt(x, z); return k ? WATERWAYS[k].bed : GROUND_Y; }
 export const groundAt = heightAt;
 /** Distance (m) from (x,z) to the water of any waterway (0 on it; 1e4 when no bank within ~80 m). Used by core/audio.js for the water ambience. */
 export function shoreDist(x, z) { return _shoreDistance(x, z); }
@@ -351,35 +279,13 @@ export const GROUPS = {
   // ---- metro: surface vestibules that are separate buildings (the rest of the metro is underground) --------------------------------------
   metro: [
     { key: 'vosstaniya-rotunda', name: 'Вестибюль метро «Площадь Восстания»', nameEn: 'Ploshchad Vosstaniya vestibule (1955 rotunda with a spire)', ids: ['w28962850'], osm: [], at: [516, 92], note: 'round colonnaded pavilion on the north side of the square (w310869151 is its roof part); the exit n318455870, entrance n318455877' },
-    { key: 'chkalovskaya-pavilion', name: 'Вестибюль метро «Чкаловская»', nameEn: 'Chkalovskaya vestibule (1997 pavilion with the overhanging granite cornice and the Chkalov bust)', ids: ['w50064533'], osm: [], at: [-3312, -3188], note: 'Bolshaya Zelenina 12 / Chkalovsky pr.; drawn by metro/st-chk.js (docs/research/metro-petro.md section 5)' },
   ],
 };
-// the west extension: each specialist owns the pure-data groups.js of its module
+// the specialist modules of the strip: each one owns the pure-data groups.js of its module
 GROUPS.landmarksBelinsky = G_BELINSKY;
 GROUPS.landmarksE = G_E; GROUPS.landmarksF = G_F; GROUPS.landmarksG = G_G; GROUPS.landmarksH = G_H; GROUPS.landmarksI = G_I; GROUPS.landmarksJ = G_J; GROUPS.landmarksK = G_K; GROUPS.bridges = G_BR;
-// the eastern / northern extension (branch feat/piter-east-neva): Old Nevsky + the Lavra + the Alexander Nevsky Bridge, the central north (Tauride, Paradny, Smolny, Liteyny / Bolsheokhtinsky bridges)
-GROUPS.landmarksEast = G_EAST; GROUPS.eastBridges = G_EAST_BRIDGES;
-GROUPS.landmarksNorth = G_NORTH; GROUPS.landmarksSmolny = G_SMOLNY; GROUPS.landmarksTauride = G_TAURIDE; GROUPS.landmarksSuvorov = G_SUVOROV; GROUPS.landmarksKirochnaya = G_KIROCHNAYA; GROUPS.northBridges = G_NORTH_BRIDGES; GROUPS.landmarksMars = G_MARS; GROUPS.landmarksGarden = G_GARDEN; GROUPS.landmarksCastle = G_CASTLE; GROUPS.landmarksNikolsky = G_NIK; GROUPS.landmarksMariinsky = G_MARIINSKY; GROUPS.landmarksNewHolland = G_NEWHOLLAND; GROUPS.landmarksYusupov = G_YUSUPOV;
-// the Petrograd side and the Spit of Vasilievsky Island (docs/PETRO-BRIEF.md)
-GROUPS.landmarksFortress = G_FORTRESS; GROUPS.landmarksStrelka = G_STRELKA; GROUPS.landmarksUniversity = G_UNIVERSITY; GROUPS.landmarksTroitskaya = G_TROITSKAYA; GROUPS.landmarksAurora = G_AURORA; GROUPS.landmarksKronverk = G_KRONVERK; GROUPS.landmarksKamennoostrovsky = G_KAMENNO; GROUPS.landmarksVladimir = G_VLADIMIR; GROUPS.landmarksKarpovka = G_KARPOVKA; GROUPS.landmarksOktyabrsky = G_OKTYABRSKY; GROUPS.landmarksModernVO = G_MODERNVO; GROUPS.landmarksMarineFacade = G_MARINEFACADE; GROUPS.landmarksPribaltiyskaya = G_PRIBALTIYSKAYA; GROUPS.landmarksGavan = G_GAVAN; GROUPS.landmarksSredny = G_SREDNY; GROUPS.landmarksMakarova = G_MAKAROVA; GROUPS.landmarksKirova = G_KIROVA; GROUPS.landmarksSevkabel = G_SEVKABEL; GROUPS.landmarksSeaTerminal = G_SEATERMINAL; GROUPS.landmarksSmolensky = G_SMOLENSKY; GROUPS.landmarksNavalCorps = G_NAVALCORPS; GROUPS.landmarksAndrew = G_ANDREW; GROUPS.landmarksMining = G_MINING; GROUPS.landmarksMenshikov = G_MENSHIKOV; GROUPS.landmarksAcademy = G_ACADEMY;
-GROUPS.landmarksCentralSouth = G_CENTRAL_SOUTH;
-GROUPS.landmarksMoskovsky = G_MOSKOVSKY;
-GROUPS.landmarksVictoryPark = G_VICTORY_PARK;
-GROUPS.landmarksPetroCompletion = G_PETRO_COMPLETION;
-GROUPS.landmarksKrestovsky = G_KRESTOVSKY;
-GROUPS.landmarksYelaginPalace = G_YE_PALACE; GROUPS.landmarksYelaginKitchen = G_YE_KITCHEN; GROUPS.landmarksYelaginServices = G_YE_SERVICES;
-GROUPS.landmarksYelaginRossi = G_YE_ROSSI; GROUPS.landmarksYelaginSpits = G_YE_SPITS; GROUPS.landmarksYelaginPark = G_YE_PARK;
-GROUPS.landmarksKamennyPalace = G_KAM_PALACE; GROUPS.landmarksKamennyChurch = G_KAM_CHURCH; GROUPS.landmarksBotanicalGreenhouses = G_BOT_GH;
-GROUPS.landmarksBotanicalGarden = G_BOT_GARDEN; GROUPS.landmarksPetrovskyStadium = G_PV_STADIUM; GROUPS.landmarksPetrovskyYacht = G_PV_YACHT;
-GROUPS.landmarksVOStatues = G_VO_STATUES; GROUPS.landmarksPetroMonuments = G_PETRO_MON;
-GROUPS.landmarksKamennyTheatre = G_N_KAMENNYTHEATRE;
-GROUPS.landmarksKamennyDachasEast = G_N_KAMENNYDACHASEAST;
-GROUPS.landmarksKamennyDachasWest = G_N_KAMENNYDACHASWEST;
-GROUPS.landmarksTVTower = G_N_TVTOWER;
-GROUPS.landmarksLETI = G_N_LETI;
-GROUPS.landmarksTransfiguration = G_N_TRANSFIGURATION;
-GROUPS.landmarksPetrovskyWest = G_N_PETROVSKYWEST;
-GROUPS.landmarksZhdanovka = G_N_ZHDANOVKA;
+// the north corridor of Nevsky (Podpisnye Izdaniya, the Mayakovskogo / Vosstaniya houses), Mikhailovsky Castle, Bolshoy Concert Hall Oktyabrsky
+GROUPS.landmarksNorth = G_NORTH; GROUPS.landmarksCastle = G_CASTLE; GROUPS.landmarksOktyabrsky = G_OKTYABRSKY;
 export const MODULE_KEYS = Object.keys(GROUPS);
 /** Flat sub-group table { key: { ...subgroup, module } }. */
 export const SUBGROUPS = Object.fromEntries(MODULE_KEYS.flatMap((m) => GROUPS[m].map((g) => [g.key, { ...g, module: m }])));
@@ -501,139 +407,10 @@ function _shoreOf(keys, x, z) {
 // a bridge deck as an area: within w/2 of the segment a-b
 const _deck = (name, a, b, w) => ({ name, x0: Math.min(a[0], b[0]) - w, x1: Math.max(a[0], b[0]) + w, z0: Math.min(a[1], b[1]) - w, z1: Math.max(a[1], b[1]) + w,
   test: (x, z) => { const dx = b[0] - a[0], dz = b[1] - a[1], t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz))); return Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t) <= w / 2; } });
-// the two banks of the Malaya Neva (Birzhevoy Bridge north end -> Tuchkov Bridge north end) and the north bank of the Bolshaya Neva (Palace Bridge -> Mendeleevskaya line): district fallbacks
-const _malayaZ = (x) => -1700 + 0.2558 * (x + 2650), _bolshayaZ = (x) => -1088 - 0.6168 * (x + 2502);
 export const AREAS = [
-  { name: 'Троице-Измайловский собор · Trinity Cathedral', c: [-2540.1, 1777.2], r: 145 },
-  { name: 'Витебский вокзал · Vitebsky Station', c: [-1260, 1376], r: 130 },
-  { name: 'Технологический институт · Technological Institute', c: [-1840, 1555], r: 110 },
-  { name: 'Ново-Московский мост · Обводный канал', c: [-1838.1, 2651], r: 95 },
-  { name: 'Московские триумфальные ворота · Moscow Gate', c: [-1780.9, 4569.8], r: 130 },
-  { name: 'Московский парк Победы · Victory Park', x0: -1720, x1: -600, z0: 6700, z1: 7880 },
-  { name: 'Чесменская церковь · Chesme Church', c: [-1139.7, 8408.5], r: 80 },
-  { name: 'Московская площадь · Moscow Square', c: [-1510, 8940], r: 240 },
-  { name: 'Московский проспект · Moskovsky Prospekt', road: 'Московский проспект' },
-  // ---- Petrograd side and the Spit of Vasilievsky Island (2026-10): bridges and single sights first, the island and the parks after them, the districts at the very end of the table
-  _deck('Троицкий мост · Trinity Bridge', [-1217.4, -1567.2], [-1433.9, -2076.9], 30),
   _deck('Дворцовый мост · Palace Bridge', [-2344.2, -871.2], [-2495.5, -1075.8], 32),
-  _deck('Биржевой мост · Birzhevoy (Exchange) Bridge', [-2680, -1425.3], [-2664.9, -1663.5], 30),
-  _deck('Тучков мост · Tuchkov Bridge', [-3746.4, -1756.4], [-3622.5, -1938.6], 30),
-  _deck('Сампсониевский мост · Sampsonievsky Bridge', [-884.5, -2834.5], [-678.2, -2849.5], 28),
-  _deck('Иоанновский мост · Ioannovsky Bridge', [-1642.2, -2117.2], [-1599.5, -2251.5], 14),
-  { name: 'Петропавловский собор · Peter and Paul Cathedral', c: [-1946.3, -1981.7], r: 42 },
-  { name: 'Монетный двор · Mint', c: [-2046.8, -1911.3], r: 42 },
-  { name: 'Невские ворота · Комендантская пристань', c: [-1836.7, -1868], r: 26 },
-  { name: 'Петропавловская крепость · Peter and Paul Fortress', poly: FORTRESS_ISLAND.flat(), margin: 22 },
-  { name: 'Ростральные колонны · Rostral Columns', c: [-2585.1, -1364.3], r: 22 }, { name: 'Ростральные колонны · Rostral Columns', c: [-2481.4, -1190.1], r: 22 },
-  ..._named(/Санкт-Петербургская Биржа/i, 16, { c: [-2590, -1245], r: 60 }).map((r) => ({ name: 'Биржа · Old Stock Exchange', ...r })),
-  { name: 'Пушкинский Дом · Pushkin House (Customs house)', c: [-2797.2, -1380.1], r: 45 },
-  { name: 'Стрелка Васильевского острова · Spit of Vasilievsky Island', c: [-2500, -1290], r: 120 },
-  { name: 'Кунсткамера · Kunstkamera', c: [-2613.3, -1012.9], r: 58 },
-  { name: 'Академия наук · Academy of Sciences', c: [-2705.1, -940.4], r: 52 },
-  { name: 'Памятник Ломоносову · Lomonosov monument', c: [-2777.2, -905.9], r: 22 },
-  ..._named(/Двенадцати коллегий/i, 14, { c: [-2910, -1030], r: 60 }).map((r) => ({ name: 'Двенадцать коллегий · Twelve Collegia (University)', ...r })),
-  { name: 'Соборная мечеть · Cathedral Mosque', c: [-1527.5, -2530.7], r: 48 },
-  { name: 'Особняк Кшесинской · Kshesinskaya Mansion', c: [-1492, -2446.8], r: 40 },
-  { name: 'Троицкая площадь · Troitskaya Square', c: [-1420, -2195], r: 105 },
-  { name: 'Памятник Горькому · Gorky monument', c: [-1757.5, -2711.3], r: 26 },
-  { name: 'Спуск со львами Ши-цза · Shi-Tsza lions', c: [-1111.7, -2246.4], r: 20 },
-  { name: 'Домик Петра I · Cabin of Peter the Great', c: [-1140, -2312], r: 38 },
-  { name: 'Нахимовское училище · Nakhimov Naval School', c: [-852.1, -2584.6], r: 46 },
-  { name: 'Крейсер «Аврора» · Cruiser Aurora', c: [-760, -2550], r: 85 },
-  { name: 'Обелиск декабристам · Decembrists obelisk', c: [-1853.3, -2342.9], r: 22 },
-  { name: 'Артиллерийский музей · Artillery Museum (Kronverk)', c: [-2081, -2345], r: 135 },
-  { name: 'Памятник «Стерегущему» · Steregushchy monument', c: [-1704, -2568.3], r: 26 },
-  { name: 'Метро «Горьковская» · Gorkovskaya', c: [-1822.5, -2672], r: 30 },
-  { name: 'Мюзик-холл · Music Hall', c: [-2287, -2536], r: 45 }, { name: 'Планетарий · Planetarium', c: [-2244.8, -2562], r: 30 }, { name: 'Балтийский дом · Baltic House', c: [-2163.8, -2620], r: 40 },
-  { name: 'Ленинградский зоопарк · Leningrad Zoo', x0: -2503, x1: -2250, z0: -2358, z1: -1948, test: (x, z) => !_waterwayAt(x, z) },
-  ...GREEN.filter((g) => g.name === 'Александровский парк').flatMap((g) => g.polys.map((p) => ({ name: 'Александровский парк · Alexander Park', poly: p.o, margin: 6 }))),
-  { name: 'Площадь Льва Толстого · Lev Tolstoy Square', c: [-2198, -3714], r: 58 },
-  { name: 'Австрийская площадь · Austrian Square', c: [-1906, -3065], r: 50 },
-  { name: 'Князь-Владимирский собор · Prince Vladimir Cathedral', c: [-3113.5, -2145.4], r: 60 },
-  { name: 'Дворец спорта «Юбилейный» · Yubileyny Sports Palace', c: [-3312.5, -1989.5], r: 72 },
-  { name: 'Тучков буян · Tuchkov Buyan', c: [-3401.3, -1843.4], r: 70 },
-  { name: 'Стадион «Петровский» · Petrovsky Stadium', c: [-3641.5, -2180.6], r: 115 },
-  // ---- Vasilievsky Island (2026-10): the bridge, then the sights from the Spit to the Gulf (east to west), then the named parks, cemeteries and districts; the streets and the fallbacks stand at the end of the table
-  _deck('Благовещенский мост · Blagoveshchensky Bridge', [-3376.35, -112.95], [-3520.6, -412.7], 40),
-  { name: 'Египетские сфинксы · Egyptian Sphinxes', c: [-3378, -507.5], r: 42 },
-  ..._named(/Российская академия художеств|Академия художеств/i, 45, { c: [-3431, -597], r: 95 }).map((r) => ({ name: 'Академия художеств · Academy of Arts', ...r })),
-  { name: 'Дом академиков · House of Academicians', c: [-3678, -488], r: 45 },
-  { name: 'Площадь Трезини · Trezzini Square', c: [-3545, -505], r: 50 },
-  { name: 'Академический сад · Academy Garden', c: [-3510, -705], r: 80 },
-  { name: 'Меншиковский дворец · Menshikov Palace', c: [-3099, -721], r: 62 },
-  { name: 'Первый кадетский корпус · First Cadet Corps', c: [-3178, -819], r: 70 },
-  ...GREEN.filter((g) => g.name === 'Румянцевский сад').flatMap((g) => g.polys.map((p) => ({ name: 'Румянцевский сад · Rumyantsev Garden', poly: p.o, margin: 4 }))),
-  { name: 'Румянцевский спуск · Rumyantsev Descent', c: [-3208, -590], r: 45 },
-  { name: 'Андреевский собор · St Andrew Cathedral', c: [-3803, -821], r: 55 },
-  { name: 'Андреевский рынок · Andreyevsky Market', c: [-3713, -679], r: 55 },
-  ...GREEN.filter((g) => g.name === 'Андреевский бульвар').flatMap((g) => g.polys.map((p) => ({ name: 'Андреевский бульвар · Andreyevsky Boulevard', poly: p.o, margin: 6 }))),
-  { name: 'Морской кадетский корпус · Naval Cadet Corps', c: [-4047.5, -336.6], r: 90 },
-  { name: 'Памятник Крузенштерну · Krusenstern monument', c: [-3984, -242], r: 35 },
-  { name: 'Подводная лодка С-189 · Submarine S-189', c: [-4236, 26], r: 50 },
-  { name: 'Горный университет · Mining University', c: [-4565, 360], r: 75 },
-  { name: 'Ледокол «Красин» · Icebreaker Krasin', c: [-4600, 512], r: 48 },
-  { name: 'Дом Евангелия · House of the Gospel', c: [-4917, 148], r: 35 },
-  { name: 'Трамвайный парк · Tram Depot', c: [-5100, -710], r: 115 },
-  { name: 'Башня Чернихова · Chernikhov Tower', c: [-4747, 499], r: 40 },
-  { name: 'Эрарта · Erarta Museum', c: [-5593, 25], r: 58 },
-  { name: 'Дворец культуры имени Кирова · Kirov Palace of Culture', c: [-5449, -145], r: 90 },
-  { name: 'Сад «Василеостровец» · Vasileostrovets Garden', c: [-5450, -230], r: 60 },
-  { name: 'Часовня Ксении Блаженной · Chapel of St Xenia', c: [-5588, -1326], r: 32 },
-  { name: 'Смоленская церковь · Smolensk Icon Church', c: [-5612, -1525], r: 50 },
-  ...GREEN.filter((g) => g.name === 'Смоленское православное кладбище').flatMap((g) => g.polys.map((p) => ({ name: 'Смоленское кладбище · Smolensky Cemetery', poly: p.o, margin: 8 }))),
-  ...GREEN.filter((g) => g.name === 'Смоленское лютеранское кладбище').flatMap((g) => g.polys.map((p) => ({ name: 'Смоленское лютеранское кладбище · Smolensky Lutheran Cemetery', poly: p.o, margin: 6 }))),
-  ...GREEN.filter((g) => g.name === 'Смоленское армяно-григорианское кладбище').flatMap((g) => g.polys.map((p) => ({ name: 'Смоленское армянское кладбище · Smolensky Armenian Cemetery', poly: p.o, margin: 6 }))),
-  { name: 'Церковь «Милующая» · Church of the Merciful Icon', c: [-5937, 540], r: 70 },
-  { name: 'Севкабель Порт · Sevkabel Port', c: [-6149, 933], r: 170 },
-  { name: 'Особняк Брусницыных · Brusnitsyn Mansion', c: [-5608, 1078], r: 70 },
-  { name: 'Скобский дворец · Skobsky Palace', c: [-5474, 1127], r: 45 },
-  { name: 'Морской вокзал · Sea Terminal', c: [-6519, 709], r: 150 },
-  { name: 'Площадь Морской Славы · Sea Glory Square', c: [-6324, 649], r: 120 },
-  { name: 'Подводная лодка Д-2 · Submarine D-2', c: [-6598, -66], r: 55 },
-  { name: 'Кроншпицы Галерной гавани · Kronshpitsy', c: [-6958, 402], r: 55 },
-  { name: 'Шкиперский мост · Shkipersky Bridge', c: [-7010, -31], r: 35 },
-  { name: 'Гаванский городок · Gavan Quarter', c: [-6289, -667], r: 110 },
-  { name: 'Памятник Петру I · Peter I monument', c: [-7477, -791], r: 40 },
-  { name: 'Гостиница «Прибалтийская» · Pribaltiyskaya Hotel', c: [-7600, -735], r: 175 },
-  { name: 'Памятник крейсеру «Киров» · Cruiser Kirov monument', c: [-7970, -1075], r: 65 },
-  ...GREEN.filter((g) => g.name === 'сквер Малые Гаванцы').flatMap((g) => g.polys.map((p) => ({ name: 'Сквер Малые Гаванцы · Malye Gavantsy Square', poly: p.o, margin: 4 }))),
-  ..._named(/Морской фасад/i, 40, { c: [-9040, -1750], r: 450 }).map((r) => ({ name: 'Морской фасад · Marine Facade', ...r })),
-  { name: 'Голден Сити · Golden City', c: [-9149, -1078], r: 150 },
-  { name: 'Голден Сити · Golden City', c: [-8700, -900], r: 140 },
-  { name: 'Горный институт · Gorny Institut metro', c: [-5036, -5], r: 55 },
-  { name: 'Памятник Каподистрии · Kapodistrias monument', c: [792.7, -453], r: 45 },
-  // ---- Mars Field / Summer Garden / Engineering Castle (2026-10): specific sights first, then the outlines of the Field and the Garden
-  // ---- south-west (2026-10): Teatralnaya Square, Mariinsky, Yusupov, New Holland, Nikolsky
-  ..._named(/^Мариинский театр$/i, 14, { c: [-3095, 773], r: 70 }).map((r) => ({ name: 'Мариинский театр · Mariinsky Theatre', ...r })),
-  ..._named(/Мариинский-2/i, 10, { c: [-3189, 806], r: 60 }).map((r) => ({ name: 'Мариинский-2 · Mariinsky II', ...r })),
-  { name: 'Консерватория Римского-Корсакова · Rimsky-Korsakov Conservatory', c: [-2975, 714], r: 55 },
-  { name: 'Театральная площадь · Teatralnaya Square', c: [-3040, 740], r: 110 },
-  ..._named(/Юсуповский дворец/i, 12, { c: [-2918, 342], r: 80 }).filter((r) => !r.poly || r.poly[0] < -2500).map((r) => ({ name: 'Юсуповский дворец · Yusupov Palace', ...r })),
-  { name: 'Новая Голландия · New Holland', c: [-3440, 330], r: 235 },
-  ..._named(/Никольский собор/i, 14, { c: [-2862, 1105], r: 70 }).map((r) => ({ name: 'Никольский Морской собор · St Nicholas Naval Cathedral', ...r })),
-  ..._named(/Колокольня Никольского/i, 10, { c: [-2959, 1147], r: 30 }).map((r) => ({ name: 'Колокольня Никольского собора · Nikolsky bell tower', ...r })),
-  { name: 'Никольская площадь · Nikolskaya Square', c: [-2900, 1120], r: 130 },
-  { name: 'Мемориал «Борцам революции» · Eternal Flame', c: [-1086, -1243], r: 32 },
-  { name: 'Суворовская площадь · Suvorov Square', c: [-1197, -1502], r: 55 },
   { name: 'Михайловский замок · Mikhailovsky (Engineers) Castle', c: [-735, -790], r: 130 },
-  ..._named(/Мраморный дворец/i, 12, { c: [-1376, -1417], r: 70 }).map((r) => ({ name: 'Мраморный дворец · Marble Palace', ...r })),
-  { name: 'Павловские казармы · Pavlovsky Barracks', c: [-1270, -1276], r: 80 },
-  ..._named(/Летний дворец/i, 10, { c: [-849, -1650], r: 30 }).map((r) => ({ name: 'Летний дворец Петра I · Summer Palace of Peter I', ...r })),
-  ...GREEN.filter((g) => g.name === 'Марсово поле').flatMap((g) => g.polys.map((p) => ({ name: 'Марсово поле · Mars Field', poly: p.o, margin: 4 }))),
-  ...GREEN.filter((g) => g.name === 'Летний сад').flatMap((g) => g.polys.map((p) => ({ name: 'Летний сад · Summer Garden', poly: p.o, margin: 6 }))),
-  { name: 'Смольный собор · Smolny Cathedral', c: [2469,-1833], r: 140 },
-  { name: 'Смольный институт · Smolny Institute', c: [2518,-1544], r: 115 },
-  { name: 'Таврический дворец · Tauride Palace', c: [1379,-1734], r: 95 },
-  { name: 'Таврический сад · Tauride Garden', x0: 910, x1: 1500, z0: -1785, z1: -1250 },
-  { name: 'Парадный квартал · Paradny Quarter', x0: 790, x1: 1120, z0: -1170, z1: -820 },
-  { name: 'Спасо-Преображенский собор · Transfiguration Cathedral', c: [66,-1182], r: 75 },
-  { name: 'Чернышевская · Chernyshevskaya', c: [467,-1351], r: 55 },
-  { name: 'Подписные Издания · Bookshop', c: [-201,-222], r: 28 },
-  { name: 'Площадь Александра Невского · Alexander Nevsky Square', c: [1940, 978], r: 95 },
-  { name: 'Троицкий собор · Holy Trinity Cathedral', c: [2089, 1260], r: 65 },
-  { name: 'Александро-Невская лавра · Alexander Nevsky Lavra', x0: 1870, x1: 2195, z0: 1100, z1: 1440 },
-  { name: 'Феодоровский собор · Feodorovsky Cathedral', c: [973, 718], r: 50 },
-  { name: 'Синопская набережная · Neva Embankment', x0: 2080, x1: 2360, z0: -405, z1: 1050, test: (x, z) => x > 2080 && x < 2360 && z > -405 && z < 1050 },
+  { name: 'Подписные Издания · Bookshop', c: [-201,-222], r: 40 },
   { name: 'Аничков мост · Anichkov Bridge', c: [-441, -93], r: 42 },
   { name: 'Обелиск «Городу-герою Ленинграду» · Hero City obelisk', c: [592, 165], r: 24 },
   ..._groupPolys(SUBGROUPS.station, 12).map((r) => ({ name: 'Московский вокзал · Moscow Railway Station', ...r })),
@@ -642,10 +419,11 @@ export const AREAS = [
   ..._groupPolys(SUBGROUPS.oktyabrskaya, 8).map((r) => ({ name: 'Гостиница «Октябрьская» · Hotel Oktyabrskaya', ...r })),
   ..._groupPolys(SUBGROUPS['nevsky-centre'], 6).map((r) => ({ name: 'Невский Центр · Nevsky Centre', ...r })),
   ..._groupPolys(SUBGROUPS.beloselsky, 8).map((r) => ({ name: 'Дворец Белосельских-Белозерских · Beloselsky-Belozersky Palace', ...r })),
+  ..._groupPolys(SUBGROUPS.anichkov, 10).map((r) => ({ name: 'Аничков дворец · Anichkov Palace', ...r })),
   ..._groupPolys(SUBGROUPS.vladimirsky, 10).map((r) => ({ name: 'Владимирский собор · Vladimirsky Cathedral', ...r })),
   ..._groupPolys(SUBGROUPS.library, 6).map((r) => ({ name: 'Российская национальная библиотека · National Library', ...r })),
-  // ---- the western extension: sights (outline of the named OSM building + margin; the circle is the fallback when OSM has no such outline), squares, waterways, streets.
-  // The landmark GROUPS of these sights are added later (from the research dossiers); until then the areas find the buildings by their OSM names.
+  // ---- the west of the strip: sights (outline of the named OSM building + margin; the circle is the fallback when OSM has no such outline), squares, waterways, streets.
+  // The areas find the buildings by their OSM names.
   ..._named(/Казанский собор/i, 14, { c: [-1568, -186], r: 90 }).map((r) => ({ name: 'Казанский собор · Kazan Cathedral', ...r })),
   ..._named(/Дом Зингера|Дом книги/i, 8, { c: [-1420, -383], r: 32 }).map((r) => ({ name: 'Дом Зингера · Singer House', ...r })),
   ..._named(/Гостиный двор/i, 8, null).map((r) => ({ name: 'Гостиный Двор · Gostiny Dvor', ...r })),
@@ -654,6 +432,7 @@ export const AREAS = [
   ..._named(/Спас на Крови|Воскресения Христова/i, 12, { c: [-1265, -854], r: 60 }).map((r) => ({ name: 'Спас на Крови · Church of the Saviour on Blood', ...r })),
   ..._named(/Михайловский замок|Инженерный замок/i, 10, null).map((r) => ({ name: 'Михайловский замок · Mikhailovsky (Engineers) Castle', ...r })),
   ..._named(/(?<![\p{L}-])Михайловский дворец|Русский музей/iu, 10, null).map((r) => ({ name: 'Михайловский дворец · Mikhailovsky Palace (Russian Museum)', ...r })),
+  { name: 'Михайловский сад · Mikhailovsky Garden', c: [-1020, -830], r: 130 },       // after the Saviour church, the castle and the museum above (those outlines win where they overlap)
   ..._named(/Адмиралтейство|Главное адмиралтейство/i, 12, { c: [-2433, -622], r: 150 }).map((r) => ({ name: 'Адмиралтейство · Admiralty', ...r })),
   { name: 'Александровский сад · Alexander Garden', c: [-2400, -490], r: 105 },       // the view Shift + 7 stands in the garden (the Admiralty circle above is only the fallback when OSM has no outline, so the garden comes second)
   ..._named(/Зимний дворец/i, 10, { c: [-2096, -896], r: 110 }).map((r) => ({ name: 'Зимний дворец · Winter Palace', ...r })),
@@ -736,39 +515,7 @@ export const AREAS = [
   { name: 'Площадь Искусств · Arts Square', road: NAMES.streets.iskusstvSq },
   { name: 'Биржевая площадь · Birzhevaya Square', road: NAMES.streets.birzhevayaSq },
   { name: 'Казанская площадь · Kazan Square', road: NAMES.streets.kazanskayaSq },
-  // Vasilievsky Island: the named streets (OSM names; a street name wins only where no sight above claimed the point), then the parts of the island that have their own name
   { name: 'Университетская набережная · Universitetskaya embankment', road: 'Университетская набережная' },
-  { name: 'Набережная Лейтенанта Шмидта · Lieutenant Schmidt embankment', road: 'набережная Лейтенанта Шмидта' },
-  { name: 'Набережная Макарова · Makarova embankment', road: 'набережная Макарова' },
-  { name: 'Кадетская линия · Kadetskaya liniya', road: 'Кадетская линия В.О.' },
-  { name: 'Большой проспект В.О. · Bolshoy Prospekt V.O.', road: 'Большой проспект В.О.' },
-  { name: 'Средний проспект В.О. · Sredny Prospekt V.O.', road: 'Средний проспект В.О.' },
-  { name: 'Малый проспект В.О. · Maly Prospekt V.O.', road: 'Малый проспект В.О.' },
-  { name: 'Кожевенная линия · Kozhevennaya liniya', road: 'Кожевенная линия' },
-  { name: 'Новосмоленская набережная · Novosmolenskaya embankment', road: 'Новосмоленская набережная' },
-  { name: 'Шкиперский проток · Shkipersky Protok', road: 'Шкиперский проток' },
-  { name: 'Среднегаванский проспект · Srednegavansky Prospekt', road: 'Среднегаванский проспект' },
-  { name: 'Гаванская улица · Gavanskaya ulitsa', road: 'Гаванская улица' },
-  { name: 'Улица Беринга · Ulitsa Beringa', road: 'улица Беринга' },
-  { name: 'Наличная улица · Nalichnaya ulitsa', road: 'Наличная улица' },
-  { name: 'Морская набережная · Morskaya embankment', road: 'Морская набережная' },
-  { name: 'Галерная гавань · Galerny Harbour', x0: -7300, x1: -6700, z0: -330, z1: 450, test: (x, z) => inIsland(x, z) },
-  { name: 'Гавань · Gavan', x0: -7300, x1: -5900, z0: -750, z1: 650, test: (x, z) => inIsland(x, z) },
-  { name: 'Смоленское поле · Smolenskoe Pole', x0: -5700, x1: -5300, z0: -300, z1: 120, test: (x, z) => inIsland(x, z) },
-  { name: 'Морской фасад · Marine Facade', x0: -9500, x1: -8600, z0: -2400, z1: -1050, test: (x, z) => inIsland(x, z) },
-  ...GREEN.filter((g) => g.name === 'Остров Декабристов').flatMap((g) => g.polys.map((p) => ({ name: 'Остров Декабристов · Dekabristov Island', poly: p.o, margin: 0 }))),
-  { name: 'Остров Декабристов · Dekabristov Island', x0: -9800, x1: -4960, z0: -2700, z1: -1300, test: (x, z) => !inIsland(x, z) },       // north of the Smolenka (outside the island outline, west of the Petrograd-side fallback below)
-  // district fallbacks of the north bank (after every street / square name): the Petrograd side north of the Malaya Neva and of the Kronverksky strait, Vasilievsky Island between the two Nevas
-  { name: '2-й Елагин мост · 2nd Yelagin Bridge', x0: -5290, x1: -5125, z0: -4905, z1: -4770 },
-  { name: 'Крестовский остров · Krestovsky Island', poly: KRESTOVSKY_ISLAND },
-  { name: 'Елагин остров · Yelagin Island', poly: ISLANDS2_COAST.yelagin },
-  { name: 'Каменный остров · Kamenny Island', poly: ISLANDS2_COAST.kamenny },
-  { name: 'Аптекарский остров · Aptekarsky Island', poly: ISLANDS2_COAST.aptekarsky },
-  { name: 'Петровский остров · Petrovsky Island', poly: ISLANDS2_COAST.petrovsky },
-  { name: 'Серный остров · Serny Island', poly: ISLANDS2_COAST.serny },
-  { name: 'Петроградская сторона · Petrograd Side', x0: -4950, x1: -550, z0: -4260, z1: -1700, test: (x, z) => z < (x <= -2450 ? _malayaZ(x) - 30 : -2235) },
-  { name: 'Васильевский остров · Vasilievsky Island', x0: -3950, x1: -2400, z0: -1800, z1: -700, test: (x, z) => z > _malayaZ(x) + 30 && z < _bolshayaZ(x) + 40 },
-  { name: 'Васильевский остров · Vasilievsky Island', x0: -9800, x1: -2400, z0: -2600, z1: 1600, test: (x, z) => inIsland(x, z) },       // the rest of the island (frame rectangles V3..V12, lib/vo-island.js)
   { name: 'Санкт-Петербург · Saint Petersburg', x0: -9999, x1: 9999, z0: -9999, z1: 9999 },
 ];
 /** Name of the area at (x,z) for the HUD toast ('' never: the last entry matches everything). */
@@ -784,9 +531,10 @@ export function areaAt(x, z) {
   return NAMES.place;
 }
 
-// ---------------------------------------------------------------- viewpoints (keys 1..5) and the hero camera
-// Every pose is a free, walkable spot (tools/layout-test.mjs checks insideBuilding / isOnRoad / line of sight). x, z, yaw (deg, 0 = north, 90 = west), pitch (deg).
-// PROVISIONAL until the modules are built: retune with `node tools/layout-test.mjs` and screenshots (see docs/HANDOFF.md).
+// ---------------------------------------------------------------- viewpoints (keys 1..0, Shift + 1..9, Alt + 1..5) and the hero camera
+// Every pose is a free, walkable spot (tools/layout-test.mjs checks insideBuilding / isOnRoad / line of sight; tools/views-check.mjs adds the colliders). x, z, yaw (deg, 0 = north, 90 = west), pitch (deg).
+// The strip from the Moscow station to the Admiralty: 1..5 the station end of Nevsky, 6..8 / 9 / 0 / Shift + 1..9 the sights of the centre and the west, Alt + 1..4 the metro entrances, Alt + 5 the castle;
+// the rest only stand in the Places list (key 'Place.<id>').
 export const HERO = { x: 560, z: 192, yaw: yawToward(560, 192, 598, 235), pitch: 8 };      // Vosstaniya Square, looking at the obelisk and the Moscow station's clock tower
 export const VIEWS = [
   { key: 'Digit1', label: 'Площадь Восстания · Московский вокзал', x: 560, z: 192, yaw: yawToward(560, 192, 598, 235), pitch: 8 },
@@ -794,130 +542,32 @@ export const VIEWS = [
   { key: 'Digit3', label: 'Невский проспект', x: 502, z: 158, yaw: yawToward(502, 158, 380, 130), pitch: 4 },
   { key: 'Digit4', label: 'Платформы Московского вокзала', x: 644.8, z: 520, yaw: yawToward(644.8, 520, 700, 800), pitch: 3 },
   { key: 'Digit5', label: 'Аничков мост', x: -395, z: -108, yaw: yawToward(-395, -108, -470, -92), pitch: 6 },
-  { key: 'Digit6', label: 'Старо-Невский проспект', x: 1202, z: 491, yaw: -125, pitch: 3 },
-  { key: 'Digit7', label: 'Александро-Невская лавра', x: 1940, z: 976, yaw: -153, pitch: 12 },
-  { key: 'Digit8', label: 'Синопская набережная · Нева', x: 2160, z: 600, yaw: -120, pitch: 2 },
-  { key: 'ShiftDigit1', label: 'Подписные Издания', x: -184, z: -222, yaw: 90, pitch: 12 },
-  { key: 'ShiftDigit2', label: 'Спасо-Преображенский собор', x: 22, z: -1186, yaw: -95, pitch: 18 },
-  { key: 'ShiftDigit3', label: 'Чернышевская', x: 444, z: -1351, yaw: -90, pitch: 10 },
-  { key: 'ShiftDigit4', label: 'Парадный квартал', x: 915, z: -1010, yaw: -60, pitch: 18 },
-  { key: 'ShiftDigit5', label: 'Таврический сад', x: 1390, z: -1457, yaw: 0, pitch: 0 },
-  { key: 'ShiftDigit6', label: 'Смольный собор', x: 2335, z: -1833, yaw: -90, pitch: 21 },
-  // the west (Nevsky to the Admiralty): 9 / 0 and Shift + 7..9 (Shift + 1..6 are the north of the centre)
+  { key: 'Digit6', label: 'Спас на Крови · канал Грибоедова', x: -1308, z: -798, yaw: yawToward(-1308, -798, -1255, -860), pitch: 14 },
+  { key: 'Digit7', label: 'Гостиный Двор · Невский проспект', x: -1123, z: -282, yaw: yawToward(-1123, -282, -1100, -190), pitch: 6 },
+  { key: 'Digit8', label: 'Зимний дворец · Дворцовая набережная', x: -2143, z: -1008, yaw: yawToward(-2143, -1008, -2060, -940), pitch: 10 },
   { key: 'Digit9', label: 'Казанский собор', x: -1470, z: -312, yaw: yawToward(-1470, -312, -1482, -235), pitch: 8 },
   { key: 'Digit0', label: 'Дворцовая площадь · Александровская колонна', x: -1985, z: -715, yaw: yawToward(-1985, -715, -2096, -896), pitch: 6 },
+  { key: 'ShiftDigit1', label: 'Подписные Издания', x: -173, z: -223, yaw: 90, pitch: 12 },
+  { key: 'ShiftDigit2', label: 'Русский музей · площадь Искусств', x: -1075, z: -620, yaw: yawToward(-1075, -620, -1061, -697), pitch: 8 },
+  { key: 'ShiftDigit3', label: 'Дворцовый мост · Дворцовая набережная', x: -2337, z: -848, yaw: yawToward(-2337, -848, -2495, -1075), pitch: 4 },
+  { key: 'ShiftDigit4', label: 'Дом Зингера · Казанский мост', x: -1398, z: -345, yaw: yawToward(-1398, -345, -1420, -383), pitch: 12 },
+  { key: 'ShiftDigit5', label: 'Аничков дворец · набережная Фонтанки', x: -598, z: -22, yaw: yawToward(-598, -22, -641, -64), pitch: 8 },
+  { key: 'ShiftDigit6', label: 'Михайловский сад · павильон Росси', x: -971, z: -900, yaw: yawToward(-971, -900, -971, -940), pitch: 8 },
   { key: 'ShiftDigit7', label: 'Адмиралтейство · Александровский сад', x: -2380, z: -470, yaw: yawToward(-2380, -470, -2433, -621), pitch: 10 },
   { key: 'ShiftDigit8', label: 'Исаакиевский собор', x: -2440, z: -60, yaw: yawToward(-2440, -60, -2523, -185), pitch: 12 },
   { key: 'ShiftDigit9', label: 'Медный всадник · Сенатская площадь', x: -2715, z: -425, yaw: yawToward(-2715, -425, -2745, -444), pitch: 6 },
-  { key: 'ShiftDigit0', label: 'Дом Мурузи', x: -154, z: -1170, yaw: -137, pitch: 22 },
-  // Mars Field / Summer Garden / Engineering Castle: Alt + 1..7
-  { key: 'AltDigit1', label: 'Марсово поле · Вечный огонь', x: -1072, z: -1207, yaw: yawToward(-1072, -1207, -1086, -1243), pitch: 6 },
-  { key: 'AltDigit2', label: 'Суворовская площадь · памятник Суворову', x: -1190.5, z: -1474.6, yaw: yawToward(-1190.5, -1474.6, -1197, -1502), pitch: 8 },
-  { key: 'AltDigit3', label: 'Летний сад · ограда и главные ворота', x: -948.1, z: -1657.2, yaw: yawToward(-948.1, -1657.2, -968, -1639), pitch: 8 },
-  { key: 'AltDigit4', label: 'Летний сад · Главная аллея', x: -963, z: -1626, yaw: -160.6, pitch: 2 },
+  // the metro entrances (the seven stations of the strip; Alt + 5 is the castle below)
+  { key: 'AltDigit1', label: 'Метро «Площадь Восстания» · ротонда', x: 534, z: 125, yaw: yawToward(534, 125, 516, 92), pitch: 10 },
+  { key: 'AltDigit2', label: 'Метро «Маяковская» · Невский Атриум', x: 247, z: 109, yaw: yawToward(247, 109, 216, 115), pitch: 8 },
+  { key: 'AltDigit3', label: 'Метро «Гостиный двор» · Невский проспект', x: -985, z: -210, yaw: yawToward(-985, -210, -976, -183), pitch: 6 },
+  { key: 'AltDigit4', label: 'Метро «Невский проспект» · канал Грибоедова', x: -1340, z: -298, yaw: yawToward(-1340, -298, -1352, -339), pitch: 6 },
   { key: 'AltDigit5', label: 'Михайловский замок · памятник Петру I', x: -700, z: -715, yaw: yawToward(-700, -715, -745, -840), pitch: 10 },
-  { key: 'AltDigit6', label: 'Лебяжья канавка · Верхний Лебяжий мост', x: -1055.8, z: -1606.2, yaw: yawToward(-1055.8, -1606.2, -1069, -1611), pitch: 4 },
-  { key: 'AltDigit7', label: 'Троицкий мост · Суворовская площадь', x: -1190, z: -1535, yaw: yawToward(-1190, -1535, -1225, -1620), pitch: 4 },
-  // south-west: Alt + 8, 9, 0, minus
-  { key: 'AltDigit8', label: 'Мариинский театр · Театральная площадь', x: -3041.5, z: 737.6, yaw: 123.5, pitch: 8 },
-  { key: 'AltDigit9', label: 'Юсуповский дворец · набережная Мойки', x: -2973, z: 282.5, yaw: -137.3, pitch: 10 },
-  { key: 'AltDigit0', label: 'Новая Голландия · арка', x: -3396.7, z: 502.4, yaw: -6.9, pitch: 6 },
-  { key: 'AltMinus', label: 'Никольский Морской собор', x: -2900, z: 1060, yaw: -139.3, pitch: 12 },
-  // Petrograd side and the Spit of Vasilievsky Island: Alt + Shift + 1..0, minus, equals (poses = the photo spots the sight modules publish)
-  { key: 'AltShiftDigit1', label: 'Петропавловская крепость · Соборная площадь', x: -2008.5, z: -1945.1, yaw: -56.7, pitch: 24 },
-  { key: 'AltShiftDigit2', label: 'Иоанновский мост · ворота крепости', x: -1602.5, z: -2241.6, yaw: 162.3, pitch: 4 },
-  { key: 'AltShiftDigit3', label: 'Стрелка Васильевского острова · Биржа', x: -2508.4, z: -1293.1, yaw: yawToward(-2508.4, -1293.1, -2590, -1245), pitch: 10 },
-  { key: 'AltShiftDigit4', label: 'Стрелка · вид на Петропавловскую крепость', x: -2461.2, z: -1321.2, yaw: yawToward(-2461.2, -1321.2, -1946, -1982), pitch: 2 },
-  { key: 'AltShiftDigit5', label: 'Кунсткамера · Университетская набережная', x: -2592.8, z: -995.3, yaw: yawToward(-2592.8, -995.3, -2613.3, -1012.9), pitch: 22 },
-  { key: 'AltShiftDigit6', label: 'Троицкая площадь · Соборная мечеть', x: -1578.2, z: -2547, yaw: -107.8, pitch: 14 },
-  { key: 'AltShiftDigit7', label: 'Крейсер «Аврора»', x: -769.8, z: -2516.7, yaw: -20.4, pitch: 8 },
-  { key: 'AltShiftDigit8', label: 'Артиллерийский музей · Кронверк', x: -2053.5, z: -2270.6, yaw: 14, pitch: 6 },
-  { key: 'AltShiftDigit9', label: 'Площадь Льва Толстого · Дом с башнями', x: -2190.6, z: -3707.5, yaw: -69.8, pitch: 16 },
-  { key: 'AltShiftDigit0', label: 'Князь-Владимирский собор', x: -3187.2, z: -2153.4, yaw: -96.2, pitch: 16 },
-  { key: 'AltShiftMinus', label: 'Домик Петра I · львы Ши-цза', x: -1124.1, z: -2278.4, yaw: 24.2, pitch: 6 },
-  { key: 'AltShiftEqual', label: 'Австрийская площадь', x: -1910.6, z: -3060.1, yaw: -103.8, pitch: 14 },
-  // Vasilievsky Island (2026-10): nine keys Alt + Shift + [ ] ; ' , . / \ ` (every digit key is taken), the other views live in the Places list only (key 'Place.<id>', group = the optgroup of the list).
-  // Poses = the photo spots the sight modules publish through ctx.services.landmarks (tools/views-spots.mjs lists them), moved off the carriageway / out of the water where a spot stood there;
-  // tools/views-check.mjs proves every pose (off the roadway, on land, not inside a collider) with the real street network; real-renderer shots in shots/views.
-  { key: 'AltShiftBracketLeft', label: 'Академия художеств · сфинксы', x: -3414.6, z: -495.4, yaw: -27.5, pitch: 6, group: 'Васильевский остров' },
-  { key: 'AltShiftBracketRight', label: 'Эрарта · музей современного искусства', x: -5556.7, z: 8.8, yaw: 119.7, pitch: 12, group: 'Васильевский остров' },
-  { key: 'AltShiftSemicolon', label: 'Смоленское кладбище · часовня Ксении Блаженной', x: -5586.4, z: -1339.4, yaw: -169.7, pitch: 0, group: 'Васильевский остров' },
-  { key: 'AltShiftQuote', label: 'Смоленское кладбище · главная аллея', x: -5561, z: -1502.3, yaw: 114.3, pitch: 1, group: 'Васильевский остров' },
-  { key: 'AltShiftComma', label: 'Горный университет · колоннада', x: -4551.2, z: 375.2, yaw: 46.4, pitch: 6, group: 'Васильевский остров' },
-  { key: 'AltShiftPeriod', label: 'Меншиковский дворец · Университетская набережная', x: -3117.7, z: -677, yaw: -44.2, pitch: 8, group: 'Васильевский остров' },
-  { key: 'AltShiftSlash', label: 'Андреевский бульвар · собор', x: -3817, z: -777, yaw: 30, pitch: 6, group: 'Васильевский остров' },
-  { key: 'AltShiftBackslash', label: 'Морской вокзал · площадь Морской Славы', x: -6371.5, z: 685.3, yaw: 99, pitch: 6, group: 'Васильевский остров' },
-  { key: 'AltShiftBackquote', label: 'Севкабель Порт · набережная', x: -6115.2, z: 1019.2, yaw: 51.5, pitch: 4, group: 'Васильевский остров' },
-  // the rest of the island, east to west
-  { key: 'Place.blagoveshchensky', label: 'Благовещенский мост', x: -3493.5, z: -439.4, yaw: -168.2, pitch: 4, group: 'Васильевский остров' },
-  { key: 'Place.academy-sphinx', label: 'Академия художеств · пристань со сфинксами', x: -3382, z: -513.3, yaw: 131.6, pitch: 6, group: 'Васильевский остров' },
-  { key: 'Place.menshikov-portico', label: 'Меншиковский дворец · портик', x: -3084.8, z: -696, yaw: 30, pitch: 10, group: 'Васильевский остров' },
-  { key: 'Place.rumyantsev-fountain', label: 'Румянцевский сад · фонтан', x: -3263, z: -679, yaw: -21.3, pitch: 12, group: 'Васильевский остров' },
-  { key: 'Place.makarova-lions', label: 'Набережная Макарова · спуск со львами', x: -2851.3, z: -1437.6, yaw: 0, pitch: 0, group: 'Васильевский остров' },
-  { key: 'Place.makarova-yakovlev', label: 'Набережная Макарова · дома Яковлевых', x: -3379, z: -1538, yaw: 104, pitch: 0, group: 'Васильевский остров' },
-  { key: 'Place.lutheran-catherine', label: 'Лютеранская церковь Святой Екатерины', x: -3445, z: -1000, yaw: 20.6, pitch: 0, group: 'Васильевский остров' },
-  { key: 'Place.andrew-bell', label: 'Андреевский собор · колокольня', x: -3844, z: -802, yaw: -73, pitch: 10, group: 'Васильевский остров' },
-  { key: 'Place.pel-tower', label: 'Дом Пеля · угловая башня', x: -3760.5, z: -696.5, yaw: 159, pitch: 14, group: 'Васильевский остров' },
-  { key: 'Place.naval-corps', label: 'Морской кадетский корпус', x: -4009.2, z: -240.8, yaw: -6.1, pitch: 6, group: 'Васильевский остров' },
-  { key: 'Place.krusenstern', label: 'Памятник Крузенштерну · лестница к Неве', x: -3988.4, z: -248.1, yaw: -150.2, pitch: 12, group: 'Васильевский остров' },
-  { key: 'Place.s189', label: 'Подводная лодка С-189', x: -4256.5, z: -1.4, yaw: -137.2, pitch: 2, group: 'Васильевский остров' },
-  { key: 'Place.mining-hercules', label: 'Горный университет · Геракл и Антей', x: -4555.2, z: 353.3, yaw: -7.5, pitch: 10, group: 'Васильевский остров' },
-  { key: 'Place.krasin', label: 'Ледокол «Красин»', x: -4621.4, z: 463.1, yaw: -103.1, pitch: 4, group: 'Васильевский остров' },
-  { key: 'Place.tram-depot', label: 'Трамвайный парк · памятник трамваю', x: -4970, z: -690, yaw: 30, pitch: 4, group: 'Васильевский остров' },
-  { key: 'Place.chernikhov-tower', label: 'Башня Чернихова', x: -4803.3, z: 443.7, yaw: 121, pitch: 18, group: 'Васильевский остров' },
-  { key: 'Place.gorny-institut', label: 'Горный институт · павильоны метро', x: -5030, z: 2, yaw: 124, pitch: 6, group: 'Васильевский остров' },
-  { key: 'Place.kirov-palace', label: 'Дворец культуры имени Кирова', x: -5462.5, z: -49.9, yaw: -12.4, pitch: 8, group: 'Васильевский остров' },
-  { key: 'Place.smolensk-church', label: 'Смоленская церковь · Смоленское кладбище', x: -5594, z: -1488.9, yaw: 21.9, pitch: 12, group: 'Васильевский остров' },
-  { key: 'Place.holy-gates', label: 'Смоленское кладбище · Святые ворота', x: -5474.9, z: -1523.8, yaw: 69, pitch: 4, group: 'Васильевский остров' },
-  { key: 'Place.trinity-chapel', label: 'Смоленское кладбище · Троицкая часовня', x: -5610.8, z: -1386.4, yaw: -90, pitch: 0, group: 'Васильевский остров' },
-  { key: 'Place.brusnitsyn', label: 'Особняк Брусницыных · Кожевенная линия', x: -5623, z: 1106, yaw: -68, pitch: 14, group: 'Васильевский остров' },
-  { key: 'Place.sevkabel-tesla', label: 'Севкабель Порт · «катушка Теслы»', x: -6200, z: 858, yaw: 66, pitch: 8, group: 'Васильевский остров' },
-  { key: 'Place.sevkabel-square', label: 'Севкабель Порт · морская площадь', x: -6258, z: 862, yaw: -118, pitch: 14, group: 'Васильевский остров' },
-  { key: 'Place.gavan-church', label: 'Церковь «Милующая»', x: -5984.3, z: 504.8, yaw: -122, pitch: 20, group: 'Васильевский остров' },
-  { key: 'Place.sea-glory', label: 'Площадь Морской Славы · игла', x: -6300, z: 640, yaw: 107.9, pitch: 6, group: 'Васильевский остров' },
-  { key: 'Place.d2', label: 'Подводная лодка Д-2 «Народоволец»', x: -6630, z: -25, yaw: -13.6, pitch: 3, group: 'Васильевский остров' },
-  { key: 'Place.gavan-town', label: 'Гаванский городок', x: -6372, z: -588, yaw: -55, pitch: 8, group: 'Васильевский остров' },
-  { key: 'Place.kronshpits', label: 'Галерная гавань · Кроншпицы', x: -6947, z: 345.4, yaw: -166, pitch: 4, group: 'Васильевский остров' },
-  { key: 'Place.skipper-canal', label: 'Шкиперский проток', x: -6970, z: 150.4, yaw: -177, pitch: 2, group: 'Васильевский остров' },
-  { key: 'Place.water-tower', label: 'Галерная гавань · водонапорная башня', x: -7162, z: -228, yaw: -29, pitch: 6, group: 'Васильевский остров' },
-  { key: 'Place.pribaltiyskaya', label: 'Гостиница «Прибалтийская»', x: -7516.6, z: -772.5, yaw: 114.4, pitch: 6, group: 'Васильевский остров' },
-  { key: 'Place.peter-tsereteli', label: 'Памятник Петру I · Прибалтийская площадь', x: -7464.1, z: -796.1, yaw: 114.4, pitch: 28, group: 'Васильевский остров' },
-  { key: 'Place.kirov-monument', label: 'Памятник крейсеру «Киров»', x: -7992.7, z: -1065.3, yaw: -65.3, pitch: 12, group: 'Васильевский остров' },
-  { key: 'Place.golden-city', label: 'Golden City · башни с золотыми коронами', x: -8689.2, z: -805.9, yaw: 5.5, pitch: 18, group: 'Васильевский остров' },
-  { key: 'Place.marine-facade-t1', label: 'Морской фасад · терминал 1', x: -9285.5, z: -1208.1, yaw: 19.5, pitch: 4, group: 'Васильевский остров' },
-  { key: 'Place.marine-facade-liner', label: 'Морской фасад · круизный лайнер', x: -8700, z: -1500, yaw: 56, pitch: 6, group: 'Васильевский остров' },
-  { key: 'Place.house-kollan', label: 'Дом Коллана · три эркера', x: -5754, z: 368, yaw: -150.5, pitch: 8, group: 'Васильевский остров' },
-  { key: 'Place.karl-may-school', label: 'Школа Карла Мая · арки и волнистый аттик', x: -4605.1, z: -814.2, yaw: -60.1, pitch: 10, group: 'Васильевский остров' },
+  // the Places list only
   { key: 'Place.oktyabrsky', label: 'БКЗ «Октябрьский» · Лиговский проспект', x: 737.5, z: -344.3, yaw: -50.4, pitch: 8 },
-  { key: 'Place.kapodistrias', label: 'Памятник Каподистрии · Греческая площадь', x: 792.7, z: -453, yaw: -27, pitch: 20 },
-  { key: 'Place.south-trinity', label: 'Троице-Измайловский собор', x: -2470.9, z: 1843, yaw: 46.4, pitch: 21, group: 'Центр до Обводного' },
-  { key: 'Place.petro-red-banner', label: 'Красное знамя · силовая станция', x: -3956, z: -3267, yaw: -130, pitch: 15, group: 'Петроградская сторона' },
-  { key: 'Place.petro-sytny', label: 'Сытный рынок · исторический зал', x: -2382, z: -2736, yaw: -93, pitch: 8, group: 'Петроградская сторона' },
-  { key: 'Place.petro-printworks', label: 'Печатный двор', x: -3193, z: -3291, yaw: -16, pitch: 12, group: 'Петроградская сторона' },
-  { key: 'Place.krestovsky-arena', label: 'Крестовский остров · стадион', x: -7050, z: -4460, yaw: 85, pitch: 12, group: 'Крестовский остров' },
-  { key: 'Place.krestovsky-metro', label: 'Метро «Крестовский остров» · парк Победы', x: -5140, z: -4338, yaw: 0, pitch: 8, group: 'Крестовский остров' },
-  { key: 'Place.yelagin-palace', label: 'Елагин дворец · западный фасад', x: -4600, z: -5225.9, yaw: -90, pitch: 8, group: 'Елагин остров' },
-  { key: 'Place.yelagin-rotunda', label: 'Елагин дворец · ротонда', x: -4496, z: -5225.9, yaw: 90, pitch: 8, group: 'Елагин остров' },
-  { key: 'Place.yelagin-kitchen', label: 'Кухонный корпус · четырнадцать статуй', x: -4623.7, z: -5234.9, yaw: 4.3, pitch: 8, group: 'Елагин остров' },
-  { key: 'Place.yelagin-stable', label: 'Конюшенный корпус · колоннада', x: -4814.7, z: -5257.2, yaw: 4.6, pitch: 8, group: 'Елагин остров' },
-  { key: 'Place.yelagin-kitchen-north', label: 'Кухонный корпус · северный портик с вазами', x: -4631.9, z: -5358, yaw: -175.7, pitch: 8, group: 'Елагин остров' },
-  { key: 'Place.yelagin-west-spit', label: 'Закат на Западной стрелке · львы', x: -6414.6, z: -5308.4, yaw: 104.5, pitch: 6, group: 'Елагин остров' },
-  { key: 'Place.yelagin-hercules', label: 'Геракл на мысу пруда', x: -5546.9, z: -5122.5, yaw: -167.4, pitch: 8, group: 'Елагин остров' },
-  { key: 'Place.yelagin-theatre', label: 'Эстрадный театр', x: -5214, z: -5372, yaw: 143.1, pitch: 8, group: 'Елагин остров' },
-  { key: 'Place.yelagin-music', label: 'Музыкальный павильон', x: -4605.9, z: -4916.7, yaw: 56.7, pitch: 8, group: 'Елагин остров' },
-  { key: 'Place.yelagin-bridge2', label: '2-й Елагин мост', x: -5207.2, z: -4837.7, yaw: 105.8, pitch: 2, group: 'Елагин остров' },
-  { key: 'Place.kamenny-gate', label: 'Каменноостровский дворец · парадные ворота', x: -2866, z: -5342, yaw: -62, pitch: 8, group: 'Каменный остров' },
-  { key: 'Place.kamenny-church', label: 'Предтеченская церковь', x: -2861.2, z: -5413.7, yaw: -120, pitch: 8, group: 'Каменный остров' },
-  { key: 'Place.botanic-institute', label: 'Ботанический сад · институт', x: -1773.3, z: -4041.5, yaw: -70, pitch: 8, group: 'Аптекарский остров' },
-  { key: 'Place.botanic-japan', label: 'Ботанический сад · Японский сад', x: -1427.6, z: -4279.1, yaw: 0, pitch: 6, group: 'Аптекарский остров' },
-  { key: 'Place.botanic-peter', label: 'Ботанический сад · бюст Петра I', x: -1569.1, z: -4274.2, yaw: 200, pitch: 8, group: 'Аптекарский остров' },
-  { key: 'Place.petrovsky-stadium', label: 'Петровский стадион · Ждановская набережная', x: -3464, z: -2201.6, yaw: 96.7, pitch: 8, group: 'Петровский остров' },
-  { key: 'Place.petrovsky-yacht', label: 'Речной яхт-клуб · Петровская коса', x: -6266.1, z: -3584.2, yaw: -16, pitch: 8, group: 'Петровский остров' },
-  { key: 'Place.south-vitebsky', label: 'Витебский вокзал', x: -1320, z: 1335, yaw: -120, pitch: 13, group: 'Центр до Обводного' },
-  { key: 'Place.south-institute', label: 'Технологический институт', x: -1880, z: 1565, yaw: -90.7, pitch: 21, group: 'Центр до Обводного' },
-  { key: 'Place.south-obvodny', label: 'Обводный канал · Ново-Московский мост', x: -1876, z: 2694.1, yaw: -41.3, pitch: 4, group: 'Центр до Обводного' },
-  { key: 'Place.moskovsky-gate', label: 'Московские триумфальные ворота', x: -1812, z: 4603, yaw: -43, pitch: 12, group: 'Московский проспект' },
-  { key: 'Place.victory-park', label: 'Московский парк Победы · главный вход', x: -1698.5, z: 7075, yaw: -88.2, pitch: 10, group: 'Московский проспект' },
-  { key: 'Place.chesme', label: 'Чесменская церковь', x: -1169, z: 8409, yaw: -90, pitch: 20, group: 'Московский проспект' },
-  { key: 'Place.moskovskaya', label: 'Московская площадь · Дом Советов', x: -1605, z: 8937, yaw: -90, pitch: 12, group: 'Московский проспект' },
+  { key: 'Place.vladimirskaya-metro', label: 'Метро «Владимирская» · Кузнечный переулок', x: -185, z: 500, yaw: yawToward(-185, 500, -187, 532), pitch: 6 },
+  { key: 'Place.circus', label: 'Цирк Чинизелли · Инженерная улица', x: -560, z: -620, yaw: yawToward(-560, -620, -569, -693), pitch: 10 },
+  { key: 'Place.library', label: 'Российская национальная библиотека · Фонтанка', x: -372, z: -300, yaw: yawToward(-372, -300, -334, -311), pitch: 8 },
+  { key: 'Place.alexandrinsky', label: 'Александринский театр · Екатерининский сад', x: -800, z: -95, yaw: yawToward(-800, -95, -844, 70), pitch: 8 },
+  { key: 'Place.hermitage', label: 'Большой Эрмитаж · Дворцовая набережная', x: -2039, z: -1084, yaw: yawToward(-2039, -1084, -1985, -1050), pitch: 10 },
+  { key: 'Place.admiralteyskaya-metro', label: 'Метро «Адмиралтейская» · Малая Морская', x: -2058, z: -438, yaw: yawToward(-2058, -438, -2029, -411), pitch: 6 },
 ];
