@@ -35,7 +35,7 @@ the Petrograd monuments and Petrovsky, Krestovsky, Yelagin, Kamenny and Botanica
 `undertest`. Partial: `landmarksNorth` keeps only the Podpisnye Izdaniya bookstore and the Mayakovskogo / Vosstaniya corridor houses; `bridges` keeps only the sites inside the extent (about 24); `metro` keeps seven stations.
 
 * **Buildings that a dropped module used to claim become ordinary generic `city` buildings.** This is intended, in particular for the 120 m scenery margin around the play area.
-* Bridges outside the extent, water outside it and the whole island / Petrograd / south-west data are gone; `src/world/data/east-water.js` (far Neva scenery) stays.
+* Bridges outside the extent, water outside it and the whole island / Petrograd / south-west data are gone; `src/world/data/east-water.js` (far Neva scenery) stays. The Malaya Neva (its mouth lies beside the Strelka, just north of the strip) is a third far-water source in `src/world/environment/neva-malaya.js` so that no wall is built across the channel.
 * The docs, tools and reference data of the dropped areas were deleted with them (`docs/EAST.md`, `NORTH.md`, `VO-*`, `ISLANDS*`, `PETRO-*`, `MARS-BRIEF.md`, `SW-BRIEF.md`, `SOUTH-EXTENSION.md`, `WEST-*`, `SEVKABEL-CULTURE.md`, `INTEGRATION.md`, the island / VO json in `docs/reference/`, the 127 `tools/landmarks<Dropped>-*` tools, `islands*`, `yelagin-*`, `kamenny-*`, `petrovsky-*`, `krestovsky-*`, `vo-*`, `gaps-*` ..., and later the dev tools that imported deleted modules: `props-vo*`, `props-petro`, `props-islands`, `props-audit-vo|petro`, `props-harbour-probe*`, `environment-{islands-probe,petro-water,karpovka-west,vo-seal,vo-walk,vo-water}`, `traffic-vo-*`, `traffic-decks`, `water-rings`).
   `docs/research/` and `docs/images/` of the original project were never copied here: references to them in the older docs are historical.
 
@@ -107,7 +107,8 @@ The revision is the first 20 hex digits of a sha256 over every `*.js` under `src
 the page then silently rebuilds everything procedurally (minutes of load, gigabytes of heap) and only prints `[baked]` in the console. After the last edit: re-bake, then `node tools/bake-manifest-check.mjs` must print `RESULT: OK` before anything is deployed.
 `tools/` and `docs/` are not hashed.
 
-Estimated strip bake (from the ratios of the full-city bake, to be replaced by the real numbers after the first strip bake): about 62 MiB gzip (range 50-75) in 65-70 files plus the manifest; a visitor downloads about 36 MiB at the start and about 55 MiB if the whole strip is walked.
+Measured strip bake (2026-10-16, revision 325179c6b6e810149b4e): **63 files, 50.7 MiB gzip** (full city: 538 files, 450 MiB). Largest products: city-base meta 8.0 MiB, field-dtex 6.6 MiB, three nav graphs 3.7 MiB each, the 23 city-base regions 0.3-1.4 MiB each. The streamer cuts the strip into 48 regions of 640 m; 18 of them are awaited before the first frame at the hero pose, the rest stream in while walking or driving.
+Measured on an RTX 3090 Ti (headless Edge, 1280 x 720, local server without compression, new profile): intro ready after 26.2 s at high and 25.0 s at medium through a sub-path (full city: 43 s with its bake), JS heap 1.16 GB after load, walking 52 fps and driving 57 fps at medium (the display is vsync-limited), 0 console errors. The source tree that is downloaded is 16 MB raw (about 4 MB gzip on a compressing host).
 The full city bake was 450 MiB in 538 files.
 
 ## 7. Deployment

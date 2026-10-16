@@ -1,6 +1,6 @@
 # Scene loading measurements and next optimizations
 
-> **Full-city numbers.** Every measurement in this file (60 s intro, 20 of 129 regions, 115.5 MiB bake, 7993 x 6137 roof grid) was taken on the whole 102_3d_piter city before it was cut down to the Nevsky strip. They are kept for the method and the reasoning. The strip has about 25 regions (23 city-base + about 25 street-surface region files), a bake of an estimated 50-75 MiB gzip in about 65-70 files and a roof grid of about 7.8k x 5.0k at 0.5 m; the real strip figures appear only after the first strip bake and are recorded in [STRIP.md](STRIP.md).
+> **Full-city numbers.** Every measurement in this file (60 s intro, 20 of 129 regions, 115.5 MiB bake, 7993 x 6137 roof grid) was taken on the whole 102_3d_piter city before it was cut down to the Nevsky strip. They are kept for the method and the reasoning. The strip has 48 regions (18 awaited before the first frame), a bake of 50.7 MiB gzip in 63 files and an intro that is ready after about 26 s; the measured strip figures are recorded in [STRIP.md](STRIP.md).
 
 Measured 2026-10-04 on Edge headless, RTX 3090 Ti / ANGLE D3D11,
 1280 × 720, a new browser profile per run. Full city, normal intro path,
