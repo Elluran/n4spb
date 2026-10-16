@@ -1,0 +1,147 @@
+// Mapped central-north landmarks. Research and approximation limits in
+// docs/research/north-corridor.md. All custom solids have closed geometry.
+import * as THREE from 'three';
+import * as L from './layout.js';
+import { makeKit } from './landmarksD/common.js';
+import { buildHouse } from './landmarksD/house.js';
+import { bookstore } from './landmarksNorth/bookstore.js';
+import { muruzi } from './landmarksNorth/muruzi.js';
+import { dome, drum, cross, ringWindows, roundCornice, portico } from './landmarksD/parts.js';
+import { CORRIDOR_ADDRESSES, GROUPS_LIST } from './landmarksNorth/groups.js';
+export const OWNS_GROUPS = true;
+
+function cathedral(K) {
+  const recs = L.groupMembers('north-preobrazhensky'); if (!recs.length) return;
+  const b = recs.find(b=>!b.part)||recs[0], cx=b.cx, cz=b.cz, P=K.P,M=K.mats, wall=K.wall('#e4ca88');
+  // OSM includes the open west portico. Remove its two projecting corners
+  // from the closed nave shell, then restore that footprint with columns.
+  const navePolys = rec => rec.polys.map(poly=>({ ...poly, o:poly.o.filter((v,i)=>{
+    const x=poly.o[i-i%2]; return x>=cx-18;
+  }) }));
+  buildHouse(K,{recs,polysOf:navePolys,hc:16.8,wall:'#e4ca88',railing:false,roofMat:M.roofDark,plinth:0.7,
+    front:(e,{len})=>{
+      K.wallQuad(wall,0,len,0,17.25,3);
+      if(len<4)return true;
+      const n=Math.max(1,Math.round(len/6.6));
+      for(let i=0;i<n;i++){
+        const x=(i+.5)*len/n;
+        K.window({x,y:2.4,w:2.15,h:7.6,head:'arch',sw:.29,d:.17,frame:'white'});
+        K.balustrade(x-1.1,x+1.1,2.4,.8,.4);
+        K.plaque(M.cream,x,12.6,Math.min(3.6,len/n-.5),1.2,.12);
+        for(let j=-2;j<=2;j++) P.geo(M.trim,new THREE.SphereGeometry(.22,6,4),x+j*.44,13.2,.2,0,0,0,1,1.4,.35);
+      }
+      return true;
+    }});
+  P.push(cx,0,cz);
+  // Main west portico; four Ionic columns, with capped entablature and door.
+  P.push(-15.1,0,0,-Math.PI/2);
+  portico(K,{x0:-8.2,x1:8.2,depth:6.1,y0:.3,y1:13.8,r:.72,xs:[-7.1,-2.37,2.37,7.1],ent:2.0,ped:3.0,wallMat:wall,steps:false});
+  P.quad(M.trim,[-8.2,13.8,0],[8.2,13.8,0],[8.2,13.8,7.33],[-8.2,13.8,7.33],[0,-1,0]);
+  for(const u of [-7.1,-2.37,2.37,7.1])K.ctx.physics.addCylinder(cx-21.2,cz+u,.76,.3,13.8);
+  P.box(M.doorWood,-1.45,1.45,.14,5.8,-.1,.18);
+  for(const x of [-1.2,0,1.2]) P.box(M.cream,x-.07,x+.07,.2,5.85,.2,.27);
+  P.pop();
+  // Low central drum and broad dark dome; four narrower bell turrets.
+  drum(K,wall,0,0,17.3,25.2,10.0,32);
+  ringWindows(K,0,0,10.02,12,{x:0,y:19,w:1.6,h:4.3,head:'arch',sw:.18,frame:'white'},0,32);
+  roundCornice(K,M.trim,M.cream,0,0,25.2,10.2,1.0);
+  dome(K,M.roofDark,0,26.2,0,10.35,.95);
+  const seams=K.wall('#626763'),profile=[[1,.1],[.97,.38],[.86,.66],[.66,.9],[.4,1.06],[.15,1.15],[0,1.18]];
+  for(let i=0;i<24;i++){
+    const a=i*Math.PI/12;let prev;
+    for(const [r,y] of profile){const q=[(r*10.35+.035)*Math.cos(a),26.2+y*10.35*.95,(r*10.35+.035)*Math.sin(a)];if(prev)P.cyl(seams,prev,q,.04,.04,5,true);prev=q;}
+  }
+  drum(K,M.cream,0,0,37.4,39.0,.7,12); dome(K,M.brass,0,39,0,.8,.65); cross(K,M.brass,0,39.65,0,1.85);
+  for(const x of [-11.6,11.6])for(const z of [-11.6,11.6]){
+    drum(K,wall,x,z,17.3,20.5,4.1,24); roundCornice(K,M.trim,M.cream,x,z,20.5,4.3,.6);
+    drum(K,wall,x,z,21.1,28,3.3,24);
+    ringWindows(K,x,z,3.32,4,{x:0,y:22,w:2,h:4.9,head:'arch',sw:.25,frame:'white'});
+    roundCornice(K,M.trim,M.cream,x,z,28,3.5,.7); dome(K,M.roofDark,x,28.7,z,3.8,.9); cross(K,M.brass,x,32.5,z,2.2);
+  }
+  // Captured-cannon fence: each pier is three bronze barrels, joined by chains.
+  // Leave the four approach paths open. No broad coplanar paving is added.
+  const bronze=K.wall('#3c4c43');
+  for(let side=0;side<4;side++){
+    P.push(0,0,0,side*Math.PI/2);
+    for(let i=-4;i<=4;i++){
+      if(i===0)continue; const x=i*8.4;
+      P.box(M.graniteWarm,x-1.05,x+1.05,.13,.56,35.2,37.0);
+      for(let k=-1;k<=1;k++){
+        P.cyl(bronze,[x+k*.45,.56,36],[x+k*.45,2.25,36],.16,.25,10,true);
+        P.cyl(M.brass,[x+k*.45,2.22,36],[x+k*.45,2.34,36],.26,.26,10,true);
+      }
+      if(i!==-1&&i!==4)for(const y of [1.05,1.75]){
+        let prev;for(let j=0;j<=12;j++){const t=j/12,q=[x+.65+t*7.1,y-.34*Math.sin(Math.PI*t),36];if(prev)P.cyl(bronze,prev,q,.04,.04,5,true);prev=q;}
+      }
+    }
+    P.pop();
+  }
+  P.pop();
+}
+
+
+function metro(K){
+  const recs=L.groupMembers('north-chernyshevskaya');if(!recs.length)return;
+  const M=K.mats,P=K.P,wall=K.wall('#c4b7a2');
+  buildHouse(K,{recs,hc:9.0,wall:'#c4b7a2',roofMat:M.roofDark,railing:false,plinth:1.0,corniceScale:.55,
+    front:(e,{len})=>{
+      K.wallQuad(wall,0,len,0,9.45,3);
+      if(len<9)return true;
+      // West-facing public frontage toward Chernyshevskogo prospect.
+      if(e.n[0]<-.5){
+        const center=len/2,w=Math.min(len-3,18),glass=K.ctx.mat.toon('#789597',{paint:.03});
+        K.plane(glass,center-w/2,center+w/2,.4,6.9,.07);
+        for(let i=0;i<=12;i++){const x=center-w/2+i*w/12;P.box(M.graniteDark,x-.045,x+.045,.4,7,.1,.2);}
+        for(const y of [3.4,5.2,6.6])P.box(M.graniteDark,center-w/2,center+w/2,y,y+.08,.1,.2);
+        P.box(M.graniteDark,center-w/2-.55,center+w/2+.55,7.02,7.55,.02,.24);
+        for(const x of [center-w/2-.4,center+w/2+.4])P.box(M.graniteDark,x-.25,x+.25,.3,7,.02,.24);
+        const wood=K.wall('#a65f37');
+        for(let i=0;i<6;i++){
+          const x=center+(i-2.5)*1.35;
+          P.box(wood,x-.61,x+.61,.13,3.3,.22,.35);
+          K.P.push(0,0,.35);K.window({x,y:1.2,w:.86,h:1.55,sw:.06,d:.1,frame:'brown'});K.P.pop();
+          P.box(M.brass,x+.41,x+.44,.9,1.5,.21,.27);
+        }
+        K.fascia(center-4.8,center+4.8,7.85,8.4,'ЧЕРНЫШЕВСКАЯ',{bg:'#c4b7a2',fg:'#454a45',size:.7,z:.2});
+        K.fascia(center-3,center+3,8.48,8.82,'МЕТРОПОЛИТЕН',{bg:'#c4b7a2',fg:'#454a45',size:.55,z:.2});
+        K.fascia(center-.65,center+.65,9.55,10.8,'М',{w:128,h:128,bg:'#d4d2c4',fg:'#1889bd',size:.86,z:.22});
+      }else{
+        const n=Math.floor(len/4);for(let i=0;i<n;i++)K.window({x:(i+.5)*len/n,y:3,w:1.8,h:3.8,sw:.12,frame:'brown'});
+      }
+      return true;
+    }});
+}
+
+function corridor(K){
+  const M=K.mats,P=K.P;
+  for(const b of L.groupMembers('north-corridor-houses')){
+    const cfg=CORRIDOR_ADDRESSES.find(([s,n])=>b.addr?.street===s&&b.addr?.no===n),color=cfg?.[2]||'#d2c2aa';
+    const hc=L.heightOf(b),wall=K.wall(color),floors=Math.max(3,b.levels||5);
+    buildHouse(K,{recs:[b],hc,wall:color,court:'#bcb4a3',railing:false,plinth:.9,
+      front:(e,{len})=>{
+        const mx=(e.a[0]+e.b[0])/2,mz=(e.a[1]+e.b[1])/2;
+        const near=L.nearestRoad(mx+e.n[0]*4,mz+e.n[1]*4,{named:true,maxDist:18});
+        if(!near||len<9)return false;
+        K.wallQuad(wall,0,len,0,hc+.45,3);
+        const n=Math.max(2,Math.round(len/3.3)),pitch=len/n,fh=(hc-4.1)/(floors-1);
+        K.shopfront(.5,len-.5,{y0:.45,y1:3.4,pitch:6,doors:[0],names:[],pier:1.4});
+        for(let f=1;f<floors;f++)for(let i=0;i<n;i++){
+          const x=(i+.5)*pitch,y=4.4+(f-1)*fh;
+          K.window({x,y,w:1.35,h:Math.min(2.35,fh-.7),head:f===1?'arch':'flat',sw:f===1?.19:.13,d:.12,frame:'white'});
+          if(f===1&&i%3===1)K.balcony(x-1.05,x+1.05,y-.24,.65);
+          if(f===2&&i%3===0)K.plaque(M.cream,x,y+2.45,1.6,.3,.12);
+        }
+        for(const x of [.25,len-.25]){K.pilaster(M.cream,x,.45,4,hc-5,.12,.3);K.downpipe(x+.25,.3,hc-.7);}
+        P.box(M.cream,0,len,3.75,3.95,.02,.22);
+        K.fascia(.7,Math.min(4.7,len-.7),3.0,3.5,b.addr.street.replace('улица ','УЛ. ').toUpperCase(),{bg:'#273e59',fg:'#e6e7db',size:.56,z:.23});
+        return true;
+      }});
+  }
+}
+
+export function build(ctx){
+  const K=makeKit(ctx),root=new THREE.Group();root.name='landmarksNorth';
+  K.svc={houses:[],entrances:[],monuments:[],photoSpots:[]};
+  for(const [name,fn] of [['preobrazhensky',cathedral],['podpisnye',bookstore],['chernyshevskaya',metro],['corridor',corridor],['muruzi',muruzi]]){K.begin();fn(K);K.flush(root,'north-'+name);}
+  ctx.addStatic(root);ctx.services.landmarksNorth={triangles:K.tris,groups:GROUPS_LIST.map(g=>g.key)};
+}

@@ -1,0 +1,91 @@
+// drive/fx.js - soft billboard particles for the player's car: white tyre smoke while drifting / braking hard, warm sparks when it scrapes or hits something, and a
+// fading exhaust glow trail while the nitro burns. Two InstancedMeshes (smoke = normal blending, sparks = additive), one draw call each, no outline pass.
+import * as THREE from 'three';
+
+function system(ctx, cap, additive) {
+  const geo = new THREE.InstancedBufferGeometry();
+  const base = new THREE.PlaneGeometry(1, 1);
+  geo.index = base.index; geo.attributes.position = base.attributes.position; geo.attributes.uv = base.attributes.uv;
+  const aPos = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3), aSize = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
+  const aCol = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+  for (const a of [aPos, aSize, aCol]) a.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute('aPos', aPos); geo.setAttribute('aSize', aSize); geo.setAttribute('aCol', aCol);
+  geo.instanceCount = 0;
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: false, fog: false,
+    vertexShader: `attribute vec3 aPos; attribute float aSize; attribute vec4 aCol; varying vec2 vUv; varying vec4 vCol;
+      void main(){ vUv = uv; vCol = aCol; vec4 mv = viewMatrix * vec4(aPos, 1.0); mv.xy += position.xy * aSize; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `varying vec2 vUv; varying vec4 vCol;
+      void main(){ float d = length(vUv - 0.5) * 2.0; float a = smoothstep(1.0, 0.15, d) * vCol.a; if (a < 0.01) discard; gl_FragColor = vec4(vCol.rgb, a); }`,
+  });
+  const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; mesh.renderOrder = 5; mesh.name = additive ? 'drive-sparks' : 'drive-smoke';
+  ctx.noOutline(mesh); ctx.add(mesh);
+  const P = []; for (let i = 0; i < cap; i++) P.push({ live: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, age: 0, life: 1, s0: 1, s1: 1, r: 1, g: 1, b: 1, a: 1, grav: 0, drag: 0 });
+  let next = 0;
+  return {
+    mesh,
+    emit(p) {
+      const q = P[next]; next = (next + 1) % cap;
+      Object.assign(q, { live: true, age: 0, grav: 0, drag: 1, a: 0.5, r: 1, g: 1, b: 1, s0: 0.3, s1: 1, life: 1 }, p);
+    },
+    update(dt) {
+      let n = 0;
+      for (const q of P) {
+        if (!q.live) continue;
+        q.age += dt; if (q.age >= q.life) { q.live = false; continue; }
+        const k = Math.exp(-q.drag * dt);
+        q.vx *= k; q.vz *= k; q.vy = q.vy * k + q.grav * dt;
+        q.x += q.vx * dt; q.y += q.vy * dt; q.z += q.vz * dt;
+        const t = q.age / q.life;
+        aPos.setXYZ(n, q.x, q.y, q.z); aSize.setX(n, q.s0 + (q.s1 - q.s0) * t);
+        aCol.setXYZW(n, q.r, q.g, q.b, q.a * (1 - t) * (t < 0.08 ? t / 0.08 : 1));
+        n++;
+      }
+      geo.instanceCount = n; mesh.visible = n > 0;
+      aPos.needsUpdate = aSize.needsUpdate = aCol.needsUpdate = true;
+    },
+    clear() { for (const q of P) q.live = false; geo.instanceCount = 0; mesh.visible = false; },
+  };
+}
+
+export function createFx(ctx) {
+  const smoke = system(ctx, 110, false), sparks = system(ctx, 70, true), glow = system(ctx, 60, true);
+  let acc = 0, damageAcc = 0;
+  const R = ctx.rng('drive-fx');
+  return {
+    /** every frame: wheel contact points (world) + the state of the car */
+    update(dt, car, wheelsWorld, exhaustWorld) {
+      acc += dt;
+      const slip = car.drifting ? Math.min(1, (Math.abs(car.vL) - 2) / 6) : 0, hard = car.braking && car.speed > 40 ? 0.6 : 0;
+      const launch = car.throttle > 0.9 && car.speed < 25 && car.speed > 2 ? 0.35 : 0;
+      const amt = Math.max(slip, hard, launch);
+      if (amt > 0.05) {
+        const rate = 36 * amt;
+        while (acc > 1 / rate) {
+          acc -= 1 / rate;
+          for (const w of wheelsWorld.slice(2)) smoke.emit({ x: w.x + (R() - 0.5) * 0.3, y: 0.18, z: w.z + (R() - 0.5) * 0.3, vx: (R() - 0.5) * 1.2 - car.vx * 0.12, vy: 0.5 + R() * 0.8, vz: (R() - 0.5) * 1.2 - car.vz * 0.12, life: 1.1 + R() * 0.8, s0: 0.45, s1: 2.0 + R() * 1.2, a: 0.42 * amt + 0.1, r: 0.93, g: 0.93, b: 0.95, drag: 1.4 });
+        }
+      } else acc = 0;
+      if (car.boosting) {
+        for (const e of exhaustWorld) if (R() < 0.8) glow.emit({ x: e.x, y: e.y, z: e.z, vx: -car.vx * 0.12 + (R() - 0.5) * 0.6, vy: (R() - 0.2) * 0.4, vz: -car.vz * 0.12 + (R() - 0.5) * 0.6, life: 0.35 + R() * 0.25, s0: 0.28, s1: 0.06, a: 0.7, r: 1.0, g: 0.55, b: 0.18, drag: 2.5 });
+      }
+      const damage = car.damageSmoke || 0;
+      if (damage > 0) {
+        damageAcc += dt * (5 + 12 * damage);
+        while (damageAcc >= 1) {
+          damageAcc--;
+          smoke.emit({ x: car.x + Math.sin(car.yaw) * (car.smokeZ ?? 1.2) + (R() - 0.5) * 0.35,
+            y: car.y + (car.smokeY ?? 0.82), z: car.z + Math.cos(car.yaw) * (car.smokeZ ?? 1.2) + (R() - 0.5) * 0.35,
+            vx: car.vx * 0.15 + (R() - 0.5) * 0.4, vy: 0.8 + R() * 0.7, vz: car.vz * 0.15,
+            life: 1.8 + R(), s0: 0.3, s1: 1.5 + damage, a: 0.24 + damage * 0.25,
+            r: 0.31, g: 0.33, b: 0.37, drag: 0.6 });
+        }
+      } else damageAcc = 0;
+      smoke.update(dt); sparks.update(dt); glow.update(dt);
+    },
+    sparks(x, y, z, nx, nz, n = 14, speed = 6) {
+      for (let i = 0; i < n; i++) sparks.emit({ x, y, z, vx: nx * speed * (0.4 + R()) + (R() - 0.5) * 5, vy: 1 + R() * 4, vz: nz * speed * (0.4 + R()) + (R() - 0.5) * 5, life: 0.35 + R() * 0.45, s0: 0.10, s1: 0.03, a: 1, r: 1, g: 0.78, b: 0.35, grav: -14, drag: 0.6 });
+    },
+    clear() { smoke.clear(); sparks.clear(); glow.clear(); acc = damageAcc = 0; },
+  };
+}

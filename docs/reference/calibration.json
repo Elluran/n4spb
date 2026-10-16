@@ -1,0 +1,58 @@
+{
+  "note": "Calibration of docs/reference/yandex-center.png (Yandex Maps screenshot, 1528x955 px, north up). Local frame: metres, +X east, +Z SOUTH, origin = ORIGIN. See calibration.md.",
+  "image": {
+    "file": "docs/reference/yandex-center.png",
+    "width": 1528,
+    "height": 955,
+    "url": "https://yandex.ru/maps/geo/sankt_peterburg/53152804/?ll=30.351279%2C59.932421&z=15.78"
+  },
+  "origin": {
+    "lat": 59.932421,
+    "lon": 30.351279,
+    "note": "local frame origin (= the ll of the Yandex URL). It is NOT the centre of the screenshot."
+  },
+  "metresPerPixel": 0.9344,
+  "rotationDeg": 0,
+  "originPixel": {
+    "u": 636,
+    "v": 430.4,
+    "note": "pixel of the screenshot that shows the local origin (0,0)"
+  },
+  "pxToWorld": {
+    "description": "x = a*u + b*v + c ; z = d*u + e*v + f  (u right, v down, pixels; x east, z south, metres)",
+    "a": 0.9344,
+    "b": 0,
+    "c": -594.28,
+    "d": 0,
+    "e": 0.9344,
+    "f": -402.17,
+    "matrix": [
+      [
+        0.9344,
+        0,
+        -594.28
+      ],
+      [
+        0,
+        0.9344,
+        -402.17
+      ]
+    ]
+  },
+  "worldToPx": {
+    "description": "u = x * pixelsPerMetre + u0 ; v = z * pixelsPerMetre + v0",
+    "u0": 636,
+    "v0": 430.4,
+    "pixelsPerMetre": 1.0702
+  },
+  "imageCentreWorld": {
+    "x": 119.6,
+    "z": 44
+  },
+  "groundCovered": {
+    "x0": -594.3,
+    "x1": 833.5,
+    "z0": -402.2,
+    "z1": 490.2
+  }
+}

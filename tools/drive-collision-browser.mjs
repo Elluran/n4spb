@@ -1,0 +1,74 @@
+// Small-scene GPU QA of production driving/physics/model/HUD, independent of city
+// region work. node tools/drive-collision-browser.mjs; screenshots: shots/collision.
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+import puppeteer from 'puppeteer-core';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const out = path.join(root, 'shots/collision');fs.mkdirSync(out,{recursive:true});
+const types = {'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.png':'image/png'};
+const server=http.createServer((req,res)=>{const f=path.resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!f.startsWith(root+path.sep)){res.writeHead(403);return res.end();}fs.readFile(f,(err,data)=>{res.writeHead(err?404:200,{'Content-Type':types[path.extname(f)]||'application/octet-stream'});res.end(err?'missing':data);});});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const executablePath=['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe','C:/Program Files/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync);
+const browser=await puppeteer.launch({executablePath,headless:true,args:['--use-angle=d3d11','--enable-gpu','--ignore-gpu-blocklist','--no-first-run'],defaultViewport:{width:1280,height:800}});
+const errors=[];
+try{
+ const page=await browser.newPage();page.on('pageerror',e=>{errors.push(e.message);console.error(e.message);});page.on('console',m=>{if(m.type()==='error'){errors.push(m.text());console.error(m.text());}});
+ await page.goto(`http://127.0.0.1:${server.address().port}/tools/collision-lab.html`);
+ await page.waitForFunction('window.labReady',{timeout:60000});
+ await page.evaluate(()=>lab.pause());
+ const shot=async name=>{await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await page.screenshot({path:path.join(out,name+'.png')});};
+ await shot('clean');
+ const pristine=await page.evaluate(()=>Array.from(lab.drive.model.body.geometry.attributes.position.array));
+ const pristinePanels=await page.evaluate(()=>Array.from(lab.drive.model.body.geometry.index.array));
+ const crash=await page.evaluate(()=>lab.crash('wall',48));assert(crash.damage>.2);assert(crash.z<12);console.log('Wall impact:',crash);
+ await page.evaluate(()=>{for(let i=0;i<100;i++)lab.advance(1/60);});
+ await shot('damaged-front');
+ const smoke=await page.evaluate(()=>lab.ctx.scene.children.filter(o=>o.name==='drive-smoke').map(o=>o.geometry.instanceCount));assert(smoke.some(n=>n>0),'front smoke emitted');
+ await page.evaluate(()=>{lab.drive.car.vx=lab.drive.car.vz=0;lab.drive.exit(true);lab.drive.enter();});
+ assert(await page.evaluate(()=>lab.drive.damage.amount>0),'damage persists across exit/entry');
+ await page.keyboard.press('KeyJ');
+ assert.deepEqual(await page.evaluate(()=>Array.from(lab.drive.model.body.geometry.attributes.position.array)),pristine,'repair restores production geometry');
+ assert.deepEqual(await page.evaluate(()=>Array.from(lab.drive.model.body.geometry.index.array)),pristinePanels,'repair reattaches panels');
+ await shot('repaired');
+ const pole=await page.evaluate(()=>lab.crash('pole',35));assert(Math.abs(pole.spin)>.1);console.log('Pole impact:',pole);await shot('damaged-corner');
+ await page.evaluate(()=>{lab.drive.car.vx=lab.drive.car.vz=0;});await page.click('.d-condition button');assert.equal(await page.evaluate(()=>lab.drive.damage.amount),0);
+ const moving=await page.evaluate(()=>lab.crash('traffic',35));assert.equal(await page.evaluate(()=>lab.vehicle.v),0);assert(moving.damage>0);console.log('Traffic impact:',moving);
+ assert(await page.evaluate(()=>lab.traffic.damageState.front>.5),'struck moving car is damaged too');
+ assert(await page.evaluate(()=>lab.traffic.z>14.1),'oncoming vehicle physically recoils');
+ await page.evaluate(()=>{lab.crash('traffic',35);lab.inspect(true,[4,1.9,-5],lab.traffic);});await shot('traffic-wrecked');
+ assert(await page.evaluate(()=>lab.fleet.damaged.size>0),'actual fleet renderer uses private damaged mesh');
+ await page.evaluate(()=>{lab.reset();lab.crash('parked',35);lab.crash('parked',35);lab.inspect(true,[4,1.9,-5],lab.parked);});await shot('parked-wrecked');
+ assert(await page.evaluate(()=>lab.parked.damageState.rear===1),'struck parked car keeps rear damage');
+ assert(await page.evaluate(()=>lab.parked.z>18),'parked car is pushed several metres');
+ await page.evaluate(()=>{for(let i=0;i<24;i++)lab.wrecks.step(1/120);});await shot('flying-parts');
+ assert(await page.evaluate(()=>lab.wrecks.stats.debris>0),'detached meshes have rigid bodies');
+ await page.evaluate(()=>{lab.reset();lab.crash('parked',45,.65);});
+ assert(await page.evaluate(()=>Math.abs(lab.parked.wreckBody.angvel().y)>.1),'offset hit spins struck car');
+ await page.evaluate(()=>lab.reset());
+ for(const [name,speed] of [['Scuffed',8],['Dented',15],['Crumpled',21],['Wrecked',30]]){
+   const stage=await page.evaluate(speed=>{lab.crash('wall',speed);lab.drive.teleport(0,0,0);lab.drive.sim(1/60);lab.inspect(true,[3.8,1.8,4.5]);return lab.drive.damage.stage;},speed);
+   assert.equal(stage,name);await shot('stage-'+name.toLowerCase());
+ }
+ await page.evaluate(()=>lab.inspect(true,[5,1.3,.1]));await shot('wrecked-side');
+ assert(await page.evaluate(()=>lab.drive.model.body.geometry.index.count < 18000),'wrecked shell loses panels');
+ await page.evaluate(()=>{lab.drive.setView(2);lab.drive.setView(0);});
+ assert(await page.evaluate(()=>lab.drive.model.root.children.filter(o=>o.material?.name==='drive-plate'&&o.position.z>0).every(o=>!o.visible)), 'shed plates stay absent after camera changes');
+ await page.evaluate(()=>{lab.drive.car.vx=lab.drive.car.vz=0;lab.drive.repair();});
+ assert.equal(await page.evaluate(()=>lab.drive.damage.stage),'Pristine');
+ await page.click('[data-stage="4"]');assert.equal(await page.evaluate(()=>lab.drive.damage.stage),'Wrecked','preview buttons exercise impacts');
+ console.log('Geometry budget:',await page.evaluate(()=>({playerBodyTriangles:lab.drive.model.body.geometry.index.count/3,
+   cachedCars:lab.fleet.damaged.size,damagedLayers:lab.ctx.scene.children.filter(o=>o.name==='damaged-traffic').reduce((n,o)=>n+o.children.length,0)})));
+ await page.evaluate(()=>{lab.reset();lab.drive.car.vz=10;});await page.keyboard.press('KeyJ');assert.equal(await page.evaluate(()=>document.querySelector('#toast').textContent),'Stop to repair');
+ await page.evaluate(()=>{lab.reset();lab.inspect(false);lab.pause(false);});await page.keyboard.down('KeyW');await new Promise(r=>setTimeout(r,900));await page.keyboard.up('KeyW');
+ assert(await page.evaluate(()=>lab.drive.car.speed>5),'real keyboard acceleration');
+ await page.keyboard.press('KeyV');await page.keyboard.press('KeyV');await shot('cockpit');
+ await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
+ await page.waitForFunction('window.labReady',{timeout:60000});
+ await page.evaluate(()=>{lab.drive.setView(0);lab.inspect();lab.drive.car.vx=lab.drive.car.vz=0;});await shot('mobile');
+ const bounds=await page.$eval('.d-condition',e=>{const b=e.getBoundingClientRect();return{x:b.x,right:b.right,y:b.y,bottom:b.bottom};});assert(bounds.x>=0&&bounds.right<=390&&bounds.y>=0&&bounds.bottom<=844);
+ assert.deepEqual(errors,[],'no page / WebGL errors');
+ console.log('PASS four damage stages, parked/moving fleet damage, production drive, repair, persistence, smoke, cockpit and mobile HUD');
+}finally{await browser.close();await new Promise(r=>server.close(r));}

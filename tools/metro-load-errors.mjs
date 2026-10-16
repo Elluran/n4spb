@@ -1,0 +1,29 @@
+// loads ?only=metro headless and prints every module / console error with its stack (run from the project root: node <this file>)
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import puppeteer from 'puppeteer-core';
+const root = 'D:/git2/agi-fun-tests/102_3d_piter';
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png', '.gz': 'application/gzip', '.bin': 'application/octet-stream' };
+const server = http.createServer((req, res) => {
+  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (p.endsWith('/')) p += 'index.html';
+  const f = path.join(root, p);
+  fs.readFile(f, (err, data) => { if (err) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(data); });
+});
+await new Promise((r) => server.listen(0, '127.0.0.1', r));
+const port = server.address().port;
+const exe = ['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe'].find((p) => fs.existsSync(p));
+const browser = await puppeteer.launch({ executablePath: exe, headless: true, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox', '--no-first-run', '--window-size=1280,720'], defaultViewport: { width: 1280, height: 720 }, protocolTimeout: 300000 });
+const page = await browser.newPage();
+const threeRoot = path.join(root, 'node_modules', 'three');
+await page.setRequestInterception(true);
+page.on('request', (req) => { const m = /^https:\/\/cdn\.jsdelivr\.net\/npm\/three@[^/]+\/(.+)$/.exec(req.url()); if (m) { const f = path.join(threeRoot, m[1].split('?')[0]); if (fs.existsSync(f)) return req.respond({ status: 200, contentType: 'text/javascript; charset=utf-8', headers: { 'Access-Control-Allow-Origin': '*' }, body: fs.readFileSync(f) }); } req.continue(); });
+page.on('console', async (m) => { if (m.type() === 'error' || m.type() === 'warning') { const args = await Promise.all(m.args().map((a) => a.evaluate((v) => (v && v.stack) ? v.stack : String(v)).catch(() => '?'))); console.log('[console.' + m.type() + ']', args.join(' ').slice(0, 900)); } });
+page.on('pageerror', (e) => console.log('[pageerror]', e.message));
+await page.goto(`http://127.0.0.1:${port}/index.html?q=low&stats=1&only=${process.argv[2] || 'metro'}`, { waitUntil: 'load', timeout: 120000 });
+await page.waitForFunction("document.body.classList.contains('loaded')", { timeout: 280000, polling: 250 });
+const errs = await page.evaluate(() => (window.__errors || []).map((e) => e.module + ': ' + String(e.message).slice(0, 1200)));
+console.log('module errors:', errs.length); for (const e of errs) console.log('  ', e);
+const st = await page.evaluate(() => { const m = window.__ctx.metro; return { stations: Object.keys(m.stations), petro: Object.keys(m.petro || {}).filter((k) => m.petro[k]) }; });
+console.log(JSON.stringify(st));
+await browser.close(); server.close();

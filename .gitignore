@@ -1,0 +1,23 @@
+node_modules/
+shots/
+*.log
+data/osm-raw/
+
+# The repository-wide (Python template) .gitignore ignores folders named lib/, parts/, env/, build/, dist/, var/ ...
+# This JavaScript project uses such names for source folders, so re-include them.
+!**/lib/
+!**/parts/
+!**/env/
+!**/build/
+!**/dist/
+!**/var/
+!**/target/
+!**/downloads/
+
+# Third-party map screenshot (Yandex Maps) and the overlay built on it: private layout reference, kept out of the repository.
+docs/reference/yandex-center.png
+docs/reference/plan-overlay.png
+
+# fetch / bake side files of the west extension
+data/*.stdout
+data/*.err

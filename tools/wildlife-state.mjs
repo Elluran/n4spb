@@ -1,0 +1,17 @@
+import { ctx, L } from './wildlife-probe.mjs';
+const svc = ctx.services.wildlife, B = svc.debug.birds, D = svc.debug.ducks, W = svc.debug.world;
+const cnt = {}; for (const b of svc.birds) cnt[b.sp] = (cnt[b.sp] || 0) + 1;
+console.log('birds', svc.birds.length, JSON.stringify(cnt), 'dead', B.birds.filter(b => b.dead).length);
+const pk = {}; for (const p of svc.perches) pk[p.kind + (p.key ? ':' + p.key : '')] = (pk[p.kind + (p.key ? ':' + p.key : '')] || 0) + 1; console.log('perches', JSON.stringify(pk));
+console.log('lions', JSON.stringify(W.lions), 'waterPts', W.waterPts.length, 'open', B.openWater.length);
+console.log('boats', B.boatList.length, 'slots', B.boatList.reduce((s, b) => s + b.n, 0));
+console.log('pigeon sites', B.sites.pigeon.length, 'sparrow sites', B.sites.sparrow.length);
+const sp = (s) => `${s.tag}(${s.x.toFixed(0)},${s.z.toFixed(0)}) w${s.w}`;
+console.log('PIGEON', B.sites.pigeon.map(sp).join(' | '));
+console.log('SPARROW', B.sites.sparrow.map(sp).join(' | '));
+console.log('flocks', B.flocks.map(f => f.sp[0] + ':' + f.site.tag + '(' + f.site.x.toFixed(0) + ',' + f.site.z.toFixed(0) + ')x' + f.birds.length).join(' | '));
+const states = {}; for (const b of svc.birds) { const k = b.sp + ':' + b.mode + ':' + b.st; states[k] = (states[k] || 0) + 1; } console.log(JSON.stringify(states));
+console.log('zones', B.zones.length);
+const lk = {}; for (const l of D.lanes) lk[l.key] = (lk[l.key] || 0) + 1; console.log('lanes', D.lanes.length, JSON.stringify(lk), 'groups', D.groups.map(g => g.kind + '@' + g.lane.key + '(' + g.lane.cx.toFixed(0) + ',' + g.lane.cz.toFixed(0) + ')').join(' | '));
+console.log('start', JSON.stringify(B.start), 'ducks', svc.ducks.length);
+process.exit(0);
