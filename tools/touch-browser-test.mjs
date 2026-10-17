@@ -295,13 +295,16 @@ SCENARIOS.mobile = async () => {
     check(`CAM: V cycles the view (${v0} -> ${v1})`, v1 === (v0 + 1) % 3, [v0, v1]);
     await tapBtn(page, 'horn'); await sleep(150);
     check('HORN: G reaches sound.horn()', (await page.evaluate(() => window.__horns)) === 1);
-    check('HOP is hidden for the coupe', (await centre(page, 'hop')).hidden === true);
+    check('HOP and FLIP are hidden for the coupe', (await centre(page, 'hop')).hidden === true && (await centre(page, 'flip')).hidden === true);
     await page.evaluate(() => { __drive.vehicle.def.hop = true; }); await sleep(250);
-    check('HOP appears for a car whose def has a hop (the Roadster)', (await centre(page, 'hop')).hidden === false);
+    check('HOP and FLIP appear for a car whose def has a hop (the Roadster)', (await centre(page, 'hop')).hidden === false && (await centre(page, 'flip')).hidden === false);
     await shot(page, 'drive-hop-844x390');
-    auditChecks('drive + HOP 844x390', await layoutAudit(page));
+    auditChecks('drive + HOP + FLIP 844x390', await layoutAudit(page));
     await tapBtn(page, 'hop'); await sleep(150);
-    check('HOP: a tap sends KeyX (T2b reads it)', (await page.evaluate(() => window.__keysSeen.includes('KeyX'))) === true);
+    check('HOP: a tap sends KeyX (drive.js latches it and hops on that very step)', (await page.evaluate(() => window.__keysSeen.includes('KeyX'))) === true);
+    await tapBtn(page, 'flip'); await sleep(150);
+    check('FLIP: a tap sends KeyC (the barrel hop; in fly mode C stays the descend key)', (await page.evaluate(() => window.__keysSeen.includes('KeyC'))) === true);
+    st = await snap(page); check('HOP / FLIP are presses, not holds: no KeyX / KeyC left in player.keys, nothing held', !st.keys.includes('KeyX') && !st.keys.includes('KeyC') && st.held.length === 0, { keys: st.keys, held: st.held });
     await page.evaluate(() => { delete __drive.vehicle.def.hop; });
     await page.evaluate(() => { const d = __drive; d.teleport(d.car.x, d.car.z, d.car.yaw); d.damage.hit({ type: 'hit', v: 14, localX: 0, localZ: 2, localNX: 0, localNZ: -1 }); }); await sleep(400);
     check('REPAIR (FIX) appears when the car is damaged and stopped', (await centre(page, 'repair')).hidden === false);
@@ -317,6 +320,34 @@ SCENARIOS.mobile = async () => {
     await tapBtn(page, 'auto'); await page.evaluate(() => { const d = __drive; d.teleport(d.car.x, d.car.z, d.car.yaw); }); await sleep(300);
     await tapBtn(page, 'exit'); await sleep(900); st = await snap(page);
     check('EXIT at a standstill: out of the car, the walk layout is back, ctx.touch inactive, no key / touchMove left behind', !st.drive && st.mode === 'walk' && st.ts.active === false && st.keys.length === 0 && st.tm[0] === 0 && st.tm[1] === 0, st);
+    // ---- 17b. the Roadster's two hop buttons for real (hop v3): HOP = X (the simple hop), FLIP = C (the barrel hop); each fires on the PRESS, with a second finger while the GAS is held
+    {
+      const has = await page.evaluate(() => !!(__drive.vehicleById && __drive.vehicleById('roadster')));
+      if (!has) console.log('       (no roadster in this harness: the hop buttons were only checked with the def.hop switch above)');
+      else {
+        await page.evaluate(() => { __drive.enter('roadster'); window.__keysSeen = []; }); await sleep(1500);
+        const vis = await page.evaluate(() => ['hop', 'flip'].map((id) => __tc.btns[id].hidden));
+        check('Roadster drive layout: HOP and FLIP both appear (no def hack)', vis.join() === 'false,false', vis);
+        await shot(page, 'drive-roadster-844x390'); auditChecks('drive Roadster 844x390 (HOP + FLIP)', await layoutAudit(page));
+        const hc = await centre(page, 'hop'), fc = await centre(page, 'flip');
+        check(`HOP (${hc.w.toFixed(0)} px) and FLIP (${fc.w.toFixed(0)} px) are at least 44 px, FLIP the bigger one`, hc.w >= 44 && fc.w >= hc.w + 4, { hop: hc.w, flip: fc.w });
+        await page.evaluate(() => { __drive.car.boost = 1; });
+        const gas = await holdBtn(page, 'gas'); await sleep(900);                           // finger 1: the GAS pedal stays down
+        const K = () => page.evaluate(() => { const c = __drive.car; return { air: !!c.air, h: +c.h.toFixed(2), vy: +c.vy.toFixed(1), barrel: !!c.barrel, flipOn: !!c.flipOn, flip: c.flip, boost: +c.boost.toFixed(3), held: __tc.held.size, keys: [...__ctx.playerObj.keys].filter((x) => x === 'KeyX' || x === 'KeyC'), dimH: __tc.btns.hop.classList.contains('dim'), dimF: __tc.btns.flip.classList.contains('dim') }; });
+        const k0 = await K(); check('GAS held by finger 1, on the ground, both buttons lit', k0.held === 1 && !k0.air && !k0.dimH && !k0.dimF, k0);
+        await page.touchscreen.tap(hc.x, hc.y); await sleep(70); const x1 = await K();           // finger 2: HOP
+        check(`HOP: the simple hop starts on the press (70 ms later ${x1.h} m up, vy ${x1.vy}), no roll, GAS still held`, x1.air && x1.h > 0.1 && x1.vy > 0 && !x1.barrel && !x1.flipOn && x1.held === 1 && x1.keys.length === 0 && x1.dimH && x1.dimF, x1);
+        await sleep(1900); const x2 = await K(); check('HOP: back on the road (the buttons light up again)', !x2.air && x2.h === 0 && !x2.dimH, x2);
+        await page.evaluate(() => { __drive.car.boost = 1; }); await sleep(250);
+        await page.touchscreen.tap(fc.x, fc.y); await sleep(70); const c1 = await K();          // finger 2: FLIP
+        check(`FLIP: the barrel hop starts on the press (70 ms later ${c1.h} m up), rolling`, c1.air && c1.h > 0.1 && c1.barrel && c1.flipOn && c1.held === 1 && c1.keys.length === 0, c1);
+        await sleep(500); const c2 = await K(); check(`FLIP: the barrel height (${c2.h} m after 0.57 s: higher than the simple hop ever gets, 1.86 m)`, c2.air && c2.h > 2.4 && Math.abs(c2.flip) > 0.5, c2);
+        await page.touchscreen.tap(hc.x, hc.y); await sleep(100); const c3 = await K();          // HOP in the air: nothing
+        check('HOP in the air does nothing (still the same barrel hop, the tank untouched)', c3.air && c3.barrel && Math.abs(c3.boost - c2.boost) < 0.04, { c2, c3 });
+        await sleep(2500); const c4 = await K(); check(`FLIP: lands level (flip ${c4.flip}) with GAS still held`, !c4.air && c4.h === 0 && c4.flip === 0 && !c4.flipOn && c4.held === 1, c4);
+        await gas.end().catch(() => {}); await page.evaluate(() => { __drive.exit(true); }); await sleep(900);
+      }
+    }
     // ---- 18. release safety
     await page.evaluate(() => { __drive.enter('coupe'); }); await sleep(900);
     let hgas = await holdBtn(page, 'gas'); await sleep(500);

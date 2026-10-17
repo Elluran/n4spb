@@ -90,7 +90,7 @@ const rs = driveSrc.indexOf('function readInput('), re = driveSrc.indexOf('const
 assert(rs > 0 && re > rs, 'drive.js readInput found');
 const readInputSrc = driveSrc.slice(rs, re);
 const makeRead = (touchMove, ctxTouch = null) => {
-  const sandbox = { keys: new Set(), touch: { nitro: false, hand: false, brake: false, jump: false }, hopTap: false, player: { touchMove: { x: touchMove.x, y: touchMove.y, lengthSq() { return this.x * this.x + this.y * this.y; } } }, clamp: (v, a, b) => Math.max(a, Math.min(b, v)), ctx: { touch: ctxTouch } };
+  const sandbox = { keys: new Set(), touch: { nitro: false, hand: false, brake: false, jump: false, flip: false }, hopTap: false, flipTap: false, player: { touchMove: { x: touchMove.x, y: touchMove.y, lengthSq() { return this.x * this.x + this.y * this.y; } } }, clamp: (v, a, b) => Math.max(a, Math.min(b, v)), ctx: { touch: ctxTouch } };
   return vm.runInNewContext(`(${readInputSrc.replace(/^function readInput/, 'function')})`, sandbox, { filename: 'drive.js readInput' });
 };
 ok('bridge: drive.js readInput still reads player.touchMove (or the ctx.touch contract) - the Phase 1 coupling', () => {
@@ -123,13 +123,27 @@ ok('actions: hold -> key, tap -> synthetic key, latch, call; mode filter', () =>
   assert.deepEqual([...T.desiredKeys('drive', new Set(), true)], [], 'a RUN latch never leaks into nitro');
   assert.deepEqual([...T.desiredKeys('fly', new Set(), true)], []);
   for (const [id, a] of Object.entries(T.ACTIONS)) { assert(['hold', 'tap', 'latch', 'call', 'pedal'].includes(a.kind), id); assert(a.modes.length, id); if (a.kind !== 'call' && a.kind !== 'pedal') assert(/^(Key[A-Z]|Space|ShiftLeft)$/.test(a.code), id + ' code'); }
-  assert.equal(T.ACTIONS.jump.code, 'Space'); assert.equal(T.ACTIONS.cam.code, 'KeyV'); assert.equal(T.ACTIONS.horn.code, 'KeyG'); assert.equal(T.ACTIONS.hop.code, 'KeyX');
+  assert.equal(T.ACTIONS.jump.code, 'Space'); assert.equal(T.ACTIONS.cam.code, 'KeyV'); assert.equal(T.ACTIONS.horn.code, 'KeyG'); assert.equal(T.ACTIONS.hop.code, 'KeyX'); assert.equal(T.ACTIONS.flip.code, 'KeyC');
   assert.equal(T.ACTIONS.nitro.code, 'ShiftLeft'); assert.equal(T.ACTIONS.hand.code, 'Space'); assert.equal(T.ACTIONS.mute.code, 'KeyM');
-  // HOP v2: the button is press-and-hold (down = charge, up = launch), not a latched tap: it is a held KEY while the finger is down
-  assert.equal(T.ACTIONS.hop.kind, 'hold', 'HOP is a held button');
-  assert.deepEqual([...T.desiredKeys('drive', new Set(['hop']))], ['KeyX'], 'a held HOP keeps X down');
-  assert.deepEqual([...T.desiredKeys('drive', new Set())], [], 'a released HOP lets X go');
-  assert.deepEqual([...T.desiredKeys('walk', new Set(['hop']))], [], 'HOP is a drive button');
+  // HOP v3: two buttons, HOP (X, the simple hop) and FLIP (C, the barrel hop); each FIRES ON THE PRESS (a synthetic keydown + keyup that drive.js latches): no hold semantics, no charge
+  for (const [id, code] of [['hop', 'KeyX'], ['flip', 'KeyC']]) {
+    assert.equal(T.ACTIONS[id].kind, 'tap', id.toUpperCase() + ' is a tap (fires on the press, immediately)'); assert.equal(T.ACTIONS[id].code, code); assert.deepEqual(T.ACTIONS[id].modes, ['drive'], id + ' exists in drive mode only');
+    assert.deepEqual([...T.desiredKeys('drive', new Set([id]))], [], id.toUpperCase() + ' is never a held key (no hold semantics)');
+    assert.deepEqual([...T.desiredKeys('fly', new Set([id]))], [], id + ' does nothing in fly mode');
+  }
+  assert.equal(T.ACTIONS.down.code, 'KeyC', 'in fly mode C is still the descend key (the FLIP button is a drive button, its tap is only handled while driving)'); assert.deepEqual(T.ACTIONS.down.modes, ['fly']);
+  { // the button table of core/touch.js: both fire on 'down' (the press), neither is a hold, no charge ring is left
+    const touchSrc = fs.readFileSync(new URL('../src/core/touch.js', import.meta.url), 'utf8');
+    assert(/hop: \{ label: 'HOP', fire: 'down'/.test(touchSrc), "HOP fires 'down'"); assert(/flip: \{ label: 'FLIP', cls: 'flip', fire: 'down'/.test(touchSrc), "FLIP fires 'down'");
+    assert(!/hopRing|tc-ring hop|\.charging|car\.charge/.test(touchSrc), 'no charge ring left in the touch layer'); assert(!/key\('keydown', 'KeyX'\)/.test(touchSrc), 'the HOP button needs no manual keydown / keyup pair any more');
+  }
+  { // drive.js readInput: X (jump) and C (flip) are levels plus latches (handling.js makes the edge); the touch buttons reach it through the synthetic keydown
+    for (const [code, field, latch] of [['KeyX', 'jump', 'hopTap'], ['KeyC', 'flip', 'flipTap']]) {
+      const mk = (keys, extra = {}) => { const sandbox = { keys: new Set(keys), touch: { nitro: false, hand: false, brake: false, jump: false, flip: false }, hopTap: false, flipTap: false, ...extra, player: { touchMove: { x: 0, y: 0, lengthSq() { return 0; } } }, clamp: (v, a, b) => Math.max(a, Math.min(b, v)), ctx: { touch: null } }; return vm.runInNewContext(`(${readInputSrc.replace(/^function readInput/, 'function')})`, sandbox)({}); };
+      assert.equal(mk([])[field], false, field + ': no key, no hop'); assert.equal(mk([code])[field], true, code + ' reads as ' + field); assert.equal(mk([], { [latch]: true })[field], true, 'a latched press (keydown + keyup inside one frame) still counts');
+      const other = field === 'jump' ? 'flip' : 'jump'; assert.equal(mk([code])[other], false, code + ' does not trigger the other hop');
+    }
+  }
   // every code the table uses is a code the game listens for
   const game = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8') + driveSrc + fs.readFileSync(new URL('../src/core/player.js', import.meta.url), 'utf8');
   for (const code of ['KeyV', 'KeyG', 'KeyM', 'Space', 'ShiftLeft', 'KeyC']) assert(game.includes(`'${code}'`), `the game reads ${code}`);
@@ -139,11 +153,11 @@ ok('actions: hold -> key, tap -> synthetic key, latch, call; mode filter', () =>
 const VIEWPORTS = [[844, 390], [915, 412], [667, 375], [1180, 820], [390, 844], [820, 1180], [320, 568]];
 const rectsFor = (mode, w, h, lh = false, ins = { l: 0, r: 0, t: 0, b: 0 }, hopOn = true, extra = true) => {
   const u = T.uiScale(w, h), out = {};
-  for (const [id, a] of Object.entries(T.anchors(mode, w))) { if (!hopOn && id === 'hop') continue; out[id] = T.placeRect(a, w, h, u, lh, ins); }
+  for (const [id, a] of Object.entries(T.anchors(mode, w))) { if (!hopOn && (id === 'hop' || id === 'flip')) continue; out[id] = T.placeRect(a, w, h, u, lh, ins); }
   return out;
 };
 ok('layout: every button >= 44 px, primaries >= 50 (56 x the 0.9 minimum scale), inside the screen, no overlaps (gap >= 8), all modes x 7 viewports x insets x handedness', () => {
-  const PRIMARY = new Set(['jump', 'run', 'fly', 'interact', 'up', 'boost', 'down', 'gas', 'brake', 'nitro', 'hand', 'hop']);
+  const PRIMARY = new Set(['jump', 'run', 'fly', 'interact', 'up', 'boost', 'down', 'gas', 'brake', 'nitro', 'hand', 'hop', 'flip']);
   for (const [w, h] of VIEWPORTS) for (const lh of [false, true]) for (const ins of [{ l: 0, r: 0, t: 0, b: 0 }, w > h ? { l: 47, r: 47, t: 0, b: 21 } : { l: 0, r: 0, t: 47, b: 34 }]) for (const mode of ['walk', 'fly', 'ride', 'drive']) {
     const r = rectsFor(mode, w, h, lh, ins), ids = Object.keys(r), tag = `${mode} ${w}x${h} lh=${lh} ins=${ins.l}`;
     for (const id of ids) {
@@ -161,13 +175,13 @@ ok('layout: every button >= 44 px, primaries >= 50 (56 x the 0.9 minimum scale),
 });
 ok('layout: arrows + recentre do not overlap each other nor the pedals; portrait 390 x 844 pedals fit', () => {
   for (const [w, h] of [[844, 390], [667, 375], [390, 844]]) for (const lh of [false, true]) {
-    const r = rectsFor('drive', w, h, lh), ids = ['arrowL', 'arrowR', 'gas', 'brake', 'nitro', 'hand', 'hop'];
+    const r = rectsFor('drive', w, h, lh), ids = ['arrowL', 'arrowR', 'gas', 'brake', 'nitro', 'hand', 'hop', 'flip'];
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) assert(!T.rectsOverlap(r[ids[i]], r[ids[j]], 8 - 1e-9), `${w}x${h} lh=${lh}: ${ids[i]} overlaps ${ids[j]}`);
   }
 });
 ok('layout: left-handed mirrors the bottom clusters and keeps the top corners', () => {
   const w = 844, h = 390, a = rectsFor('drive', w, h, false), b = rectsFor('drive', w, h, true);
-  for (const id of ['gas', 'brake', 'nitro', 'hand', 'hop', 'arrowL', 'arrowR']) { near(a[id].x, w - b[id].right, 1e-9, id + ' mirrored x'); near(a[id].y, b[id].y, 1e-9, id + ' same y'); }
+  for (const id of ['gas', 'brake', 'nitro', 'hand', 'hop', 'flip', 'arrowL', 'arrowR']) { near(a[id].x, w - b[id].right, 1e-9, id + ' mirrored x'); near(a[id].y, b[id].y, 1e-9, id + ' same y'); }
   for (const id of ['menu', 'mute', 'cam', 'horn', 'auto', 'repair', 'exit']) { near(a[id].x, b[id].x, 1e-9, id + ' stays'); }
   const wz = T.zones('drive', w, h, false), wl = T.zones('drive', w, h, true);
   near(wz.stick.x, 0, 1e-9); near(wl.stick.x + wl.stick.w, w, 1e-9); assert.equal(T.zones('walk', w, h).stick.w, w * 0.45);

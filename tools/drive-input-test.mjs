@@ -1,6 +1,6 @@
 // CPU regression for first-E entry: run the real interaction listener and the drive module's real
 // keydown listener in order, with a simulated delay during initial HUD/audio setup. No WebGL required.
-// Also the Roadster's input: readInput (drive.js) turns the X key and the touch HOP button into input.jump, the exhaust-point array fed to the fx has room for every nozzle of every car, and
+// Also the Roadster's input: readInput (drive.js) turns the X key (the simple hop) and the touch HOP button into input.jump and the C key (the barrel hop) and the FLIP button into input.flip, the exhaust-point array fed to the fx has room for every nozzle of every car, and
 // the door stays shut while the car is in the air (exit()).
 // Run: node tools/drive-input-test.mjs
 import assert from 'node:assert/strict';
@@ -55,7 +55,7 @@ try {
   const r0 = source.indexOf('  function readInput(out = {}) {'), r1 = source.indexOf('  const input = {};', r0);
   assert(r0 >= 0 && r1 > r0, 'drive readInput is present');
   const read = (codes, touch = {}, player = null) => {
-    const fn = vm.runInNewContext(source.slice(r0, r1) + ' readInput;', { keys: new Set(codes), touch: { nitro: false, hand: false, brake: false, jump: false, ...touch }, hopTap: !!touch.tap, player, clamp: (v, a, b) => Math.max(a, Math.min(b, v)) });
+    const fn = vm.runInNewContext(source.slice(r0, r1) + ' readInput;', { keys: new Set(codes), touch: { nitro: false, hand: false, brake: false, jump: false, flip: false, ...touch }, hopTap: !!touch.tap, flipTap: !!touch.tapC, player, clamp: (v, a, b) => Math.max(a, Math.min(b, v)) });
     return fn({});
   };
   assert.equal(read([]).jump, false, 'no key: no hop');
@@ -63,6 +63,11 @@ try {
   assert.equal(read(['KeyX']).jump, true, 'the X key hops');
   assert.equal(read([], { jump: true }).jump, true, 'the touch HOP button hops');
   assert.equal(read(['KeyW']).jump, false, 'W alone does not hop');
+  // the barrel hop: C (and the touch FLIP button, and the latched press) -> input.flip; X and C are separate keys
+  assert.equal(read([]).flip, false, 'no key: no barrel hop'); assert.equal(read(['KeyC']).flip, true, 'the C key is the barrel hop'); assert.equal(read([], { flip: true }).flip, true, 'the touch FLIP button is the barrel hop');
+  assert.equal(read([], { tapC: true }).flip, true, 'a latched C press (keydown + keyup between two frames) still flips'); assert.equal(read(['KeyC']).jump, false, 'C is not the simple hop'); assert.equal(read(['KeyX']).flip, false, 'X is not the barrel hop');
+  assert.equal(read([], { tapC: true }).jump, false); assert.equal(read([], { tap: true }).flip, false);
+  const gc = read(['KeyW', 'KeyC', 'ShiftLeft']); assert(gc.flip && gc.thr === 1 && gc.nitro, 'gas + nitro + the barrel hop together');
   const both = read(['KeyW', 'KeyX', 'ShiftLeft']); assert(both.jump && both.thr === 1 && both.nitro, 'gas + nitro + hop together');
   assert.equal(read(['Space']).hand, true, 'the handbrake is still Space');
   // the exhaust points of every car fit the world-point array (four nozzles with an array of two crashed the first frame)
@@ -73,25 +78,31 @@ try {
   assert.equal(garage.length, 4, 'the placeholder garage has four cars');
   for (const d of garage) assert(d.exhaust.length <= room && room >= 6, `exW (${room}) holds the ${d.exhaust.length} exhaust points of ${d.id}`);
   assert(garage.find((d) => d.id === 'roadster').exhaust.length === 4 && garage.find((d) => d.id === 'roadster').tuning.hop, 'the Roadster has four nozzles and a hop');
-  // the keydown listener latches the tap of X: only while driving, not on auto-repeat, not behind a modal
+  // the keydown listener latches the press of X (hopTap) and of C (flipTap): immediately, only while driving, not on auto-repeat, not behind a modal; each key has its own latch
   {
     const events = new EventTarget(); globalThis.addEventListener = events.addEventListener.bind(events);
-    const sb = { addEventListener, state: { active: true, enteredAt: 0 }, ctx: { ui: { modalOpen: false } }, performance: { now: () => 1e6 }, exit() {}, api: { setView() {}, repair() {} }, view: { mode: 0 }, sound: { horn() {} }, hopTap: false };
+    const sb = { addEventListener, state: { active: true, enteredAt: 0 }, ctx: { ui: { modalOpen: false } }, performance: { now: () => 1e6 }, exit() {}, api: { setView() {}, repair() {} }, view: { mode: 0 }, sound: { horn() {} }, hopTap: false, flipTap: false };
     vm.runInNewContext(driveListener, sb, { filename: 'drive.js keydown listener (hop)' });
-    const press = (repeat = false) => events.dispatchEvent(Object.assign(new Event('keydown', { cancelable: true }), { code: 'KeyX', repeat }));
-    press(true); assert.equal(sb.hopTap, false, 'auto-repeat does not latch');
-    sb.ctx.ui.modalOpen = true; press(); assert.equal(sb.hopTap, false, 'a modal swallows the key'); sb.ctx.ui.modalOpen = false;
-    sb.state.active = false; press(); assert.equal(sb.hopTap, false, 'not driving: no latch'); sb.state.active = true;
-    press(); assert.equal(sb.hopTap, true, 'a fresh X press while driving latches the hop');
+    const press = (code, repeat = false) => events.dispatchEvent(Object.assign(new Event('keydown', { cancelable: true }), { code, repeat }));
+    for (const [code, latch, other] of [['KeyX', 'hopTap', 'flipTap'], ['KeyC', 'flipTap', 'hopTap']]) {
+      press(code, true); assert.equal(sb[latch], false, code + ': auto-repeat does not latch');
+      sb.ctx.ui.modalOpen = true; press(code); assert.equal(sb[latch], false, code + ': a modal swallows the key'); sb.ctx.ui.modalOpen = false;
+      sb.state.active = false; press(code); assert.equal(sb[latch], false, code + ': not driving (walking / flying: C is the descend key there): no latch'); sb.state.active = true;
+      press(code); assert.equal(sb[latch], true, 'a fresh ' + code + ' press while driving latches its hop on the frame of the key down'); assert.equal(sb[other], false, code + ' does not latch the other hop');
+      sb.hopTap = sb.flipTap = false;
+    }
     if (originalAdd === undefined) delete globalThis.addEventListener; else globalThis.addEventListener = originalAdd;
   }
-  // hop v2: the key level is what charges the hop (drive.js passes a level, handling.js makes the edge), the HUD hint and the charge bar exist, the model gets the charge / flip / pulses
-  assert(/out.jump = k.has('KeyX') || touch.jump || hopTap/.test(source), 'readInput still passes the X key as a LEVEL (hold = charge)');
+  // hop v3: X and C are levels plus latches (drive.js passes them, handling.js makes the edge: the hop starts on the step of the key down), the HUD hint has no charge bar, the model gets flip / pulses (no charge)
+  assert(source.includes("out.jump = k.has('KeyX') || touch.jump || hopTap"), 'readInput passes the X key as a level plus the latch'); assert(source.includes("out.flip = k.has('KeyC') || touch.flip || flipTap"), 'readInput passes the C key as a level plus the latch');
   const hudSrc = fs.readFileSync(new URL('../src/world/drive/hud.js', import.meta.url), 'utf8');
-  assert(hudSrc.includes('<kbd>X</kbd> хоп (держите – выше)'), 'the key hint reads X хоп (держите – выше)'); assert(hudSrc.includes('d-charge') && hudSrc.includes('car.charging'), 'the HUD has a charge bar fed by car.charge');
-  assert(/charge: c.charge/.test(source) && /flip: c.flip/.test(source) && /s0: c.pulse0/.test(source), 'poseVehicle passes charge / flip / side-jet pulses to the model');
+  assert(hudSrc.includes('<kbd>X</kbd> хоп · <kbd>C</kbd> бочка'), 'the key hint reads X хоп · C бочка'); assert(!hudSrc.includes('d-charge') && !hudSrc.includes('car.charging') && !hudSrc.includes('держите'), 'the HUD has no charge bar and no hold hint any more');
+  assert(hudSrc.includes('data-k="hop"') && hudSrc.includes('data-k="flip"'), 'the DOM touch buttons HOP and FLIP exist');
+  assert(/flip: c.flip/.test(source) && /s0: c.pulse0/.test(source) && !/charge: c.charge/.test(source), 'poseVehicle passes flip / side-jet pulses to the model (no charge)');
+  assert(source.includes("ev.type === 'dry'") && source.includes('hud.deny()'), 'a press the tank cannot pay blinks the boost bar');
+  assert(source.includes("car.jumpHeld = keys.has('KeyX')") && source.includes("car.flipHeld = keys.has('KeyC')"), 'a hop key that is down at the door starts no hop when the car is entered');
   // exit() refuses in mid-hop (unless forced)
   const e0 = source.indexOf('  function exit(force = false) {'), e1 = source.indexOf('EXIT_MAX_KMH', e0);
   assert(e0 >= 0 && /!force && car\.air\) return false/.test(source.slice(e0, e1)), 'exit() keeps the door shut while the car is airborne');
 }
-console.log('RESULT: OK - first-E entry, held key and subsequent exit with 0, 1,000 and 12,000 ms setup delays; the hop key (X / touch), exhaust-point room, no exit in the air.');
+console.log('RESULT: OK - first-E entry, held key and subsequent exit with 0, 1,000 and 12,000 ms setup delays; the hop keys (X simple / C barrel, keyboard and touch), exhaust-point room, no exit in the air.');

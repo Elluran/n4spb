@@ -130,7 +130,8 @@ export const ACTIONS = {
   recentre: { kind: 'call',  call: 'recentre', modes: ['drive'] },
   nitro:    { kind: 'hold',  code: 'ShiftLeft', modes: ['drive'] },
   hand:     { kind: 'hold',  code: 'Space',     modes: ['drive'] },
-  hop:      { kind: 'hold',  code: 'KeyX',      modes: ['drive'] },        // press and HOLD: down = charge the hop, up = launch it (a quick tap is the small hop)
+  hop:      { kind: 'tap',   code: 'KeyX',      modes: ['drive'] },        // the simple hop: fires on the press (a synthetic keydown, drive.js latches it)
+  flip:     { kind: 'tap',   code: 'KeyC',      modes: ['drive'] },        // the barrel hop: the same, KeyC (drive only: in fly mode C is the descend key and there is no FLIP button)
   cam:      { kind: 'tap',   code: 'KeyV',      modes: ['drive'] },
   horn:     { kind: 'tap',   code: 'KeyG',      modes: ['drive'] },
   repair:   { kind: 'call',  call: 'repair',    modes: ['drive'] },
@@ -171,7 +172,7 @@ export const LAYOUT = {
     interact: A('r', 'b', 98, 88, 80),
   },
   drive: {
-    gas: A('r', 'b', 16, 16, 100, 124), brake: A('r', 'b', 128, 16, 80), nitro: A('r', 'b', 28, 152, 76), hand: A('r', 'b', 136, 108, 64), hop: A('r', 'b', 126, 184, 60),
+    gas: A('r', 'b', 16, 16, 100, 124), brake: A('r', 'b', 128, 16, 80), nitro: A('r', 'b', 28, 152, 76), hand: A('r', 'b', 136, 108, 64), hop: A('r', 'b', 126, 184, 60), flip: A('r', 'b', 200, 184, 68),
     cam: A('r', 't', 16, 72, 48), horn: A('r', 't', 76, 72, 48), auto: A('r', 't', 136, 72, 48), repair: A('r', 't', 196, 72, 48),
     exit: A('l', 't', 132, 72, 52),                                // beside the 108 px map in the far top-left corner (no accidents)
     arrowL: A('l', 'b', 16, 16, 96), arrowR: A('l', 'b', 124, 16, 96), recentre: A('l', 'b', 16, 124, 48),

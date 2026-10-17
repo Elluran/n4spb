@@ -1,7 +1,7 @@
 // The REAL keyboard flow of every garage car in the real page (headless Edge / Chrome with GPU, the HUD is drawn): load -> Start -> for each car (taxi pickup, Zhiguli, Roadster, red coupe, in that order,
 // so that "exit one car, enter the next" is exercised three times): walk up -> the car's own prompt -> E -> W (gas) -> Shift (nitro / boost) -> A + Space (handbrake drift) -> G (horn) -> V V V
 // (chase / high / cockpit / chase) -> S (brake, then reverse) -> E (exit, the car stays solid) -> the next car.
-// The Roadster also hops (X, a tap: the hop v2 launches on the key release, one frame later) once the gas hop is built into handling.js (the check switches itself on when the car has a `hop` tuning and a height `h`).
+// The Roadster also hops (hop v3: X = the simple hop 1.86 m, C = the barrel hop 3.72 m with the roll; both launch on the key DOWN) once the gas hops are built into handling.js (the check switches itself on when the car has a `hop` tuning and a height `h`).
 //   node tools/drive-garage-keys-test.mjs [--q medium] [--only environment,streets,city,landmarksC,drive] [--shots] [--out shots/drive/keys] [--tod night] [--load-timeout ms]
 // Checks per car: the prompt names the car, E gets into THAT car (HUD boost label, one-gear letter D for the pickup and the Roadster), gas speeds up, the nitro lowers the tank and raises the speed, the handbrake
 // with A makes the car slide (drifting or a sideways speed) and turns it, the horn is called, V cycles the camera 0 -> 1 -> 2 -> 0 and the cockpit set is visible only in mode 2, S stops the car
@@ -128,15 +128,30 @@ try {
     check(s.boosting && s.boost < b0 - 0.1 && s.kmh > k0 + 5, `${id}: Shift boosts (tank ${b0} -> ${s.boost}, ${k0} -> ${s.kmh} km/h)`);
     await shot(`${id}_3_nitro`);
     await page.keyboard.up('ShiftLeft');
-    // the Roadster's gas hop (X): up within a third of a second, back on the ground inside two seconds, the tank pays for it (only once handling.js has the hop)
+    // the Roadster's gas hops (hop v3, both on the key DOWN): X = up within a third of a second (1.86 m apex, > 0.3 m after 0.3 s), back on the ground inside 2.2 s, the tank pays 0.28 (checked right after the launch);
+    // C = the barrel hop: higher than X could ever go (> 2.4 m after 0.5 s), the cosmetic roll turns (|flip| > 0.2 or done) and is exactly 0 on the ground again; the other key in the air does nothing
     const hopOn = await page.evaluate(() => { const d = window.__drive; return !!(d.vehicle.def.tuning.hop && typeof d.car.h === 'number'); });
-    if (id === 'roadster') console.log(hopOn ? 'hop: the car has the gas hop' : 'hop: not built into handling.js yet (skipped)');
+    if (id === 'roadster') console.log(hopOn ? 'hop: the car has the gas hops' : 'hop: not built into handling.js yet (skipped)');
     if (hopOn) {
-      const tank0 = (await st()).boost; await page.keyboard.press('KeyX'); await sleep(320);
+      await page.evaluate(() => { window.__drive.car.boost = 1; }); await sleep(100);
+      const tank0 = (await st()).boost; await page.keyboard.down('KeyX'); await sleep(60);
+      const t1 = await page.evaluate(() => { const c = window.__drive.car; return { h: +c.h.toFixed(2), air: !!c.air, boost: +c.boost.toFixed(2), flipOn: !!c.flipOn }; });
+      await page.keyboard.up('KeyX'); await sleep(260);
       const up = await page.evaluate(() => { const c = window.__drive.car; return { h: +c.h.toFixed(2), air: !!c.air }; });
-      await sleep(1700); const down = await page.evaluate(() => { const c = window.__drive.car; return { h: +c.h.toFixed(2), air: !!c.air, boost: +c.boost.toFixed(2) }; });
-      console.log('hop:', JSON.stringify({ tank0, up, down }));
+      await sleep(1900); const down = await page.evaluate(() => { const c = window.__drive.car; return { h: +c.h.toFixed(2), air: !!c.air, boost: +c.boost.toFixed(2), flip: c.flip }; });
+      console.log('hop X:', JSON.stringify({ tank0, t1, up, down }));
+      check(t1.air && t1.h > 0 && !t1.flipOn, `${id}: X launches on the key DOWN (60 ms after the press: ${t1.h} m up, no roll)`);
       check(up.air && up.h > 0.3 && !down.air && down.h === 0, `${id}: X hops (${up.h} m up after 0.3 s, down again: ${down.air ? 'still airborne' : 'landed'})`);
+      await page.evaluate(() => { window.__drive.car.boost = 1; }); await sleep(700);        // the cooldown after the touchdown is over
+      await page.keyboard.down('KeyC'); await sleep(60);
+      const c1 = await page.evaluate(() => { const c = window.__drive.car; return { h: +c.h.toFixed(2), air: !!c.air, flipOn: !!c.flipOn }; });
+      await page.keyboard.up('KeyC'); await page.keyboard.press('KeyX'); await sleep(440);   // X in the air does nothing
+      const c2 = await page.evaluate(() => { const c = window.__drive.car; return { h: +c.h.toFixed(2), air: !!c.air, flip: +c.flip.toFixed(2), flipOn: !!c.flipOn }; });
+      await sleep(2300); const c3 = await page.evaluate(() => { const c = window.__drive.car; return { h: +c.h.toFixed(2), air: !!c.air, flip: c.flip, flipOn: !!c.flipOn }; });
+      console.log('hop C:', JSON.stringify({ c1, c2, c3 }));
+      check(c1.air && c1.h > 0 && c1.flipOn, `${id}: C launches on the key DOWN (60 ms after the press: ${c1.h} m up, rolling)`);
+      check(c2.air && c2.h > 2.4 && c2.flipOn, `${id}: C is the barrel hop (${c2.h} m up after 0.5 s, higher than the simple hop ever gets; roll ${c2.flip} rad)`);
+      check(!c3.air && c3.h === 0 && c3.flip === 0 && !c3.flipOn, `${id}: C lands level (flip ${c3.flip}, ${c3.air ? 'still airborne' : 'landed'})`);
     }
     // cameras
     const modes = [];

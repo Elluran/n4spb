@@ -2,7 +2,7 @@
 // fading exhaust glow trail while the nitro burns. Two InstancedMeshes (smoke = normal blending, sparks = additive), one draw call each, no outline pass.
 // COLD GAS (the Roadster, def.jetFx in drive/cars/index.js): its THRUST is not a fire but a white condensate cloud, so the exhaust glow is replaced by soft white puffs from every nozzle
 // (a third, normal-blended InstancedMesh with its own cap, so the tyre smoke is never starved), plus the hop's down-jet columns and the ring cloud that rolls out from the car at take-off and touchdown.
-// HOP v2: a growing hiss of small ground puffs while the hop charges (car.charge), bigger columns / rings for a charged hop (car.jetK), and on a max hop the SIDE STREAMS: thin white cold-gas jets from the front lateral nozzles and a
+// HOP v3: bigger columns / rings for the barrel hop (C; car.jetK), whose SIDE STREAMS are: thin white cold-gas jets from the front lateral nozzles and a
 // rear pair, pulsing left / right while the (cosmetic) barrel roll turns the car (car.flip, car.pulse0 / pulse1; tuning.hop.flip.nozzles), emitted along the body's own sideways axis so they spiral with the roll.
 import * as THREE from 'three';
 
@@ -57,7 +57,7 @@ const DOWN = [[0.95, 0.95], [-0.95, 0.95], [0.95, -1.98], [-0.95, -1.98]];
 
 export function createFx(ctx) {
   const smoke = system(ctx, 110, false), sparks = system(ctx, 70, true), glow = system(ctx, 60, true), jet = system(ctx, 220, false, 'drive-jet');
-  let acc = 0, damageAcc = 0, jetAcc = 0, gasAcc = 0, columnAcc = 0, chargeAcc = 0, streamAcc = 0;
+  let acc = 0, damageAcc = 0, jetAcc = 0, gasAcc = 0, columnAcc = 0, streamAcc = 0;
   const R = ctx.rng('drive-fx');
   return {
     /** every frame: wheel contact points (world) + the state of the car; jetFx (def.jetFx) + jetDir (world unit vector, the way the nozzles fire) switch the exhaust glow to the cold-gas cloud */
@@ -91,7 +91,7 @@ export function createFx(ctx) {
       }
       if (car.jet > 0.1) {                                                                        // the hop's down-jets: a white column under each wheel and a spray where it meets the road
         const s = Math.sin(car.yaw), co = Math.cos(car.yaw), ground = car.y - (car.h || 0);
-        const K = car.jetK || 1;                                                                  // a charged hop: longer, fatter columns and a wider spray
+        const K = car.jetK || 1;                                                                  // the barrel hop: longer, fatter columns and a wider spray
         columnAcc += dt * (K > 1 ? 30 : 36);
         for (; columnAcc >= 1; columnAcc--) for (const [lx, lz] of DOWN) {
           const x = car.x + lx * co + lz * s, z = car.z - lx * s + lz * co;
@@ -99,16 +99,8 @@ export function createFx(ctx) {
           if (R() < (K > 1 ? 0.35 : 0.5)) { const a = R() * 6.283, v = 2.6 * (1 + 0.5 * (K - 1)); jet.emit({ x, y: ground + 0.12, z, vx: Math.cos(a) * v + car.vx * 0.4, vy: 0.1, vz: Math.sin(a) * v + car.vz * 0.4, life: 0.7 + R() * 0.4, s0: 0.4, s1: 1.7 * (1 + 0.4 * (K - 1)), a: (K > 1 ? 0.3 : 0.4) * car.jet, r: 0.93, g: 0.95, b: 1.0, drag: 2 }); }
         }
       } else columnAcc = 0;
-      if (car.charge > 0.02 && !car.air) {                                                        // the hop charging: small white puffs round the four down-jet stubs, more and bigger as the charge grows
-        const c = car.charge, s = Math.sin(car.yaw), co = Math.cos(car.yaw), ground = car.y - (car.h || 0);
-        chargeAcc += dt * (8 + 40 * c);
-        for (; chargeAcc >= 1; chargeAcc--) {
-          const d = DOWN[(R() * 4) | 0], x = car.x + d[0] * co + d[1] * s, z = car.z - d[0] * s + d[1] * co, a = R() * 6.283, v = 1.2 + 2.2 * c;
-          jet.emit({ x, y: ground + 0.1, z, vx: Math.cos(a) * v + car.vx * 0.4, vy: 0.05 + 0.4 * R(), vz: Math.sin(a) * v + car.vz * 0.4, life: 0.45 + R() * 0.3, s0: 0.2, s1: 0.6 + 0.9 * c, a: 0.12 + 0.3 * c, r: 0.93, g: 0.95, b: 1.0, drag: 2.2 });
-        }
-      } else chargeAcc = 0;
       const FL = car.tuning && car.tuning.hop && car.tuning.hop.flip;
-      if (car.flipOn && FL && (car.pulse0 > 0.1 || car.pulse1 > 0.1)) {                           // the side streams of a max hop: thin cold-gas jets out of the flanks, spiralling with the roll
+      if (car.flipOn && FL && (car.pulse0 > 0.1 || car.pulse1 > 0.1)) {                           // the side streams of the barrel hop: thin cold-gas jets out of the flanks, spiralling with the roll
         const cf = Math.cos(car.flip), sf = Math.sin(car.flip), py = FL.pivotY, s = Math.sin(car.yaw), co = Math.cos(car.yaw), N = FL.nozzles;
         streamAcc += dt * 56;
         for (; streamAcc >= 1; streamAcc--) for (let side = 0; side < 2; side++) {
@@ -137,7 +129,7 @@ export function createFx(ctx) {
       } else damageAcc = 0;
       smoke.update(dt); sparks.update(dt); glow.update(dt); jet.update(dt);
     },
-    /** the ring cloud of a hop (take-off and touchdown): puffs roll out from the car's middle at road level; k > 1 = a max hop (faster, bigger, a second tighter ring) */
+    /** the ring cloud of a hop (take-off and touchdown): puffs roll out from the car's middle at road level; k > 1 = the barrel hop (faster, bigger, a second tighter ring) */
     ring(x, y, z, n = 24, k = 1) {
       for (let i = 0; i < n; i++) {
         const a = (i + R() * 0.8) / n * 6.283, v = (4.2 + R() * 1.6) * k * (k > 1 && i % 2 ? 0.6 : 1);
@@ -147,6 +139,6 @@ export function createFx(ctx) {
     sparks(x, y, z, nx, nz, n = 14, speed = 6) {
       for (let i = 0; i < n; i++) sparks.emit({ x, y, z, vx: nx * speed * (0.4 + R()) + (R() - 0.5) * 5, vy: 1 + R() * 4, vz: nz * speed * (0.4 + R()) + (R() - 0.5) * 5, life: 0.35 + R() * 0.45, s0: 0.10, s1: 0.03, a: 1, r: 1, g: 0.78, b: 0.35, grav: -14, drag: 0.6 });
     },
-    clear() { smoke.clear(); sparks.clear(); glow.clear(); jet.clear(); acc = damageAcc = jetAcc = gasAcc = columnAcc = chargeAcc = streamAcc = 0; },
+    clear() { smoke.clear(); sparks.clear(); glow.clear(); jet.clear(); acc = damageAcc = jetAcc = gasAcc = columnAcc = streamAcc = 0; },
   };
 }

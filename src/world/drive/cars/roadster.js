@@ -6,7 +6,7 @@
 // SHAPE (measured from the official press renders, +-3 %): 4.62 m long, 2.00 m wide, 1.22 m high, wheelbase 2.96 m, cab-forward (the windscreen base is above the front axle), nose lip 0.49 m,
 //   hood 25 deg then flat to the cowl 0.83 m, windscreen 18.7 deg to the roof peak 1.219 m at z = -0.1, roof falling 9 deg to a 4 cm step, rear deck 0.93 m at the chopped tail; tyres 0.685 m (front) / 0.734 m (rear).
 // REACTIVE: the 4 rear nozzles (SPEC_ROADSTER.exhaust) fire cold-gas plumes under thrust (model.flames[0..3], pale blue-white billowing lathe plumes that fade out, NO orange flame); the wing rises and tips back at speed / thrust;
-//   four hidden down-jets (hop, p.jet / p.charge / p.jetK) appear only while a hop charges or uses them. HOP v2: p.charge squats the nose a little; on a MAX hop p.flip (radians, from handling.js car.flip) rolls the whole model
+//   four hidden down-jets (hop, p.jet / p.jetK) appear only while a hop uses them. HOP v3: on the BARREL hop (C) p.flip (radians, from handling.js car.flip) rolls the whole model
 //   a full 360 degrees about its long axis through the middle of the body (COSMETIC: the physics car stays upright; the cockpit view ignores it so the camera never rolls) and four thin cyan-white side streaks (p.s0 / p.s1 = the pulses
 //   of the left / right jets) shoot out of the flanks while it turns.
 // DRAW CALLS: exterior 17 (body, glass, head lamps, tail lamps, driver, yoke, 4 wheels, rear plate, roof logo, wing = blade + fences + struts) + glow + head-lamp pool + 4 plumes + 4 down-jets (the last three groups only while used).
@@ -44,8 +44,8 @@ export const SPEC_ROADSTER = {
 const NOSE = '#1E2228', PAINT = '#DDDFE4', PAINT_HI = '#F6F7F9', CARBON = '#14171B', UNDER = '#0D0F12', LINING = '#0F1114', LINER = '#161B26', PILLAR = '#14171B', SEAT = '#E6E6EA', METAL = '#C9CBD0', FENDER = '#CDD2DB';
 const DISC = '#F0F1F5', RIM = '#A9ACB6', SPOKE = '#0A0A0D', BRONZE = '#8C6B4A', TITAN = '#524E53', CAP = '#242733', TYRE_STEP = '#1B1B1D', RING = '#B8A47C', BORE = '#050505';
 const DEGS = Math.PI / 180, SHADE_LIFT = [0.44, 0.46, 0.50];
-/** hop v2 (the numbers mirror tuning.hop in cars/tuning.js): the nose-down squat at full charge (rad), the height of the barrel roll's axis, the side-jet nozzles (front lateral L1 / L2 and a rear pair near the rear wheels; x is mirrored) */
-const SQUAT = 0.045, FLIP_PIVOT = 0.55, SIDE_NOZZLES = [[0.92, 0.58, 2.05], [1.0, 0.55, -1.75]];
+/** hop v3 (the numbers mirror tuning.hop in cars/tuning.js): the height of the barrel roll's axis, the side-jet nozzles (front lateral L1 / L2 and a rear pair near the rear wheels; x is mirrored) */
+const FLIP_PIVOT = 0.55, SIDE_NOZZLES = [[0.92, 0.58, 2.05], [1.0, 0.55, -1.75]];
 
 /** a copy of a toon material whose shaded side is lifted toward a cool blue-grey: the albedo (vertex colour included) is added back as emissive, so the satin white reads white in the shade
  *  while the black carbon stays black (the lift scales with the albedo); the original (shared by the other garage cars) stays untouched */
@@ -330,8 +330,8 @@ export function createRoadsterModel(ctx, { plate = 'RDSTR' } = {}) {
     /** pose: x y z yaw (rotY) pitchUp roll; steer in -1..1 (+ = left); roll the wheels by `spin` radians since the last call; brake / boost / lights 0..1; optional hop: jet 0..1 */
     set(p) {
       const dt = p.dt || 0.016, hop = Math.max(0, p.jet || 0);
-      // HOP v2: the charge squats the nose; the max-hop barrel roll (p.flip, radians) turns the model about its long axis through the middle of the body (the cockpit view stays level: the camera is derived from this root)
-      const charge = Math.max(0, p.charge || 0), px = -p.pitch - 0.07 * hop + SQUAT * charge;
+      // HOP v3: the barrel hop's roll (p.flip, radians) turns the model about its long axis through the middle of the body (the cockpit view stays level: the camera is derived from this root)
+      const px = -p.pitch - 0.07 * hop;
       let ft = inside ? 0 : (p.flip || 0); ft -= 2 * Math.PI * Math.round(ft / (2 * Math.PI));                              // the shortest equivalent angle: a finished roll (2 pi) is level
       if (inside) flipShown = 0;                                                                                          // the cockpit camera is derived from this root: never a trace of roll there
       if (ft === 0 && flipShown !== 0) { flipShown *= Math.exp(-18 * dt); if (Math.abs(flipShown) < 0.002) flipShown = 0; }  // an early landing eases the roll out instead of snapping
@@ -363,7 +363,7 @@ export function createRoadsterModel(ctx, { plate = 'RDSTR' } = {}) {
       wingGroup.position.y = deckY(-2.0) + 0.03 + 0.16 * wingK; wingGroup.position.z = -2.04 - 0.06 * wingK; wingGroup.rotation.x = -5 * DEGS * wingK; fences.scale.y = 0.12 + 0.88 * wingK; struts.scale.y = 0.02 + 0.20 * wingK;
       const bb = body.geometry.boundingBox, sag = bb ? Math.max(0, bb.min.z - minZ0) : 0, crushed = sag > 0.3;
       wingGroup.position.z += sag; wingGroup.visible = !inside && !crushed;                                            // up to 0.3 m of crush the wing follows the tail, beyond it vanishes
-      const dj = Math.max(hop, 0.25 * charge), jk = p.jetK || 1, rolled = Math.abs(flipShown) > 0.5;                                                          // the cold-gas columns of a hop (a charging hop shows short ones, a charged hop fat long ones); absent for plain driving
+      const dj = hop, jk = p.jetK || 1, rolled = Math.abs(flipShown) > 0.5;                                                          // the cold-gas columns of a hop (the simple hop short ones, the barrel hop fat long ones); absent for plain driving
       for (const j of downJets) { j.visible = dj > 0.02 && !rolled; if (j.visible) j.scale.set(1 + 0.25 * (jk - 1), (0.4 + 1.2 * dj) * (1 + 0.3 * (jk - 1)), 1 + 0.25 * (jk - 1)); }      // (not while the car is rolled over: the particle columns of fx.js fire straight down on their own)
     },
     /** camera mode 2 (cockpit): the exterior shell, glass, lamps, plate, roof decal and wing are replaced by the cockpit set (roadster/interior.js); the wheel meshes and the yoke stay */
