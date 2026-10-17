@@ -32,7 +32,7 @@ Nothing here has run on a real phone yet: the checklist at the end is what has t
 **Drive (Need-for-Speed style: left thumb steers, right thumb has the pedals)**
 
 * left thumb: a **floating wheel** (default: only the horizontal offset counts, full lock = 64 px, 6 px dead zone, curve 1.35, the wheel icon turns; the wheel follows the thumb past the lock so straightening needs a small move back), or two big **arrows** (96 px, ramping 0.3 -> 1 in 0.3 s), or **tilt** (phone roll);
-* right thumb: **GAS** 100 x 124, **BRAKE** 80 (at a standstill = reverse), **NITRO** 76 (its ring is the tank; the word comes from the car's HUD profile, so the Roadster says THRUSTER), **DRIFT** 64 (handbrake), **HOP** 60 (only when the current car has a hop: `vehicle.def.hop` or `id === 'roadster'`);
+* right thumb: **GAS** 100 x 124, **BRAKE** 80 (at a standstill = reverse), **NITRO** 76 (its ring is the tank; the word comes from the car's HUD profile, so the Roadster says THRUSTER), **DRIFT** 64 (handbrake), **HOP** 60 (only when the current car has a hop: `vehicle.def.hop` or `id === 'roadster'`; PRESS AND HOLD: down charges the hop (a ring round the button fills with `car.charge`, 0.7 s to full, a full charge launches by itself), up launches it, a quick tap is the small hop);
 * top right second row: **CAM** (V), **HORN** (G), **AUTO** (auto-gas toggle), **FIX** (repair, only when damaged and stopped); top left beside the 108 px map: **EXIT** (refused above 25 km/h like E, with the toast);
 * the speedometer is scaled to half and sits at the bottom centre (above the pedals in portrait), the nitro bar, key hints, old `.d-touch` buttons and the damage pill are hidden (`html.tc` CSS, no hud.js edit);
 * a drag on the free part of the screen orbits the chase camera (a synthetic `mousemove` with `movementX`, the path drive.js already has for the mouse).
@@ -46,11 +46,12 @@ An iPhone cannot lock the orientation, so the banner is the only mechanism there
 |---|---|
 | walk stick | `player.touchMove.set(x, y)` (y down = back); run = the player's own `length > 0.95` or the RUN latch (`ShiftLeft` in `player.keys`) |
 | look | `player.look.dx / dy += delta * 2.2 * sensitivity` (the mouse accumulator); in the car a synthetic `mousemove` |
-| JUMP, CAM, HORN, HOP, SOUND | a synthetic `KeyboardEvent` keydown + keyup on `window` (`Space`, `KeyV`, `KeyG`, `KeyX`, `KeyM`): every handler reads `e.code`, none checks `isTrusted` |
+| JUMP, CAM, HORN, SOUND | a synthetic `KeyboardEvent` keydown + keyup on `window` (`Space`, `KeyV`, `KeyG`, `KeyM`): every handler reads `e.code`, none checks `isTrusted` |
 | UP / DOWN / BOOST / NITRO / DRIFT | the code is held in `player.keys` while the finger is down (`Space`, `KeyC`, `ShiftLeft`); no keydown is dispatched, so no jump |
+| HOP (press and hold, `ACTIONS.hop.kind = 'hold'`) | `KeyX` is held in `player.keys` while the finger is down (drive.js `readInput` makes it `input.jump`; handling.js charges while it is down and launches on release); a synthetic keydown on press (and keyup on release) also latches a press shorter than one frame (drive.js `hopTap`). The charge ring reads `car.charging` / `car.charge` from `ctx.drive.car` |
 | USE / EXIT / FIX / FLY | `ctx.interact.use()` / `ctx.drive.exit()` / `ctx.drive.repair()` / `player.toggleFly()` |
 | steering + pedals | the exact inverse of drive.js `readInput`: `player.touchMove = (-steer / 1.4, thr > 0 ? -thr / 1.3 : brk)`; the brake wins over the gas; a neutral y of 0.12 keeps small steering above the 0.1 threshold; gas below 0.2 is lifted to 0.2 (`touch-logic.js encodeDrive`) |
-| the clean contract (Phase 2) | `ctx.touch = { active, mode, steer (+left), thr, brk, nitro, hand, hop, look: {dx, dy} }`, written every frame; `active` is true while driving |
+| the clean contract (Phase 2) | `ctx.touch = { active, mode, steer (+left), thr, brk, nitro, hand, hop, look: {dx, dy} }`, written every frame (`hop` = the HOP button is held); `active` is true while driving |
 
 **Merge warning.** The steering bridge is only valid while drive.js `readInput` still reads `player.touchMove`. `tools/touch-logic-test.mjs` extracts the real `readInput` source from `src/world/drive.js` and runs the encoder through it, and
 fails loudly when `readInput` reads neither `player.touchMove` nor `ctx.touch`. Phase 2 (after the drive input rewrite lands): in `readInput` take `ctx.touch` when `active` (`out.steer = t.steer; out.thr = t.thr; out.brk = t.brk; out.nitro ||= t.nitro; out.hand ||= t.hand`),
@@ -116,7 +117,7 @@ the rotate banner, the settings panel and persistence across a reload, left-hand
 
 1. imports of `createTouchControls` and `installBootGuard`;
 2. `const isTouch = document.documentElement.classList.contains('tc')` (was the `(pointer: coarse)` query);
-3. the default tier `isTouch ? 'performance' : 'medium'` and, right after `const quality = ...`, the touch GPU overrides (`pixelRatio`, `shadowMap` 1024, `msaa` 2);
+3. the default tier `'performance'` (since 2026-10-17 on every device; phones add the touch GPU overrides below) and, right after `const quality = ...`, the touch GPU overrides (`pixelRatio`, `shadowMap` 1024, `msaa` 2);
 4. `const guard = installBootGuard({ canvas, params, isTouch, qName })` right after `const canvas = ...` (before the renderer, so that a renderer failure shows the card);
 5. `createTouchControls({ ctx, player, canvas, params })` after `ctx.interact = ...`;
 6. `frame()` starts with `if (guard.dead || document.hidden) { last = now; return; }`;

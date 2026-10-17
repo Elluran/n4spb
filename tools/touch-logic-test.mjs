@@ -90,7 +90,7 @@ const rs = driveSrc.indexOf('function readInput('), re = driveSrc.indexOf('const
 assert(rs > 0 && re > rs, 'drive.js readInput found');
 const readInputSrc = driveSrc.slice(rs, re);
 const makeRead = (touchMove, ctxTouch = null) => {
-  const sandbox = { keys: new Set(), touch: { nitro: false, hand: false, brake: false }, player: { touchMove: { x: touchMove.x, y: touchMove.y, lengthSq() { return this.x * this.x + this.y * this.y; } } }, clamp: (v, a, b) => Math.max(a, Math.min(b, v)), ctx: { touch: ctxTouch } };
+  const sandbox = { keys: new Set(), touch: { nitro: false, hand: false, brake: false, jump: false }, hopTap: false, player: { touchMove: { x: touchMove.x, y: touchMove.y, lengthSq() { return this.x * this.x + this.y * this.y; } } }, clamp: (v, a, b) => Math.max(a, Math.min(b, v)), ctx: { touch: ctxTouch } };
   return vm.runInNewContext(`(${readInputSrc.replace(/^function readInput/, 'function')})`, sandbox, { filename: 'drive.js readInput' });
 };
 ok('bridge: drive.js readInput still reads player.touchMove (or the ctx.touch contract) - the Phase 1 coupling', () => {
@@ -125,6 +125,11 @@ ok('actions: hold -> key, tap -> synthetic key, latch, call; mode filter', () =>
   for (const [id, a] of Object.entries(T.ACTIONS)) { assert(['hold', 'tap', 'latch', 'call', 'pedal'].includes(a.kind), id); assert(a.modes.length, id); if (a.kind !== 'call' && a.kind !== 'pedal') assert(/^(Key[A-Z]|Space|ShiftLeft)$/.test(a.code), id + ' code'); }
   assert.equal(T.ACTIONS.jump.code, 'Space'); assert.equal(T.ACTIONS.cam.code, 'KeyV'); assert.equal(T.ACTIONS.horn.code, 'KeyG'); assert.equal(T.ACTIONS.hop.code, 'KeyX');
   assert.equal(T.ACTIONS.nitro.code, 'ShiftLeft'); assert.equal(T.ACTIONS.hand.code, 'Space'); assert.equal(T.ACTIONS.mute.code, 'KeyM');
+  // HOP v2: the button is press-and-hold (down = charge, up = launch), not a latched tap: it is a held KEY while the finger is down
+  assert.equal(T.ACTIONS.hop.kind, 'hold', 'HOP is a held button');
+  assert.deepEqual([...T.desiredKeys('drive', new Set(['hop']))], ['KeyX'], 'a held HOP keeps X down');
+  assert.deepEqual([...T.desiredKeys('drive', new Set())], [], 'a released HOP lets X go');
+  assert.deepEqual([...T.desiredKeys('walk', new Set(['hop']))], [], 'HOP is a drive button');
   // every code the table uses is a code the game listens for
   const game = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8') + driveSrc + fs.readFileSync(new URL('../src/core/player.js', import.meta.url), 'utf8');
   for (const code of ['KeyV', 'KeyG', 'KeyM', 'Space', 'ShiftLeft', 'KeyC']) assert(game.includes(`'${code}'`), `the game reads ${code}`);

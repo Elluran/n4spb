@@ -1,6 +1,8 @@
 // drive/hud.js - the driving interface, "Need for Speed, but simpler": a big italic speedometer with a tacho arc and the gear, a nitro bar, a drift counter, speed streaks + a vignette that grow with the speed
 // (cyan while the nitro burns) and a key hint line that fades out. Everything is DOM / 2D canvas, created on demand, hidden with body.noui (H) and in screenshots (body.shot).
 // The round street map + the current-street pill are NOT here any more: core/minimap.js serves walking and driving alike (main.js feeds it).
+// HOP v2 (a car with a hop): the X key hint reads 'X хоп (держите – выше)'; while the hop key is held a thin CHARGE bar (.d-charge, above the THRUST label) fills with car.charge and glows when it is full; the old touch HOP button fills from below
+// (the core/touch.js layer draws its own ring).
 
 const CSS = `
 #drive .d-condition { position: absolute; right: 24px; bottom: calc(370px + env(safe-area-inset-bottom, 0px)); padding: 8px 10px; border-radius: 8px; background: rgba(12,18,44,.72); font: 700 12px/1.4 "Noto Sans", sans-serif; }
@@ -25,6 +27,11 @@ body.driving #interact { display: none !important; }
 #drive .d-nitro.low i { background: linear-gradient(90deg, #ff4d57, #ffb347); }
 #drive .d-nitro.burn { box-shadow: 0 0 18px 3px rgba(60,190,255,.85); }
 #drive .d-nlab { position: absolute; right: 24px; bottom: calc(338px + env(safe-area-inset-bottom, 0px)); font: 700 11px/1 "Rubik", sans-serif; letter-spacing: .24em; color: rgba(255,255,255,.85); text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+#drive .d-charge { position: absolute; right: 22px; bottom: calc(354px + env(safe-area-inset-bottom, 0px)); width: 260px; height: 7px; background: rgba(12,18,44,.72); border: 1.5px solid rgba(255,255,255,.8); border-radius: 3px; transform: skewX(-18deg); overflow: hidden; opacity: 0; transition: opacity .15s; }
+#drive .d-charge.on { opacity: 1; }
+#drive .d-charge i { display: block; height: 100%; width: 100%; transform-origin: left; transform: scaleX(0); background: linear-gradient(90deg, #8fd8ff, #f2fbff); }
+#drive .d-charge.full { box-shadow: 0 0 14px 3px rgba(190,235,255,.9); }
+#drive .d-touch button[data-k="hop"] { background: linear-gradient(to top, rgba(143,216,255,.62) calc(var(--c, 0) * 100%), rgba(12,18,44,.78) calc(var(--c, 0) * 100%)); }
 #drive .d-drift { position: absolute; top: 24%; left: 50%; transform: translateX(-50%) skewX(-8deg); text-align: center; font: 900 46px/1 "Rubik", sans-serif; font-style: italic; opacity: 0; transition: opacity .25s; text-shadow: 0 3px 0 rgba(0,0,0,.4); }
 #drive .d-drift small { display: block; font: 700 13px/1.4 "Rubik", sans-serif; letter-spacing: .3em; color: #ffe05a; }
 #drive .d-drift.on { opacity: 1; }
@@ -38,7 +45,7 @@ body.driving #interact { display: none !important; }
 #drive .d-touch.hop button { padding: 10px 16px; }
 #drive .d-touch button.off { opacity: .45; }
 #drive .d-touch button { font: 700 14px/1 "Rubik", sans-serif; color: #fff; background: rgba(12,18,44,.78); border: 2px solid rgba(255,255,255,.85); border-radius: 12px; padding: 14px 16px; }
-@media (pointer: coarse) { #drive .d-touch { display: flex; } #drive .d-keys { display: none; } #drive .d-speedo { transform: scale(.72); transform-origin: right bottom; } #drive .d-nitro { bottom: calc(232px + env(safe-area-inset-bottom, 0px)); } #drive .d-nlab { bottom: calc(252px + env(safe-area-inset-bottom, 0px)); } }
+@media (pointer: coarse) { #drive .d-touch { display: flex; } #drive .d-keys { display: none; } #drive .d-speedo { transform: scale(.72); transform-origin: right bottom; } #drive .d-nitro { bottom: calc(232px + env(safe-area-inset-bottom, 0px)); } #drive .d-nlab { bottom: calc(252px + env(safe-area-inset-bottom, 0px)); } #drive .d-charge { bottom: calc(268px + env(safe-area-inset-bottom, 0px)); } }
 @media (max-width: 900px) { #drive .d-keys { display: none; } `;
 
 const ARC = { cx: 150, cy: 150, r: 124, a0: 135, a1: 405 };
@@ -55,7 +62,7 @@ export function createDriveHud({ isTouch, onExit, onRepair, onNitro, onHand, onB
     <canvas class="d-streaks"></canvas>
     <div class="d-condition"><span>BODY 100%</span><button type="button" title="Stop, then repair the car (J)">J · Repair</button></div>
     <div class="d-vig"></div><div class="d-flash"></div>
-    <div class="d-nlab">NITRO</div><div class="d-nitro"><i></i></div>
+    <div class="d-charge"><i></i></div><div class="d-nlab">NITRO</div><div class="d-nitro"><i></i></div>
     <div class="d-speedo">
       <svg viewBox="0 0 300 300">
         <defs><linearGradient id="dg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#6fb000"/><stop offset=".55" stop-color="#ffe05a"/><stop offset="1" stop-color="#ff4d57"/></linearGradient></defs>
@@ -67,17 +74,17 @@ export function createDriveHud({ isTouch, onExit, onRepair, onNitro, onHand, onB
       <div class="d-num">0</div><div class="d-unit">KM/H</div><div class="d-gear">N</div>
     </div>
     <div class="d-drift"><small>ДРИФТ · DRIFT</small><span></span></div>
-    <div class="d-keys"><kbd>W</kbd><kbd>S</kbd> газ · тормоз &nbsp; <kbd>A</kbd><kbd>D</kbd> руль &nbsp; <kbd>Shift</kbd> нитро &nbsp; <span class="d-hopk" hidden><kbd>X</kbd> хоп &nbsp; </span><kbd>Space</kbd> ручник (дрифт) &nbsp; <kbd>G</kbd> сигнал &nbsp; <kbd>V</kbd> камера &nbsp; <kbd>1</kbd>–<kbd>5</kbd>/<kbd>R</kbd> телепорт &nbsp; <kbd>E</kbd> выйти · exit</div>
+    <div class="d-keys"><kbd>W</kbd><kbd>S</kbd> газ · тормоз &nbsp; <kbd>A</kbd><kbd>D</kbd> руль &nbsp; <kbd>Shift</kbd> нитро &nbsp; <span class="d-hopk" hidden><kbd>X</kbd> хоп (держите – выше) &nbsp; </span><kbd>Space</kbd> ручник (дрифт) &nbsp; <kbd>G</kbd> сигнал &nbsp; <kbd>V</kbd> камера &nbsp; <kbd>1</kbd>–<kbd>5</kbd>/<kbd>R</kbd> телепорт &nbsp; <kbd>E</kbd> выйти · exit</div>
     <div class="d-touch"><button data-k="nitro">NITRO</button><button data-k="hop" hidden>HOP</button><button data-k="hand">DRIFT</button><button data-k="brake">STOP</button><button data-k="exit">EXIT</button></div>`;
   document.body.appendChild(root);
   const $ = (s) => root.querySelector(s);
   const condition = $('.d-condition span');
   $('.d-condition button').addEventListener('click', () => onRepair?.());
   const el = { rpm: $('.d-rpm'), num: $('.d-num'), gear: $('.d-gear'), nitro: $('.d-nitro'), nbar: $('.d-nitro i'), vig: $('.d-vig'), flash: $('.d-flash'), drift: $('.d-drift'), driftN: $('.d-drift span'), keys: $('.d-keys'),
-    streaks: $('.d-streaks'), hopKey: $('.d-hopk'), hopBtn: $('.d-touch [data-k="hop"]'), touch: $('.d-touch') };
+    streaks: $('.d-streaks'), charge: $('.d-charge'), chargeI: $('.d-charge i'), hopKey: $('.d-hopk'), hopBtn: $('.d-touch [data-k="hop"]'), touch: $('.d-touch') };
   const sctx = el.streaks.getContext('2d');
   let prof = {};         // per-car words (drive/cars/tuning.js HUD): the label of the boost bar, 'D' for a one-gear (electric) car
-  let hasHop = false, hopOff = false;       // the car can hop (set by its profile); the HOP button is dimmed
+  let hasHop = false, hopOff = false, chargeShown = -1;       // the car can hop (set by its profile); the HOP button is dimmed
   let shown = false, keyT = 0, lastNum = -1, lastGear = '', flashA = 0, bankT = 0, driftPts = 0, driftShown = 0;
   const streaks = []; for (let i = 0; i < 70; i++) streaks.push({ a: Math.random() * 6.283, r: Math.random(), l: 0.15 + Math.random() * 0.3, w: 0.6 + Math.random() * 1.8 });
   // touch buttons
@@ -112,7 +119,14 @@ export function createDriveHud({ isTouch, onExit, onRepair, onNitro, onHand, onB
       if (gear !== lastGear) { lastGear = gear; el.gear.textContent = gear; el.gear.classList.add('shift'); setTimeout(() => el.gear.classList.remove('shift'), 140); }
       const f = Math.max(0, Math.min(1, car.rpm));
       el.rpm.setAttribute('stroke-dashoffset', (((ARC.a1 - ARC.a0) * Math.PI / 180 * ARC.r) * (1 - f)).toFixed(1));
-      if (hasHop) { const off = car.air || car.boost < (car.tuning.hop?.minTank ?? 0); if (off !== hopOff) { hopOff = off; el.hopBtn.classList.toggle('off', off); } }      // the HOP button dims while the tank is too low or the car is in the air
+      if (hasHop) {
+        const off = car.air || (!car.charging && car.boost < (car.tuning.hop?.minTank ?? 0)); if (off !== hopOff) { hopOff = off; el.hopBtn.classList.toggle('off', off); }      // the HOP button dims while the tank is too low or the car is in the air
+        const ch = car.charging ? Math.max(0, Math.min(1, car.charge || 0)) : 0;              // the charge while X (or the button) is held
+        if (ch !== chargeShown) {
+          chargeShown = ch; el.chargeI.style.transform = `scaleX(${ch.toFixed(3)})`; el.hopBtn.style.setProperty('--c', ch.toFixed(3));
+          el.charge.classList.toggle('on', car.charging); el.charge.classList.toggle('full', ch >= 0.95);
+        }
+      }
       el.nbar.style.transform = `scaleX(${car.boost.toFixed(3)})`; el.nitro.classList.toggle('low', car.boost < 0.22); el.nitro.classList.toggle('burn', car.boosting);
       // streaks + vignette
       const spd = Math.max(0, (car.speed - 95) / 130) + (car.boosting ? 0.45 : 0);

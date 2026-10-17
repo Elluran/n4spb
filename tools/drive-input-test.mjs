@@ -85,6 +85,11 @@ try {
     press(); assert.equal(sb.hopTap, true, 'a fresh X press while driving latches the hop');
     if (originalAdd === undefined) delete globalThis.addEventListener; else globalThis.addEventListener = originalAdd;
   }
+  // hop v2: the key level is what charges the hop (drive.js passes a level, handling.js makes the edge), the HUD hint and the charge bar exist, the model gets the charge / flip / pulses
+  assert(/out.jump = k.has('KeyX') || touch.jump || hopTap/.test(source), 'readInput still passes the X key as a LEVEL (hold = charge)');
+  const hudSrc = fs.readFileSync(new URL('../src/world/drive/hud.js', import.meta.url), 'utf8');
+  assert(hudSrc.includes('<kbd>X</kbd> хоп (держите – выше)'), 'the key hint reads X хоп (держите – выше)'); assert(hudSrc.includes('d-charge') && hudSrc.includes('car.charging'), 'the HUD has a charge bar fed by car.charge');
+  assert(/charge: c.charge/.test(source) && /flip: c.flip/.test(source) && /s0: c.pulse0/.test(source), 'poseVehicle passes charge / flip / side-jet pulses to the model');
   // exit() refuses in mid-hop (unless forced)
   const e0 = source.indexOf('  function exit(force = false) {'), e1 = source.indexOf('EXIT_MAX_KMH', e0);
   assert(e0 >= 0 && /!force && car\.air\) return false/.test(source.slice(e0, e1)), 'exit() keeps the door shut while the car is airborne');

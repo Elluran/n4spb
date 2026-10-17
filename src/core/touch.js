@@ -62,6 +62,8 @@ body.playing #tc { display: block; }
 #tc .tc-b.arrow svg { width: 52%; height: 52%; }
 #tc .tc-b span { pointer-events: none; }
 #tc .tc-ring { position: absolute; inset: -7px; border-radius: 50%; pointer-events: none; background: conic-gradient(#35b8ff calc(var(--p, 1) * 1turn), rgba(255,255,255,.18) 0); -webkit-mask: radial-gradient(circle, transparent 66%, #000 68%); mask: radial-gradient(circle, transparent 66%, #000 68%); }
+#tc .tc-ring.hop { background: conic-gradient(#d9f3ff calc(var(--p, 0) * 1turn), rgba(255,255,255,.18) 0); opacity: 0; transition: opacity .12s; }
+#tc .tc-ring.hop.on { opacity: 1; }
 #tc .tc-ring.low { background: conic-gradient(#ff5560 calc(var(--p, 1) * 1turn), rgba(255,255,255,.18) 0); }
 #tc .tc-ghost { position: absolute; width: calc(112px * var(--tc-u)); height: calc(112px * var(--tc-u)); margin: calc(-56px * var(--tc-u)) 0 0 calc(-56px * var(--tc-u)); border-radius: 50%; pointer-events: none; opacity: .0; transition: opacity .2s; }
 #tc .tc-ghost.show { opacity: .9; }
@@ -110,7 +112,7 @@ const BTN = {
   interact: { label: '', fire: 'down', aria: 'Действие · Use' },
   up: { label: 'UP', fire: 'hold', aria: 'Вверх · Up' }, down: { label: 'DOWN', fire: 'hold', aria: 'Вниз · Down' }, boost: { label: 'BOOST', fire: 'hold', aria: 'Ускорение · Boost' },
   gas: { label: 'GAS', cls: 'pedal gas', fire: 'hold', aria: 'Газ · Gas' }, brake: { label: 'BRAKE', cls: 'brake', fire: 'hold', aria: 'Тормоз · Brake' },
-  nitro: { label: 'NITRO', fire: 'hold', aria: 'Нитро · Nitro' }, hand: { label: 'DRIFT', fire: 'hold', aria: 'Ручник · Handbrake' }, hop: { label: 'HOP', fire: 'down', aria: 'Прыжок авто · Hop' },
+  nitro: { label: 'NITRO', fire: 'hold', aria: 'Нитро · Nitro' }, hand: { label: 'DRIFT', fire: 'hold', aria: 'Ручник · Handbrake' }, hop: { label: 'HOP', fire: 'hold', aria: 'Прыжок авто (держите — выше) · Hop (hold to charge)' },
   cam: { label: 'CAM', cls: 'small', fire: 'down', aria: 'Камера · Camera' }, horn: { label: 'HORN', cls: 'small', fire: 'down', aria: 'Сигнал · Horn' }, auto: { label: 'AUTO', cls: 'small', fire: 'up', aria: 'Автогаз · Auto gas' },
   repair: { label: 'FIX', cls: 'small', fire: 'up', aria: 'Починить · Repair' }, exit: { label: 'EXIT', cls: 'small', fire: 'up', aria: 'Выйти из машины · Exit the car' },
   arrowL: { label: '', cls: 'arrow', fire: 'hold', svg: SVG.left, aria: 'Руль влево · Steer left' }, arrowR: { label: '', cls: 'arrow', fire: 'hold', svg: SVG.right, aria: 'Руль вправо · Steer right' },
@@ -140,7 +142,7 @@ export function createTouchControls({ ctx, player, canvas, params = new URLSearc
   ctx.touch = state;
   let mode = 'walk';
   const held = new Set(), since = new Map(), ptrs = new Map(), ownedKeys = new Set();
-  let stickPtr = null, lookPtr = null, steerPtr = null, wheelBase = 0, wheelSteer = 0, hopTicks = 0, lookAcc = { dx: 0, dy: 0 };
+  let stickPtr = null, lookPtr = null, steerPtr = null, wheelBase = 0, wheelSteer = 0, lookAcc = { dx: 0, dy: 0 };
   let ins = { l: 0, r: 0, t: 0, b: 0 }, u = 1, W = win.innerWidth, H = win.innerHeight;
   let tiltOn = false, tiltRoll = 0, tiltZero = 0, tiltAt = 0, wake = null, started = false, lastDamage = 0, lastBoost = false, coachTimer = 0;
   const isIPhone = /iPhone|iPod/.test(nav.userAgent || '') && !/iPad/.test(nav.userAgent || '');
@@ -164,11 +166,12 @@ export function createTouchControls({ ctx, player, canvas, params = new URLSearc
     const el = h('button', { type: 'button', class: 'tc-b ' + (d.cls || ''), 'data-id': id, 'aria-label': d.aria, hidden: true }, d.svg ? h('span', { html: d.svg, style: 'display:contents' }) : null, d.label ? h('span', { text: d.label }) : null);
     if (id === 'interact') el.append(h('span', { html: SVG.hand, style: 'display:contents' }));
     if (id === 'nitro') el.append(h('i', { class: 'tc-ring', style: '--p:1' }));
+    if (id === 'hop') el.append(h('i', { class: 'tc-ring hop', style: '--p:0' }));      // the charge ring: fills while the button is held
     btns[id] = el; tc.append(el);
   }
   tc.append(label, coach, rotate);
   body.append(tc, probe);
-  const ring = btns.nitro && btns.nitro.querySelector('.tc-ring'), wheelSvg = wheelGhost.querySelector('svg');
+  const ring = btns.nitro && btns.nitro.querySelector('.tc-ring'), hopRing = btns.hop && btns.hop.querySelector('.tc-ring'), wheelSvg = wheelGhost.querySelector('svg');
 
   // ---------------------------------------------------------------- helpers
   const buzz = (ms) => { if (settings.haptics && typeof nav.vibrate === 'function') { try { nav.vibrate(ms); } catch (e) { /* no vibration */ } } };
@@ -271,10 +274,11 @@ export function createTouchControls({ ctx, player, canvas, params = new URLSearc
   // ---------------------------------------------------------------- releasing every role (blur, hidden tab, mode switch, a panel, orientation)
   function releaseAll() {
     for (const [id, p] of ptrs) { try { p.el.releasePointerCapture(id); } catch (e) { /* already gone */ } }
+    if (held.has('hop')) key('keyup', 'KeyX');      // a held HOP button is let go with every other role (the charge launches)
     ptrs.clear(); stickPtr = lookPtr = steerPtr = null; held.clear(); since.clear(); wheelBase = 0; wheelSteer = 0; lookAcc = { dx: 0, dy: 0 };
     stickGhost.style.left = stickGhost.dataset.hx + 'px'; stickGhost.style.top = stickGhost.dataset.hy + 'px'; stickGhost.firstChild.nextSibling.style.transform = '';
     player.touchMove.set(0, 0);
-    state.steer = state.thr = state.brk = 0; state.nitro = state.hand = false; state.look.dx = state.look.dy = 0;
+    state.steer = state.thr = state.brk = 0; state.nitro = state.hand = state.hop = false; state.look.dx = state.look.dy = 0;
     for (const id in btns) btns[id].classList.remove('down');
     syncKeys();
     stickGhost.classList.remove('run');
@@ -348,13 +352,13 @@ export function createTouchControls({ ctx, player, canvas, params = new URLSearc
     const id = btn.dataset.id, d = BTN[id], a = T.ACTIONS[id]; if (!a || !a.modes.includes(mode)) return;
     ptrs.set(e.pointerId, { role: 'btn', id, el: btn });
     btn.classList.add('down'); buzz(6);
-    if (d.fire === 'hold') { held.add(id); since.set(id, performance.now()); syncKeys(); return; }
+    if (d.fire === 'hold') { held.add(id); since.set(id, performance.now()); syncKeys(); if (id === 'hop') key('keydown', 'KeyX'); return; }      // HOP: the keydown latches a press shorter than one frame (drive.js hopTap); the level comes from player.keys
     if (d.fire === 'down') fire(id);
   }
   function buttonUp(p, e) {
     const id = p.id, d = BTN[id];
     p.el.classList.remove('down');
-    if (d.fire === 'hold') { held.delete(id); since.delete(id); syncKeys(); }
+    if (d.fire === 'hold') { held.delete(id); since.delete(id); syncKeys(); if (id === 'hop') key('keyup', 'KeyX'); }
     else if (d.fire === 'up' && e.type === 'pointerup' && inRect(e, p.el)) fire(id);
   }
   function fire(id) {
@@ -374,7 +378,6 @@ export function createTouchControls({ ctx, player, canvas, params = new URLSearc
       default: break;
     }
     if (id === 'recentre') tiltZero = tiltRoll;
-    if (id === 'hop') { state.hop = true; hopTicks = 3; }
   }
   btns.recentre && btns.recentre.addEventListener('pointerup', () => { tiltZero = tiltRoll; });
 
@@ -388,7 +391,6 @@ export function createTouchControls({ ctx, player, canvas, params = new URLSearc
     updateMode();
     portraitBanner();
     if (mode === 'drive') driveFrame(dt, now);
-    if (hopTicks > 0 && --hopTicks === 0) state.hop = false;
     syncKeys();
     refresh();
     state.look.dx = lookAcc.dx; state.look.dy = lookAcc.dy; lookAcc.dx = lookAcc.dy = 0;
@@ -406,12 +408,13 @@ export function createTouchControls({ ctx, player, canvas, params = new URLSearc
     const raw = steerSource(now);
     const steer = Math.max(-1, Math.min(1, raw * (settings.steerAssist ? T.steerAssist(car.speed || 0) : 1)));
     const gas = held.has('gas') || (settings.autoGas && !held.has('brake'));
-    state.steer = steer; state.thr = gas ? 1 : 0; state.brk = held.has('brake') ? 1 : 0; state.nitro = held.has('nitro'); state.hand = held.has('hand');
+    state.steer = steer; state.thr = gas ? 1 : 0; state.brk = held.has('brake') ? 1 : 0; state.nitro = held.has('nitro'); state.hand = held.has('hand'); state.hop = held.has('hop');
     const enc = T.encodeDrive({ steer, thr: state.thr, brk: state.brk });
     player.touchMove.set(enc.x, enc.y);
     // feedback: the wheel turns, the NITRO ring shows the tank, the GAS pedal says AUTO, haptics on bumps and on the boost
     wheelSvg.style.transform = `rotate(${-steer * 90}deg)`;
     if (ring) { const p = Math.max(0, Math.min(1, car.boost == null ? 1 : car.boost)); if (Math.abs((ring._p ?? -1) - p) > 0.01) { ring._p = p; ring.style.setProperty('--p', p.toFixed(3)); ring.classList.toggle('low', p < 0.22); } }
+    if (hopRing) { const q = car.charging ? Math.max(0, Math.min(1, car.charge || 0)) : 0; if (Math.abs((hopRing._p ?? -1) - q) > 0.01) { hopRing._p = q; hopRing.style.setProperty('--p', q.toFixed(3)); hopRing.classList.toggle('on', car.charging); } }      // the HOP charge ring, read from the car state
     const gl = btns.gas && btns.gas.firstChild; if (gl) { const t = settings.autoGas ? 'AUTO' : 'GAS'; if (gl.textContent !== t) gl.textContent = t; }
     if (car.boosting && !lastBoost) buzz(20); lastBoost = !!car.boosting;
     const dmg = car.damage || 0; if (dmg > lastDamage + 0.002) buzz(Math.min(140, 40 + (dmg - lastDamage) * 900)); lastDamage = dmg;

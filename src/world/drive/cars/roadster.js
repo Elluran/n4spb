@@ -6,7 +6,9 @@
 // SHAPE (measured from the official press renders, +-3 %): 4.62 m long, 2.00 m wide, 1.22 m high, wheelbase 2.96 m, cab-forward (the windscreen base is above the front axle), nose lip 0.49 m,
 //   hood 25 deg then flat to the cowl 0.83 m, windscreen 18.7 deg to the roof peak 1.219 m at z = -0.1, roof falling 9 deg to a 4 cm step, rear deck 0.93 m at the chopped tail; tyres 0.685 m (front) / 0.734 m (rear).
 // REACTIVE: the 4 rear nozzles (SPEC_ROADSTER.exhaust) fire cold-gas plumes under thrust (model.flames[0..3], pale blue-white billowing lathe plumes that fade out, NO orange flame); the wing rises and tips back at speed / thrust;
-//   four hidden down-jets (hop, p.jet) appear only while a hop uses them.
+//   four hidden down-jets (hop, p.jet / p.charge / p.jetK) appear only while a hop charges or uses them. HOP v2: p.charge squats the nose a little; on a MAX hop p.flip (radians, from handling.js car.flip) rolls the whole model
+//   a full 360 degrees about its long axis through the middle of the body (COSMETIC: the physics car stays upright; the cockpit view ignores it so the camera never rolls) and four thin cyan-white side streaks (p.s0 / p.s1 = the pulses
+//   of the left / right jets) shoot out of the flanks while it turns.
 // DRAW CALLS: exterior 17 (body, glass, head lamps, tail lamps, driver, yoke, 4 wheels, rear plate, roof logo, wing = blade + fences + struts) + glow + head-lamp pool + 4 plumes + 4 down-jets (the last three groups only while used).
 // Z-FIGHTING: every part keeps >= 1.5-2 cm from the surface it sits next to; decals (bars, seams, plate) are 1.2-2 cm proud.
 // COCKPIT: camera mode 2 shows the cockpit set of cars/roadster/interior.js (createRoadsterCockpit(ctx, S, paint) -> { group, wheel, setVisible, update }); its yoke is also the exterior steering wheel.
@@ -42,6 +44,8 @@ export const SPEC_ROADSTER = {
 const NOSE = '#1E2228', PAINT = '#DDDFE4', PAINT_HI = '#F6F7F9', CARBON = '#14171B', UNDER = '#0D0F12', LINING = '#0F1114', LINER = '#161B26', PILLAR = '#14171B', SEAT = '#E6E6EA', METAL = '#C9CBD0', FENDER = '#CDD2DB';
 const DISC = '#F0F1F5', RIM = '#A9ACB6', SPOKE = '#0A0A0D', BRONZE = '#8C6B4A', TITAN = '#524E53', CAP = '#242733', TYRE_STEP = '#1B1B1D', RING = '#B8A47C', BORE = '#050505';
 const DEGS = Math.PI / 180, SHADE_LIFT = [0.44, 0.46, 0.50];
+/** hop v2 (the numbers mirror tuning.hop in cars/tuning.js): the nose-down squat at full charge (rad), the height of the barrel roll's axis, the side-jet nozzles (front lateral L1 / L2 and a rear pair near the rear wheels; x is mirrored) */
+const SQUAT = 0.045, FLIP_PIVOT = 0.55, SIDE_NOZZLES = [[0.92, 0.58, 2.05], [1.0, 0.55, -1.75]];
 
 /** a copy of a toon material whose shaded side is lifted toward a cool blue-grey: the albedo (vertex colour included) is added back as emissive, so the satin white reads white in the shade
  *  while the black carbon stays black (the lift scales with the albedo); the original (shared by the other garage cars) stays untouched */
@@ -293,6 +297,12 @@ export function createRoadsterModel(ctx, { plate = 'RDSTR' } = {}) {
   const jetMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.92, 0.95, 1.0), transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, name: 'drive-jet' });
   const downJets = [];
   for (const [x, z] of [[0.95, 0.95], [-0.95, 0.95], [0.95, -1.98], [-0.95, -1.98]]) { const j = new THREE.Mesh(jetGeo, jetMat); j.position.set(x, 0.17, z); j.visible = false; root.add(j); downJets.push(j); ctx.noOutline(j); }
+  // ---- the side streaks of a max hop (4 thin cyan-white cold-gas cores on the flanks, built hidden, shown only while the barrel roll turns and a side jet pulses): the plume lathe laid along +/- x, thin, 0.4 - 1.8 m long: the white particle streams of fx.js carry the look, these cores only make them read as jets
+  const streaks = [], streakMat = flameMat.clone(); streakMat.opacity = 0.5; streakMat.name = 'drive-streak';
+  for (const [nx, ny, nz] of SIDE_NOZZLES) for (const sd of [1, -1]) {
+    const m = new THREE.Mesh(plumeGeo, streakMat); m.position.set(sd * nx, ny, nz); m.rotation.y = sd > 0 ? -Math.PI / 2 : Math.PI / 2; m.visible = false; m.scale.set(0.3, 0.3, 0.01); root.add(m); ctx.noOutline(m);
+    streaks.push({ mesh: m, side: sd > 0 ? 0 : 1 });
+  }
   // ---- the pale-blue ground glow under thrust (the real car has none otherwise) and the head-lamp pool on the road (night)
   const glowMat = new THREE.MeshBasicMaterial({ map: glowTexture(), color: new THREE.Color(0.55, 0.75, 1.0), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, name: 'drive-roadster-glow' });
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 5.8), glowMat); glow.rotation.x = -Math.PI / 2; glow.position.set(0, 0.06, -3.2); root.add(glow); ctx.noOutline(glow);
@@ -309,7 +319,8 @@ export function createRoadsterModel(ctx, { plate = 'RDSTR' } = {}) {
   const steerWheel = cockpit.wheel; root.add(steerWheel);
 
   const night = ctx.shared.uNight, cp = { steer: 0, kmh: 0, rpm: 0, gear: 'N', night: 0, boost: 0, dt: 0.016 };       // cp: the cockpit's per-frame parameters (one object, nothing allocated per frame)
-  let boostK = 0, wingK = 0, inside = false;
+  let boostK = 0, wingK = 0, inside = false, flipShown = 0;
+  const _e = new THREE.Euler(0, 0, 0, 'YXZ'), _o = new THREE.Vector3();
   // damage (drive/damage.js) bends only the body mesh: the wing follows the crushed tail (read from the body's bounding box, which damage.sync recomputes) and vanishes with it
   body.geometry.computeBoundingBox();
   const minZ0 = body.geometry.boundingBox.min.z;
@@ -319,7 +330,15 @@ export function createRoadsterModel(ctx, { plate = 'RDSTR' } = {}) {
     /** pose: x y z yaw (rotY) pitchUp roll; steer in -1..1 (+ = left); roll the wheels by `spin` radians since the last call; brake / boost / lights 0..1; optional hop: jet 0..1 */
     set(p) {
       const dt = p.dt || 0.016, hop = Math.max(0, p.jet || 0);
-      root.position.set(p.x, p.y, p.z); root.rotation.set(-p.pitch - 0.07 * hop, p.yaw, p.roll);
+      // HOP v2: the charge squats the nose; the max-hop barrel roll (p.flip, radians) turns the model about its long axis through the middle of the body (the cockpit view stays level: the camera is derived from this root)
+      const charge = Math.max(0, p.charge || 0), px = -p.pitch - 0.07 * hop + SQUAT * charge;
+      let ft = inside ? 0 : (p.flip || 0); ft -= 2 * Math.PI * Math.round(ft / (2 * Math.PI));                              // the shortest equivalent angle: a finished roll (2 pi) is level
+      if (inside) flipShown = 0;                                                                                          // the cockpit camera is derived from this root: never a trace of roll there
+      if (ft === 0 && flipShown !== 0) { flipShown *= Math.exp(-18 * dt); if (Math.abs(flipShown) < 0.002) flipShown = 0; }  // an early landing eases the roll out instead of snapping
+      else flipShown = ft;
+      root.position.set(p.x, p.y, p.z); root.rotation.set(px, p.yaw, p.roll + flipShown);
+      if (flipShown !== 0) { _e.set(px, p.yaw, 0, 'YXZ'); _o.set(FLIP_PIVOT * Math.sin(flipShown), FLIP_PIVOT * (1 - Math.cos(flipShown)), 0).applyEuler(_e); root.position.add(_o); }
+      for (const st of streaks) { const k = flipShown !== 0 && !inside ? (st.side === 0 ? p.s0 : p.s1) || 0 : 0; st.mesh.visible = k > 0.08; if (st.mesh.visible) { const f = 1 + 0.12 * Math.sin(61 * performance.now() / 1000 + st.side * 2); st.mesh.scale.set(0.3, 0.3, (0.4 + 1.4 * k) * f); } }
       const del = p.steerAngle, sp = p.spin;
       for (const w of wheels) { if (w.front) w.pivot.rotation.y = del; w.mesh.rotation.x += sp * w.k; }
       steerWheel.rotation.z = p.steer * 2.2;
@@ -344,7 +363,8 @@ export function createRoadsterModel(ctx, { plate = 'RDSTR' } = {}) {
       wingGroup.position.y = deckY(-2.0) + 0.03 + 0.16 * wingK; wingGroup.position.z = -2.04 - 0.06 * wingK; wingGroup.rotation.x = -5 * DEGS * wingK; fences.scale.y = 0.12 + 0.88 * wingK; struts.scale.y = 0.02 + 0.20 * wingK;
       const bb = body.geometry.boundingBox, sag = bb ? Math.max(0, bb.min.z - minZ0) : 0, crushed = sag > 0.3;
       wingGroup.position.z += sag; wingGroup.visible = !inside && !crushed;                                            // up to 0.3 m of crush the wing follows the tail, beyond it vanishes
-      for (const j of downJets) { j.visible = hop > 0.02; if (j.visible) j.scale.set(1, 0.4 + 1.2 * hop, 1); }       // the cold-gas columns of a hop; absent for plain driving
+      const dj = Math.max(hop, 0.25 * charge), jk = p.jetK || 1, rolled = Math.abs(flipShown) > 0.5;                                                          // the cold-gas columns of a hop (a charging hop shows short ones, a charged hop fat long ones); absent for plain driving
+      for (const j of downJets) { j.visible = dj > 0.02 && !rolled; if (j.visible) j.scale.set(1 + 0.25 * (jk - 1), (0.4 + 1.2 * dj) * (1 + 0.3 * (jk - 1)), 1 + 0.25 * (jk - 1)); }      // (not while the car is rolled over: the particle columns of fx.js fire straight down on their own)
     },
     /** camera mode 2 (cockpit): the exterior shell, glass, lamps, plate, roof decal and wing are replaced by the cockpit set (roadster/interior.js); the wheel meshes and the yoke stay */
     setView(v) {

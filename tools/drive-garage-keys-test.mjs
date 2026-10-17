@@ -1,7 +1,7 @@
 // The REAL keyboard flow of every garage car in the real page (headless Edge / Chrome with GPU, the HUD is drawn): load -> Start -> for each car (taxi pickup, Zhiguli, Roadster, red coupe, in that order,
 // so that "exit one car, enter the next" is exercised three times): walk up -> the car's own prompt -> E -> W (gas) -> Shift (nitro / boost) -> A + Space (handbrake drift) -> G (horn) -> V V V
 // (chase / high / cockpit / chase) -> S (brake, then reverse) -> E (exit, the car stays solid) -> the next car.
-// The Roadster also hops (X) once the gas hop is built into handling.js (the check switches itself on when the car has a `hop` tuning and a height `h`).
+// The Roadster also hops (X, a tap: the hop v2 launches on the key release, one frame later) once the gas hop is built into handling.js (the check switches itself on when the car has a `hop` tuning and a height `h`).
 //   node tools/drive-garage-keys-test.mjs [--q medium] [--only environment,streets,city,landmarksC,drive] [--shots] [--out shots/drive/keys] [--tod night] [--load-timeout ms]
 // Checks per car: the prompt names the car, E gets into THAT car (HUD boost label, one-gear letter D for the pickup and the Roadster), gas speeds up, the nitro lowers the tank and raises the speed, the handbrake
 // with A makes the car slide (drifting or a sideways speed) and turns it, the horn is called, V cycles the camera 0 -> 1 -> 2 -> 0 and the cockpit set is visible only in mode 2, S stops the car

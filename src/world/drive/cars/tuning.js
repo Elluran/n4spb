@@ -11,7 +11,7 @@
 //   steering        quick       soft: slow turn-in, low grip  lively: quick turn-in, loose tail, early slide  planted wide tyres: quick, not twitchy
 //   body            flat        rolls 1.6 x, lazy springs    the model leans 1.25 x / 1.3 x by itself (lada2106.js set())  stiff and low, squats at launch
 //   nitro           x1.38 / 1.9  x1.30 / 1.5 (electric boost) x1.34 / 1.8                 THRUST x1.28 / 2.0, builds over 0.22 s (nitroRamp), a short tank (3.3 s)
-//   hop             -           -                           -                           the gas hop (the `hop` row: handling.js; the Roadster only)
+//   hop             -           -                           -                           the gas hop (the `hop` row: handling.js; the Roadster only): X taps 1.24 m, X held (0.7 s) 2.48 m with a barrel roll
 // `durability` (damage.js recordDamage): a stout stainless body crumples less per hit than the soft old Zhiguli metal, the thin faceted Roadster shell a bit more than the coupe.
 
 /** body weights (kg): the red coupe is 1350 (the unit of the traffic impact ratios), the truck 2.2 x, the Lada 0.7 x, the Roadster 1.25 x (a real one is just under 1,700 kg) */
@@ -42,7 +42,12 @@ export const TUNING = {
     grip: 9.5, gripHand: 1.3, scrub: 0.10, handDecel: 6,                             // wide planted tyres: quick but not twitchy
     engBrake: 2.0,                                                                   // strong regeneration when the throttle is released
     rollK: 0.0024, rollMax: 0.045, pitchK: 0.0045, pitchMax: 0.07, bodyResp: 11, impactDecay: 4.5,      // stiff and low: little roll, a visible squat at launch
-    hop: { v0: 6.2, g: 15.5, cost: 0.28, minTank: 0.28, cooldown: 0.55, airSteer: 0.25, pitchUp: 0.07 },   // the gas hop (handling.js): take-off speed m/s, gravity m/s2, tank cost, tank needed, cooldown s after touchdown, steering torque while airborne, nose-up
+    // the gas hop v2 (handling.js hopStep): HOLD X to charge it. A tap (held <= tapT) = v0 6.2 m/s, apex 1.24 m, 0.8 s; a full charge (held tapT + 0.6 = chargeT 0.7 s, then it launches by itself) = v0max 8.77 m/s, apex 2.48 m (twice), ~1.13 s;
+    // in between the APEX is linear in the charge (v0 = sqrt(v0^2 + (v0max^2 - v0^2) c)). Tank cost cost -> costMax with the charge, minTank (= cost) starts a charge, the charge is capped by what the tank can pay. g m/s2, cooldown s after touchdown,
+    // airSteer = the steering torque in the air, pitchUp = nose-up while the jets burn, squat = nose-down at full charge (rad, model only), jetBig = the down-jets grow by this much at full charge.
+    // flip = the max hop: from charge `at` the model rolls 360 degrees (cosmetic) finishing at `frac` of the airtime, side jets pulse every `pulseT` s (the L1 / L2 front nozzles + a rear pair, car-local x y z, mirrored); clearMax = the height (m over the road) the solids see.
+    hop: { v0: 6.2, v0max: 8.77, g: 15.5, cost: 0.28, costMax: 0.45, minTank: 0.28, tapT: 0.10, chargeT: 0.7, cooldown: 0.55, airSteer: 0.25, pitchUp: 0.07, squat: 0.045, jetBig: 0.9, clearMax: 1.9,
+      flip: { at: 0.95, frac: 0.85, pulseT: 0.36, pivotY: 0.55, nozzles: [[0.92, 0.58, 2.05], [1.0, 0.55, -1.75]] } },
   },
 };
 

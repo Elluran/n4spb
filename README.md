@@ -44,7 +44,7 @@ Note that the page loads fast only while the shipping bake in `assets/baked/` ma
 | Space | Jump |
 | F | Take off / land. While flying **W / S fly along the view**, A / D strafe, Space or E up, Q or C down, Shift boost. Roofs are walkable: fly over a building, press F and you land on its roof |
 | E | Use: enter the metro, board / leave a train, switch an escalator, get into the car ("[E] ..." prompts) |
-| E at a parked car | **Drive**: four cars wait on the station forecourt, each with its own handling, engine voice and cockpit: the red sports car (beside the Moscow station's taxi rank), the taxi pickup, the eggplant Zhiguli and the white **Tesla Roadster** (2026; its **Shift** is a THRUST from four cold-gas nozzles, **X** is a gas hop over kerbs and benches); E at the nearest one gets in, every car carries the Bibliotechka roof logo. In the car: **W / S** gas / brake + reverse, **A / D** steer, **Shift** nitro, **Space** handbrake (drift), **G** horn, **V** camera (chase / high / cockpit), mouse looks around, **E** gets out (below 25 km/h); the place keys and R teleport the car |
+| E at a parked car | **Drive**: four cars wait on the station forecourt, each with its own handling, engine voice and cockpit: the red sports car (beside the Moscow station's taxi rank), the taxi pickup, the eggplant Zhiguli and the white **Tesla Roadster** (2026; its **Shift** is a THRUST from four cold-gas nozzles, **X** is a gas hop over kerbs and benches: a tap is a 1.2 m hop, **hold X** to charge a higher one, a full 0.7 s charge is twice as high (2.5 m) with a barrel roll and side jets); E at the nearest one gets in, every car carries the Bibliotechka roof logo. In the car: **W / S** gas / brake + reverse, **A / D** steer, **Shift** nitro, **Space** handbrake (drift), **G** horn, **V** camera (chase / high / cockpit), mouse looks around, **E** gets out (below 25 km/h); the place keys and R teleport the car |
 | Street map (bottom left) | A round heading-up map that labels the named streets and a pill above it that names the street you are on (hidden underground and in the metro, **H** hides it with the rest of the UI) |
 | 1 – 5 | Jump to: Площадь Восстания · Московский вокзал / Обелиск / Невский проспект / платформы вокзала / Аничков мост |
 | 6 – 8 | Спас на Крови (Griboedov Canal) / Гостиный Двор / Зимний дворец |
@@ -62,7 +62,7 @@ Note that the page loads fast only while the shipping bake in `assets/baked/` ma
 Touch (phones and tablets): see **Mobile** below. Quality (Medium / Performance) is in the top-right corner on desktop and in the menu on touch devices (remembered; phones start on Performance).
 The player cannot leave the strip: the border is an invisible wall (the scenery goes on for 120 m beyond it and then fades into the city beyond the data).
 
-URL parameters: `?tod=day|golden|night|overcast` (or a number 0..4), `?look=overcast|cloudy` (weather overlay), `?q=medium|performance`, `?t=40` (start time, s), `?cam=x,z,yaw,pitch` (yaw 0 = north, 90 = west; 5 numbers = free camera `x,y,z,yaw,pitch`),
+URL parameters: `?tod=day|golden|night|overcast` (or a number 0..4), `?look=overcast|cloudy` (weather overlay), `?q=performance|medium` (performance is the default), `?t=40` (start time, s), `?cam=x,z,yaw,pitch` (yaw 0 = north, 90 = west; 5 numbers = free camera `x,y,z,yaw,pitch`),
 `?only=environment,streets,city` (build only some modules), `?allcity` (ignore landmark claims: plain prisms), `?noroof`, `?stats`, `?people=off`, `?tr=nomove`, `?wl=nobirds`, `?pdens=1.3` (crowd density), `?baked=0` (procedural build, no baked assets).
 Debug hooks: `window.__ctx`, `window.__setCam`, `window.__sim(t)`, `window.__bench(n)`, `window.__knock` (`hit(x, z, kmh, dx, dz, kind)` knocks the nearest standing thing; `stats`, `list`; `tools/shot.mjs --pre` steps it before a shot).
 
@@ -77,7 +77,7 @@ The page runs on phones and tablets with an on-screen control layer (`src/core/t
 | Walking: bottom right | **JUMP**, **RUN** (latch), **FLY** (take off / land; while flying: **UP**, **DOWN**, **BOOST**), and a **USE** button that appears when something is in reach (a car, a metro door, a train) with its label |
 | Top right | **MENU** (places, time of day, sound, hide UI, respawn, FPS, fullscreen, quality, settings) and **SOUND** |
 | Driving: left thumb | steering: a floating wheel (swipe left / right, proportional), or arrows, or tilt the phone |
-| Driving: right thumb | **GAS**, **BRAKE** (reverse at a standstill), **NITRO**, **DRIFT** (handbrake), **HOP** (cars that can hop) |
+| Driving: right thumb | **GAS**, **BRAKE** (reverse at a standstill), **NITRO**, **DRIFT** (handbrake), **HOP** (cars that can hop; press and hold to charge a higher hop, release to launch) |
 | Driving: top | **CAM** (camera), **HORN**, **AUTO** (auto-gas), **FIX** (repair), **EXIT** (below 25 km/h); a drag on the free screen orbits the camera |
 
 Settings (menu -> Controls, saved on the device): look and steering sensitivity, invert Y, steering scheme (wheel / arrows / tilt), speed steering assist, tilt range, auto-gas, left-handed layout, haptics (Android only), button size, run by default.
@@ -119,7 +119,7 @@ The world is the build list `MODULES` in `src/main.js` (each module is `src/worl
 | `traffic` | Moving and parked vehicles of 20+ Petersburg archetypes (Lada, crossovers, SUVs, taxis, vans, turquoise buses, trolleybuses with poles on the wires, the red double-decker "City Tour"), a car-following simulation with signals, queues, bus stops and giving way to pedestrians |
 | `people` | About a thousand anime pedestrians on pavements, zebras, the squares, the station hall and platforms; they board the real trains, use the metro doors, queue for taxis, photograph the horses and the obelisk, follow tour guides with umbrellas, busk, push prams, ride scooters, walk dogs |
 | `wildlife` | Pigeon flocks, sparrows, hooded crows, gulls, swifts at golden hour, mallards with ducklings; calm WebAudio ambience (city bed, lapping water, cafe murmur, metro hum) |
-| `drive` | The drivable garage of four cars (`drive/cars/`: red coupe, taxi pickup, Zhiguli, Tesla Roadster; per-car arcade handling, nitro / THRUST, drift, a gas hop for the Roadster, collisions with the same solids as the walker, speedometer / tacho HUD, engine / tyre / wind sound) |
+| `drive` | The drivable garage of four cars (`drive/cars/`: red coupe, taxi pickup, Zhiguli, Tesla Roadster; per-car arcade handling, nitro / THRUST, drift, a chargeable gas hop for the Roadster (a tap, or hold X for twice the height and a barrel roll), collisions with the same solids as the walker, speedometer / tacho HUD, engine / tyre / wind sound) |
 
 Engine (`src/core/`): renderer with colour-aware outlines and bloom, toon materials, sky, facade shader, physics with multi-level floors, first-person player, static batcher + outline proxies, canvas textures, WebAudio synth, region streaming of baked products.
 The look (four light presets, about 430 colours) is documented in [`docs/LOOK.md`](docs/LOOK.md).

@@ -1,6 +1,7 @@
 // drive/handling.js - arcade car physics ("Need for Speed, but simpler"): a point mass with a heading, a bicycle-model yaw rate that is limited by tyre grip (understeer at
 // speed), a lateral-velocity grip that the handbrake releases (drifts), nitro (more acceleration + a higher top speed, a tank that refills slowly and faster while drifting),
-// six gears for the tacho / engine note, an optional gas HOP (tuning.hop: the Roadster's down-jets throw the car ~1.2 m up for ~0.8 s; absent = no vertical dynamics at all, car.y is the road) and
+// six gears for the tacho / engine note, an optional gas HOP (tuning.hop: the Roadster's down-jets throw the car up; absent = no vertical dynamics at all, car.y is the road; hop v2: the key CHARGES the hop,
+// a tap = 1.24 m / 0.8 s, a full charge (0.7 s) = 2.48 m / 1.13 s with a cosmetic barrel roll, see hopStep) and
 // an optional thrust surge (tuning.nitroRamp), and collisions against the same solids that stop the pedestrian (core/physics.js: walls, trees, lamp posts, parked cars, the moving
 // traffic) through an oriented rigid footprint with friction and angular impulses; the car also refuses the river, terrain holes (escalator shafts), building footprints and the edge of the map.
 // Frame: yaw = rotY (0 faces +Z, positive turns toward +X); forward = (sin yaw, cos yaw), left = (cos yaw, -sin yaw). steer > 0 = left. Units: m, s.
@@ -15,6 +16,10 @@ export const COUPE_TUNING = { acc: ACC, brake: BRAKE, revAcc: REV_ACC, vmax: VMA
   drag: 0.0011, engBrake: 1.7, nitroDrain: 0.22, nitroRefill: 0.045, nitroDriftRefill: 0.10, pitchK: 0.0040, pitchMax: 0.05, rollK: 0.0030, rollMax: 0.06, bodyResp: 9,
   impactDecay: 4.5, hf: 2.1, hr: 2.1, hw: 0.95, smokeZ: 1.2, smokeY: 0.82, spec: null };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const TAU = Math.PI * 2;
+/** the hop at charge c (0..1), tuning.hop: the take-off speed grows so that the APEX (v0^2 / 2g) is linear in the charge, v0 = sqrt(v0^2 + (v0max^2 - v0^2) c): 6.2 m/s (1.24 m) at 0, 8.77 m/s (2.48 m) at 1; and the tank cost cost -> costMax */
+export const hopV0 = (H, c) => { const a = H.v0 * H.v0, b = (H.v0max ?? H.v0) ** 2; return Math.sqrt(a + (b - a) * c); };
+export const hopCost = (H, c) => H.cost + ((H.costMax ?? H.cost) - H.cost) * c;
 const _s = { y: -Infinity, kind: null, item: null };
 
 export function createHandling(ctx, tuning = null) {
@@ -84,7 +89,9 @@ export function createHandling(ctx, tuning = null) {
     impactSpin: 0,
     h: 0, vy: 0, air: false, jet: 0, surge: 0,       // the gas hop (tuning.hop only): height above the road, climb speed, airborne, the down-jets 0..1; the thrust surge 0..1 (tuning.nitroRamp only)
     hopCd: 0, hopBuf: 0, jetT: 0, jumpHeld: false, cushion: false,
-    events: [],                       // { type: 'hit', v } since the last step(); a hop adds { type: 'hop' }, { type: 'cushion' } and { type: 'land', v } (drive.js takes them out before applyImpacts)
+    charging: false, charge: 0, chargeHeld: 0, jetK: 1,   // hop v2: the key is held (charging), the charge 0..1 while it is, the seconds it has been held, the size of the down-jets (1 = a tap, up to 1 + jetBig)
+    flipOn: false, flip: 0, flipT: 0, flipDur: 1, flipDir: 1, flipDone: false, maxHop: false, pulse0: 0, pulse1: 0,   // the max-hop barrel roll (COSMETIC: the physics car stays upright): angle (rad, + = to the right), time, side-jet pulses 0..1 (left, right)
+    events: [],                       // { type: 'hit', v } since the last step(); a hop adds { type: 'hop', charge, flip }, { type: 'cushion' } and { type: 'land', v, big } (drive.js takes them out before applyImpacts)
     carCenter: { x: 0, z: 0 },
     spec: SPEC, tuning: T, mass: SPEC.mass || 1350, smokeZ: T.smokeZ, smokeY: T.smokeY,
   };
@@ -92,6 +99,7 @@ export function createHandling(ctx, tuning = null) {
   car.reset = (x, z, yaw) => {
     car.nitroLock = false; car.impactSpin = 0; car.events.length = 0;
     car.h = car.vy = car.jet = car.surge = car.hopCd = car.hopBuf = car.jetT = 0; car.air = car.jumpHeld = car.cushion = false;
+    car.charging = car.flipOn = car.flipDone = car.maxHop = false; car.charge = car.chargeHeld = car.flip = car.flipT = car.pulse0 = car.pulse1 = 0; car.jetK = 1;
     car.x = x; car.z = z; car.yaw = yaw; car.vx = car.vz = 0; car.steer = 0; car.pitch = car.roll = 0; car.y = groundAt(x, z);
     car.speed = car.vF = car.vL = car.aLong = car.aLat = 0; car.gear = 1; car.rpm = 0.15; car.boosting = car.drifting = car.braking = false;
   };
@@ -100,7 +108,8 @@ export function createHandling(ctx, tuning = null) {
   function fly(h) {
     const H = T.hop, g = groundAt(car.x, car.z);
     car.vy -= H.g * h;
-    if (!car.cushion && car.y - g < 0.6 && car.vy < -3 && car.boost > 0.05) { car.cushion = true; car.events.push({ type: 'cushion' }); }
+    // the landing cushion fires the jets earlier for a faster sink (they brake 40 m/s2 down to 1.8 m/s); a tap hop still fires at 0.6 m
+    if (!car.cushion && car.y - g < Math.max(0.6, (car.vy * car.vy - 3.2) / 48 + 0.2) && car.vy < -3 && car.boost > 0.05) { car.cushion = true; car.events.push({ type: 'cushion' }); }
     if (car.cushion && car.vy < -1.8 && car.boost > 0.01) {
       const v = Math.min(-1.8, car.vy + 40 * h); car.boost = Math.max(0, car.boost - 0.006 * (v - car.vy)); car.vy = v; car.jetT = Math.max(car.jetT, 0.25);
     }
@@ -109,21 +118,49 @@ export function createHandling(ctx, tuning = null) {
       const v = -car.vy;
       car.y = g; car.h = 0; car.vy = 0; car.air = false; car.cushion = false; car.hopCd = H.cooldown;
       car.pitch -= Math.min(0.045, 0.006 * v);                                   // the nose dips on touchdown and the body springs back (step() eases the pitch)
-      car.events.push({ type: 'land', v });
+      car.events.push({ type: 'land', v, big: car.maxHop });
+      car.flipOn = car.maxHop = false; car.flip = 0; car.pulse0 = car.pulse1 = 0; car.jetK = 1;      // an early landing ends the roll at once: exactly level
     } else car.h = car.y - g;
     return car.y;
   }
-  /** once per step: the hop key (an edge, buffered 0.18 s: a press just before touchdown, or just before the cooldown ends, still counts) starts a hop when the car is on the road and the tank has the gas */
+  /** once per step: the hop key CHARGES the hop (hop v2). A press (an edge, buffered 0.18 s: a press just before touchdown, or just before the cooldown ends, still counts) starts the charge when the car is on the road and
+   *  the tank has the gas (minTank); the car stays planted (steering, throttle and nitro work). Held longer than tapT (0.1 s: a tap is never a charge) the charge rises 0 -> 1 over chargeT (0.7 s); the release launches it, a
+   *  full charge launches by itself (holding never hangs) and so does a charge that has reached what the tank can pay (cap). A sub-frame tap is a press and a release in two frames: charge 0 = today's hop. */
   function hopStep(dt, inp) {
-    const H = T.hop, jump = !!inp.jump;
+    const H = T.hop, jump = !!inp.jump, tapT = H.tapT ?? 0.1, fullT = Math.max(tapT + 1e-3, H.chargeT ?? 0.7);
     car.hopBuf = jump && !car.jumpHeld ? 0.18 : Math.max(0, car.hopBuf - dt); car.jumpHeld = jump;
     car.hopCd = Math.max(0, car.hopCd - dt); car.jetT = Math.max(0, car.jetT - dt);
-    if (car.hopBuf > 0 && !car.air && car.hopCd <= 0 && car.boost >= H.minTank) {
-      car.hopBuf = 0; car.air = true; car.vy = H.v0; car.h = 0; car.cushion = false; car.boost = Math.max(0, car.boost - H.cost); car.jetT = 0.45;
-      car.events.push({ type: 'hop' });
-      if (Math.abs(car.steer) > 0.3) car.impactSpin += (H.flick ?? 2.4) * car.steer / (1 + Math.hypot(car.vx, car.vz) / 20);    // the front lateral jets flick the nose toward the steering (about 30 degrees standing, less at speed: the car keeps its line)
+    if (!car.charging) {
+      if (car.hopBuf > 0 && !car.air && car.hopCd <= 0 && car.boost >= H.minTank) { car.charging = true; car.chargeHeld = 0; car.charge = 0; car.hopBuf = 0; }
+    } else if (jump) car.chargeHeld += dt;
+    if (car.charging) {
+      const span = (H.costMax ?? H.cost) - H.cost, cap = span > 0 ? clamp((car.boost - H.cost) / span, 0, 1) : 1;     // the charge the tank can pay for (the tank refills meanwhile, so it creeps up)
+      const raw = clamp((car.chargeHeld - tapT) / (fullT - tapT), 0, 1);
+      if (car.boost < H.minTank) { car.charging = false; car.charge = 0; }                                      // the thrust drained the tank meanwhile: the charge is lost
+      else {
+        car.charge = Math.min(raw, cap);
+        if (!jump || raw >= 1 || (cap < 1 && raw >= cap && car.chargeHeld > tapT)) hopLaunch(car.charge, inp.steer || 0);
+      }
+    }
+    if (car.flipOn) {                                                                                             // the barrel roll of a max hop: a smoothstep 0 -> 360 degrees, finished at flip.frac of the expected airtime
+      car.flipT += dt; const u = Math.min(1, car.flipT / car.flipDur), P = H.flip.pulseT ?? 0.36;
+      car.flip = car.flipDir * TAU * u * u * (3 - 2 * u);
+      const w = clamp(car.flipT / 0.08, 0, 1) * clamp((car.flipDur - car.flipT) / 0.12, 0, 1), s = Math.sin(Math.PI * car.flipT / P);   // the side jets alternate: left / right pulses of period P that sum to 1, faded in and out
+      car.pulse0 = w * s * s; car.pulse1 = w * (1 - s * s);
+      if (u >= 1 && !car.flipDone) { car.flipDone = true; car.jetT = Math.max(car.jetT, 0.3); }                   // the down-jets fire again before the touchdown
     }
     car.jet = Math.min(1, car.jetT / 0.25);
+  }
+  /** launch the hop at charge c (0..1): the climb speed, the tank cost, the down-jets, the nose flick toward the steering and, on a (nearly) full charge, the cosmetic barrel roll */
+  function hopLaunch(c, steerIn) {
+    const H = T.hop, v0 = hopV0(H, c);
+    car.charging = false; car.chargeHeld = 0; car.charge = 0;
+    car.air = true; car.vy = v0; car.h = 0; car.cushion = false; car.boost = Math.max(0, car.boost - hopCost(H, c)); car.jetT = 0.45 + 0.2 * c; car.jetK = 1 + (H.jetBig ?? 0) * c;
+    car.maxHop = !!H.flip && c >= (H.flip.at ?? 0.95);
+    car.flipOn = car.maxHop; car.flipDone = false; car.flipT = 0; car.flip = 0; car.pulse0 = car.pulse1 = 0;
+    if (car.maxHop) { car.flipDir = steerIn > 0.3 ? -1 : 1; car.flipDur = (H.flip.frac ?? 0.85) * 2 * v0 / H.g; }   // the held steering picks the side (left = to the left), else to the right
+    car.events.push({ type: 'hop', charge: c, flip: car.maxHop });
+    if (Math.abs(car.steer) > 0.3) car.impactSpin += (H.flick ?? 2.4) * car.steer / (1 + Math.hypot(car.vx, car.vz) / 20);    // the front lateral jets flick the nose toward the steering (about 30 degrees standing, less at speed: the car keeps its line)
   }
 
   function sub(h, inp) {
@@ -194,7 +231,8 @@ export function createHandling(ctx, tuning = null) {
     car.x = nx; car.z = nz;
     edgePush(h);
     car.y = car.air ? fly(h) : groundAt(car.x, car.z);
-    collide(car);
+    if (car.air && T.hop.clearMax !== undefined && car.h > T.hop.clearMax) { const yAir = car.y; car.y = yAir - car.h + T.hop.clearMax; collide(car); car.y = yAir; }     // the solids see the car no higher than clearMax over the road: a max hop clears the low furniture, never a bus shelter or a kiosk
+    else collide(car);
     edgePush(h);
     car.odo += Math.hypot(car.vx, car.vz) * h;
     car.spin += (car.vx * sy + car.vz * cy) * h / SPEC.R;

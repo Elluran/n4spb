@@ -130,7 +130,7 @@ export const ACTIONS = {
   recentre: { kind: 'call',  call: 'recentre', modes: ['drive'] },
   nitro:    { kind: 'hold',  code: 'ShiftLeft', modes: ['drive'] },
   hand:     { kind: 'hold',  code: 'Space',     modes: ['drive'] },
-  hop:      { kind: 'tap',   code: 'KeyX',      modes: ['drive'] },
+  hop:      { kind: 'hold',  code: 'KeyX',      modes: ['drive'] },        // press and HOLD: down = charge the hop, up = launch it (a quick tap is the small hop)
   cam:      { kind: 'tap',   code: 'KeyV',      modes: ['drive'] },
   horn:     { kind: 'tap',   code: 'KeyG',      modes: ['drive'] },
   repair:   { kind: 'call',  call: 'repair',    modes: ['drive'] },

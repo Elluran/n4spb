@@ -4,7 +4,8 @@
 // no sirens, no alarms. Everything is silent when the page audio is muted or not started. Created lazily at the first enter() (a user gesture).
 // PROFILES (drive/cars/tuning.js SOUND): createCarSound(audio, profile) / setProfile(profile) re-voices the same graph per car (oscillator types, pitch law, filter, gains, no gear blips):
 // the Lada is a rough old four, the pickup a low electric hum, the Roadster an electric whine whose `jet` field (gain, hp, attack, release) turns the nitro whoosh into the airy hiss of its cold-gas
-// nozzles, with a valve thunk when the thrust opens and the one-shots of its gas hop (hop(), cushion(), land(v)). No profile = the red coupe's voice.
+// nozzles, with a valve thunk when the thrust opens and the one-shots of its gas hop (hop(charge), cushion(), land(v, big)). HOP v2: while the hop charges update() raises a soft hiss (c.charge 0..1: louder, higher),
+// a max hop adds the flip() whoosh and a deeper, longer landing thump. No profile = the red coupe's voice.
 export function createCarSound(audio, profile = null) {
   let ac = null, out = null, E = null, started = false, last = { gear: 1, boosting: false }, P = profile || {};
   const noiseBuf = (ac2) => { const b = ac2.createBuffer(1, ac2.sampleRate * 2, ac2.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; };
@@ -31,7 +32,9 @@ export function createCarSound(audio, profile = null) {
     const n3 = noise(); n3.connect(wlp); wlp.connect(wind); wind.connect(out);
     const whoosh = ac.createGain(); whoosh.gain.value = 0; const hbp = ac.createBiquadFilter(); hbp.type = 'highpass'; hbp.frequency.value = 1200;
     const n4 = noise(); n4.connect(hbp); hbp.connect(whoosh); whoosh.connect(out);
-    E = { eng, o1, o2, o3, g1, g2, g3, lp, intake, ibp, squeal, sbp, wind, wlp, whoosh, hbp, nb };
+    const chg = ac.createGain(); chg.gain.value = 0; const cbp = ac.createBiquadFilter(); cbp.type = 'bandpass'; cbp.Q.value = 0.7; cbp.frequency.value = 2000;      // the charging hiss (air through a bandpass that climbs with the charge)
+    const n5 = noise(); n5.connect(cbp); cbp.connect(chg); chg.connect(out);
+    E = { eng, o1, o2, o3, g1, g2, g3, lp, intake, ibp, squeal, sbp, wind, wlp, whoosh, hbp, chg, cbp, nb };
     voice();
     return true;
   }
@@ -52,10 +55,10 @@ export function createCarSound(audio, profile = null) {
     gg.gain.setValueAtTime(vol, t); gg.gain.exponentialRampToValueAtTime(0.001, t + dur);
     s.connect(f); f.connect(gg); gg.connect(out); s.start(t); s.stop(t + dur + 0.05);
   }
-  function thump(vol) {
+  function thump(vol, f0 = 120, f1 = 38, dur = 0.28) {
     if (!E) return;
-    const o = ac.createOscillator(), gg = ac.createGain(), t = ac.currentTime; o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.28);
-    gg.gain.setValueAtTime(vol, t); gg.gain.exponentialRampToValueAtTime(0.001, t + 0.32); o.connect(gg); gg.connect(out); o.start(t); o.stop(t + 0.35);
+    const o = ac.createOscillator(), gg = ac.createGain(), t = ac.currentTime; o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    gg.gain.setValueAtTime(vol, t); gg.gain.exponentialRampToValueAtTime(0.001, t + dur + 0.04); o.connect(gg); gg.connect(out); o.start(t); o.stop(t + dur + 0.07);
   }
 
   return {
@@ -79,6 +82,7 @@ export function createCarSound(audio, profile = null) {
       g(E.wind.gain, (0.02 + 0.28 * sp * sp) * (P.wind ?? 1), 0.12); E.wlp.frequency.setTargetAtTime(350 + sp * 1500, t, 0.12);
       const J = P.jet;
       g(E.whoosh.gain, c.boosting ? (J ? J.gain : 0.09) : 0, c.boosting ? (J ? J.attack : 0.08) : (J ? J.release : 0.25));
+      if (J) { const q = c.charge || 0; g(E.chg.gain, q > 0.02 ? 0.02 + 0.13 * q : 0, q > 0.02 ? 0.05 : 0.08); if (q > 0.02) E.cbp.frequency.setTargetAtTime(1800 + 3400 * q, t, 0.05); }       // the hop charging: a hiss that rises with the charge
       if (J && c.boosting && !last.boosting) thrust();
       last.boosting = !!c.boosting;
       if (c.gear !== last.gear) { if (P.blip !== false && c.gear > last.gear && thr > 0.3) burst(2400, 0.07, 0.05, 'bandpass'); last.gear = c.gear; }
@@ -86,9 +90,11 @@ export function createCarSound(audio, profile = null) {
     hit(v) { if (!E || !on_()) return; thump(Math.min(0.8, 0.12 + v * 0.05)); burst(900 + v * 60, 0.25, Math.min(0.5, 0.08 + v * 0.03)); },
     thrust,
     /** the gas hop: take-off (a hiss of air and a soft thud), the landing cushion re-firing, touchdown (v = the sink speed m/s) */
-    hop() { if (!E || !on_()) return; burst(3500, 0.40, 0.14, 'highpass'); thump(0.18); },
+    hop(charge = 0) { if (!E || !on_()) return; burst(3500, 0.40 + 0.25 * charge, 0.14 + 0.08 * charge, 'highpass'); thump(0.18 + 0.12 * charge, 120 - 30 * charge); },
+    /** the barrel roll of a max hop: a calm airy whoosh that sweeps across (a band-passed noise burst), no tone, no alarm */
+    flip() { if (!E || !on_()) return; burst(2200, 0.9, 0.11, 'bandpass'); },
     cushion() { if (!E || !on_()) return; burst(3000, 0.2, 0.10, 'highpass'); },
-    land(v) { if (!E || !on_()) return; thump(Math.min(0.5, 0.10 + v * 0.04)); burst(900, 0.25, Math.min(0.3, 0.05 + v * 0.025)); },
+    land(v, big = false) { if (!E || !on_()) return; if (big) { thump(Math.min(0.75, 0.30 + v * 0.04), 95, 28, 0.5); burst(700, 0.45, Math.min(0.4, 0.12 + v * 0.03)); return; } thump(Math.min(0.5, 0.10 + v * 0.04)); burst(900, 0.25, Math.min(0.3, 0.05 + v * 0.025)); },
     scrape(v) { if (!E || !on_()) return; burst(1800, 0.12, Math.min(0.12, 0.03 + v * 0.03), 'bandpass'); },
     horn() { try { audio.play('carHorn', { volume: 1 }); } catch (e) { /* */ } },
     stop() { last.boosting = false; if (out) g(out.gain, 0, 0.05); },

@@ -3,8 +3,8 @@
 //
 // FILES (code in drive/):  model.js the car (body, glass, wheels, lamps, driver, wing, logo decals, nitro flames, neon underglow);  handling.js the arcade physics + collisions;
 //   hud.js speedometer / tacho / gear / nitro / drift counter / speed streaks / key hints;  fx.js tyre smoke + sparks + exhaust glow (the Roadster: cold-gas cloud);  sound.js engine / tyres / wind / nitro / crash.
-// CONTROLS  W / Up gas, S / Down brake + reverse, A D / Left Right steer, Shift nitro, X hop (the Roadster: its down-jets throw it over kerbs and bins), Space handbrake (drift), G horn, V camera (chase / high / cockpit), mouse looks around (it
-//   swings back by itself), E gets out (below ~25 km/h), 1-5 and R teleport the car to the same places as on foot, T time of day, M mute. Touch: left stick drives, buttons for nitro / hop / drift / stop / exit.
+// CONTROLS  W / Up gas, S / Down brake + reverse, A D / Left Right steer, Shift nitro, X hop (the Roadster: a tap throws it over kerbs and bins, HOLD X to charge a higher hop, a full charge = twice as high with a barrel roll), Space handbrake (drift), G horn, V camera (chase / high / cockpit), mouse looks around (it
+//   swings back by itself), E gets out (below ~25 km/h), 1-5 and R teleport the car to the same places as on foot, T time of day, M mute. Touch: left stick drives, buttons for nitro / hop (press and hold) / drift / stop / exit.
 // HOW IT PLUGS IN: while driving, player.inputLock is raised (the walker is frozen and its keys / look are ignored), player.pos follows the car (so the people / traffic / zones /
 //   street-name toasts keep working around the car) and this module sets the camera after the player's update (module updates run after player.update). The parked car is a physics
 //   box; the moving car uses a rigid footprint with angular impulses against the walker's solids (core/physics.js). Traffic brakes after impacts while keeping its lane route; it appears to
@@ -49,7 +49,7 @@ export async function build(ctx) {
   const fx = createFx(ctx);
   const isTouch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
   const touch = { nitro: false, hand: false, brake: false, jump: false };
-  let hopTap = false;           // the hop key / button went down since the last physics step: a tap shorter than one frame (keydown + keyup between two frames) must still hop
+  let hopTap = false;           // the hop key / button went down since the last physics step: a tap shorter than one frame (keydown + keyup between two frames) must still start (and, one frame later, launch) a hop
   const hud = createDriveHud({ isTouch, onExit: () => api.exit(), onRepair: () => api.repair(), onNitro: (v) => { touch.nitro = v; }, onHand: (v) => { touch.hand = v; }, onBrake: (v) => { touch.brake = v; }, onJump: (v) => { touch.jump = v; if (v) hopTap = true; } });
   const night = ctx.shared.uNight;
 
@@ -83,7 +83,7 @@ export async function build(ctx) {
     out.steer = (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) - (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0);
     out.nitro = k.has('ShiftLeft') || k.has('ShiftRight') || touch.nitro;
     out.hand = k.has('Space') || touch.hand;
-    out.jump = k.has('KeyX') || touch.jump || hopTap;                          // a level, plus the latched tap; handling.js makes the edge (only a car with tuning.hop reads it)
+    out.jump = k.has('KeyX') || touch.jump || hopTap;                          // a level (held = the hop charges, released = it launches), plus the latched tap; handling.js makes the edge (only a car with tuning.hop reads it)
     if (player && player.touchMove) { const tm = player.touchMove; if (tm.lengthSq() > 0.01) { out.steer = clamp(-tm.x * 1.4, -1, 1); if (tm.y < -0.15) out.thr = clamp(-tm.y * 1.3, 0, 1); else if (tm.y > 0.3) out.brk = clamp(tm.y, 0, 1); } }
     return out;
   }
@@ -168,7 +168,7 @@ export async function build(ctx) {
     let gear = c.gear === 0 ? 'R' : ((c.speed || 0) < 1 && (c.throttle || 0) < 0.05 ? 'N' : String(c.gear || 1));
     if (v.def.hud.gearD && gear !== 'R' && gear !== 'N') gear = 'D';            // a one-gear electric car
     v.model.set({ x: c.x, y: c.y, z: c.z, yaw: c.yaw, pitch: c.pitch, roll: c.roll, steer: c.steer, steerAngle: c.steerAngle, spin: c.spin || 0, brake: c.braking ? 1 : 0, boost: c.boosting ? v.car.boost + 0.2 : 0, dt: spinDt || 0.016, lights: driven && n > 0.25, glow: driven ? 1 : 0.25,
-      kmh: c.speed || 0, rpm: c.rpm ?? 0.15, gear, air: !!c.air, h: c.h || 0, jet: c.jet || 0 });
+      kmh: c.speed || 0, rpm: c.rpm ?? 0.15, gear, air: !!c.air, h: c.h || 0, jet: c.jet || 0, charge: c.charge || 0, jetK: c.jetK || 1, flip: c.flip || 0, s0: c.pulse0 || 0, s1: c.pulse1 || 0 });
   }
   const poseModel = (spinDt) => poseVehicle(V, spinDt, state.active);
   // the parked cars: posed (and drawn) only while they can be seen: always within 70 m (their shadows), beyond that only inside the view frustum; the models switch their own frustum culling off
@@ -303,9 +303,10 @@ export async function build(ctx) {
       E.splice(i--, 1);
       if (!effects) continue;
       if (ev.type === 'cushion') { sound.cushion(); continue; }
-      if (ev.type === 'hop') { sound.hop(); view.shake = Math.min(1.4, view.shake + 0.2); }
-      else { sound.land(ev.v); view.shake = Math.min(1.4, view.shake + ev.v / 14); }
-      fx.ring(car.x, car.y - (car.h || 0), car.z, ev.type === 'hop' || ev.v > 3 ? 24 : 12);
+      if (ev.type === 'hop') { const c = ev.charge || 0; sound.hop(c); if (ev.flip) sound.flip(); view.shake = Math.min(1.4, view.shake + 0.2 + 0.25 * c); }
+      else { sound.land(ev.v, ev.big); view.shake = Math.min(1.4, view.shake + ev.v / 14 + (ev.big ? 0.25 : 0)); }
+      const big = ev.type === 'hop' ? ev.flip : ev.big;                                  // a max hop: a bigger ring cloud at take-off and at touchdown
+      fx.ring(car.x, car.y - (car.h || 0), car.z, big ? 44 : ev.type === 'hop' || ev.v > 3 ? 24 : 12, big ? 1.5 : 1);
     }
   }
   function frame(dt) {
@@ -327,7 +328,7 @@ export async function build(ctx) {
       exUse.length = 0; for (let i = 0; i < Math.min(V.def.exhaust.length, exW.length); i++) { const e = V.def.exhaust[i]; exUse.push(model.root.localToWorld(exW[i].set(e.x, e.y, e.z))); }     // the car's own tail pipes (an electric pickup has none: no flame particles)
       jetDir.set(-Math.sin(car.yaw), 0.05, -Math.cos(car.yaw));                                                                                  // the nozzles fire backwards, 3 degrees up (the Roadster's cold-gas cloud, def.jetFx)
       fx.update(dt, car, wheelsW, exUse, V.def.jetFx, jetDir);
-      sound.update({ rpm: car.rpm, throttle: car.throttle, drifting: car.drifting, vL: car.vL, boosting: car.boosting, gear: car.gear, speed: car.speed }, true);
+      sound.update({ rpm: car.rpm, throttle: car.throttle, drifting: car.drifting, vL: car.vL, boosting: car.boosting, gear: car.gear, speed: car.speed, charge: car.charge }, true);
       hud.update(car, dt);
     }
     cameraStep(dt);
