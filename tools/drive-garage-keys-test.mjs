@@ -1,8 +1,9 @@
-// The REAL keyboard flow of every garage car in the real page (headless Edge / Chrome with GPU, the HUD is drawn): load -> Start -> for each car (taxi pickup, Zhiguli, red coupe, in that order,
-// so that "exit one car, enter the next" is exercised twice): walk up -> the car's own prompt -> E -> W (gas) -> Shift (nitro / boost) -> A + Space (handbrake drift) -> G (horn) -> V V V
+// The REAL keyboard flow of every garage car in the real page (headless Edge / Chrome with GPU, the HUD is drawn): load -> Start -> for each car (taxi pickup, Zhiguli, Roadster, red coupe, in that order,
+// so that "exit one car, enter the next" is exercised three times): walk up -> the car's own prompt -> E -> W (gas) -> Shift (nitro / boost) -> A + Space (handbrake drift) -> G (horn) -> V V V
 // (chase / high / cockpit / chase) -> S (brake, then reverse) -> E (exit, the car stays solid) -> the next car.
+// The Roadster also hops (X) once the gas hop is built into handling.js (the check switches itself on when the car has a `hop` tuning and a height `h`).
 //   node tools/drive-garage-keys-test.mjs [--q medium] [--only environment,streets,city,landmarksC,drive] [--shots] [--out shots/drive/keys] [--tod night] [--load-timeout ms]
-// Checks per car: the prompt names the car, E gets into THAT car (HUD boost label, one-gear letter D for the pickup), gas speeds up, the nitro lowers the tank and raises the speed, the handbrake
+// Checks per car: the prompt names the car, E gets into THAT car (HUD boost label, one-gear letter D for the pickup and the Roadster), gas speeds up, the nitro lowers the tank and raises the speed, the handbrake
 // with A makes the car slide (drifting or a sideways speed) and turns it, the horn is called, V cycles the camera 0 -> 1 -> 2 -> 0 and the cockpit set is visible only in mode 2, S stops the car
 // (and reverses it), E at < 25 km/h gets out, the car is a solid box again, the other cars never moved. Exit code 1 on a page error, a module error or a failed check.
 import http from 'node:http';
@@ -45,7 +46,7 @@ try {
   }
   page.on('console', (m) => { const t = m.type(); if (t === 'error') logs.push(`[console.${t}] ${m.text()}`); });
   page.on('pageerror', (e) => problems.push(`[pageerror] ${e.message}`));
-  const q = new URLSearchParams({ q: args.q || 'medium', t: '30', only: args.only || 'environment,streets,city,landmarksC,drive' });
+  const q = new URLSearchParams({ q: args.q || 'medium', t: '30', only: args.only || 'environment,streets,city,landmarksC,drive', baked: args.baked || 'force' });          // baked=force: the developer switch that keeps a stale bake usable while src is edited
   if (args.tod) q.set('tod', args.tod);
   await page.goto(`http://127.0.0.1:${port}/index.html?${q}`, { waitUntil: 'load', timeout: 300000 });
   await page.waitForFunction("document.body.classList.contains('loaded')", { timeout: Number(args['load-timeout'] || 900000), polling: 500 });
@@ -86,7 +87,7 @@ try {
   console.log('straight:', JSON.stringify(strait));
   check(strait && strait.len >= 400, `a straight of >= 400 m exists for the driving phases (${strait && strait.len} m)`);
   const R = {};
-  for (const id of ['truck', 'lada', 'coupe']) {
+  for (const id of ['truck', 'lada', 'roadster', 'coupe']) {
     console.log(`=== ${id}`);
     const sp = await page.evaluate((id) => { const v = window.__drive.vehicleById(id); return { x: v.parked.x, z: v.parked.z, yaw: v.parked.yaw, cz: v.spec.centerZ, label: v.def.label }; }, id);
     // the walker 3 m to the car's right side, looking at it
@@ -100,13 +101,13 @@ try {
     if (!s.active) { console.log('(the first E bounced)'); await page.keyboard.press('KeyE'); await sleep(900); s = await st(); }
     check(s.active && s.id === id, `${id}: E gets into this car (${s.id})`);
     const hud = await page.evaluate(() => ({ nlab: document.querySelector('#drive .d-nlab')?.textContent, toast: document.getElementById('toast')?.textContent }));
-    check(hud.nlab === (id === 'truck' ? 'BOOST' : 'NITRO'), `${id}: the boost bar says ${hud.nlab}`);
+    check(hud.nlab === ({ truck: 'BOOST', roadster: 'THRUST' }[id] || 'NITRO'), `${id}: the boost bar says ${hud.nlab}`);
     await shot(`${id}_1_seated`);
     await page.evaluate((s) => { const d = window.__drive; d.teleport(s.x, s.z, Math.atan2(s.tx, s.tz)); d.car.vx = d.car.vz = 0; }, strait); await sleep(600);
     // gas
     await page.keyboard.down('KeyW'); await sleep(2500); s = await st(); const gas = s; console.log('gas 2.5 s:', JSON.stringify(s));
     check(s.kmh > 30, `${id}: W speeds the car up (${s.kmh} km/h after 2.5 s)`);
-    if (id === 'truck') check(s.gear === 1, `${id}: the electric pickup has one gear (${s.gear})`);
+    if (id === 'truck' || id === 'roadster') check(s.gear === 1, `${id}: the electric car has one gear (${s.gear})`);
     if (id === 'lada') check(s.gear >= 2, `${id}: the Zhiguli shifts (${s.gear})`);
     await shot(`${id}_2_gas`);
     // horn
@@ -127,6 +128,16 @@ try {
     check(s.boosting && s.boost < b0 - 0.1 && s.kmh > k0 + 5, `${id}: Shift boosts (tank ${b0} -> ${s.boost}, ${k0} -> ${s.kmh} km/h)`);
     await shot(`${id}_3_nitro`);
     await page.keyboard.up('ShiftLeft');
+    // the Roadster's gas hop (X): up within a third of a second, back on the ground inside two seconds, the tank pays for it (only once handling.js has the hop)
+    const hopOn = await page.evaluate(() => { const d = window.__drive; return !!(d.vehicle.def.tuning.hop && typeof d.car.h === 'number'); });
+    if (id === 'roadster') console.log(hopOn ? 'hop: the car has the gas hop' : 'hop: not built into handling.js yet (skipped)');
+    if (hopOn) {
+      const tank0 = (await st()).boost; await page.keyboard.press('KeyX'); await sleep(320);
+      const up = await page.evaluate(() => { const c = window.__drive.car; return { h: +c.h.toFixed(2), air: !!c.air }; });
+      await sleep(1700); const down = await page.evaluate(() => { const c = window.__drive.car; return { h: +c.h.toFixed(2), air: !!c.air, boost: +c.boost.toFixed(2) }; });
+      console.log('hop:', JSON.stringify({ tank0, up, down }));
+      check(up.air && up.h > 0.3 && !down.air && down.h === 0, `${id}: X hops (${up.h} m up after 0.3 s, down again: ${down.air ? 'still airborne' : 'landed'})`);
+    }
     // cameras
     const modes = [];
     for (let i = 0; i < 3; i++) {
@@ -152,7 +163,7 @@ try {
   const moved = await page.evaluate(() => { const d = window.__drive; return d.fleet.map((v) => [v.id, Math.hypot(v.parked.x - window.__moved0[v.id][0], v.parked.z - window.__moved0[v.id][1])]); });
   console.log('how far each car ended from its start spot:', JSON.stringify(moved));
   const kmh = (id) => R[id].gas.kmh;
-  check(kmh('truck') < kmh('coupe') && kmh('coupe') < kmh('lada'), `speed after 2.5 s of gas: truck ${kmh('truck')} < coupe ${kmh('coupe')} < lada ${kmh('lada')} km/h`);
+  check(kmh('truck') < kmh('coupe') && kmh('coupe') < kmh('lada') && kmh('lada') < kmh('roadster'), `speed after 2.5 s of gas: truck ${kmh('truck')} < coupe ${kmh('coupe')} < lada ${kmh('lada')} < roadster ${kmh('roadster')} km/h`);
 } catch (e) {
   problems.push(`[test crashed] ${e.stack || e.message}`);
 } finally {
@@ -160,4 +171,4 @@ try {
   await browser.close(); server.close();
 }
 if (problems.length) { console.log('PROBLEMS:'); for (const p of problems) console.log(' -', p); process.exit(1); }
-console.log('PASS garage keys: the real keyboard drives the pickup, the Zhiguli and the coupe (gas, nitro, drift, horn, camera, brake, reverse, exit) one after another');
+console.log('PASS garage keys: the real keyboard drives the pickup, the Zhiguli, the Roadster and the coupe (gas, nitro, drift, horn, camera, brake, reverse, exit) one after another');

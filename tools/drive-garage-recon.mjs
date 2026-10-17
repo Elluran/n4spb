@@ -1,6 +1,6 @@
 // ASCII occupancy map of the station forecourt (where the garage cars park), from the REAL scene (reduced module set, headless Edge, one browser job).
 //   node tools/drive-garage-recon.mjs [--x 579 --z 219 --r 24 --step 1] [--only environment,streets,city,traffic,people,drive] [--eval "js"]
-// Legend:  # inside a building   R real asphalt (streets net.cover >= -0.5)   S a solid / column (physics)   c a parked garage car box   . free pavement / forecourt
+// Legend:  # inside a building   R real asphalt (streets net.cover >= -0.5)   S a solid / column (physics)   c / t / l / r a parked garage car box (coupe, truck, lada, roadster)   . free pavement / forecourt
 // Prints the map (z down the page, x across; the origin of a row is its left x) and, for every garage car, its parked pose + the occupancy of its footprint.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -39,7 +39,7 @@ try {
   }
   page.on('console', (m) => { const t = m.type(); if (t === 'error' || t === 'warning' || t === 'warn') logs.push(`[console.${t}] ${m.text()}`); });
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
-  const q = new URLSearchParams({ w: '900', h: '500', t: '0', q: 'low', shot: '1', only: args.only || 'environment,streets,city,drive' });
+  const q = new URLSearchParams({ w: '900', h: '500', t: '0', q: 'performance', shot: '1', only: args.only || 'environment,streets,city,drive', baked: args.baked || 'force' });
   q.set('cam', `${CX},${CZ},0,0`);
   await page.goto(`http://127.0.0.1:${port}/index.html?${q}`, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction('window.__ready === true', { timeout: Number(args['load-timeout'] || 280000), polling: 250 });
@@ -50,7 +50,7 @@ try {
     const boxes = (d.fleet || []).map((v) => { const sy = Math.sin(v.parked.yaw), cy = Math.cos(v.parked.yaw); return { id: v.id, x: v.parked.x + sy * v.spec.centerZ, z: v.parked.z + cy * v.spec.centerZ, yaw: v.parked.yaw, hw: v.spec.W / 2, hd: v.spec.len / 2 }; });
     const inCar = (x, z) => boxes.find((b) => { const dx = x - b.x, dz = z - b.z, sy = Math.sin(b.yaw), cy = Math.cos(b.yaw); return Math.abs(dx * cy - dz * sy) < b.hw && Math.abs(dx * sy + dz * cy) < b.hd; });
     const cell = (x, z) => {
-      const c = inCar(x, z); if (c) return c.id[0] === 'c' ? 'c' : c.id[0] === 't' ? 't' : 'l';
+      const c = inCar(x, z); if (c) return c.id[0];          // c coupe, t truck, l lada, r roadster
       if (L.insideBuilding(x, z)) return '#';
       if (net && net.cover(x, z, {}) >= -0.5) return 'R';
       if (ph.columnBlocked(x, z, 0.3, 0.3, 1.7)) return 'S';

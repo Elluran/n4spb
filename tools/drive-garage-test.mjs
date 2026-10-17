@@ -1,7 +1,7 @@
-// End-to-end test of the GARAGE (three drivable cars at the Moscow Railway Station) in the REAL page (headless Edge / Chrome with GPU, the full game flow like tools/drive-test.mjs):
-//   load -> Start -> the three cars stand parked in a row (layout checks: no building, no traffic lane, solid for walkers) -> walk to each car: its own prompt, E gets in
+// End-to-end test of the GARAGE (four drivable cars at the Moscow Railway Station) in the REAL page (headless Edge / Chrome with GPU, the full game flow like tools/drive-test.mjs):
+//   load -> Start -> the four cars stand parked in a row (layout checks: no building, no traffic lane, solid for walkers) -> walk to each car: its own prompt, E gets in
 //   (nearest car) -> accelerate 10 s / 14 s, 0-100 km/h, top speed on a long straight, braking from 60 and 100 km/h -> cockpit camera from the car's own eye -> exit (the car stays parked,
-//   its box is solid again) -> compare the three cars: top speed and acceleration order truck < coupe < lada, braking truck longest, mass order lada < coupe < truck.
+//   its box is solid again) -> compare the four cars: top speed and acceleration order truck < coupe < lada < roadster, braking truck longest, the Roadster shortest, mass order lada < coupe < roadster < truck.
 //   node tools/drive-garage-test.mjs [--q medium] [--only environment,streets,city,drive] [--out shots/drive/garage] [--shots] [--tod night] [--load-timeout ms]
 // The default module set has NO traffic / people (deterministic physics on the long straight; the collision / momentum tests are in tools/drive-garage-damage-test.mjs, the pure handling
 // numbers in tools/drive-garage-handling.mjs). Exit code 1 on a page error, a module error or a failed check.
@@ -45,7 +45,7 @@ try {
   }
   page.on('console', (m) => { const t = m.type(); if (t === 'error') logs.push(`[console.${t}] ${m.text()}`); });
   page.on('pageerror', (e) => problems.push(`[pageerror] ${e.message}`));
-  const q = new URLSearchParams({ q: args.q || 'medium', t: '30', only: args.only || 'environment,streets,city,drive' });
+  const q = new URLSearchParams({ q: args.q || 'medium', t: '30', only: args.only || 'environment,streets,city,drive', baked: args.baked || 'force' });          // baked=force: the developer switch that keeps a stale bake usable while src is edited
   if (args.tod) q.set('tod', args.tod);
   await page.goto(`http://127.0.0.1:${port}/index.html?${q}`, { waitUntil: 'load', timeout: 300000 });
   await page.waitForFunction("document.body.classList.contains('loaded')", { timeout: Number(args['load-timeout'] || 600000), polling: 500 });
@@ -81,7 +81,7 @@ try {
   console.log('garage:', JSON.stringify(garage.cars.filter((c) => c.id)));
   console.log('pairs:', JSON.stringify(garage.cars.filter((c) => c.pair)));
   const cars = garage.cars.filter((c) => c.id), pairs = garage.cars.filter((c) => c.pair);
-  check(cars.map((c) => c.id).join() === 'coupe,truck,lada', `the garage holds coupe, truck, lada (got ${cars.map((c) => c.id)})`);
+  check(cars.map((c) => c.id).join() === 'coupe,truck,lada,roadster', `the garage holds coupe, truck, lada, roadster (got ${cars.map((c) => c.id)})`);
   for (const c of cars) {
     check(c.building === 0 && c.outside === 0, `${c.id}: the parked footprint is clear of buildings / the map edge`);
     check(c.trafficLane === 0, `${c.id}: the parked footprint is not on a traffic lane (gap to the nearest driven lane ${c.minGapToTrafficLane} m)`);
@@ -110,7 +110,8 @@ try {
   check(/Сесть в машину/.test(prompts.coupe.text), 'coupe prompt text: Сесть в машину');
   check(/такси-пикап/.test(prompts.truck.text) && /taxi pickup/.test(prompts.truck.text), 'truck prompt text: такси-пикап / taxi pickup');
   check(/Жигули/.test(prompts.lada.text) && /Zhiguli/.test(prompts.lada.text), 'lada prompt text: Жигули / Zhiguli');
-  check(!/Tesla|Cybertruck|ВАЗ|Lada|VAZ/i.test(prompts.truck.text + prompts.lada.text), 'no brand names in the prompts');
+  check(/Сесть в родстер/.test(prompts.roadster.text) && /Roadster/.test(prompts.roadster.text), 'roadster prompt text: Сесть в родстер / Roadster');
+  check(!/Tesla|Cybertruck|ВАЗ|Lada|VAZ/i.test(prompts.truck.text + prompts.lada.text + prompts.roadster.text), 'no brand names in the prompts');
 
   // ================================================================= 3. enter each car with the real E key, drive, measure, exit
   // candidates: the straightest long runs along the driven lanes (geometry only: the physics of far regions is not loaded yet), then each one is loaded region by region and re-checked with the solids
@@ -151,8 +152,8 @@ try {
     if (!st.active) { await page.keyboard.press('KeyE'); await sleep(900); st = await page.evaluate(() => { const d = window.__drive; return { active: d.active, id: d.vehicle.id, boxDropped: !d.vehicle.box, others: d.fleet.filter((f) => f !== d.vehicle).map((f) => !!f.box), toast: '', nlab: document.querySelector('#drive .d-nlab')?.textContent, spec: {} }; }); console.log('(the first E bounced; the second entered)'); }
     console.log(`E at ${id}:`, JSON.stringify(st));
     check(st.active && st.id === id, `${id}: E at the car gets into THIS car (got ${st.id})`);
-    check(st.boxDropped && st.others.every(Boolean), `${id}: its parked box is removed while driving, the other two stay solid`);
-    check(id === 'truck' ? st.nlab === 'BOOST' : st.nlab === 'NITRO', `${id}: HUD boost label ${st.nlab}`);
+    check(st.boxDropped && st.others.every(Boolean), `${id}: its parked box is removed while driving, the other three stay solid`);
+    check(st.nlab === ({ truck: 'BOOST', roadster: 'THRUST' }[id] || 'NITRO'), `${id}: HUD boost label ${st.nlab}`);
     await shot(`2_seated_${id}`);
     // handling numbers on the straight
     M[id] = await page.evaluate((s, id) => {
@@ -199,21 +200,26 @@ try {
     check(ex.walkerDist < 6, `${id}: the walker stands next to the parked car (${ex.walkerDist} m)`);
   }
   // ================================================================= 4. the comparison
-  const Cc = M.coupe, T = M.truck, Ld = M.lada;
+  const Cc = M.coupe, T = M.truck, Ld = M.lada, Rd = M.roadster;
   const rows = ['mass', 't100', 'v10', 'd10', 'top', 'nitroKmh6s', 'brake60', 'brake100'];
-  console.log('metric'.padEnd(11), 'coupe'.padStart(9), 'truck'.padStart(9), 'lada'.padStart(9));
-  for (const k of rows) console.log(k.padEnd(11), ...['coupe', 'truck', 'lada'].map((i) => String(M[i][k]).padStart(9)));
-  check(T.mass > Cc.mass && Cc.mass > Ld.mass, `mass order truck ${T.mass} > coupe ${Cc.mass} > lada ${Ld.mass}`);
+  console.log('metric'.padEnd(11), 'coupe'.padStart(9), 'truck'.padStart(9), 'lada'.padStart(9), 'roadster'.padStart(9));
+  for (const k of rows) console.log(k.padEnd(11), ...['coupe', 'truck', 'lada', 'roadster'].map((i) => String(M[i][k]).padStart(9)));
+  check(T.mass > Rd.mass && Rd.mass > Cc.mass && Cc.mass > Ld.mass, `mass order truck ${T.mass} > roadster ${Rd.mass} > coupe ${Cc.mass} > lada ${Ld.mass}`);
   check(T.mass / Cc.mass > 2.0 && T.mass / Cc.mass < 2.4 && Ld.mass / Cc.mass > 0.6 && Ld.mass / Cc.mass < 0.8, 'masses are about 2.2 x and 0.7 x the coupe');
-  check(T.top < Cc.top && Cc.top < Ld.top, `top speed (14 s on the straight): truck ${T.top} < coupe ${Cc.top} < lada ${Ld.top}`);
-  check(T.v10 < Cc.v10 && Cc.v10 < Ld.v10, `speed after 10 s: truck ${T.v10} < coupe ${Cc.v10} < lada ${Ld.v10}`);
-  check(T.t100 > Cc.t100 && Cc.t100 > Ld.t100, `0-100 km/h: truck ${T.t100} s > coupe ${Cc.t100} s > lada ${Ld.t100} s`);
+  check(Rd.mass / Cc.mass > 1.15 && Rd.mass / Cc.mass < 1.35, `the roadster weighs ${(Rd.mass / Cc.mass).toFixed(2)} x the coupe (about 1.25 x)`);
+  check(T.top < Cc.top && Cc.top < Ld.top && Ld.top < Rd.top, `top speed (14 s on the straight): truck ${T.top} < coupe ${Cc.top} < lada ${Ld.top} < roadster ${Rd.top}`);
+  check(T.v10 < Cc.v10 && Cc.v10 < Ld.v10 && Ld.v10 < Rd.v10, `speed after 10 s: truck ${T.v10} < coupe ${Cc.v10} < lada ${Ld.v10} < roadster ${Rd.v10}`);
+  check(T.t100 > Cc.t100 && Cc.t100 > Ld.t100 && Ld.t100 > Rd.t100, `0-100 km/h: truck ${T.t100} s > coupe ${Cc.t100} s > lada ${Ld.t100} s > roadster ${Rd.t100} s`);
+  check(Rd.t100 >= 1.3 && Rd.t100 <= 1.6, `the roadster does 0-100 km/h in ${Rd.t100} s (1.3-1.6 s)`);
+  check(Rd.top >= 190 && Rd.top <= 210, `the roadster's top speed after 14 s is ${Rd.top} km/h (about 200 without THRUST)`);
+  check(Rd.gearTop === 1, `the roadster has one gear (${Rd.gearTop})`);
   check(T.top / Cc.top > 0.8 && T.top / Cc.top < 0.9, `the truck's top speed is ${(T.top / Cc.top * 100).toFixed(0)} % of the coupe's (about 85 %)`);
   check(Ld.top / Cc.top > 1.04 && Ld.top / Cc.top < 1.13, `the lada's top speed is ${(Ld.top / Cc.top * 100).toFixed(0)} % of the coupe's (about 108 %)`);
-  check(T.nitroKmh6s < Cc.nitroKmh6s, `the truck's boost is weaker (${T.nitroKmh6s} vs ${Cc.nitroKmh6s} km/h after 6 s)`);
+  check(T.nitroKmh6s < Cc.nitroKmh6s && Cc.nitroKmh6s < Rd.nitroKmh6s, `the truck's boost is weaker (${T.nitroKmh6s} vs ${Cc.nitroKmh6s} km/h after 6 s), the roadster's THRUST stronger (${Rd.nitroKmh6s})`);
   check(T.brake60 > Cc.brake60 && T.brake100 > Cc.brake100, `the truck brakes longer (${T.brake60} / ${T.brake100} m vs ${Cc.brake60} / ${Cc.brake100} m)`);
   check(Ld.brake60 > Cc.brake60, `the lada's old brakes are softer (${Ld.brake60} m vs ${Cc.brake60} m)`);
-  for (const id of ['coupe', 'truck', 'lada']) check(!M[id].blockedAtEnd, `${id}: the straight run ended on the road`);
+  check(Rd.brake60 < Cc.brake60 && Rd.brake100 < Cc.brake100, `the roadster brakes shortest (${Rd.brake60} / ${Rd.brake100} m vs ${Cc.brake60} / ${Cc.brake100} m)`);
+  for (const id of ['coupe', 'truck', 'lada', 'roadster']) check(!M[id].blockedAtEnd, `${id}: the straight run ended on the road`);
 
   // ================================================================= 4b. parked cars are drawn only when they can be seen (70 m, or inside the view frustum)
   const vis = {};
@@ -225,22 +231,22 @@ try {
   vis.close = await page.evaluate(() => window.__drive.fleet.map((v) => v.model.root.visible));
   await page.evaluate(() => window.__setCam(575, null, 224, -62, -6)); await sleep(700);
   vis.here = await page.evaluate(() => window.__drive.fleet.map((v) => v.model.root.visible));
-  console.log('visibility (coupe, truck, lada):', JSON.stringify(vis));
+  console.log('visibility (coupe, truck, lada, roadster):', JSON.stringify(vis));
   check(vis.farAway.every((v) => !v) && vis.behind.every((v) => !v), 'parked cars are hidden far away and when outside the view');
   check(vis.close.every(Boolean) && vis.here.every(Boolean), 'parked cars are drawn within 70 m and in the view');
   // ================================================================= 5. state per car: a dent stays with its car
   const keep = await page.evaluate(() => {
     const d = window.__drive, ph = window.__ctx.physics, f = (id) => d.vehicleById(id), r = {};
-    for (const v of d.fleet) { v.damage.repair(); v.car.damage = 0; v.car.collisionSpec = null; }          // start from three pristine cars
+    for (const v of d.fleet) { v.damage.repair(); v.car.damage = 0; v.car.collisionSpec = null; }          // start from four pristine cars
     // a real crash on the free forecourt south of the aisle (a wall 10 m ahead), then park it where it stopped
     const l = f('lada'), p = { x: l.parked.x, z: l.parked.z, yaw: l.parked.yaw };
-    d.enter('lada'); d.teleport(596, 229, 0);
-    const wall = ph.addBox(596, 240, 10, 0.6, 0, 0, 3);
+    d.enter('lada'); d.teleport(568, 229, 0);          // 28 m west of the Roadster's spot, on the free forecourt
+    const wall = ph.addBox(568, 240, 10, 0.6, 0, 0, 3);
     d.car.vx = 0; d.car.vz = 22; d.sim(2.5, { thr: 0 });
     r.ladaDamage = l.damage.amount; r.ladaStage = l.damage.stage; r.ladaShed = Object.keys(l.damage.state.shed || {}).length;
     d.car.vx = d.car.vz = 0; d.car.speed = 0; d.exit(true); ph.remove(wall);
     r.ladaParkedAt = [+l.parked.x.toFixed(1), +l.parked.z.toFixed(1)];
-    r.coupeAfter = f('coupe').damage.amount; r.truckAfter = f('truck').damage.amount;
+    r.coupeAfter = f('coupe').damage.amount; r.truckAfter = f('truck').damage.amount; r.roadsterAfter = f('roadster').damage.amount;
     d.enter('coupe'); r.hudDamageCoupe = d.car.damage; d.car.speed = 0; d.exit(true);
     d.enter('lada'); r.hudDamageLada = d.car.damage; r.ladaReenter = d.damage.amount; d.car.speed = 0; d.exit(true);
     // put everything back for the next checks
@@ -249,11 +255,11 @@ try {
   });
   console.log('state per car:', JSON.stringify(keep));
   check(keep.ladaDamage > 0.2, `the Zhiguli took a real dent from the wall (${keep.ladaDamage.toFixed(2)}, ${keep.ladaStage})`);
-  check(keep.coupeAfter === 0 && keep.truckAfter === 0, 'the other two cars stay pristine');
+  check(keep.coupeAfter === 0 && keep.truckAfter === 0 && keep.roadsterAfter === 0, 'the other three cars stay pristine');
   check(keep.hudDamageCoupe === 0 && keep.hudDamageLada > 0.2 && keep.ladaReenter === keep.ladaDamage, 'entering a car shows its own damage in the HUD state');
   await shot('3_after');
   for (const l of logs) problems.push(l);
 } catch (e) { problems.push(`[test] ${e.stack || e.message}`); }
 finally { await browser.close(); server.close(); }
 if (problems.length) { console.log('PROBLEMS:'); for (const p of problems) console.log(' -', p); process.exit(1); }
-console.log('PASS garage: three cars parked clear of the lanes, their own prompts, E enters the nearest, per-car cockpit eye / fov, truck < coupe < lada in speed and acceleration, truck brakes longest, dents stay per car');
+console.log('PASS garage: four cars parked clear of the lanes, their own prompts, E enters the nearest, per-car cockpit eye / fov, truck < coupe < lada < roadster in speed and acceleration, truck brakes longest, the roadster shortest, dents stay per car');

@@ -36,7 +36,7 @@ function pick() {
   return { x: g.ax + (g.bx - g.ax) * u - g.nx * d, z: g.az + (g.bz - g.az) * u - g.nz * d, nx: g.nx, nz: g.nz };
 }
 
-const SPECS = { coupe: null, truck: { W: 2.03, R: 0.43, wb: 3.80, front: 2.63, rear: -3.05, hgt: 1.80, len: 5.68, centerZ: -0.21, mass: MASS.truck }, lada: { W: 1.62, R: 0.285, wb: 2.42, front: 2.09, rear: -2.07, hgt: 1.40, len: 4.16, centerZ: 0.01, mass: MASS.lada } };
+const SPECS = { roadster: { W: 2.00, R: 0.355, wb: 2.96, front: 2.36, rear: -2.26, hgt: 1.22, len: 4.62, centerZ: 0.05, mass: MASS.roadster }, coupe: null, truck: { W: 2.03, R: 0.43, wb: 3.80, front: 2.63, rear: -3.05, hgt: 1.80, len: 5.68, centerZ: -0.21, mass: MASS.truck }, lada: { W: 1.62, R: 0.285, wb: 2.42, front: 2.09, rear: -2.07, hgt: 1.40, len: 4.16, centerZ: 0.01, mass: MASS.lada } };
 const makeCar = (id) => createHandling(world, id === 'coupe' ? null : tuningFor(id, SPECS[id]));
 let HF = 2.1, HR = 2.1, HW = 0.95;                                      // the footprint the handling tests (T.hf / hr / hw) of the car under test
 function footprintOutside(car) {
@@ -45,8 +45,8 @@ function footprintOutside(car) {
   return false;
 }
 const fail = []; let hits = 0, runsDone = 0, glancingChecked = 0, glancingLost = 0, maxSpeed = 0, outsideFrames = 0, stuckRuns = 0, centreOut = 0;
-for (let run = 0; run < RUNS * 3; run++) {
-  const id = ['coupe', 'truck', 'lada'][run % 3], p = pick(), car = makeCar(id); HF = car.tuning.hf; HR = car.tuning.hr; HW = car.tuning.hw; runsDone++;
+for (let run = 0; run < RUNS * 4; run++) {
+  const id = ['coupe', 'truck', 'lada', 'roadster'][run % 4], p = pick(), car = makeCar(id); HF = car.tuning.hf; HR = car.tuning.hr; HW = car.tuning.hw; runsDone++;
   const toward = Math.atan2(p.nx, p.nz), ang = toward + (rnd() * 2 - 1) * 75 * Math.PI / 180;     // yaw 0 faces +Z: the heading atan2(dx, dz) toward the edge normal (nx, nz)
   car.reset(p.x, p.z, ang);
   const v0 = 8 + rnd() * 30; car.vx = Math.sin(ang) * v0; car.vz = Math.cos(ang) * v0;
@@ -75,7 +75,7 @@ for (let run = 0; run < RUNS * 3; run++) {
 }
 
 // ---- a glancing hit keeps its speed along the edge: the east edge x = 835 (OLD, z -405..1060) is a wall along z; the car approaches it 20 deg off the wall (a steeper 70 deg hit is run too and must recover)
-for (const [deg, keep] of [[20, 0.4], [45, 0.2], [70, 0]]) for (const id of ['coupe', 'truck', 'lada']) {
+for (const [deg, keep] of [[20, 0.4], [45, 0.2], [70, 0]]) for (const id of ['coupe', 'truck', 'lada', 'roadster']) {
   const car = makeCar(id); const wallX = 835, yaw = Math.PI / 2 - deg * Math.PI / 180;      // yaw 0 faces +Z (along the wall), the car heads east of south-east: deg = the angle between the heading and the wall
   const a = deg * Math.PI / 180, yawA = a;                                                          // heading deg from the wall (+Z), leaning toward the wall (+X)
   car.reset(wallX - 70, 300, yawA); car.vx = Math.sin(yawA) * 30; car.vz = Math.cos(yawA) * 30;
@@ -83,6 +83,6 @@ for (const [deg, keep] of [[20, 0.4], [45, 0.2], [70, 0]]) for (const id of ['co
   const v0 = 30; glancingChecked++; const lost = vmin < v0 * keep; if (lost) { glancingLost++; fail.push(['hit-lost-speed', id, deg, +vmin.toFixed(1), +vend.toFixed(1)]); }
   if (VERBOSE) console.log(id + ' hit at ' + deg + ' deg off the east edge: slowest ' + vmin.toFixed(1) + ' m/s after the hit, ' + vend.toFixed(1) + ' m/s 12 s later; x ' + car.x.toFixed(1) + ' z ' + car.z.toFixed(1));
 }
-console.log(`edge runs ${runsDone} (coupe, taxi pickup, Lada): hits ${hits}, footprint outside the map in ${outsideFrames} frames, centre outside ${centreOut}, stuck runs (no escape in 5 s) ${stuckRuns}, top speed ${maxSpeed.toFixed(0)} km/h`);
+console.log(`edge runs ${runsDone} (coupe, taxi pickup, Lada, Roadster): hits ${hits}, footprint outside the map in ${outsideFrames} frames, centre outside ${centreOut}, stuck runs (no escape in 5 s) ${stuckRuns}, top speed ${maxSpeed.toFixed(0)} km/h`);
 if (fail.length) { console.log('FAILURES (' + fail.length + '):'); for (const f of fail.slice(0, 15)) console.log('  ', JSON.stringify(f)); console.log('RESULT: FAIL'); process.exit(1); }
 console.log('RESULT: OK');

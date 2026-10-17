@@ -1,8 +1,9 @@
-// Handling numbers of the three garage cars (red coupe, taxi pickup, Lada 2106), headless, NO browser: the real drive/handling.js on an empty flat world.
+// Handling numbers of the four garage cars (red coupe, taxi pickup, Lada 2106, Tesla Roadster), headless, NO browser: the real drive/handling.js on an empty flat world.
 //   node tools/drive-garage-handling.mjs [--json out.json] [--quiet]
 // Measures per car: 0-100 km/h time, speed after 10 s, top speed over a long straight (with and without the nitro), braking distance from 60 km/h and from 100 km/h,
 // the steady turning circle at 60 km/h (full lock), the lateral slide after a handbrake turn-in, and checks the ORDER the user asked for:
-//   top speed truck < coupe < lada, acceleration truck < coupe < lada, braking distance truck > coupe, mass lada < coupe < truck, and the coupe's old numbers (default tuning) unchanged.
+//   top speed truck < coupe < lada < roadster, acceleration truck < coupe < lada < roadster, braking distance truck > coupe, mass lada < coupe < roadster < truck, and the coupe's old numbers (default tuning) unchanged;
+//   the Roadster's targets: 0-100 km/h in 1.3-1.6 s, top 190-205 km/h without THRUST and 245-265 with it, 100 -> 0 km/h in under 2.7 s, a turning circle of about 11 m (full lock, 60 km/h).
 import { createHandling, COUPE_TUNING } from '../src/world/drive/handling.js';
 import { SPEC as COUPE_SPEC } from '../src/world/drive/model.js';
 import { EYE as COUPE_EYE } from '../src/world/drive/cockpit.js';
@@ -16,6 +17,7 @@ const SPECS = {
   coupe: { ...COUPE_SPEC, mass: MASS.coupe, eye: COUPE_EYE },
   truck: { W: 2.03, R: 0.43, wb: 3.80, front: 2.63, rear: -3.05, hgt: 1.80, len: 5.68, centerZ: -0.21, mass: MASS.truck },
   lada: { W: 1.62, R: 0.285, wb: 2.42, front: 2.09, rear: -2.07, hgt: 1.40, len: 4.16, centerZ: 0.01, mass: MASS.lada },
+  roadster: { W: 2.00, R: 0.355, wb: 2.96, front: 2.36, rear: -2.26, hgt: 1.22, len: 4.62, centerZ: 0.05, mass: MASS.roadster },
 };
 const DT = 1 / 60, KMH = 3.6;
 function fresh(id, legacy = false) {
@@ -33,8 +35,8 @@ function measure(id, legacy = false) {
   for (const v0 of [60, 100]) {
     car = fresh(id, legacy);
     run(car, 40, (t) => ({ ...up, thr: car.speed < v0 ? 1 : 0 }), (t, c) => c.speed < v0 - 0.2);      // up to v0
-    const z0 = car.z; run(car, 12, { thr: 0, brk: 1, steer: 0, hand: false, nitro: false }, (t, c) => c.speed > 0.5);
-    r['brake' + v0] = +(car.z - z0).toFixed(1);
+    const z0 = car.z; let tStop = 0; run(car, 12, { thr: 0, brk: 1, steer: 0, hand: false, nitro: false }, (t, c) => { tStop = t; return c.speed > 0.5; });
+    r['brake' + v0] = +(car.z - z0).toFixed(1); if (v0 === 100) r.brake100T = +tStop.toFixed(2);
   }
   car = fresh(id, legacy); run(car, 40, (t) => ({ ...up, thr: car.speed < 60 ? 1 : 0.18 }), (t, c) => c.speed < 59.5);
   car.vx = Math.sin(car.yaw) * 60 / KMH; car.vz = Math.cos(car.yaw) * 60 / KMH;
@@ -57,26 +59,34 @@ function measure(id, legacy = false) {
   const y1 = car.yaw; run(car, 0.5, { thr: 0.2, brk: 0, steer: 1, hand: false, nitro: false }); r.yawRate50 = +((car.yaw - y1) / 0.5).toFixed(2);
   return r;
 }
-const res = {}; for (const id of ['coupe', 'truck', 'lada']) res[id] = measure(id);
+const res = {}; for (const id of ['coupe', 'truck', 'lada', 'roadster']) res[id] = measure(id);
 const old = measure('coupe', true);
 if (!has('--quiet')) {
-  const rows = ['t100', 'v10', 'd10', 'top', 't100n', 'topNitro', 'nitro6', 'brake60', 'brake100', 'turn60', 'yawRate50', 'corner100VL', 'corner100Drift', 'corner100Kmh', 'slideVL', 'slideYawDeg'];
-  console.log('metric'.padEnd(12), 'coupe'.padStart(9), 'truck'.padStart(9), 'lada'.padStart(9), '  truck/coupe  lada/coupe');
-  for (const k of rows) console.log(k.padEnd(12), ...['coupe', 'truck', 'lada'].map((i) => String(res[i][k]).padStart(9)), '  ', (res.truck[k] / res.coupe[k]).toFixed(2).padStart(9), (res.lada[k] / res.coupe[k]).toFixed(2).padStart(10));
-  console.log('mass kg'.padEnd(12), ...['coupe', 'truck', 'lada'].map((i) => String(MASS[i]).padStart(9)), '  ', (MASS.truck / MASS.coupe).toFixed(2).padStart(9), (MASS.lada / MASS.coupe).toFixed(2).padStart(10));
+  const rows = ['t100', 'v10', 'd10', 'top', 't100n', 'topNitro', 'nitro6', 'brake60', 'brake100', 'brake100T', 'turn60', 'yawRate50', 'corner100VL', 'corner100Drift', 'corner100Kmh', 'slideVL', 'slideYawDeg'];
+  console.log('metric'.padEnd(12), 'coupe'.padStart(9), 'truck'.padStart(9), 'lada'.padStart(9), 'roadster'.padStart(9), '  truck/coupe  lada/coupe  roadster/coupe');
+  for (const k of rows) console.log(k.padEnd(12), ...['coupe', 'truck', 'lada', 'roadster'].map((i) => String(res[i][k]).padStart(9)), '  ', (res.truck[k] / res.coupe[k]).toFixed(2).padStart(9), (res.lada[k] / res.coupe[k]).toFixed(2).padStart(10), (res.roadster[k] / res.coupe[k]).toFixed(2).padStart(14));
+  console.log('mass kg'.padEnd(12), ...['coupe', 'truck', 'lada', 'roadster'].map((i) => String(MASS[i]).padStart(9)), '  ', (MASS.truck / MASS.coupe).toFixed(2).padStart(9), (MASS.lada / MASS.coupe).toFixed(2).padStart(10), (MASS.roadster / MASS.coupe).toFixed(2).padStart(14));
 }
 const fails = [];
 const need = (ok, msg) => { if (!ok) fails.push(msg); };
-const C = res.coupe, T = res.truck, Ld = res.lada;
-need(T.top < C.top && C.top < Ld.top, `top speed order truck ${T.top} < coupe ${C.top} < lada ${Ld.top}`);
-need(T.t100 > C.t100 && C.t100 > Ld.t100, `0-100 order truck ${T.t100} > coupe ${C.t100} > lada ${Ld.t100}`);
-need(T.v10 < C.v10 && C.v10 < Ld.v10, `speed after 10 s order truck ${T.v10} < coupe ${C.v10} < lada ${Ld.v10}`);
+const C = res.coupe, T = res.truck, Ld = res.lada, Rd = res.roadster;
+need(T.top < C.top && C.top < Ld.top && Ld.top < Rd.top, `top speed order truck ${T.top} < coupe ${C.top} < lada ${Ld.top} < roadster ${Rd.top}`);
+need(T.t100 > C.t100 && C.t100 > Ld.t100 && Ld.t100 > Rd.t100, `0-100 order truck ${T.t100} > coupe ${C.t100} > lada ${Ld.t100} > roadster ${Rd.t100}`);
+need(T.v10 < C.v10 && C.v10 < Ld.v10 && Ld.v10 < Rd.v10, `speed after 10 s order truck ${T.v10} < coupe ${C.v10} < lada ${Ld.v10} < roadster ${Rd.v10}`);
 need(T.brake60 > C.brake60, `braking from 60 km/h: truck ${T.brake60} m > coupe ${C.brake60} m`);
 need(Ld.brake60 > C.brake60, `braking from 60 km/h: lada ${Ld.brake60} m > coupe ${C.brake60} m (soft old brakes)`);
-need(MASS.lada < MASS.coupe && MASS.coupe < MASS.truck, 'mass order lada < coupe < truck');
+need(MASS.lada < MASS.coupe && MASS.coupe < MASS.roadster && MASS.roadster < MASS.truck, 'mass order lada < coupe < roadster < truck');
 need(T.top / C.top > 0.8 && T.top / C.top < 0.9, `truck top speed ${(T.top / C.top * 100).toFixed(0)} % of the coupe (about 85 %)`);
 need(Ld.top / C.top > 1.05 && Ld.top / C.top < 1.12, `lada top speed ${(Ld.top / C.top * 100).toFixed(0)} % of the coupe (about 108 %)`);
-need(T.nitro6 < C.nitro6 && C.nitro6 <= Ld.nitro6, `nitro sprint (speed at 6 s) order truck ${T.nitro6} < coupe ${C.nitro6} <= lada ${Ld.nitro6}`);
+need(T.nitro6 < C.nitro6 && C.nitro6 <= Ld.nitro6 && Ld.nitro6 < Rd.nitro6, `nitro sprint (speed at 6 s) order truck ${T.nitro6} < coupe ${C.nitro6} <= lada ${Ld.nitro6} < roadster ${Rd.nitro6}`);
+// the Roadster's own targets (spec 2.3): a quick launch, a 200 km/h cruise, a 255 km/h THRUST, a short stop, a tight circle
+need(Rd.t100 >= 1.3 && Rd.t100 <= 1.6, `roadster 0-100 km/h ${Rd.t100} s (1.3-1.6 s)`);
+need(Rd.top >= 190 && Rd.top <= 205, `roadster top speed without THRUST ${Rd.top} km/h (190-205)`);
+need(Rd.topNitro >= 245 && Rd.topNitro <= 265, `roadster top speed with THRUST ${Rd.topNitro} km/h (245-265)`);
+need(Rd.t100n < Rd.t100, `roadster 0-100 km/h with THRUST ${Rd.t100n} s is quicker than without (${Rd.t100} s)`);
+need(Rd.brake100T < 2.7, `roadster braking 100 -> 0 km/h in ${Rd.brake100T} s (< 2.7 s)`);
+need(2 * Rd.turn60 >= 9.5 && 2 * Rd.turn60 <= 12.5, `roadster turning circle ${(2 * Rd.turn60).toFixed(1)} m across (radius ${Rd.turn60} m at 60 km/h, full lock; about 11 m)`);
+need(Rd.brake60 < C.brake60, `braking from 60 km/h: roadster ${Rd.brake60} m < coupe ${C.brake60} m (big discs)`);
 need(Ld.slideVL > C.slideVL, `the lada slides more than the coupe (${Ld.slideVL} vs ${C.slideVL} m/s)`);
 need(Ld.corner100VL > C.corner100VL, `the lada slides sideways more in a 100 km/h corner (${Ld.corner100VL} vs ${C.corner100VL} m/s)`);
 need(T.turn60 > C.turn60, `the truck turns wider than the coupe (${T.turn60} vs ${C.turn60} m at 60 km/h)`);
@@ -86,11 +96,15 @@ for (const k of Object.keys(C)) need(C[k] === old[k] || Math.abs(C[k] - old[k]) 
   const { loadGarage, createPlaceholderModel } = await import('../src/world/drive/cars/index.js');
   const { createCarDamage } = await import('../src/world/drive/damage.js');
   const warn = console.warn; let warned = 0; console.warn = () => { warned++; };
-  const none = await loadGarage({}, { paths: { truck: './does-not-exist.js', lada: './does-not-exist.js' } });
-  need(none.map((e) => e.id).join() === 'coupe' && warned === 2, `a missing truck / lada file leaves the coupe alone (got ${none.map((e) => e.id)}, ${warned} warnings)`);
-  const ph2 = await loadGarage({}, { paths: { truck: './does-not-exist.js' }, placeholders: true });
+  const none = await loadGarage({}, { paths: { truck: './does-not-exist.js', lada: './does-not-exist.js', roadster: './does-not-exist.js' } });
+  need(none.map((e) => e.id).join() === 'coupe' && warned === 3, `a missing truck / lada / roadster file leaves the coupe alone (got ${none.map((e) => e.id)}, ${warned} warnings)`);
+  const ph2 = await loadGarage({}, { paths: { truck: './does-not-exist.js', roadster: './does-not-exist.js' }, placeholders: true });
   console.warn = warn;
-  need(ph2.map((e) => e.id).join() === 'coupe,truck,lada' && ph2[1].spec.mass === MASS.truck && ph2[1].spec.durability > 1, 'placeholders (tests only) stand in for a missing car with the registry spec');
+  need(ph2.map((e) => e.id).join() === 'coupe,truck,lada,roadster' && ph2[1].spec.mass === MASS.truck && ph2[1].spec.durability > 1 && ph2[3].spec.mass === MASS.roadster && ph2[3].exhaust.length === 4 && ph2[3].jetFx, 'placeholders (tests only) stand in for a missing car with the registry spec (the Roadster keeps its four nozzles and its jet fx)');
+  const real = await loadGarage({}, { paths: { truck: './does-not-exist.js', lada: './does-not-exist.js' } });
+  const rr = real.find((e) => e.id === 'roadster');
+  need(rr && rr.exhaust.length === 4 && rr.jetFx && rr.hud.boost === 'THRUST' && rr.tuning.hop && rr.tuning.nitroRamp > 0 && rr.spec.mass === MASS.roadster && rr.spec.durability === 0.95 && rr.parked.x === 596 && rr.parked.z === 232, 'the real Roadster entry: four nozzles, jet fx, THRUST bar, hop + nitroRamp tuning, mass / durability / parking rows');
+  need(real.map((e) => e.id).join() === 'coupe,roadster' && real[0].tuning.hop === undefined && real[0].jetFx === undefined, 'the coupe has no hop and no jet fx (only the Roadster does)');
   // the damage conventions on a placeholder box car: crush on its own spec, shed zones, exact repair
   const { default: THREE_ } = { default: await import('three') };
   const pm = createPlaceholderModel({}, ph2[1].spec), shed = [];
@@ -108,4 +122,4 @@ for (const k of Object.keys(C)) need(C[k] === old[k] || Math.abs(C[k] - old[k]) 
 if (args.includes('--json')) { const f = args[args.indexOf('--json') + 1]; (await import('node:fs')).writeFileSync(f, JSON.stringify({ res, mass: MASS }, null, 1)); }
 void COUPE_TUNING; void TUNING;
 if (fails.length) { console.log('FAILED:'); for (const f of fails) console.log(' -', f); process.exit(1); }
-console.log('PASS garage handling: order truck < coupe < lada (top speed, acceleration), truck brakes longer, mass order, coupe unchanged');
+console.log('PASS garage handling: order truck < coupe < lada < roadster (top speed, acceleration), the Roadster targets (0-100, top, THRUST, braking, circle), truck brakes longer, mass order, coupe unchanged');

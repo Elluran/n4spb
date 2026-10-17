@@ -3,9 +3,10 @@
 // whoosh, a thump / scrape on a collision and a gear-change blip. The ordinary two-tone car horn is the engine's own one-shot (audio.play('carHorn')). CALM by the user's rules:
 // no sirens, no alarms. Everything is silent when the page audio is muted or not started. Created lazily at the first enter() (a user gesture).
 // PROFILES (drive/cars/tuning.js SOUND): createCarSound(audio, profile) / setProfile(profile) re-voices the same graph per car (oscillator types, pitch law, filter, gains, no gear blips):
-// the Lada is a rough old four, the pickup a low electric hum. No profile = the red coupe's voice.
+// the Lada is a rough old four, the pickup a low electric hum, the Roadster an electric whine whose `jet` field (gain, hp, attack, release) turns the nitro whoosh into the airy hiss of its cold-gas
+// nozzles, with a valve thunk when the thrust opens and the one-shots of its gas hop (hop(), cushion(), land(v)). No profile = the red coupe's voice.
 export function createCarSound(audio, profile = null) {
-  let ac = null, out = null, E = null, started = false, last = { gear: 1 }, P = profile || {};
+  let ac = null, out = null, E = null, started = false, last = { gear: 1, boosting: false }, P = profile || {};
   const noiseBuf = (ac2) => { const b = ac2.createBuffer(1, ac2.sampleRate * 2, ac2.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; };
   const clipCurve = () => { const n = 512, c = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(x * 2.2) / Math.tanh(2.2); } return c; };
 
@@ -30,7 +31,7 @@ export function createCarSound(audio, profile = null) {
     const n3 = noise(); n3.connect(wlp); wlp.connect(wind); wind.connect(out);
     const whoosh = ac.createGain(); whoosh.gain.value = 0; const hbp = ac.createBiquadFilter(); hbp.type = 'highpass'; hbp.frequency.value = 1200;
     const n4 = noise(); n4.connect(hbp); hbp.connect(whoosh); whoosh.connect(out);
-    E = { eng, o1, o2, o3, g1, g2, g3, lp, intake, ibp, squeal, sbp, wind, wlp, whoosh, nb };
+    E = { eng, o1, o2, o3, g1, g2, g3, lp, intake, ibp, squeal, sbp, wind, wlp, whoosh, hbp, nb };
     voice();
     return true;
   }
@@ -40,6 +41,7 @@ export function createCarSound(audio, profile = null) {
     const ty = P.types || ['sawtooth', 'sawtooth', 'square'], gn = P.gains || [0.5, 0.35, 0.3];
     E.o1.type = ty[0]; E.o2.type = ty[1]; E.o3.type = ty[2];
     E.g1.gain.value = gn[0]; E.g2.gain.value = gn[1]; E.g3.gain.value = gn[2]; E.lp.Q.value = P.lpQ ?? 2.2;
+    E.hbp.frequency.value = P.jet ? P.jet.hp : 1200;
   }
   const g = (p, v, t = 0.06) => { try { p.setTargetAtTime(v, ac.currentTime, t); } catch (e) { /* */ } };
 
@@ -75,13 +77,23 @@ export function createCarSound(audio, profile = null) {
       g(E.squeal.gain, 0.16 * slip, 0.05); E.sbp.frequency.setTargetAtTime(1900 + Math.abs(c.vL) * 90, t, 0.08);
       const sp = Math.min(1, c.speed / 220);
       g(E.wind.gain, (0.02 + 0.28 * sp * sp) * (P.wind ?? 1), 0.12); E.wlp.frequency.setTargetAtTime(350 + sp * 1500, t, 0.12);
-      g(E.whoosh.gain, c.boosting ? 0.09 : 0, c.boosting ? 0.08 : 0.25);
+      const J = P.jet;
+      g(E.whoosh.gain, c.boosting ? (J ? J.gain : 0.09) : 0, c.boosting ? (J ? J.attack : 0.08) : (J ? J.release : 0.25));
+      if (J && c.boosting && !last.boosting) thrust();
+      last.boosting = !!c.boosting;
       if (c.gear !== last.gear) { if (P.blip !== false && c.gear > last.gear && thr > 0.3) burst(2400, 0.07, 0.05, 'bandpass'); last.gear = c.gear; }
     },
     hit(v) { if (!E || !on_()) return; thump(Math.min(0.8, 0.12 + v * 0.05)); burst(900 + v * 60, 0.25, Math.min(0.5, 0.08 + v * 0.03)); },
+    thrust,
+    /** the gas hop: take-off (a hiss of air and a soft thud), the landing cushion re-firing, touchdown (v = the sink speed m/s) */
+    hop() { if (!E || !on_()) return; burst(3500, 0.40, 0.14, 'highpass'); thump(0.18); },
+    cushion() { if (!E || !on_()) return; burst(3000, 0.2, 0.10, 'highpass'); },
+    land(v) { if (!E || !on_()) return; thump(Math.min(0.5, 0.10 + v * 0.04)); burst(900, 0.25, Math.min(0.3, 0.05 + v * 0.025)); },
     scrape(v) { if (!E || !on_()) return; burst(1800, 0.12, Math.min(0.12, 0.03 + v * 0.03), 'bandpass'); },
     horn() { try { audio.play('carHorn', { volume: 1 }); } catch (e) { /* */ } },
-    stop() { if (out) g(out.gain, 0, 0.05); },
+    stop() { last.boosting = false; if (out) g(out.gain, 0, 0.05); },
   };
   function on_() { return !!ac && !audio.muted && ac.state === 'running'; }
+  /** the valve of the cold-gas nozzles opening: a low click and a thud (one shot, Roadster only: update() fires it at the rising edge of the thrust) */
+  function thrust() { if (!E || !on_()) return; burst(300, 0.12, 0.25); thump(0.12); }
 }

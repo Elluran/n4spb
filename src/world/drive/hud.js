@@ -34,6 +34,9 @@ body.driving #interact { display: none !important; }
 #drive .d-keys kbd { font: 700 11px/1 "Noto Sans", sans-serif; background: #fff; color: #1c2a5a; border-radius: 4px; padding: 2px 5px; margin: 0 2px; }
 #drive .d-flash { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(255,60,60,0) 40%, rgba(255,60,60,.55) 100%); opacity: 0; }
 #drive .d-touch { position: absolute; right: 18px; top: 84px; display: none; flex-direction: column; gap: 10px; pointer-events: auto; }
+#drive .d-touch.hop { gap: 6px; }
+#drive .d-touch.hop button { padding: 10px 16px; }
+#drive .d-touch button.off { opacity: .45; }
 #drive .d-touch button { font: 700 14px/1 "Rubik", sans-serif; color: #fff; background: rgba(12,18,44,.78); border: 2px solid rgba(255,255,255,.85); border-radius: 12px; padding: 14px 16px; }
 @media (pointer: coarse) { #drive .d-touch { display: flex; } #drive .d-keys { display: none; } #drive .d-speedo { transform: scale(.72); transform-origin: right bottom; } #drive .d-nitro { bottom: calc(232px + env(safe-area-inset-bottom, 0px)); } #drive .d-nlab { bottom: calc(252px + env(safe-area-inset-bottom, 0px)); } }
 @media (max-width: 900px) { #drive .d-keys { display: none; } `;
@@ -42,7 +45,7 @@ const ARC = { cx: 150, cy: 150, r: 124, a0: 135, a1: 405 };
 const pt = (a, r) => [ARC.cx + r * Math.cos(a * Math.PI / 180), ARC.cy + r * Math.sin(a * Math.PI / 180)];
 const arcPath = (a0, a1, r) => { const [x0, y0] = pt(a0, r), [x1, y1] = pt(a1, r); return `M${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
 
-export function createDriveHud({ isTouch, onExit, onRepair, onNitro, onHand, onBrake }) {
+export function createDriveHud({ isTouch, onExit, onRepair, onNitro, onHand, onBrake, onJump }) {
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
   const root = document.createElement('div'); root.id = 'drive';
   const ticks = [];
@@ -64,21 +67,22 @@ export function createDriveHud({ isTouch, onExit, onRepair, onNitro, onHand, onB
       <div class="d-num">0</div><div class="d-unit">KM/H</div><div class="d-gear">N</div>
     </div>
     <div class="d-drift"><small>ДРИФТ · DRIFT</small><span></span></div>
-    <div class="d-keys"><kbd>W</kbd><kbd>S</kbd> газ · тормоз &nbsp; <kbd>A</kbd><kbd>D</kbd> руль &nbsp; <kbd>Shift</kbd> нитро &nbsp; <kbd>Space</kbd> ручник (дрифт) &nbsp; <kbd>G</kbd> сигнал &nbsp; <kbd>V</kbd> камера &nbsp; <kbd>1</kbd>–<kbd>5</kbd>/<kbd>R</kbd> телепорт &nbsp; <kbd>E</kbd> выйти · exit</div>
-    <div class="d-touch"><button data-k="nitro">NITRO</button><button data-k="hand">DRIFT</button><button data-k="brake">STOP</button><button data-k="exit">EXIT</button></div>`;
+    <div class="d-keys"><kbd>W</kbd><kbd>S</kbd> газ · тормоз &nbsp; <kbd>A</kbd><kbd>D</kbd> руль &nbsp; <kbd>Shift</kbd> нитро &nbsp; <span class="d-hopk" hidden><kbd>X</kbd> хоп &nbsp; </span><kbd>Space</kbd> ручник (дрифт) &nbsp; <kbd>G</kbd> сигнал &nbsp; <kbd>V</kbd> камера &nbsp; <kbd>1</kbd>–<kbd>5</kbd>/<kbd>R</kbd> телепорт &nbsp; <kbd>E</kbd> выйти · exit</div>
+    <div class="d-touch"><button data-k="nitro">NITRO</button><button data-k="hop" hidden>HOP</button><button data-k="hand">DRIFT</button><button data-k="brake">STOP</button><button data-k="exit">EXIT</button></div>`;
   document.body.appendChild(root);
   const $ = (s) => root.querySelector(s);
   const condition = $('.d-condition span');
   $('.d-condition button').addEventListener('click', () => onRepair?.());
   const el = { rpm: $('.d-rpm'), num: $('.d-num'), gear: $('.d-gear'), nitro: $('.d-nitro'), nbar: $('.d-nitro i'), vig: $('.d-vig'), flash: $('.d-flash'), drift: $('.d-drift'), driftN: $('.d-drift span'), keys: $('.d-keys'),
-    streaks: $('.d-streaks') };
+    streaks: $('.d-streaks'), hopKey: $('.d-hopk'), hopBtn: $('.d-touch [data-k="hop"]'), touch: $('.d-touch') };
   const sctx = el.streaks.getContext('2d');
   let prof = {};         // per-car words (drive/cars/tuning.js HUD): the label of the boost bar, 'D' for a one-gear (electric) car
+  let hasHop = false, hopOff = false;       // the car can hop (set by its profile); the HOP button is dimmed
   let shown = false, keyT = 0, lastNum = -1, lastGear = '', flashA = 0, bankT = 0, driftPts = 0, driftShown = 0;
   const streaks = []; for (let i = 0; i < 70; i++) streaks.push({ a: Math.random() * 6.283, r: Math.random(), l: 0.15 + Math.random() * 0.3, w: 0.6 + Math.random() * 1.8 });
   // touch buttons
   for (const b of root.querySelectorAll('.d-touch button')) {
-    const k = b.dataset.k, down = (v) => (e) => { e.preventDefault(); if (k === 'nitro') onNitro(v); else if (k === 'hand') onHand(v); else if (k === 'brake') onBrake(v); else if (v) onExit(); };
+    const k = b.dataset.k, down = (v) => (e) => { e.preventDefault(); if (k === 'nitro') onNitro(v); else if (k === 'hand') onHand(v); else if (k === 'brake') onBrake(v); else if (k === 'hop') onJump?.(v); else if (v) onExit(); };
     b.addEventListener('pointerdown', down(true)); b.addEventListener('pointerup', down(false)); b.addEventListener('pointercancel', down(false)); b.addEventListener('pointerleave', down(false));
   }
   const resizeStreaks = () => { el.streaks.width = innerWidth; el.streaks.height = innerHeight; };
@@ -86,8 +90,11 @@ export function createDriveHud({ isTouch, onExit, onRepair, onNitro, onHand, onB
 
   return {
     root,
-    /** per-car words: { boost: 'NITRO' | 'BOOST', gearD: true } */
-    setProfile(p) { prof = p || {}; $('.d-nlab').textContent = prof.boost || 'NITRO'; lastGear = ''; },
+    /** per-car words: { boost: 'NITRO' | 'BOOST', gearD: true }; hop = the car has a gas hop (tuning.hop): the X key hint and the HOP touch button appear */
+    setProfile(p, hop = false) {
+      prof = p || {}; $('.d-nlab').textContent = prof.boost || 'NITRO'; lastGear = '';
+      hasHop = hop; el.hopKey.hidden = el.hopBtn.hidden = !hop; el.touch.classList.toggle('hop', hop);
+    },
     show(on) {
       if (on === shown) return; shown = on; document.body.classList.toggle('driving', on);
       if (on) { keyT = 9; el.keys.classList.remove('hide'); driftPts = 0; }
@@ -105,6 +112,7 @@ export function createDriveHud({ isTouch, onExit, onRepair, onNitro, onHand, onB
       if (gear !== lastGear) { lastGear = gear; el.gear.textContent = gear; el.gear.classList.add('shift'); setTimeout(() => el.gear.classList.remove('shift'), 140); }
       const f = Math.max(0, Math.min(1, car.rpm));
       el.rpm.setAttribute('stroke-dashoffset', (((ARC.a1 - ARC.a0) * Math.PI / 180 * ARC.r) * (1 - f)).toFixed(1));
+      if (hasHop) { const off = car.air || car.boost < (car.tuning.hop?.minTank ?? 0); if (off !== hopOff) { hopOff = off; el.hopBtn.classList.toggle('off', off); } }      // the HOP button dims while the tank is too low or the car is in the air
       el.nbar.style.transform = `scaleX(${car.boost.toFixed(3)})`; el.nitro.classList.toggle('low', car.boost < 0.22); el.nitro.classList.toggle('burn', car.boosting);
       // streaks + vignette
       const spd = Math.max(0, (car.speed - 95) / 130) + (car.boosting ? 0.45 : 0);

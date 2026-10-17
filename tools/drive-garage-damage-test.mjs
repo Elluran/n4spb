@@ -1,9 +1,9 @@
-// Crash test of EVERY garage car (red coupe, taxi pickup, eggplant Zhiguli) in the collision yard (tools/collision-lab.html: the production drive.js + registry + damage + wrecks in a small
+// Crash test of EVERY garage car (red coupe, taxi pickup, eggplant Zhiguli, Tesla Roadster) in the collision yard (tools/collision-lab.html: the production drive.js + registry + damage + wrecks in a small
 // scene, headless Edge with the GPU): each car is driven into the wall, into a parked sedan and into oncoming traffic with its OWN spec, geometry and mass.
 //   node tools/drive-garage-damage-test.mjs [--shots] [--keep]      (screenshots with --shots: shots/collision/garage_<car>_<case>.png)
 // Proves per car: crush (the front of its own shell moves back, the stage rises), shed panels (the index shrinks, debris bodies fly), smoke, exact repair, one damage state per car
 // (a dented car stays dented while another is driven), the wreck of a struck sedan, and the MASS order: the heavier the car, the farther it throws the parked sedan; the stouter the
-// body (truck > coupe > lada), the less it crumples at the same speed. tools/drive-damage-test.mjs and tools/wreck-physics-test.mjs (node, no page) keep covering the shared base.
+// body (truck > coupe > roadster > lada), the less it crumples at the same speed. tools/drive-damage-test.mjs and tools/wreck-physics-test.mjs (node, no page) keep covering the shared base.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -34,7 +34,7 @@ try {
   const shot = async (name) => { if (!args.has('--shots')) return; await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))); await page.screenshot({ path: path.join(out, `garage_${name}.png`) }); };
   const ids = await page.evaluate(() => lab.drive.fleet.map((v) => v.id));
   console.log('garage:', ids.join(', '));
-  assert.deepEqual(ids, ['coupe', 'truck', 'lada'], 'all three cars are in the garage');
+  assert.deepEqual(ids, ['coupe', 'truck', 'lada', 'roadster'], 'all four cars are in the garage');
   const R = {};
   // ---------------------------------------------------------------- per car: wall, shed panels, repair
   for (const id of ids) {
@@ -76,6 +76,7 @@ try {
   for (const id of ids) { await fresh(id); dmg[id] = await page.evaluate(() => lab.crash('wall', 20).damage); }
   console.log('damage at 20 m/s into the wall:', JSON.stringify(Object.fromEntries(Object.entries(dmg).map(([k, v]) => [k, +v.toFixed(3)]))));
   check(dmg.truck < dmg.coupe && dmg.coupe < dmg.lada, `crush order at the same speed: truck ${dmg.truck.toFixed(3)} < coupe ${dmg.coupe.toFixed(3)} < lada ${dmg.lada.toFixed(3)}`);
+  check(dmg.roadster > dmg.truck && dmg.roadster < dmg.lada * 1.15, `the thin Roadster shell crumples more than the truck's (${dmg.roadster.toFixed(3)} vs ${dmg.truck.toFixed(3)}) and about like the others`);
   // ---------------------------------------------------------------- the struck sedan: wreck + momentum (the heavier car throws it farther)
   const thrown = {};
   for (const id of ids) {
@@ -95,6 +96,7 @@ try {
   }
   console.log('sedan thrown by a 22 m/s hit (m):', JSON.stringify(Object.fromEntries(Object.entries(thrown).map(([k, v]) => [k, +v.toFixed(2)]))));
   check(thrown.truck > thrown.coupe && thrown.coupe > thrown.lada, `momentum order: truck ${thrown.truck.toFixed(2)} > coupe ${thrown.coupe.toFixed(2)} > lada ${thrown.lada.toFixed(2)} m`);
+  check(thrown.roadster > thrown.coupe && thrown.roadster < thrown.truck, `the Roadster (1.25 x the coupe) throws the sedan between the coupe and the truck (${thrown.roadster.toFixed(2)} m)`);
   // ---------------------------------------------------------------- oncoming traffic
   for (const id of ids) {
     await fresh(id);
@@ -114,20 +116,24 @@ try {
     const d = lab.drive, f = (id) => d.vehicleById(id), res = {};
     if (d.active) d.exit(true);
     d.enter('lada'); lab.reset(); lab.crash('wall', 30); d.car.vx = d.car.vz = 0; d.exit(true);
-    res.ladaAfter = f('lada').damage.amount; res.coupeAfterLada = f('coupe').damage.amount; res.truckAfterLada = f('truck').damage.amount;
+    res.ladaAfter = f('lada').damage.amount; res.coupeAfterLada = f('coupe').damage.amount; res.truckAfterLada = f('truck').damage.amount; res.roadsterAfterLada = f('roadster').damage.amount;
     d.enter('coupe'); res.activeCoupe = d.vehicle.id; res.coupeSeen = d.damage.amount; d.exit(true);
     d.enter('lada'); res.ladaAgain = d.damage.amount; res.ladaStage = d.damage.stage; res.carDamageHud = d.car.damage; d.exit(true);
     res.ladaStillDented = f('lada').damage.amount;
     d.enter('lada'); d.teleport(40, 60, 0); d.car.vx = d.car.vz = 0; d.exit(true);          // park the dented Lada out of the way: drive.js strikeParked now crumples a parked car that is hit, so a truck crash THROUGH it would change its state legitimately
     d.enter('truck'); lab.crash('wall', 30); const t = f('truck').damage.amount; d.car.vx = d.car.vz = 0; d.exit(true);
     res.truckDented = t; res.ladaUnchanged = f('lada').damage.amount; res.coupeUnchanged = f('coupe').damage.amount;
+    d.enter('truck'); d.teleport(40, 200, 0); d.car.vx = d.car.vz = 0; d.exit(true);          // out of the way too
+    d.enter('roadster'); lab.reset(); lab.crash('wall', 30); res.roadsterDented = f('roadster').damage.amount; d.car.vx = d.car.vz = 0; d.exit(true);
+    res.ladaUnchanged2 = f('lada').damage.amount; res.truckUnchanged2 = f('truck').damage.amount; res.coupeUnchanged2 = f('coupe').damage.amount;
     return res;
   });
   console.log('persistence:', JSON.stringify(persist));
-  check(persist.ladaAfter > 0.2 && persist.coupeAfterLada === 0 && persist.truckAfterLada === 0, 'a crashed Lada leaves the coupe and the truck pristine');
+  check(persist.ladaAfter > 0.2 && persist.coupeAfterLada === 0 && persist.truckAfterLada === 0 && persist.roadsterAfterLada === 0, 'a crashed Lada leaves the coupe, the truck and the Roadster pristine');
   check(persist.activeCoupe === 'coupe' && persist.coupeSeen === 0, 'entering the coupe shows the coupe\'s own (pristine) state');
   check(persist.ladaAgain === persist.ladaAfter && persist.ladaStage !== 'Pristine' && persist.carDamageHud > 0, 'the parked dented Lada is still dented when entered again (HUD damage follows)');
   check(persist.truckDented > 0 && persist.ladaUnchanged === persist.ladaAfter && persist.coupeUnchanged === 0, 'three cars, three damage states');
+  check(persist.roadsterDented > 0.2 && persist.ladaUnchanged2 === persist.ladaAfter && persist.truckUnchanged2 === persist.truckDented && persist.coupeUnchanged2 === 0, `a fourth state: the crashed Roadster (${persist.roadsterDented.toFixed(2)}) leaves the others as they were`);
   // ---------------------------------------------------------------- the real keyboard still works (coupe) and nothing threw
   await fresh('coupe'); await page.evaluate(() => { lab.inspect(false); lab.pause(false); });
   await page.keyboard.down('KeyW'); await new Promise((r) => setTimeout(r, 900)); await page.keyboard.up('KeyW');
@@ -137,4 +143,4 @@ try {
 } catch (e) { problems.push('[test] ' + (e.stack || e.message)); }
 finally { await browser.close(); await new Promise((r) => server.close(r)); }
 if (problems.length) { console.log('PROBLEMS:'); for (const p of problems) console.log(' -', p); process.exit(1); }
-console.log('PASS garage damage: crush, shed panels, wrecks, repair, momentum and durability order, one damage state per car, for the coupe, the taxi pickup and the Zhiguli');
+console.log('PASS garage damage: crush, shed panels, wrecks, repair, momentum and durability order, one damage state per car, for the coupe, the taxi pickup, the Zhiguli and the Roadster');

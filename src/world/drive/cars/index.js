@@ -2,32 +2,39 @@
 //   coupe  the red sports car "Bibliott GT" (drive/model.js, drive/cockpit.js: wrapped here, not moved)
 //   truck  the taxi pickup (cars/cybertruck.js: SPEC_TRUCK + createTruckModel), heavier and a bit slower
 //   lada   the eggplant VAZ-2106 "Zhiguli" (cars/lada2106.js: SPEC_LADA + createLadaModel), lighter, a bit faster and loose
+//   roadster  the white Tesla Roadster of 2026 (cars/roadster.js: SPEC_ROADSTER + createRoadsterModel), the fastest: electric, one gear, four rear cold-gas nozzles (THRUST) and a gas hop
 // An entry: { id, name, nameEn, label, labelEn, toast, spec, tuning, parked {x, z, yaw}, sound, hud, exhaust [{x,y,z}], reach, makeModel(ctx) }
 //   spec    the car's SPEC (drive/model.js fields W R tw track wb front rear hgt len centerZ ...) + mass (kg), durability, eye {x,y,z}, fovRest: read by handling, damage, collisions, wrecks, camera
 //   tuning  createHandling(ctx, tuning): the per-car overrides of the coupe's constants (cars/tuning.js) + the spec-derived probes
 //   sound   createCarSound profile (the engine voice), hud  the HUD words (boost label, one-gear letter)
-// The two new cars load with a dynamic import and a fallback: a missing / broken car file drops THAT car from the garage (a warning) and the game goes on with the others; the plain
+// The three new cars load with a dynamic import and a fallback: a missing / broken car file drops THAT car from the garage (a warning) and the game goes on with the others; the plain
 // placeholder box car exists only for tests (loadGarage(ctx, { placeholders: true }), never in the game).
 // PARKING: the coupe stays at its old spot on the station's taxi-rank service aisle (OSM way w569726648, highway=service: lane rank 0, which traffic/sim.js never drives); the pickup and the Zhiguli
-// stand on the free forecourt pavement south of it, staggered so that every car has a free way out to the east (toward Vosstaniya Square); docs/research/garage-2026.md.
+// stand on the free forecourt pavement south of it, staggered so that every car has a free way out to the east (toward Vosstaniya Square); the Roadster has the open forecourt east of x = 596
+// to itself; docs/research/garage-2026.md.
 import * as THREE from 'three';
 import { createCarModel, SPEC as COUPE_SPEC } from '../model.js';
 import { EYE as COUPE_EYE } from '../cockpit.js';
 import { MASS, DURABILITY, SOUND, HUD, tuningFor } from './tuning.js';
 
 const DEG = Math.PI / 180;
-/** where the cars wait: the coupe at its old spot on the asphalt strip beside the taxi rank, the two new ones in line with it (verified free of lanes / buildings by tools/drive-garage-test.mjs) */
+/** where the cars wait: the coupe at its old spot on the asphalt strip beside the taxi rank, the new ones in line with it (verified free of lanes / buildings by tools/drive-garage-test.mjs) */
 export const PARKING = {
   coupe: { x: 579, z: 219, yaw: 99 * DEG },
   truck: { x: 590.0, z: 224.0, yaw: 99 * DEG },            // on the free forecourt pavement just south of the aisle, 5.5 m from the coupe: its way east along the pavement is clear
   lada: { x: 582.0, z: 228.0, yaw: 99 * DEG },             // a row further south, 4 m beside the pickup's line (its way east passes 2.7 m south of the pickup's centre): no car is boxed in
+  roadster: { x: 596.0, z: 232.0, yaw: 99 * DEG },         // the south-east corner of the forecourt, 8 m beyond the pickup: 25 m of open pavement ahead of the nose (room for a hop and a thrust run), nobody's way out passes it
 };
 
 const PRESENTATION = {
   coupe: { name: 'Красная «Б»', nameEn: 'Bibliott GT', label: 'Сесть в машину', labelEn: 'Get in the car · Bibliott GT', toast: 'Красная «Б» · Bibliott GT', reach: 4.6 },
   truck: { name: 'Такси-пикап', nameEn: 'Taxi pickup', label: 'Сесть в такси-пикап', labelEn: 'Get in the taxi pickup', toast: 'Такси-пикап · Taxi pickup', reach: 5.4 },
   lada: { name: 'Жигули', nameEn: 'Zhiguli', label: 'Сесть в «Жигули»', labelEn: 'Get in the Zhiguli', toast: 'Жигули · баклажановая шестёрка', reach: 4.6 },
+  roadster: { name: 'Родстер', nameEn: 'Roadster', label: 'Сесть в родстер', labelEn: 'Get in the Roadster', toast: 'Родстер · Tesla Roadster 2026', reach: 4.8 },
 };
+
+/** the Roadster's THRUST plume as the fx module draws it (fx.js reads def.jetFx): cold white condensate puffs from every nozzle instead of the orange exhaust glow; the other cars have none */
+export const JET_FX = { color: [0.92, 0.95, 1.0], additive: false, rate: 28, s0: 0.22, s1: 2.8, life: [0.9, 1.5], a: 0.5, back: 6, drag: 2.0, ground: true };
 
 function entry(id, spec, makeModel, extra = {}) {
   const full = { ...spec, mass: MASS[id], durability: DURABILITY[id] };
@@ -74,7 +81,7 @@ async function optional(path, id, names, placeholders) {
   }
 }
 
-/** the registry: coupe first, then whichever of the new cars load */
+/** the registry: coupe first, then whichever of the new cars load (the fleet order: coupe, truck, lada, roadster) */
 export async function loadGarage(ctx, { placeholders = false, paths = {} } = {}) {
   const garage = [];
   const coupeSpec = { ...COUPE_SPEC, eye: { ...COUPE_EYE }, fovRest: 72 };
@@ -85,5 +92,8 @@ export async function loadGarage(ctx, { placeholders = false, paths = {} } = {})
   const l = await optional(paths.lada || './lada2106.js', 'lada', ['SPEC_LADA', 'createLadaModel'], placeholders);
   if (l && !l.placeholder) garage.push(entry('lada', l.SPEC_LADA, (c) => l.createLadaModel(c), { exhaust: l.SPEC_LADA.exhaust ? l.SPEC_LADA.exhaust.slice(0, 1) : [] }));
   else if (l) { const s = { W: 1.62, R: 0.285, tw: 0.175, track: 1.35, wb: 2.42, front: 2.09, rear: -2.07, hgt: 1.4, len: 4.16, centerZ: 0.01, eye: { x: 0.35, y: 1.12, z: -0.1 }, fovRest: 72 }; garage.push(entry('lada', s, (c) => createPlaceholderModel(c, s, '#552659'), { exhaust: [{ x: 0.52, y: 0.235, z: -2.19 }] })); }
+  const r = await optional(paths.roadster || './roadster.js', 'roadster', ['SPEC_ROADSTER', 'createRoadsterModel'], placeholders);
+  if (r && !r.placeholder) garage.push(entry('roadster', r.SPEC_ROADSTER, (c) => r.createRoadsterModel(c), { exhaust: r.SPEC_ROADSTER.exhaust.slice(), jetFx: JET_FX }));          // the four rear nozzles drive the thrust particles
+  else if (r) { const s = { W: 2.0, R: 0.355, tw: 0.31, track: 1.61, wb: 2.96, front: 2.36, rear: -2.26, hgt: 1.22, len: 4.62, centerZ: 0.05, eye: { x: 0.36, y: 0.93, z: 0.2 }, fovRest: 74 }; garage.push(entry('roadster', s, (c) => createPlaceholderModel(c, s, '#e4e6ea'), { exhaust: [0.4, 0.13, -0.13, -0.4].map((x) => ({ x, y: 0.5, z: -2.27 })), jetFx: JET_FX })); }
   return garage;
 }

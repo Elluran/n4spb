@@ -1,6 +1,7 @@
 // drive/handling.js - arcade car physics ("Need for Speed, but simpler"): a point mass with a heading, a bicycle-model yaw rate that is limited by tyre grip (understeer at
 // speed), a lateral-velocity grip that the handbrake releases (drifts), nitro (more acceleration + a higher top speed, a tank that refills slowly and faster while drifting),
-// six gears for the tacho / engine note, and collisions against the same solids that stop the pedestrian (core/physics.js: walls, trees, lamp posts, parked cars, the moving
+// six gears for the tacho / engine note, an optional gas HOP (tuning.hop: the Roadster's down-jets throw the car ~1.2 m up for ~0.8 s; absent = no vertical dynamics at all, car.y is the road) and
+// an optional thrust surge (tuning.nitroRamp), and collisions against the same solids that stop the pedestrian (core/physics.js: walls, trees, lamp posts, parked cars, the moving
 // traffic) through an oriented rigid footprint with friction and angular impulses; the car also refuses the river, terrain holes (escalator shafts), building footprints and the edge of the map.
 // Frame: yaw = rotY (0 faces +Z, positive turns toward +X); forward = (sin yaw, cos yaw), left = (cos yaw, -sin yaw). steer > 0 = left. Units: m, s.
 import { SPEC as COUPE_SPEC } from './model.js';
@@ -81,16 +82,49 @@ export function createHandling(ctx, tuning = null) {
     x: 0, z: 0, y: 0.03, yaw: 0, vx: 0, vz: 0, steer: 0, pitch: 0, roll: 0, spin: 0, wheelSpin: 0,
     speed: 0, vF: 0, vL: 0, gear: 1, rpm: 0.15, boost: 1, boosting: false, drifting: false, braking: false, aLong: 0, aLat: 0, odo: 0, steerAngle: 0, throttle: 0,
     impactSpin: 0,
-    events: [],                       // { type: 'hit', v } since the last step()
+    h: 0, vy: 0, air: false, jet: 0, surge: 0,       // the gas hop (tuning.hop only): height above the road, climb speed, airborne, the down-jets 0..1; the thrust surge 0..1 (tuning.nitroRamp only)
+    hopCd: 0, hopBuf: 0, jetT: 0, jumpHeld: false, cushion: false,
+    events: [],                       // { type: 'hit', v } since the last step(); a hop adds { type: 'hop' }, { type: 'cushion' } and { type: 'land', v } (drive.js takes them out before applyImpacts)
     carCenter: { x: 0, z: 0 },
     spec: SPEC, tuning: T, mass: SPEC.mass || 1350, smokeZ: T.smokeZ, smokeY: T.smokeY,
   };
   car.nitroLock = false;
   car.reset = (x, z, yaw) => {
     car.nitroLock = false; car.impactSpin = 0; car.events.length = 0;
+    car.h = car.vy = car.jet = car.surge = car.hopCd = car.hopBuf = car.jetT = 0; car.air = car.jumpHeld = car.cushion = false;
     car.x = x; car.z = z; car.yaw = yaw; car.vx = car.vz = 0; car.steer = 0; car.pitch = car.roll = 0; car.y = groundAt(x, z);
     car.speed = car.vF = car.vL = car.aLong = car.aLat = 0; car.gear = 1; car.rpm = 0.15; car.boosting = car.drifting = car.braking = false;
   };
+
+  /** the airborne part of a substep: gravity, the landing cushion (the down-jets fire again just above the road), the touchdown; returns car.y (an absolute height: a kerb or a deck under the car can catch it) */
+  function fly(h) {
+    const H = T.hop, g = groundAt(car.x, car.z);
+    car.vy -= H.g * h;
+    if (!car.cushion && car.y - g < 0.6 && car.vy < -3 && car.boost > 0.05) { car.cushion = true; car.events.push({ type: 'cushion' }); }
+    if (car.cushion && car.vy < -1.8 && car.boost > 0.01) {
+      const v = Math.min(-1.8, car.vy + 40 * h); car.boost = Math.max(0, car.boost - 0.006 * (v - car.vy)); car.vy = v; car.jetT = Math.max(car.jetT, 0.25);
+    }
+    car.y += car.vy * h;
+    if (car.vy < 0 && car.y <= g) {
+      const v = -car.vy;
+      car.y = g; car.h = 0; car.vy = 0; car.air = false; car.cushion = false; car.hopCd = H.cooldown;
+      car.pitch -= Math.min(0.045, 0.006 * v);                                   // the nose dips on touchdown and the body springs back (step() eases the pitch)
+      car.events.push({ type: 'land', v });
+    } else car.h = car.y - g;
+    return car.y;
+  }
+  /** once per step: the hop key (an edge, buffered 0.18 s: a press just before touchdown, or just before the cooldown ends, still counts) starts a hop when the car is on the road and the tank has the gas */
+  function hopStep(dt, inp) {
+    const H = T.hop, jump = !!inp.jump;
+    car.hopBuf = jump && !car.jumpHeld ? 0.18 : Math.max(0, car.hopBuf - dt); car.jumpHeld = jump;
+    car.hopCd = Math.max(0, car.hopCd - dt); car.jetT = Math.max(0, car.jetT - dt);
+    if (car.hopBuf > 0 && !car.air && car.hopCd <= 0 && car.boost >= H.minTank) {
+      car.hopBuf = 0; car.air = true; car.vy = H.v0; car.h = 0; car.cushion = false; car.boost = Math.max(0, car.boost - H.cost); car.jetT = 0.45;
+      car.events.push({ type: 'hop' });
+      if (Math.abs(car.steer) > 0.3) car.impactSpin += (H.flick ?? 2.4) * car.steer / (1 + Math.hypot(car.vx, car.vz) / 20);    // the front lateral jets flick the nose toward the steering (about 30 degrees standing, less at speed: the car keeps its line)
+    }
+    car.jet = Math.min(1, car.jetT / 0.25);
+  }
 
   function sub(h, inp) {
     let sy = Math.sin(car.yaw), cy = Math.cos(car.yaw);
@@ -103,15 +137,18 @@ export function createHandling(ctx, tuning = null) {
     const thr = clamp(inp.thr, 0, 1), brk = clamp(inp.brk, 0, 1);
     // an empty tank locks the nitro until the key is released: otherwise the refill switched it on and off every frame while Shift stayed down (the flames blinked)
     if (car.boost <= 0.005) car.nitroLock = true; else if (!inp.nitro) car.nitroLock = false;
-    const boosting = !!inp.nitro && !car.nitroLock && thr > 0.05 && vF > -1;
+    const boosting = !!inp.nitro && !car.nitroLock && thr > 0.05 && vF > -1 && !car.air;
+    // the thrust builds over nitroRamp seconds (the valve lag of the cold-gas nozzles) instead of switching on; no nitroRamp = the full push at once
+    if (T.nitroRamp) car.surge = boosting ? car.surge + (1 - car.surge) * Math.min(1, h / T.nitroRamp) : 0;
     const vmax = T.vmax * (boosting ? T.nitroVmax : 1);
     let a = 0;
-    if (thr > 0 && vF > -0.3) { a = T.acc * thr * Math.max(0, 1 - Math.pow(Math.max(vF, 0) / vmax, 1.7)) * (boosting ? T.nitroAcc : 1); if (vF > vmax) a = -8; }
+    if (thr > 0 && vF > -0.3) { a = T.acc * thr * Math.max(0, 1 - Math.pow(Math.max(vF, 0) / vmax, 1.7)) * (boosting ? (T.nitroRamp ? 1 + (T.nitroAcc - 1) * car.surge : T.nitroAcc) : 1); if (vF > vmax) a = -8; }
     else if (thr > 0) a = T.brake * 0.8 * thr;                                  // throttle while rolling backwards: brake first
     if (brk > 0) { if (vF > 0.8) a -= T.brake * brk; else a -= T.revAcc * brk * clamp(1 + vF / T.vrev, 0, 1); }
     if (!thr && !brk) a -= Math.sign(vF) * (T.engBrake + T.drag * vF * vF);   // engine braking + air drag
     else a -= Math.sign(vF) * T.drag * vF * vF;
     if (inp.hand) a -= Math.sign(vF) * T.handDecel;
+    if (car.air) a = -Math.sign(vF) * T.drag * vF * vF;                           // airborne: no drive, no brakes, no handbrake, only the air drag
     let nvF = vF + a * h;
     if (!thr && !brk && !inp.hand && vF * nvF < 0) nvF = 0;
     if (inp.hand && vF * nvF < 0 && !brk && !thr) nvF = 0;
@@ -121,6 +158,7 @@ export function createHandling(ctx, tuning = null) {
     let om;
     if (inp.hand && sp > 6) om = car.steer * Math.min(sp * T.handYaw, T.handYawMax) * sgn;
     else { const low = sa * Math.tan(T.steerLock * car.steer) / SPEC.wb, grip = car.steer * T.yawGrip / Math.max(sa, 4) * sgn; om = Math.abs(low) < Math.abs(grip) ? low : grip; }
+    if (car.air) om *= T.hop.airSteer;                                           // the tyres do not bite: the jets only nudge the nose
     car.steerAngle = 0.5 * car.steer * clamp(1 - sp / 70, 0.25, 1);
     car.impactSpin *= Math.exp(-(inp.hand ? 1.8 : T.impactDecay) * h);
     const yaw0 = car.yaw, sy0 = sy, cy0 = cy;
@@ -131,18 +169,18 @@ export function createHandling(ctx, tuning = null) {
     // ---- grip: the velocity follows the heading; what the tyres cannot hold slides (drift)
     let vf = car.vx * sy + car.vz * cy, vl = car.vx * cy - car.vz * sy;
     vf += nvF - vF;                                                              // the longitudinal change of this step
-    const gr = inp.hand ? T.gripHand : T.grip, cap = maxLat * h;
+    const gr = car.air ? 0 : inp.hand ? T.gripHand : T.grip, cap = maxLat * h;      // airborne: no grip, the sideways speed is kept and nothing scrubs
     const dv = clamp(-vl * (1 - Math.exp(-gr * h)), -cap, cap);
     vl += dv;
     vf -= Math.sign(vf) * Math.abs(dv) * T.scrub;                                  // sliding scrubs speed
     car.vx = sy * vf + cy * vl; car.vz = cy * vf - sy * vl;
     car.vF = vf; car.vL = vl; car.aLong = (nvF - vF0) / h * 0.5 + car.aLong * 0.5; car.aLat = om * vf;
-    car.braking = (brk > 0.1 && vF0 > 0.8) || !!inp.hand && sp > 3;
+    car.braking = !car.air && ((brk > 0.1 && vF0 > 0.8) || !!inp.hand && sp > 3);
     car.boosting = boosting;
     car.throttle = thr;
     // ---- tank
     if (boosting) car.boost = Math.max(0, car.boost - T.nitroDrain * h);
-    else car.boost = Math.min(1, car.boost + (T.nitroRefill + (Math.abs(vl) > 2.2 && sp > 9 ? T.nitroDriftRefill : 0)) * h);
+    else car.boost = Math.min(1, car.boost + (T.nitroRefill + (Math.abs(vl) > 2.2 && sp > 9 && !car.air ? T.nitroDriftRefill : 0)) * h);
     // ---- move: terrain refusals first (axis by axis, so the car slides along the river wall), then the solids
     let nx = car.x + car.vx * h, nz = car.z + car.vz * h;
     if (carBlocked(nx, nz, sy, cy)) {
@@ -155,7 +193,7 @@ export function createHandling(ctx, tuning = null) {
     }
     car.x = nx; car.z = nz;
     edgePush(h);
-    car.y = groundAt(car.x, car.z);
+    car.y = car.air ? fly(h) : groundAt(car.x, car.z);
     collide(car);
     edgePush(h);
     car.odo += Math.hypot(car.vx, car.vz) * h;
@@ -171,14 +209,17 @@ export function createHandling(ctx, tuning = null) {
     ph.refreshDynamic();
     dt = Math.min(dt, 0.1);
     const v = Math.hypot(car.vx, car.vz), n = clamp(Math.max(Math.ceil(dt * 120), Math.ceil((v + Math.abs(car.impactSpin) * 2.4) * dt / 0.18)), 1, 80), h = dt / n;
+    if (T.hop) hopStep(dt, inp);
     for (let i = 0; i < n; i++) sub(h, inp);
     // ---- ride height + attitude: the axles follow the road (humped deck), body pitch / roll from the accelerations
     const sy = Math.sin(car.yaw), cy = Math.cos(car.yaw), w = SPEC.wb / 2;
     const yF = groundAt(car.x + sy * w, car.z + cy * w), yR = groundAt(car.x - sy * w, car.z - cy * w);
     const yT = (yF + yR) / 2, slope = Math.atan2(yF - yR, SPEC.wb);
     const k = Math.min(1, 16 * dt);
-    car.y += (yT - car.y) * k;
-    if (Math.abs(car.y - yT) > 0.6) car.y = yT;
+    if (!car.air) {                                                               // (airborne, car.y is the flight itself: only the road part of the height is eased)
+      car.y += (yT - car.y) * k;
+      if (Math.abs(car.y - yT) > 0.6) car.y = yT;
+    }
     const pt = slope + clamp(car.aLong * T.pitchK, -T.pitchMax, T.pitchMax), rt = clamp(car.aLat * T.rollK, -T.rollMax, T.rollMax);
     car.pitch += (pt - car.pitch) * Math.min(1, T.bodyResp * dt); car.roll += (rt - car.roll) * Math.min(1, T.bodyResp * dt);
     // ---- derived: speed, gear, rpm
