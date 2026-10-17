@@ -20,6 +20,7 @@ const TYPES = {
   '.svg': 'image/svg+xml',
   '.md': 'text/markdown; charset=utf-8',
   '.wasm': 'application/wasm',
+  '.webmanifest': 'application/manifest+json',
 };
 
 http.createServer((req, res) => {

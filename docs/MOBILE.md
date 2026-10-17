@@ -1,0 +1,140 @@
+# Mobile: touch controls and a hardened boot
+
+Phones and tablets get their own control layer (`src/core/touch.js`), a lighter default tier and a boot that fails *honestly*. Desktop is untouched: everything below keys off one class, `<html class="tc">`,
+which the inline script of `index.html` sets for a coarse pointer (`(pointer: coarse)`) or `?touch=1`; `?touch=0` forces it off. Without the class `createTouchControls()` returns `null`, creates nothing, listens to nothing.
+
+Nothing here has run on a real phone yet: the checklist at the end is what has to be done on devices. Everything else is covered by `npm run touch` (pure node) and `npm run touchbrowser` (Edge, emulated touch, real multi-touch).
+
+## 1. What is where
+
+| File | Role |
+|---|---|
+| `src/core/touch-logic.js` | the pure part: settings + persistence, stick / steering / tilt curves, the encoder for drive.js, the action -> key table, the layout geometry. No DOM, no three.js |
+| `src/core/touch.js` | the DOM owner: zones, buttons, ghosts, menu + settings panels, haptics, fullscreen / orientation / wake lock, the rotate banner, per-frame work |
+| `src/core/boot-guard.js` | the fatal card, `webglcontextlost`, errors while loading, the phone warning, the crash-loop guard |
+| `index.html` | `html.tc` switch, PWA meta tags, the touch CSS (keys row, `#stall`), the 45 s loading watchdog |
+| `manifest.webmanifest`, `assets/icons/*.png` | add-to-home-screen (fullscreen, landscape); icons from `node tools/make-icons.mjs` |
+| `src/main.js` | the wiring (list in section 8) |
+| `tools/touch-logic-test.mjs`, `tools/touch-browser-test.mjs` | the tests |
+
+## 2. Layouts (landscape first; CSS px at UI scale 1, centres / gaps scale with the scale)
+
+`u` = UI scale = shorter screen side / 390 kept in 0.9-1.25 (tablets 1.25; the settings can override). Every button is at least 44 px, primaries 56-124 px, gaps >= 8 px, offsets
+`max(16 px, env(safe-area-inset-*))` (left / right insets included: a notched phone in landscape has 47 px). Positions come from `touch-logic.js LAYOUT` and are checked in node and in the browser.
+
+**Walk / fly / ride (train car)**
+
+* left 45 % of the screen from 25 % down: a **floating stick** (appears where the thumb lands, 112 px ring, 8 % dead zone, 1.2 response curve, full push = run, the ring turns gold);
+  everything else is the **look drag** (2.2 px x sensitivity, like the old canvas look);
+* bottom right: **JUMP** 72, **RUN** 56 (a latch), **FLY** 56 (label LAND while flying), contextual **USE** 80 (only while `ctx.interact.target`; its label sits beside it, never a keyboard letter); while flying JUMP becomes **UP**, RUN becomes **BOOST**, **DOWN** 56 appears;
+* top right: **MENU** 48 and **SOUND** 48; the clock moves to the top centre; the street map (132 px) to the top left under the toast. The old chips (places, fly, quality, sound) are hidden; the menu has them.
+
+**Drive (Need-for-Speed style: left thumb steers, right thumb has the pedals)**
+
+* left thumb: a **floating wheel** (default: only the horizontal offset counts, full lock = 64 px, 6 px dead zone, curve 1.35, the wheel icon turns; the wheel follows the thumb past the lock so straightening needs a small move back), or two big **arrows** (96 px, ramping 0.3 -> 1 in 0.3 s), or **tilt** (phone roll);
+* right thumb: **GAS** 100 x 124, **BRAKE** 80 (at a standstill = reverse), **NITRO** 76 (its ring is the tank; the word comes from the car's HUD profile, so the Roadster says THRUSTER), **DRIFT** 64 (handbrake), **HOP** 60 (only when the current car has a hop: `vehicle.def.hop` or `id === 'roadster'`);
+* top right second row: **CAM** (V), **HORN** (G), **AUTO** (auto-gas toggle), **FIX** (repair, only when damaged and stopped); top left beside the 108 px map: **EXIT** (refused above 25 km/h like E, with the toast);
+* the speedometer is scaled to half and sits at the bottom centre (above the pedals in portrait), the nitro bar, key hints, old `.d-touch` buttons and the damage pill are hidden (`html.tc` CSS, no hud.js edit);
+* a drag on the free part of the screen orbits the chase camera (a synthetic `mousemove` with `movementX`, the path drive.js already has for the mouse).
+
+**Portrait** keeps the same anchors (the arrows shrink so that they clear the pedals; the toast and the hint go to the middle of the screen) and shows a non-blocking dismissible banner "rotate your phone" (the dismissal is remembered for the session).
+An iPhone cannot lock the orientation, so the banner is the only mechanism there.
+
+## 3. How touch reaches the game (Phase 1: the existing channels)
+
+| Control | Channel |
+|---|---|
+| walk stick | `player.touchMove.set(x, y)` (y down = back); run = the player's own `length > 0.95` or the RUN latch (`ShiftLeft` in `player.keys`) |
+| look | `player.look.dx / dy += delta * 2.2 * sensitivity` (the mouse accumulator); in the car a synthetic `mousemove` |
+| JUMP, CAM, HORN, HOP, SOUND | a synthetic `KeyboardEvent` keydown + keyup on `window` (`Space`, `KeyV`, `KeyG`, `KeyX`, `KeyM`): every handler reads `e.code`, none checks `isTrusted` |
+| UP / DOWN / BOOST / NITRO / DRIFT | the code is held in `player.keys` while the finger is down (`Space`, `KeyC`, `ShiftLeft`); no keydown is dispatched, so no jump |
+| USE / EXIT / FIX / FLY | `ctx.interact.use()` / `ctx.drive.exit()` / `ctx.drive.repair()` / `player.toggleFly()` |
+| steering + pedals | the exact inverse of drive.js `readInput`: `player.touchMove = (-steer / 1.4, thr > 0 ? -thr / 1.3 : brk)`; the brake wins over the gas; a neutral y of 0.12 keeps small steering above the 0.1 threshold; gas below 0.2 is lifted to 0.2 (`touch-logic.js encodeDrive`) |
+| the clean contract (Phase 2) | `ctx.touch = { active, mode, steer (+left), thr, brk, nitro, hand, hop, look: {dx, dy} }`, written every frame; `active` is true while driving |
+
+**Merge warning.** The steering bridge is only valid while drive.js `readInput` still reads `player.touchMove`. `tools/touch-logic-test.mjs` extracts the real `readInput` source from `src/world/drive.js` and runs the encoder through it, and
+fails loudly when `readInput` reads neither `player.touchMove` nor `ctx.touch`. Phase 2 (after the drive input rewrite lands): in `readInput` take `ctx.touch` when `active` (`out.steer = t.steer; out.thr = t.thr; out.brk = t.brk; out.nitro ||= t.nitro; out.hand ||= t.hand`),
+drop the `player.touchMove` hack, the `touch` object and the `.d-touch` buttons in hud.js, and delete the canvas touch handlers in `player.js` (nothing reaches them any more: the touch layer sits on top of the canvas).
+
+One role per pointer (stick / look / wheel / a button), `setPointerCapture`, `pointercancel` and `lostpointercapture` release it; extra fingers in a zone are ignored; **every** role is released on a mode switch (walk / fly / ride / drive), on a panel opening, on `blur`, a hidden tab,
+`pagehide` and an orientation change, and `player.keys` / `touchMove` go back to zero. A panel opened by a touch swallows the browser's ghost click for 350 ms (it would hit the close button under the finger).
+
+## 4. Settings (the menu -> Controls; `localStorage['piter.touch']`, try / catch everywhere)
+
+| Setting | Default | Range |
+|---|---|---|
+| look sensitivity | 1.0 | 0.4-2.5 (x the 2.2 px multiplier); invert Y off |
+| steering | wheel | wheel / arrows / tilt (tilt asks for motion access inside the tap on iOS) |
+| steering sensitivity | 100 % | 50-150 % (a shorter swipe to full lock) |
+| speed steering assist | on | the lock shrinks 1 -> 0.6 from 0 to 180 km/h |
+| tilt range | 28 deg | 18-40; the centre is captured on entering the car and by the 0 deg button |
+| auto gas | off | the pedal reads AUTO; the brake still wins |
+| left-handed | off | swaps the stick zone and the right cluster (the top corners stay) |
+| haptics | on | `navigator.vibrate` (Android only; disabled in the panel where it does not exist) |
+| button size | auto | 0.8-1.3 |
+| run by default | off | the RUN latch |
+
+The menu also has places (44 px rows), time of day, sound, hide UI, respawn, FPS, fullscreen (not on iPhone) and the quality select (reloads). Corrupt JSON, blocked storage and unknown keys fall back to defaults.
+
+## 5. Tier and boot on a phone
+
+* **Default tier = performance** on touch devices (a remembered `piter.q` or `?q=` still wins). On touch the GPU side is trimmed whatever the tier: shadow map 1024, MSAA 2, pixel ratio <= 1 (`main.js`; `level`, far plane and the bake are untouched, so no new bake is needed).
+* **`#go` is the one user gesture** (touch.js adds its own click listener): fullscreen (Android Chrome, iPad; never iPhone, which has no element fullscreen), then `screen.orientation.lock('landscape')` after the fullscreen promise (Android only), the screen **wake lock** (re-requested when the tab returns), tilt permission when tilt is the saved scheme.
+* **Hidden tab**: all roles released, `player.keys` cleared, the main loop skips the frame, the wake lock is re-acquired on return.
+* **iPhone fullscreen** is only possible as an installed web app: `manifest.webmanifest` (display fullscreen, landscape) plus the `apple-mobile-web-app-*` meta tags; the menu explains Share -> Add to Home Screen.
+* **Failure handling** (`boot-guard.js`): an uncaught error while loading, a failed `main()` or a lost WebGL context shows a full-screen card with the message and a Reload button (no restore attempt: main.js frees the CPU copies of the geometry after the upload frame, so a restored context could not be refilled).
+  The loading screen has a **45 s no-progress watchdog** (inline in `index.html`: "scripts did not load: check the connection / iOS 16.4+" when main.js never started, "still loading, keep the tab open" when it is just slow; never kills the load).
+  Phones see a **pre-start warning once per session** ("heavy scene, ~51 MB, ~1 GB RAM; Continue anyway", stronger when `navigator.deviceMemory` < 4 or on a cellular / save-data connection; `?gate=0` skips it) and a **crash-loop guard**: two unfinished starts within a minute (sessionStorage `piter.boots`) and the next start shows a card
+  that offers the performance tier or "try anyway" instead of loading again (`?guard=0` switches it off).
+
+## 6. Known limits
+
+* **Memory is the real blocker on phones.** The bake is ~357 MB of typed arrays; the measured JS heap after load is ~1.2 GB on desktop (docs/STRIP.md). iOS Safari reloads tabs over its budget (reports: ~1.5 GB iPhone 12 Pro, ~3 GB iPhone 15 Pro) with no catchable exception; Android Chrome shows "Aw, Snap". Expect trouble on low-RAM phones, likely fine on iPad Pro and 8 GB+ Android.
+  The controls cannot fix this; the warning, the card and the crash-loop guard only make it honest. A memory diet (release the `field-*` products after the build, a 1 m roof map, tiling) is a separate project.
+* OS gates: `DecompressionStream` and import maps need iOS 16.4+ / a current Chrome (below that the watchdog tells so).
+* Haptics: Android only. iOS Safari has no `navigator.vibrate`.
+* Orientation lock: Android Chrome in fullscreen / installed only; iOS only has the rotate banner.
+* The tilt sign on iOS (gravity is reported with the opposite sign) is a best guess until tested on a device; the settings panel can fall back to the wheel.
+* Hybrid laptops report a fine pointer: use `?touch=1`.
+* WebGL specifics to confirm on devices: half-float render targets with MSAA (`EXT_color_buffer_float`), `KHR_parallel_shader_compile` (the compile is serial where it is missing).
+
+## 7. Testing
+
+```sh
+npm run touch                      # pure node: curves, dead zones, the encoder vs the REAL drive.js readInput, settings (corrupt JSON, throwing storage), action table, layout geometry in 7 viewports
+npm run touchbrowser               # Edge + puppeteer-core, isMobile + hasTouch, real multi-touch; screenshots in shots/touch/ (LOOK at them)
+node tools/touch-browser-test.mjs --only mobile,portrait     # scenarios: desktop mobile portrait layout settings boot failure (full = the whole baked scene, opt-in)
+node tools/make-icons.mjs          # rewrites assets/icons/*.png
+```
+
+The browser test uses the fast harness (`?baked=0&only=drive&noroof=1`, ~6 s per page) and, for the real scene, `?baked=force` (needed while the bake is stale). Run browser tools one at a time (GPU).
+It covers: the desktop page untouched (and `?touch=1` / `?touch=0`), the stick, look, stick + look at once, two fingers in a zone, a third finger, JUMP, RUN latch, FLY with UP / DOWN, USE -> the car, wheel (full / half / other side / dead zone), GAS, steer + gas at once, NITRO, DRIFT, BRAKE and reverse,
+CAM / HORN / HOP / FIX / AUTO, EXIT at speed and standing, release safety (menu, blur, hidden tab, `pointercancel`), layouts at 844x390, 915x412, 667x375, 1180x820, 820x1180, 390x844, 360x640 and with 47 px notch insets (no overlaps, >= 44 px, nothing over the map / speedometer / clock),
+the rotate banner, the settings panel and persistence across a reload, left-handed, tilt, arrows, places, the boot stubs (fullscreen -> orientation lock, wake lock, re-request, haptics, an iPhone user agent), the fatal card, the crash-loop guard, the phone warning and the watchdog.
+
+## 8. Wiring in `src/main.js` (what to re-apply when merging)
+
+1. imports of `createTouchControls` and `installBootGuard`;
+2. `const isTouch = document.documentElement.classList.contains('tc')` (was the `(pointer: coarse)` query);
+3. the default tier `isTouch ? 'performance' : 'medium'` and, right after `const quality = ...`, the touch GPU overrides (`pixelRatio`, `shadowMap` 1024, `msaa` 2);
+4. `const guard = installBootGuard({ canvas, params, isTouch, qName })` right after `const canvas = ...` (before the renderer, so that a renderer failure shows the card);
+5. `createTouchControls({ ctx, player, canvas, params })` after `ctx.interact = ...`;
+6. `frame()` starts with `if (guard.dead || document.hidden) { last = now; return; }`;
+7. the last line is `guard.gate().then(() => main()).catch(guard.fatal)` instead of `main()`.
+
+## 9. Testing on a real phone
+
+* **iPhone / iPad**: open the GitHub Pages URL (https://averkij.github.io/n4spb/, HTTPS, so wake lock and device motion work); Safari Web Inspector from a Mac (Settings -> Safari -> Advanced -> Web Inspector, then Develop -> the iPhone) for the console and the memory timeline. Also test the home-screen install (Share -> Add to Home Screen) for fullscreen.
+* **Android**: Chrome `chrome://inspect` over USB debugging; `adb reverse tcp:5176 tcp:5176` and `http://localhost:5176` is a secure context (wake lock, device motion) without HTTPS (`node tools/serve.mjs` listens on all interfaces, but a LAN IP over plain HTTP is not secure).
+
+**Real-device checklist** (cannot be automated here): iPhone (Safari + standalone), iPad, a mid Android, a flagship Android.
+
+- [ ] the page loads and starts (jetsam / "Aw, Snap" during the load?), the phone warning and the 45 s watchdog read well
+- [ ] stick and look feel right at the default sensitivities; no accidental pinch / double-tap zoom, no pull-to-refresh, no rubber banding, no callout / text selection, no focus zoom in the menu
+- [ ] JUMP / RUN / FLY / UP / DOWN / USE; the USE button appears at the red car, the metro doors, the trains
+- [ ] driving: wheel, arrows and tilt (**the tilt sign on iOS vs Android, and in landscape-secondary**), GAS / BRAKE / NITRO / DRIFT, camera, horn, exit; thumb reach with large and small hands; the left-handed swap
+- [ ] safe-area insets on a notched phone in both landscape directions (the clusters keep 47 px from the edges)
+- [ ] fullscreen from `#go` (Android, iPad), the orientation lock after it (Android), the wake lock in the browser and in standalone, re-acquired after switching apps
+- [ ] haptics on Android (impact, nitro), none expected on iOS
+- [ ] audio against the iOS ringer switch (the page is silent when the switch is on silent), after a phone call (the AudioContext resumes)
+- [ ] frame rate and heat on the performance tier; WebGL extensions (half-float MSAA targets)

@@ -23,6 +23,8 @@ import { createTimeOfDay } from './core/timeofday.js';
 import { createZones } from './core/zones.js';
 import { createUI, createInteract } from './core/ui.js';
 import { createMinimap } from './core/minimap.js';
+import { createTouchControls } from './core/touch.js';      // phones / tablets: the touch UI (does nothing on desktop)
+import { installBootGuard } from './core/boot-guard.js';      // fatal card, lost-context handler, phone warning + crash-loop guard
 
 export const MODULES = [
   // order matters: later modules read services of earlier ones (see docs/DESIGN.md)
@@ -59,7 +61,7 @@ const SHOT = params.has('shot');
 const ONLY = params.get('only') ? params.get('only').split(',').map(s => s.trim()).filter(Boolean) : null;
 const $ = (id) => document.getElementById(id);
 
-const isTouch = matchMedia('(pointer: coarse)').matches;
+const isTouch = document.documentElement.classList.contains('tc');      // the inline script of index.html: (pointer: coarse) or ?touch=1 (?touch=0 forces it off)
 // Tiers: pixelRatio / msaa / shadow map + box are the GPU side; ndFar = distance of the outline (normal / depth) pass (the outline fades out at 190 m anyway), lod scales the distance LOD of the
 // city details (balconies, railings ...), cull scales the vehicle / people / bird render radii on top of their own tier tables, petals = flower petals. (The population / tree / bird counts
 // of each module scale with quality.level (falls back to quality.name) inside the module.)
@@ -75,13 +77,15 @@ const QUALITY = {
   // ?far= and ?fogx= override the two for tuning (any tier).
   performance: { name: 'performance', level: 'low', pixelRatio: Math.min(devicePixelRatio, 1.0), msaa: 4, shadowMap: 2048, shadowSize: 50, petals: 0.35, ndFar: 110, lod: 0.6, cull: 0.55, far: 1800, fogScale: 2.5 },
 };
-let qName = params.get('q') || (() => { try { return localStorage.getItem('piter.q'); } catch (e) { return null; } })() || 'medium';
-if (!QUALITY[qName]) qName = 'medium';                       // (a remembered 'high' / 'low' from before the two-tier policy lands here too)
+let qName = params.get('q') || (() => { try { return localStorage.getItem('piter.q'); } catch (e) { return null; } })() || (isTouch ? 'performance' : 'medium');      // phones start on the lighter tier (a remembered choice or ?q= still wins)
+if (!QUALITY[qName]) qName = isTouch ? 'performance' : 'medium';                       // (a remembered 'high' / 'low' from before the two-tier policy lands here too)
 const quality = { ...QUALITY[qName] };
+if (isTouch) Object.assign(quality, { pixelRatio: Math.min(quality.pixelRatio, 1), shadowMap: Math.min(quality.shadowMap, 1024), msaa: Math.min(quality.msaa ?? 4, 2) });      // phones: the GPU side only (shadow map, MSAA, pixel ratio), so the bake and the `level` stay valid
 if (SHOT) { quality.pixelRatio = 1; }
 
 // ------------------------------------------------------------------ renderer & scene
 const canvas = $('scene');
+const guard = installBootGuard({ canvas, params, isTouch, qName });      // before anything can fail: the fatal card (an error while loading, a lost WebGL context), the phone warning, the crash-loop guard
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: SHOT });
 renderer.setPixelRatio(1);
 renderer.shadowMap.enabled = true;
@@ -244,6 +248,7 @@ player.solidAt = L.insideBuilding;
 player.clampXZ = L.clampToPlay;                       // the play area is a union of rectangles (layout.js): nobody walks into the empty notches
 ctx.ui = createUI({ player, toast: showToast });
 ctx.interact = createInteract({ camera, player, ui: ctx.ui });
+createTouchControls({ ctx, player, canvas, params });      // null on desktop; on a phone it owns every touch element and feeds player / ctx.interact / ctx.drive (core/touch.js)
 if (params.has('smooth')) player.smoothing = Math.max(0, Number(params.get('smooth')) || 0) / 1000;      // look easing in ms (default 40, 0 = raw)
 // ?cam=x,z,yaw,pitch (standing)  |  x,y,z,yaw,pitch (free camera at eye height y, also underground)  |  x,y,z,yaw,pitch,1 (STANDING on the highest surface not above y: feet level)
 function parseCam(s) {
@@ -381,6 +386,7 @@ const lodOpts = { shadowR: (quality.shadowSize || 75) * 1.6, ndFar: pipeline.ndF
 const lodBase = params.has('lodscale') ? Number(params.get('lodscale')) || 1 : (quality.lod || 1), DRIVE_LOD = params.has('drivelod') ? Number(params.get('drivelod')) : 0.7; let driveLod = 1;      // ?drivelod=1 turns the drive mode off
 function frame(now) {
   requestAnimationFrame(frame);
+  if (guard.dead || document.hidden) { last = now; return; }      // a fatal card is up / the tab is hidden (the browser pauses rAF anyway; iOS standalone does not always)
   let dt = Math.min(0.1, (now - last) / 1000); last = now;
   if (ctx.regions) ctx.regions.update(player.pos.x, player.pos.z);
   if (SHOT || ctx.travelPending || (ctx.regions && !ctx.regions.readyAt(player.pos.x, player.pos.z))) dt = 0;
@@ -513,4 +519,4 @@ async function main() {
   if (params.has('stats')) $('stats').hidden = false;
   if (errors.length) console.warn('module errors', errors);
 }
-main();
+guard.gate().then(() => main()).catch(guard.fatal);      // (the gate is empty except on a phone's first visit / after a crash loop)

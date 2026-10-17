@@ -59,12 +59,34 @@ Note that the page loads fast only while the shipping bake in `assets/baked/` ma
 | M | Mute |
 | R | Reset to the start view (while driving: teleports the car there) |
 
-Touch: drag the left side to walk, the right side to look; the **Fly** button takes off and lands. Quality (High / Medium / Low) is in the top-right corner (remembered; phones start on Medium).
+Touch (phones and tablets): see **Mobile** below. Quality (Medium / Performance) is in the top-right corner on desktop and in the menu on touch devices (remembered; phones start on Performance).
 The player cannot leave the strip: the border is an invisible wall (the scenery goes on for 120 m beyond it and then fades into the city beyond the data).
 
 URL parameters: `?tod=day|golden|night|overcast` (or a number 0..4), `?look=overcast|cloudy` (weather overlay), `?q=medium|performance`, `?t=40` (start time, s), `?cam=x,z,yaw,pitch` (yaw 0 = north, 90 = west; 5 numbers = free camera `x,y,z,yaw,pitch`),
 `?only=environment,streets,city` (build only some modules), `?allcity` (ignore landmark claims: plain prisms), `?noroof`, `?stats`, `?people=off`, `?tr=nomove`, `?wl=nobirds`, `?pdens=1.3` (crowd density), `?baked=0` (procedural build, no baked assets).
 Debug hooks: `window.__ctx`, `window.__setCam`, `window.__sim(t)`, `window.__bench(n)`, `window.__knock` (`hit(x, z, kmh, dx, dz, kind)` knocks the nearest standing thing; `stats`, `list`; `tools/shot.mjs --pre` steps it before a shot).
+
+## Mobile
+
+The page runs on phones and tablets with an on-screen control layer (`src/core/touch.js`, design and the real-device checklist in [`docs/MOBILE.md`](docs/MOBILE.md)). It switches on for a coarse pointer (or `?touch=1`; `?touch=0` forces it off); the desktop page does not change. **Landscape is the intended orientation** (a portrait phone gets a "rotate your phone" hint).
+
+| Where | Control |
+|---|---|
+| Walking: left thumb | floating stick (push all the way to run) |
+| Walking: right thumb | drag to look |
+| Walking: bottom right | **JUMP**, **RUN** (latch), **FLY** (take off / land; while flying: **UP**, **DOWN**, **BOOST**), and a **USE** button that appears when something is in reach (a car, a metro door, a train) with its label |
+| Top right | **MENU** (places, time of day, sound, hide UI, respawn, FPS, fullscreen, quality, settings) and **SOUND** |
+| Driving: left thumb | steering: a floating wheel (swipe left / right, proportional), or arrows, or tilt the phone |
+| Driving: right thumb | **GAS**, **BRAKE** (reverse at a standstill), **NITRO**, **DRIFT** (handbrake), **HOP** (cars that can hop) |
+| Driving: top | **CAM** (camera), **HORN**, **AUTO** (auto-gas), **FIX** (repair), **EXIT** (below 25 km/h); a drag on the free screen orbits the camera |
+
+Settings (menu -> Controls, saved on the device): look and steering sensitivity, invert Y, steering scheme (wheel / arrows / tilt), speed steering assist, tilt range, auto-gas, left-handed layout, haptics (Android only), button size, run by default.
+On a phone the first visit shows a heavy-scene warning (about 51 MB to download and about 1 GB of memory), the quality starts on **Performance** (shadow map 1024, MSAA 2, pixel ratio 1), and the page tries fullscreen, a landscape lock (Android) and the screen wake lock when you press the start button.
+
+* **iPhone / iPad**: Safari needs iOS 16.4 or newer. An iPhone has no element fullscreen: use Share -> Add to Home Screen (the page ships a web-app manifest) to get a fullscreen app; it cannot lock the orientation and has no vibration. iPads can go fullscreen from the menu.
+* **Android**: Chrome. Fullscreen + the landscape lock work from the start button; vibration on impacts and the nitro.
+* **Known limits**: the scene is heavy (the load decodes about 350 MB of baked data; the measured JS heap is about 1.2 GB on desktop). Low-RAM phones may run out of memory and reload: the page then explains it and offers the lighter tier, but the safe bets are a recent phone or a tablet.
+  Not yet tested on real devices (the tilt direction on iOS in particular): see the checklist in `docs/MOBILE.md`. Tests: `npm run touch` (pure node) and `npm run touchbrowser` (Edge, emulated multi-touch).
 
 ## What is built
 
@@ -139,6 +161,7 @@ docs/                 the guides (below)
 | Doc | Read it for |
 |---|---|
 | [`docs/STRIP.md`](docs/STRIP.md) | The strip: the eight rectangles, what was dropped, the clipped data, the metro scheme, the border, rebuild / bake / deploy |
+| [`docs/MOBILE.md`](docs/MOBILE.md) | Phones and tablets: the touch layouts, how touch reaches the game, settings, the hardened boot, tests, the real-device checklist |
 | [`docs/HANDOFF.md`](docs/HANDOFF.md) | The state of this repository, gotchas, how to resume |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Builder guide: module contract, ctx API, coordinates, performance, verification, z-fighting |
 | [`docs/AGENT-BRIEF.md`](docs/AGENT-BRIEF.md), [`docs/PERFORMANCE-CONTRACT.md`](docs/PERFORMANCE-CONTRACT.md) | Ground rules, road integrity rules, user content rules; what a change may cost |

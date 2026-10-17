@@ -30,7 +30,12 @@
     "landmarks": "node tools/landmarks-groups-check.mjs",
     "edge": "node tools/drive-edge-test.mjs",
     "edgereal": "node tools/drive-edge-real.mjs",
-    "knock": "node tools/knock-test.mjs"
+    "knock": "node tools/knock-test.mjs",
+    "signals-knock": "node tools/signals-knock-test.mjs",
+    "hop": "node tools/drive-hop-test.mjs",
+    "touch": "node tools/touch-logic-test.mjs",
+    "touchbrowser": "node tools/touch-browser-test.mjs",
+    "icons": "node tools/make-icons.mjs"
   },
   "devDependencies": {
     "puppeteer-core": "^23.11.1",

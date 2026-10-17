@@ -4,6 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Невский проспект · Saint Petersburg</title>
+<meta name="theme-color" content="#0b1230">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Невский">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png">
+<script>
+  // the touch UI switch: <html class="tc"> for a coarse pointer (phones, tablets) or ?touch=1; ?touch=0 forces it off (the saved setting piter.touch.mode on / off counts too). Everything touch-specific
+  // (core/touch.js, the touch CSS below, the phone quality tier) keys off this one class, so the desktop page is untouched.
+  (function () { try {
+    var m = /[?&]touch=([01])/.exec(location.search), mode = 'auto';
+    try { mode = (JSON.parse(localStorage.getItem('piter.touch') || '{}').mode) || 'auto'; } catch (e) {}
+    var on = m ? m[1] === '1' : mode === 'on' ? true : mode === 'off' ? false : matchMedia('(pointer: coarse)').matches;
+    if (on) document.documentElement.classList.add('tc');
+  } catch (e) {} })();
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231c2a5a'/%3E%3Cpath d='M16 4v6M16 10l-5 4h10zM9 14h14v3H9zM10 17h12v2H10zM8 22h16v2H8z' fill='%23e6c36a'/%3E%3Cpath d='M16 4l1 6h-2z' fill='%23fff3dc'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -99,6 +116,21 @@
   @media (pointer: coarse) { #help .desk, body.flying #help .air { display: none; } }
   @media (pointer: fine) { #help .touch { display: none; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  /* touch: the keyboard keys row gives way to the finger controls and the size note; tap targets of the remaining chips; iOS zooms a focused field under 16 px */
+  #intro .keys .tk { display: none; }
+  html.tc #intro .keys .kb { display: none; }
+  html.tc #intro .keys .tk { display: inline-flex; }
+  html.tc #intro .keys { display: flex; }
+  html.tc #go { min-height: 48px; padding: 0 28px; }
+  html.tc body.playing #intro { pointer-events: none; }      /* the fade-out takes 0.9 s: the first touches must already reach the game */
+  html.tc #intro .art { min-height: clamp(110px, 34vh, 340px); }
+  html.tc #intro .keys { padding: 8px 28px 12px; font-size: 12px; gap: 4px 18px; }
+  /* the loading watchdog (inline script below): shown when the progress has not moved for 45 s */
+  #stall { margin: 12px 28px 0; padding: 10px 12px; border-radius: 6px; background: rgba(242,193,78,.14); color: #f6e7bd; font-size: 13px; line-height: 1.45; }
+  #stall[hidden] { display: none; }
+  #stall .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  #stall button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 4px; background: #f2c14e; color: #0f1a44; font: 600 14px/1 "Golos Text", "Segoe UI", sans-serif; cursor: pointer; touch-action: manipulation; }
+  #stall button.alt { background: rgba(255,255,255,.16); color: #fff; }
   @media (max-width: 520px) { #intro .keys { display: none; } #intro .head { padding: 18px 18px 0; } #fact { padding-left: 18px; padding-right: 18px; } #intro .row { padding: 14px 18px 16px; } #go { flex: 1 1 100%; } }
   @media (max-width: 560px) { #toast { top: calc(94px + env(safe-area-inset-top, 0px)); max-width: calc(100vw - 24px); } }   /* below the corner chips instead of under them */
 </style>
@@ -129,7 +161,10 @@
       </div>
       <button id="go" disabled>В Питер</button>
     </div>
-    <div class="keys"><span><kbd>W A S D</kbd>Walk</span><span><kbd>Shift</kbd>Run</span><span><kbd>F</kbd>Fly</span><span><kbd>T</kbd>Time of day</span></div>
+    <div id="stall" hidden></div>
+    <div class="keys"><span class="kb"><kbd>W A S D</kbd>Walk</span><span class="kb"><kbd>Shift</kbd>Run</span><span class="kb"><kbd>F</kbd>Fly</span><span class="kb"><kbd>T</kbd>Time of day</span>
+      <span class="tk">Левый палец — идти, правый — смотреть, кнопка у машины — сесть · Left thumb walks, right thumb looks, the button by a car gets you in</span>
+      <span class="tk">Тяжёлая сцена: ~51 МБ и ~1 ГБ памяти, лучше на новом телефоне или планшете, горизонтально · Heavy scene: ~51 MB and ~1 GB RAM, best on a recent phone or tablet in landscape</span></div>
   </div>
 </div>
 <script>
@@ -225,6 +260,34 @@
     document.getElementById('intro').style.setProperty('--art', `url("./assets/splash/${sight || pick(SIGHTS)}.jpg")`);
     document.getElementById('fact').textContent = fact;
   }
+</script>
+
+<script>
+  // loading watchdog: if the progress (percent + label) has not moved for 45 s, say so in the intro card instead of leaving "загрузка…" forever (a blocked CDN import, a stalled network, a phone that is too slow).
+  // It never kills the load: "keep waiting" re-arms it, "reload" restarts.
+  (function () {
+    var last = '', t0 = Date.now(), el = document.getElementById('stall');
+    if (!el) return;
+    function text(id) { var n = document.getElementById(id); return n ? n.textContent : ''; }
+    function show() {
+      var started = !!window.__mainStarted;
+      el.replaceChildren();
+      var p = document.createElement('div');
+      p.textContent = started
+        ? 'Загрузка идёт дольше обычного — слабое устройство или сеть. Оставьте вкладку открытой. · Still loading — a slow device or network. Keep this tab open.'
+        : 'Скрипты не загрузились — проверьте сеть (нужен доступ к cdn.jsdelivr.net) и версию браузера: нужен iOS 16.4+ / свежий Chrome. · The scripts did not load: check the connection (cdn.jsdelivr.net) and the browser (iOS 16.4+ / a current Chrome).';
+      var row = document.createElement('div'); row.className = 'btns';
+      var a = document.createElement('button'); a.type = 'button'; a.textContent = 'Перезагрузить · Reload'; a.onclick = function () { location.reload(); };
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'alt'; b.textContent = 'Подождать · Keep waiting'; b.onclick = function () { el.hidden = true; t0 = Date.now(); };
+      row.append(a, b); el.append(p, row); el.hidden = false;
+    }
+    setInterval(function () {
+      if (document.body.classList.contains('loaded')) { el.hidden = true; return; }
+      var cur = text('loadpct') + '|' + text('loadlabel');
+      if (cur !== last) { last = cur; t0 = Date.now(); if (!el.hidden) el.hidden = true; return; }
+      if (Date.now() - t0 > 45000 && el.hidden) show();
+    }, 1500);
+  })();
 </script>
 
 <div class="hud" id="toast"><div class="sign"><span class="t-name"></span></div></div>
