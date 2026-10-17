@@ -160,13 +160,13 @@ function createWreckWorld(ctx) {
     if (!started) return;
     const mover = carHandles.get(h1) || carHandles.get(h2);
     const target = proxyHandles.get(h1) || proxyHandles.get(h2);
-    if (!mover || !target || target.record.wreckBody) return;
+    if (!mover || !target || target.record?.wreckBody) return;
     const p = mover.body.translation(), dx = p.x - target.cx, dz = p.z - target.cz, d = Math.hypot(dx, dz) || 1;
     const nx = dx / d, nz = dz / d, prior = mover.before || mover.body.linvel();
     const speed = -((prior.x - target.vx) * nx + (prior.z - target.vz) * nz);
     if (speed < .7) return;
     mover.lastHit = tick;
-    const mass = vehicleMass(mover.spec), otherMass = vehicleMass(target.spec), j = speed * 1.08 / (1 / mass + 1 / otherMass);
+    const mass = vehicleMass(mover.spec), otherMass = target.spec ? vehicleMass(target.spec) : (target.mass || 20), j = speed * 1.08 / (1 / mass + 1 / otherMass);
     const x = (p.x + target.cx) / 2, z = (p.z + target.cz) / 2;
     target.applyCarImpulse(-nx * j, -nz * j, x, z);
     // Replace the response to the temporary fixed proxy with the two-mass result.

@@ -18,6 +18,7 @@ import { LOD } from './core/lod.js';
 import { batchFixtureCells } from './core/fixture-cells.js';
 import { compactStaticAttributes } from './core/compact-static.js';
 import { createAudio } from './core/audio.js';
+import { createKnock } from './core/knock.js';
 import { createTimeOfDay } from './core/timeofday.js';
 import { createZones } from './core/zones.js';
 import { createUI, createInteract } from './core/ui.js';
@@ -100,6 +101,7 @@ if (params.has('ndfar')) pipeline.ndFar = Number(params.get('ndfar')) || 1e9;   
 const audio = createAudio();
 const ctx = createContext({ scene, camera, renderer, audio, quality, sunDir });
 ctx.sky = sky;
+ctx.knock = createKnock(ctx);      // the knockable street furniture (core/knock.js): modules register their instances during the build (guard: if (ctx.knock))
 const zones = createZones({ scene, camera, sky, pipeline, shared: ctx.shared, staticRoot: ctx.staticRoot, dynamicRoot: ctx.dynamicRoot, indoor: ctx.indoor, heightAt: L.heightAt });
 ctx.zones = zones;
 if (params.get('nofreeze') === '1' || params.get('nofreeze') === 'zones') zones.config.freezeHidden = false;

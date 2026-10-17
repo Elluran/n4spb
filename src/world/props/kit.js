@@ -193,6 +193,20 @@ export function makePanels(ctx) {
     for (const p of pts) { g.P.push(p[0], p[1], p[2]); g.N.push(nx, 0, nz); g.U.push(p[3], p[4]); }
     g.I.push(base, base + 1, base + 2, base, base + 2, base + 3); g.n += 4;
   };
+  /** the same quad as a standalone Mesh (about its own origin: position = the panel centre, yaw towards (nx, nz)) in the DYNAMIC root: a poster / fascia / chalk board that has to travel
+   *  with a knockable (S.attach); the material is the shared one of the merged panels. Without ctx.knock the caller keeps it where it is, it looks the same. */
+  const object = (tex, cx, cy, cz, nx, nz, w, h, o = {}) => {
+    const g = get(tex, !!o.lit, !!o.alpha), f = o.flip ? -1 : 1, u0 = o.u0 ?? 0, u1 = o.u1 ?? 1, v0 = o.v0 ?? 0, v1 = o.v1 ?? 1, hw = w / 2 * f, hh = h / 2;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute([-hw, -hh, 0, hw, -hh, 0, hw, hh, 0, -hw, hh, 0], 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute([u0, v0, u1, v0, u1, v1, u0, v1], 2));
+    geo.setIndex([0, 1, 2, 0, 2, 3]); geo.computeBoundingSphere(); geo.computeBoundingBox();
+    const m = new THREE.Mesh(geo, g.mat); m.name = 'pr-panel-obj'; m.castShadow = false; m.receiveShadow = !g.lit;
+    m.position.set(cx, cy, cz); m.rotation.order = 'YXZ'; m.rotation.y = Math.atan2(nx, nz); m.rotation.x = o.tilt || 0;
+    if (g.lit || g.alpha) ctx.noOutline(m);
+    return ctx.add(m);
+  };
   const finish = (root) => {
     let tris = 0;
     for (const g of map.values()) {
@@ -206,7 +220,7 @@ export function makePanels(ctx) {
     }
     return tris;
   };
-  return { panel, finish };
+  return { panel, object, finish };
 }
 
 /** flat ring [x,z,...] point test (even-odd) */

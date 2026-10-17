@@ -233,11 +233,22 @@ export function makeWorld(ctx) {
   function perchesNear(x, z, r0, r1, o = {}) {
     const out = [], ci = Math.floor(x / PC), cj = Math.floor(z / PC), R = Math.ceil(r1 / PC);
     for (let i = ci - R; i <= ci + R; i++) for (let j = cj - R; j <= cj + R; j++) for (const p of pgrid.get(tk(i, j)) || []) {
+      if (p.dead) continue;
       if (p.occ && p.occ !== o.self) continue;
       const d = Math.hypot(p.x - x, p.z - z); if (d < r0 || d > r1) continue;
       if (o.kinds && !o.kinds.includes(p.kind)) continue;
       if (o.avoid && Math.hypot(p.x - o.avoid.x, p.z - o.avoid.z) < (o.avoidR ?? 12)) continue;
       out.push(p);
+    }
+    return out;
+  }
+
+  /** a knocked lamp / post (core/knock.js): the perches of `kinds` within r of (x,z) are gone for good (p.dead); returns them so the birds on them can leave */
+  function dropPerches(x, z, kinds, r = 0.6) {
+    const out = [], ci = Math.floor(x / PC), cj = Math.floor(z / PC);
+    for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) for (const p of pgrid.get(tk(i, j)) || []) {
+      if (p.dead || !kinds.includes(p.kind) || Math.hypot(p.x - x, p.z - z) > r) continue;
+      p.dead = true; out.push(p);
     }
     return out;
   }
@@ -277,5 +288,5 @@ export function makeWorld(ctx) {
   lap('water');
   // ---------------------------------------------------------------- the player
   const player = ctx.player.position;
-  return { timing, ok, clear, kind, groundY, perches, perchesNear, inTree, treesNear, onLane, player, env, streets, landmarks, hash2, L, ringHas, posts, lions, onBridge, onBridgePavement, bridgeUV, inSquare, flightClear, waterPts, nevaBanks, solid };
+  return { timing, ok, clear, kind, groundY, perches, perchesNear, dropPerches, inTree, treesNear, onLane, player, env, streets, landmarks, hash2, L, ringHas, posts, lions, onBridge, onBridgePavement, bridgeUV, inSquare, flightClear, waterPts, nevaBanks, solid };
 }

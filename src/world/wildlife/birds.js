@@ -382,8 +382,8 @@ export function buildBirds(ctx, W, say, opts = {}) {
         continue;
       }
       if (b.sp === 'gull') {                                                   // post gulls: the posts and lions nearest the start (every other one among the 40 nearest)
-        const pool = postsNear.filter((q) => !q.occ).slice(0, 40);
-        const cand = pool.length ? pool : W.perches.filter((q) => q.kind === 'post' && !q.occ);
+        const pool = postsNear.filter((q) => !q.occ && !q.dead).slice(0, 40);
+        const cand = pool.length ? pool : W.perches.filter((q) => q.kind === 'post' && !q.occ && !q.dead);
         const pick = cand.length ? cand[Math.min(cand.length - 1, Math.floor(R() * R() * cand.length))] : null;
         if (pick) { setPerch(b, pick, R.range(-20, 0)); b.until = R.range(4, 30); } else b.st = 'dead';
         si++; continue;
@@ -529,7 +529,7 @@ export function buildBirds(ctx, W, say, opts = {}) {
     if (u >= 1) {
       b.x = f.x1; b.z = f.z1; b.y = f.y1; b.fl = null;
       if (f.done) { f.done(b, t); return; }
-      if (f.perch) { setPerch(b, f.perch, t); b.until = t + R.range(12, 45); return; }
+      if (f.perch && !f.perch.dead) { setPerch(b, f.perch, t); b.until = t + R.range(12, 45); return; }
       setGround(b, f.x1, f.z1, t, f.home || { x: f.x1, z: f.z1, r: 6 });
       b.until = t + R.range(12, 30); if (b.flock) b.until = 1e9;
       return;
@@ -894,6 +894,16 @@ export function buildBirds(ctx, W, say, opts = {}) {
 
   // the density director: the animals follow the player (director.js)
   const director = makeDirector(ctx, W, { birds, flocks, sites: { pigeon: pgSites, sparrow: spSites }, R, spot, layoutFlock, setGround, setPerch, takeBoat, leaveBoat, boatList, boatTaken, soarGull, boatNear, okSites, siteOk, openWater, gY });
+  // a knocked lamp / bollard / sign (core/knock.js): its perch is gone for good and the bird on it takes off at once (a bird still flying to it lands on the ground)
+  if (ctx.knock && ctx.knock.listen) ctx.knock.listen((rec) => {
+    const kinds = rec.kind === 'lamp' ? ['lamp'] : rec.kind === 'bollard' || rec.kind === 'sign' || rec.kind === 'post' ? ['post'] : null;
+    if (!kinds) return;
+    for (const p of W.dropPerches(rec.x, rec.z, kinds)) {
+      const b = p.occ; if (!b) continue;
+      if (b.st === 'perch' && b.perch === p) { if (!flee(b, tPrev, { r0: 10, r1: 70 })) launch(b, b.x, gY(b.x, b.z), b.z, tPrev, { fast: true, flat: true }); }
+      else if (b.st === 'fly' && b.fl && b.fl.perch === p) p.occ = null;
+    }
+  });
   update(0, 0);
   return { group, birds, flocks, update, SP, models, say, gallery, launch, flee, setPerch, setGround, poseGround, posePerch, P, writeBird, cafes, director, sites: { pigeon: pgSites, sparrow: spSites }, zones: Z, boatList, start, openWater, timing: tmB, siteOk, takeBoat, leaveBoat, boatTaken };
 }

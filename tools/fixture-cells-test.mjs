@@ -4,6 +4,9 @@ import { createMaterials } from '../src/core/materials.js';
 import { batchFixtureCells } from '../src/core/fixture-cells.js';
 import { registerLOD } from '../src/core/spatial.js';
 import { LOD } from '../src/core/lod.js';
+import { Physics } from '../src/core/physics.js';
+import { createKnock } from '../src/core/knock.js';
+import { knockInstances } from '../src/world/lib/knock-inst.js';
 const root=new THREE.Group();LOD.init(root);
 const material=createMaterials({}).toon('#abcdef',{vertexColors:true});
 const sources=[],skipped=[];
@@ -17,6 +20,11 @@ function add(x,zone='',skip='',far=260){
  (skip?skipped:sources).push(o);return o;
 }
 add(12);add(15);add(215);add(225);add(12,'indoor');add(14,'indoor');add(15,'','dynamic');add(15,'','reflection');add(15,'','range',280);
+// a knockable fixture (<= 128 vertices, vertex-coloured toon, finite range, loose): Dynamic by the knock contract, so the cell batcher must leave it alone
+const kctx={physics:new Physics(()=>0),onUpdate(){},addStatic:o=>root.add(o),noOutline:o=>o};kctx.knock=createKnock(kctx);
+const kgeo=new THREE.BoxGeometry(.5,.9,.5);kgeo.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(kgeo.attributes.position.count*3).fill(.5),3));
+const knocks=knockInstances(kctx,{name:'knock-fixture',parts:[{geo:kgeo,mat:material}],spots:[{x:12,y:0,z:3},{x:16,y:0,z:5},{x:500,y:0,z:9}],far:220,rec:{kind:'bin',mass:14,h:.9,r:.25,hitK:.12}});
+assert.equal(knocks.meshes.length,2);
 const matrix=new THREE.Matrix4(),normal=new THREE.Matrix3(),p=new THREE.Vector3(),n=new THREE.Vector3();
 function triangles(mesh){
  const g=mesh.geometry,out=[];
@@ -33,6 +41,7 @@ function triangles(mesh){
 }
 const expected=sources.flatMap(triangles), registrations=sources.map(o=>({...LOD.of(o)}));
 const result=batchFixtureCells(root);assert.equal(result.sources,6);assert.equal(result.meshes,3);
+for(const k of knocks.meshes){assert.equal(k.parent,root,'a knock mesh stays where its module put it');assert(LOD.of(k)&&LOD.of(k).far===220,'with its authored range');assert.equal(k.instanceMatrix.usage,THREE.DynamicDrawUsage);assert(k.userData.knock);}
 const merged=[];root.traverse(o=>{if(o.name==='fixture-cell')merged.push(o);});
 const actual=merged.flatMap(triangles);assert.equal(actual.length,expected.length);
 // Groups keep source order in this fixture, including distinct cells and zones.

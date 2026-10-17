@@ -38,3 +38,6 @@ State of this repository (cut from `102_3d_piter`, 2026-10-16). What the strip i
 * The first strip bake and its real sizes / load times are not recorded yet.
 * Three.js (jsDelivr) and the Google Fonts are still loaded from their CDNs; vendoring them would remove the external dependency but edits `index.html` (hashed: do it before the final bake).
 * Performance on the strip (walk, drive, load) has to be re-measured; the numbers in the older performance docs are for the whole city.
+* **Knockable furniture** (`src/core/knock.js`, ported from 103_doomgrad_3d; rules in [DRIVING-COLLISIONS.md](DRIVING-COLLISIONS.md)): knock meshes are Dynamic and loose, so each type x 384 m cell is its own draw: measure the densest families (`tools/drive-bench.mjs`) before shipping more of them.
+  Known limits: the people navigation (baked snapshot of the colliders) keeps a knocked thing's old position as an obstacle and walks through a lying pole until the next bake; a traffic wreck does not break anchored things; chains, wires and panels merged into world-space
+  geometry do not follow a knocked post. Every `src/` edit stales the bake: while developing use `?baked=force` (`tools/shot.mjs --params "baked=force"`), rebake once at the end.

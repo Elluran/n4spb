@@ -695,6 +695,8 @@ export function buildNav(ctx, cfg = {}) {
     const rec = { x: b.x, z: b.z, rotY: b.rotY, len, seats, node, ax, az, y: b.y ?? (onPave ? PAVE : 0), w: b.w ?? zoneW(b.x, b.z), where: b.where || 'street' };
     nav.benches.push(rec); return rec;
   };
+  /** the bench records whose centre lies within r metres of (x, z): a knocked bench (core/knock.js) takes its seats with it (people.js subscribes, sim.knockBench) */
+  nav.benchesNear = (x, z, r = 0.6) => nav.benches.filter((b) => Math.hypot(b.x - x, b.z - z) <= r);
   for (const b of [...(lm.benches || []), ...((svc.props && svc.props.benches) || [])]) nav.addBench(b);
   // the benches of the castle square (landmarksCastle: positions only, they face the nearest footway / pavement): a bench that props already registered is not added twice
   try {

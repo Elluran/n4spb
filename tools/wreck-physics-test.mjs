@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { Physics } from '../src/core/physics.js';
+import { createKnock } from '../src/core/knock.js';
 import { getCarWrecks } from '../src/world/drive/wrecks.js';
 import { bindCarImpact, bindParkedImpact } from '../src/world/traffic/impact.js';
 import { ARCH } from '../src/world/traffic/fleetdata.js';
@@ -33,6 +34,23 @@ physics.addBox(30, 8, 12, .2, 0, 0, 3);
 const wallCar = car(30, 0); wallCar.source.applyCarImpulse(0, 56000, 30, 0);
 for (let i = 0; i < 360; i++) wrecks.step(1 / 120);
 assert(wallCar.r.z < 6.1, 'wreck cannot tunnel through a wall');
+// A knockable thing (core/knock.js) is a legal wreck target: its source has no record / spec, and the chain handler used to throw on that (unseen, inside Rapier's event drain), so a
+// struck car bounced off a bench like off a wall and the bench stayed. The wreck must now knock it and drive on.
+{
+  const knock = createKnock(ctx), mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1.8, .9, .6), new THREE.MeshBasicMaterial(), 1);
+  mesh.setMatrixAt(0, new THREE.Matrix4().makeTranslation(-300, 0, 9)); mesh.computeBoundingSphere();
+  const item = physics.addBox(-300, 9, 1.8, .6, 0, 0, .9);
+  const bench = knock.register({ kind: 'bench', x: -300, z: 9, y: 0, mass: 45, h: .9, w: 1.8, d: .6, hitK: .25, item, parts: [{ mesh, index: 0 }] });
+  assert(bench && item.source.applyCarImpulse && !item.source.record && !item.source.spec, 'a knock source has neither record nor spec');
+  const errors = [], realError = console.error; console.error = (...a) => errors.push(a);
+  const struck = car(-300, 0); struck.source.applyCarImpulse(0, 14000, -300, -2.28);
+  for (let i = 0; i < 240; i++) { wrecks.step(1 / 120); knock.update(1 / 120); }
+  console.error = realError;
+  assert.deepEqual(errors, [], 'no error logged by the chain handler');
+  assert(bench.state === 'fly' || bench.state === 'rest', `the bench was knocked by the wreck (state ${bench.state})`);
+  assert(!physics.items.includes(item), 'its collider was removed');
+  assert(struck.r.z > 9.5, `the wreck drove on past the bench instead of bouncing off it (z ${struck.r.z.toFixed(1)})`);
+}
 const pusher = car(60, 0), second = car(60, 8);
 pusher.source.applyCarImpulse(0, 21000, 60, 0);
 for (let i = 0; i < 240; i++) wrecks.step(1 / 120);

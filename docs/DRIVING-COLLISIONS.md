@@ -75,6 +75,29 @@ zero module errors. This intentionally small module check does not prove full-ci
 FPS, region streaming or bridge integration. The larger module-subset load was
 cancelled to avoid competing with the other agent's region tests.
 
+## Knockable street furniture
+
+Benches, litter bins, pots, urns, racks, post boxes, cabinets, kiosks, ad columns, bollard posts and the lamp / traffic-signal / sign poles are **instances of dynamic InstancedMeshes** that the
+driven car can knock over (`src/core/knock.js`, `ctx.knock`; `window.__knock` in the page; `npm run knock` is the headless regression). A registered collider gets a `source` in the protocol
+the traffic wrecks already use (`cx cz vx vz spin invMassRatio inertia applyCarImpulse onCarHit`), so `drive/collision.js` shares the impulse by mass (its `massK` already scales the target
+for the three garage masses; a new car needs `spec.mass`, not a retune):
+
+* **Free things** (`anchored: 0`) fly, bounce, tumble and settle on a side. A knock needs a velocity change of at least `minDv` (0.5 m/s by default; heavy things more).
+* **Anchored things** (lamps, signal and sign poles, bollards, columns, cabinets: `anchored` = break speed in km/h of the CAR AT CONTACT) are static below it, they only wobble; above it they break
+  off at the foot and topple along the hit. The speed test is made once, before the impulse: the `invMassRatio` getter latches an `armed` flag that `applyCarImpulse` consumes (a test after the
+  impulse compared the already slowed car and held a lamp that a 30 km/h car should break). A traffic wreck is a legal target of free things (`wrecks.js` accepts a source without `record` / `spec`)
+  but does not break anchored ones (no armed flag).
+* **`hitK`** is the share of a wall-blow the car takes (damage, shake, flash, sound): `drive.js applyImpacts` scales the event by `obstacle.source.hitK` (a bin 0.12, a lamp 0.6, a column 1.0).
+* **Rest colliders.** The collider is removed at the knock and a low static box replaces it at the resting pose; its top is capped at **0.42 m** (below the car's step height 0.45), so the car drives over
+  lying debris and never crashes into its own thrown bench. Rest boxes carry no source.
+* **Floor.** The body falls to the `ctx.physics.surfaceAt` floor: a walk box / ramp (bridge deck, steps, a pavement slab) or the terrain level where it stood; over **open water**
+  (`L.waterLevelAt` is not null and no deck) it sinks and the record becomes `lost` (hidden, no rest collider). `L.heightAt` is the waterway bed there, so it is never used as a floor.
+* **Parts.** A record carries any number of parts, each keeping its offset from the record origin: pole + head + lens instances of a signal, body + glow + light pool of a lamp (`hide: true` parts vanish at
+  the knock, they follow a wobble). `{ obj }` parts must be created with `ctx.add` (dynamic root).
+* **Not knockable:** anything built by `city/*` (baked colliders are plain data: a function in a baked collider breaks `encodeBaked`; `tools/check.mjs` fails on it), continuous runs (quay panels, bridge
+  railings, fences, balustrades) and furniture on bridge decks / platforms / metro. People nav keeps a baked snapshot of the colliders: a knocked thing's old position stays an obstacle for pedestrians until the next bake.
+* Calm sounds only: a metal thing plays the existing `clank` one-shot (at most one per 0.15 s), never an alarm.
+
 ## Shipping handoff
 
 The user requested small-area verification while another agent adds regions.

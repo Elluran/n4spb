@@ -1,0 +1,92 @@
+// world/lib/knock-inst.js - the shared builder of KNOCKABLE instanced furniture (lamps, bollard posts, signal poles, stop furniture, landmark benches ...), the helper behind
+// ctx.knock (core/knock.js). One call turns a list of placements into the draw structure the knock contract needs (docs/PERFORMANCE-CONTRACT.md, "Knockable instances"):
+//   with ctx.knock    one DYNAMIC InstancedMesh per part per 384 m cell (named `${name}|${cx},${cz}`), registered with registerLOD(mesh, far) WITHOUT attach (a loose draw, no
+//                     uncullable shadow sector), and one knock.register() per placement, whose parts are that placement's instances in every part mesh (a lamp = body + glow +
+//                     light pool, a signal = pole + head instances + lens instances). The return value `records[i]` belongs to `spots[i]`.
+//   without ctx.knock (tools/check.mjs and the headless tools of the modules, R1) ONE Static InstancedMesh per part for all placements, no register, no registerLOD: exactly the
+//                     structure the module built before the knock existed (the engine splits and batches it as ever); `records` is a list of nulls.
+// knockInstances(ctx, {
+//   name,                         mesh name prefix
+//   parts: [{ geo, mat, shadow = true, receive = true, noOutline = false, hide = false, far, name,
+//             when(spot, i),      optional: false = this placement has no instance of the part (a signal without a countdown)
+//             place(spot, i) }],  optional: a Matrix4 (or an array of them: two heads on one pole) in WORLD space instead of the placement matrix; null / false = none
+//   spots: [{ x, y, z, rotY, s }],  y = the foot level; s = uniform scale (default 1)
+//   items: [collider | null | [colliders]] | (i, spot) => collider | [colliders],   the physics colliders of the placements (R8: keep the handles)
+//   rec: { kind, mass, h, r | w, d, anchored, hitK, metal, minDv, originY, onKnock } | (spot, i) => the same   used as given: apply spot.s yourself in the function form
+//   far,                          registerLOD range (m) of the parts (a part `far` overrides it)
+//   cell = 384,
+//   extraParts: (i, spot) => [{ mesh, index, hide } | { obj }]   parts that live elsewhere (a shared light-pool mesh, a detached panel)
+// }) -> { records, meshes }
+import * as THREE from 'three';
+import { registerLOD } from '../../core/spatial.js';
+
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), NO_MATRICES = [];
+
+/** the world matrix of a placement: translate (x, y, z), turn rotY about the vertical, scale s */
+function spotMatrix(spot, out = new THREE.Matrix4()) {
+  const s = spot.s ?? 1;
+  return out.compose(_p.set(spot.x, spot.y ?? 0, spot.z), _q.setFromAxisAngle(UP, spot.rotY || 0), _s.set(s, s, s));
+}
+
+export function knockInstances(ctx, { name = 'knock', parts, spots, items = null, rec = {}, far = Infinity, cell = 384, extraParts = null }) {
+  const records = new Array(spots.length).fill(null), meshes = [];
+  const knock = ctx.knock || null;
+  /** the matrices of part `pi` for placement `i`: [] when it has none */
+  const matricesOf = (pi, i) => {
+    const part = parts[pi], spot = spots[i];
+    if (part.when && !part.when(spot, i)) return NO_MATRICES;
+    if (part.place) { const m = part.place(spot, i); return !m ? NO_MATRICES : Array.isArray(m) ? m : [m]; }
+    return [spotMatrix(spot)];
+  };
+  const make = (pi, list, key) => {
+    const part = parts[pi], mesh = new THREE.InstancedMesh(part.geo, part.mat, list.length);
+    for (let k = 0; k < list.length; k++) mesh.setMatrixAt(k, list[k]);
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.castShadow = part.shadow !== false; mesh.receiveShadow = part.receive !== false;
+    mesh.name = (part.name ? `${name}-${part.name}` : parts.length > 1 ? `${name}-${pi}` : name) + (key ? `|${key}` : '');
+    mesh.computeBoundingSphere();
+    if (part.noOutline) ctx.noOutline(mesh);
+    ctx.addStatic(mesh); meshes.push(mesh);
+    return mesh;
+  };
+
+  if (!knock) {                                                                            // headless / no knock: today's structure, one Static mesh per part
+    for (let pi = 0; pi < parts.length; pi++) {
+      const list = []; for (let i = 0; i < spots.length; i++) for (const m of matricesOf(pi, i)) list.push(m);
+      if (list.length) make(pi, list, '');
+    }
+    return { records, meshes };
+  }
+
+  const cells = new Map();                                                                  // 'cx,cz' -> [spot indices], in spot order
+  for (let i = 0; i < spots.length; i++) {
+    const key = Math.floor(spots[i].x / cell) + ',' + Math.floor(spots[i].z / cell);
+    let a = cells.get(key); if (!a) cells.set(key, (a = [])); a.push(i);
+  }
+  const keys = [...cells.keys()].sort((a, b) => { const [ax, az] = a.split(',').map(Number), [bx, bz] = b.split(',').map(Number); return ax - bx || az - bz; });
+  for (const key of keys) {
+    const idx = cells.get(key), mine = idx.map(() => []), cellMeshes = [];                  // mine[n] = the parts of the n-th placement of this cell
+    for (let pi = 0; pi < parts.length; pi++) {
+      const list = [], owner = [];
+      for (let n = 0; n < idx.length; n++) for (const m of matricesOf(pi, idx[n])) { list.push(m); owner.push(n); }
+      if (!list.length) continue;
+      const mesh = make(pi, list, key);
+      for (let k = 0; k < list.length; k++) mine[owner[k]].push({ mesh, index: k, hide: !!parts[pi].hide });
+      cellMeshes.push([mesh, parts[pi].far ?? far]);
+    }
+    for (let n = 0; n < idx.length; n++) {
+      const i = idx[n], spot = spots[i];
+      const extra = extraParts ? extraParts(i, spot) : null;
+      const it = typeof items === 'function' ? items(i, spot) : items ? items[i] : null;
+      const r = typeof rec === 'function' ? rec(spot, i) : rec;
+      if (!r) continue;
+      records[i] = knock.register({
+        ...r, x: r.x ?? spot.x, z: r.z ?? spot.z, y: r.y ?? spot.y ?? 0, rotY: r.rotY ?? spot.rotY ?? 0,
+        parts: extra ? mine[n].concat(extra) : mine[n],
+        ...(Array.isArray(it) ? { items: it } : { item: it || null }),
+      });
+    }
+    for (const [mesh, pfar] of cellMeshes) registerLOD(mesh, pfar);                         // after register(): the LOD takes the bounding sphere, inflated by the throw reach, at call time
+  }
+  return { records, meshes };
+}

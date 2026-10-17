@@ -15,11 +15,19 @@
 //   4. the span profile is clamped to <= 0.9 m above the contact wire wherever a hanger stands, so every hanger really reaches its span.
 // Drawn through ctx.wires (one draw call; every polyline carries kind: contact | arc | span | hanger | tie, for the test) + a few merged boxes (rosettes, frogs, masts, signs).
 // Published as service `wires`: contact-wire pair centrelines for traffic (trolleybus poles), the spans (landmarksC hangs pendant lamps on the Anichkov ones) and the anchors.
+// KNOCKABLE MASTS (core/knock.js, lib/knock-inst.js): with ctx.knock the plain black kerb masts are instanced per 384 m cell (Dynamic, registerLOD 320 m, ONE geometry, the height is the
+//   instance scale) and registered as kind 'mast' (350 kg, anchored: holds a bump, breaks off at the foot above 24 km/h of the car, steel clank), the physics collider is kept; the masts of
+//   a bridge deck stay in the merged pole mesh (a deck is not a floor for a toppled pole). Without ctx.knock the masts are merged into the pole mesh exactly as before.
+//   THE WIRES STAY: a knocked mast does not take its span along. The contact wires, hangers and spans are segments of the ONE ctx.wires draw (core/geo.js; in the shipped page that mesh
+//   is the baked one), there is no per-span handle to collapse, and a span alone could not go anyway (the contact wires hang from it through the hangers and run on to the next
+//   span): the strands stay in the air as in the 103 reference. A span that loses its mast keeps hanging on the rosette at its other end; the wire is not a physical rope.
 import { wayAt } from './net.js';
-import { prepWay } from './surface.js';
+import { prepWay, WALK_Y } from './surface.js';
 import { latAt } from './lanes.js';
 import { clearanceHit } from './bld.js';
-import { hash2, clamp, inMergedStrip } from './furn.js';
+import { hash2, clamp, inMergedStrip, INST_STATS } from './furn.js';
+import { VB } from './vb.js';
+import { knockInstances } from '../lib/knock-inst.js';
 import { PointGrid, pairs } from './util.js';
 import * as L from '../layout.js';
 
@@ -31,6 +39,7 @@ const SNAP = Number(ENV.WIRES_SNAP) || 10;       // a free wire end moves to a s
 const GAP = Number(ENV.WIRES_GAP) || 44;         // longest unsupported run of a contact wire (m)
 const BRIDGE_GAP = Math.min(GAP, 56);          // ... on a bridge: a few metres longer than on the street is not needed any more: the test limit is 60 m between hangers / ties / ends            // ... on a bridge (landmarksC draws the Anichkov Bridge without masts: its wires hang from the facades at both ends)
 const CHAIN = Number(ENV.WIRES_CHAIN) || 70;     // longest run over a joint: last support of one way's wire + arc + first support of the next
+const MAST_H = 9.0, MAST_FAR = 320;             // the instanced mast model stands 9 m (a tie mast of 8 m is the same model scaled), seen up to this far
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 export function buildWires(ctx, net, lamps, opts = {}) {
@@ -95,7 +104,7 @@ export function buildWires(ctx, net, lamps, opts = {}) {
   };
   const makeSpan = (a, b) => {
     const len = Math.hypot(a.x - b.x, a.z - b.z);
-    return { A: [a.x, a.z, a.y], B: [b.x, b.z, b.y], poleA: a.pole, poleB: b.pole, nxA: a.nx, nzA: a.nz, nxB: b.nx, nzB: b.nz, len, tx: (b.x - a.x) / len, tz: (b.z - a.z) / len, mid: [(a.x + b.x) / 2, (a.z + b.z) / 2], knots: [], id: -1 };
+    return { A: [a.x, a.z, a.y], B: [b.x, b.z, b.y], poleA: a.pole, poleB: b.pole, deckA: !!a.deck, deckB: !!b.deck, nxA: a.nx, nzA: a.nz, nxB: b.nx, nzB: b.nz, len, tx: (b.x - a.x) / len, tz: (b.z - a.z) / len, mid: [(a.x + b.x) / 2, (a.z + b.z) / 2], knots: [], id: -1 };
   };
   const spanAt = (px, pz, nx, nz) => {
     const A = facadeSide(px, pz, nx, nz, 1), B = facadeSide(px, pz, nx, nz, -1);
@@ -314,7 +323,7 @@ export function buildWires(ctx, net, lamps, opts = {}) {
       if (!sp) {
         // a bridge deck (no facade, the river forbids mastSide): a mast just outside the asphalt of the whole deck on each side
         const out = (sg) => { let d = 1.5; while (d < 40 && (net.cover(q.x + nx * sg * d, q.z + nz * sg * d, {}) > -0.3 || net.cover(q.x + nx * sg * (d + 1.3), q.z + nz * sg * (d + 1.3), {}) > -0.5 || inMergedStrip(net, q.x + nx * sg * (d + 1.3), q.z + nz * sg * (d + 1.3)))) d += 0.5; d += 1.3; const x = q.x + nx * sg * d, z = q.z + nz * sg * d;
-          return d > 40 || L.insideBuilding(x, z, 0.3) ? null : { x, z, y: 9.0, nx: -nx * sg, nz: -nz * sg, pole: true }; };
+          return d > 40 || L.insideBuilding(x, z, 0.3) ? null : { x, z, y: 9.0, nx: -nx * sg, nz: -nz * sg, pole: true, deck: true }; };
         const a = out(1), b = out(-1);
         if (!a || !b) continue;
         sp = makeSpan(a, b);
@@ -405,13 +414,15 @@ export function buildWires(ctx, net, lamps, opts = {}) {
 
   // ------------------------------------------------------------ supports hardware: rosettes and masts (drawn once per place)
   const placed = new Map();
-  const placeSupport = (P, nx, nz, pole) => {
+  const knockMasts = !!(ctx.knock && poles), mastSpots = [];               // with ctx.knock the kerb masts are instances (below), not merged boxes; a bridge-deck mast (deck) stays merged
+  const placeSupport = (P, nx, nz, pole, deck = false) => {
     const key = Math.round(P[0] * 4) + ',' + Math.round(P[1] * 4) + ',' + Math.round(P[2] * 2);
     if (placed.has(key)) return; placed.set(key, 1);
     if (pole) {
       // plain black mast with a short bracket
-      if (poles) { poles.cyl(0.11, 0.17, P[2], '#25282b', [P[0], 0.12 + P[2] / 2, P[1]], null, 6, null, true); poles.box(0.3, 0.3, 0.3, '#3a3d42', [P[0], 0.12 + P[2], P[1]]); }
-      ctx.physics.addCylinder(P[0], P[1], 0.22, 0, 4);
+      const item = ctx.physics.addCylinder(P[0], P[1], 0.22, 0, 4);
+      if (knockMasts && !deck) mastSpots.push({ x: P[0], y: WALK_Y, z: P[1], rotY: 0, s: P[2] / MAST_H, item });
+      else if (poles) { poles.cyl(0.11, 0.17, P[2], '#25282b', [P[0], 0.12 + P[2] / 2, P[1]], null, 6, null, true); poles.box(0.3, 0.3, 0.3, '#3a3d42', [P[0], 0.12 + P[2], P[1]]); }
       stats.masts++; service.masts.push({ x: P[0], z: P[1], h: P[2] });
     } else {
       // rosette: a round plate on the facade (white-grey) + a short eye with an insulator
@@ -485,7 +496,18 @@ export function buildWires(ctx, net, lamps, opts = {}) {
     for (const u of U) pts.push([sp.A[0] + (sp.B[0] - sp.A[0]) * u, spanY(sp, u), sp.A[1] + (sp.B[1] - sp.A[1]) * u]);
     add(pts, 0.034, SPANC, 'span', 'S' + sp.id); stats.spans++;
     service.spans.push({ id: sp.id, a: [sp.A[0], sp.A[2], sp.A[1]], b: [sp.B[0], sp.B[2], sp.B[1]], mid: [sp.mid[0], parab(sp, 0.5), sp.mid[1]], len: sp.len, poles: [sp.poleA, sp.poleB] });
-    placeSupport(sp.A, sp.nxA, sp.nzA, sp.poleA); placeSupport(sp.B, sp.nxB, sp.nzB, sp.poleB);
+    placeSupport(sp.A, sp.nxA, sp.nzA, sp.poleA, sp.deckA); placeSupport(sp.B, sp.nxB, sp.nzB, sp.poleB, sp.deckB);
+  }
+  if (mastSpots.length) {
+    // the mast model (base at the origin): the same pole and cap box the merged mesh draws; the instance scale carries the height (9 m, the 8 m tie masts a touch slimmer)
+    const V = new VB(); V.cyl(0.11, 0.17, MAST_H, '#25282b', [0, MAST_H / 2, 0], null, 6, null, true); V.box(0.3, 0.3, 0.3, '#3a3d42', [0, MAST_H, 0]);
+    const geo = V.build(), mVC = ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0.02, name: 'pt-wire-mast' });
+    // 350 kg of steel, anchored: a bump (a parking scrape) only makes it wobble, a car at 24 km/h breaks it off at the foot and it topples along the hit
+    knockInstances(ctx, {
+      name: 'pt-wire-masts', parts: [{ geo, mat: mVC, far: MAST_FAR }], spots: mastSpots, items: mastSpots.map((m) => m.item), far: MAST_FAR,
+      rec: (m) => ({ kind: 'mast', mass: 350, h: MAST_H * m.s + 0.15, r: 0.17, anchored: 24, hitK: 0.4, metal: true }),
+    });
+    INST_STATS['pt-wire-masts'] = { n: mastSpots.length, tris: Math.round(geo.index.count / 3 * mastSpots.length) };
   }
 
   // ------------------------------------------------------------ crossing frames where wires of different routes cross

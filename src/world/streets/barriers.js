@@ -13,7 +13,8 @@
 import * as THREE from 'three';
 import { VB } from './vb.js';
 import { PointGrid } from './util.js';
-import { instances } from './furn.js';
+import { instances, INST_STATS } from './furn.js';
+import { knockInstances } from '../lib/knock-inst.js';
 import { WALK_Y } from './surface.js';
 
 const IRON = '#1c1e1d', IRON_L = '#2d3031';
@@ -76,8 +77,12 @@ export function buildBarriers(ctx, net, walks, poles, root, lamps = []) {
   const RING8 = Array.from({ length: 8 }, (_, k) => [Math.cos(k * Math.PI / 4) * 0.13, Math.sin(k * Math.PI / 4) * 0.13]);
   const onRoad = (x, z) => net.cover(x, z, {}) > 0.05 || RING8.some(([dx, dz]) => net.cover(x + dx, z + dz, {}) > 0.05);       // road clearance rule: no post (nor a chain to it) on the asphalt: the footprint (post radius 0.11) counts, not only the centre (a fillet corner)
   const posts = walks.chainPosts.filter((p) => !lampAt(p.x, p.z) && !onRoad(p.x, p.z));
-  instances(ctx, post, mVC, posts.map((p) => ({ x: p.x, y: WALK_Y, z: p.z, rotY: p.rotY })), 'pt-chain-posts');
-  for (const p of posts) ctx.physics.addCylinder(p.x, p.z, 0.11, 0, 0.85);
+  const postSpots = posts.map((p) => ({ x: p.x, y: WALK_Y, z: p.z, rotY: p.rotY }));
+  const postItems = posts.map((p) => ctx.physics.addCylinder(p.x, p.z, 0.11, 0, 0.85));
+  // knockable (core/knock.js): cast iron, anchored: holds a bump, breaks off at the foot above 30 km/h (103: streets/bollards.js); without ctx.knock it is the one static mesh of before
+  knockInstances(ctx, { name: 'pt-chain-posts', parts: [{ geo: post, mat: mVC }], spots: postSpots, items: postItems, far: 240,
+    rec: { kind: 'bollard', mass: 60, h: 0.85, r: 0.11, anchored: 30, hitK: 0.4, metal: true } });
+  if (postSpots.length) INST_STATS['pt-chain-posts'] = { n: postSpots.length, tris: Math.round((post.index ? post.index.count : post.attributes.position.count) / 3 * postSpots.length) };
   const chain = chainModel(), ch = [], chainRuns0 = [];
   for (let [x0, z0, x1, z1] of walks.chains) {
     if (onRoad(x0, z0) || onRoad(x1, z1)) continue;

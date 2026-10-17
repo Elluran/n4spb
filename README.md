@@ -8,6 +8,7 @@ along **Nevsky Prospekt** over the **Fontanka** and the **Anichkov Bridge**, pas
 and go **down into the metro**: seven real stations with escalators up to 116 m long, halls 51-86 m deep and trains you can ride.
 The streets are made of **real OpenStreetMap footprints**, on a July afternoon with about a thousand pedestrians, hundreds of moving cars, buses and trolleybuses, timetabled trains, tourist boats and birds,
 and a golden evening, a white night and an overcast day (key **T**).
+The driven car **knocks over and throws the street furniture** by weight (`src/core/knock.js`): benches, litter bins, flower pots and urns slide and tumble, lamp posts, traffic-signal and sign poles, bollards and cabinets hold below a break speed and then topple, and what lies on the ground can be driven over.
 
 This is a cut-down copy of the whole-city project `102_3d_piter`: **one strip of 4.9 km2** (3.7 x 2.4 km bounding box), kept small so that it can be deployed as a static site and load fast.
 What the strip is, what was dropped and why, how to rebuild and deploy it: [`docs/STRIP.md`](docs/STRIP.md).
@@ -43,7 +44,7 @@ Note that the page loads fast only while the shipping bake in `assets/baked/` ma
 | Space | Jump |
 | F | Take off / land. While flying **W / S fly along the view**, A / D strafe, Space or E up, Q or C down, Shift boost. Roofs are walkable: fly over a building, press F and you land on its roof |
 | E | Use: enter the metro, board / leave a train, switch an escalator, get into the car ("[E] ..." prompts) |
-| E at the red car | **Drive**: the red sports car with the Bibliotechka logo stands beside the Moscow station's taxi rank. In the car: **W / S** gas / brake + reverse, **A / D** steer, **Shift** nitro, **Space** handbrake (drift), **G** horn, **V** camera (chase / high / cockpit), mouse looks around, **E** gets out (below 25 km/h); the place keys and R teleport the car |
+| E at a parked car | **Drive**: four cars wait on the station forecourt, each with its own handling, engine voice and cockpit: the red sports car (beside the Moscow station's taxi rank), the taxi pickup, the eggplant Zhiguli and the white **Tesla Roadster** (2026; its **Shift** is a THRUST from four cold-gas nozzles, **X** is a gas hop over kerbs and benches); E at the nearest one gets in, every car carries the Bibliotechka roof logo. In the car: **W / S** gas / brake + reverse, **A / D** steer, **Shift** nitro, **Space** handbrake (drift), **G** horn, **V** camera (chase / high / cockpit), mouse looks around, **E** gets out (below 25 km/h); the place keys and R teleport the car |
 | Street map (bottom left) | A round heading-up map that labels the named streets and a pill above it that names the street you are on (hidden underground and in the metro, **H** hides it with the rest of the UI) |
 | 1 – 5 | Jump to: Площадь Восстания · Московский вокзал / Обелиск / Невский проспект / платформы вокзала / Аничков мост |
 | 6 – 8 | Спас на Крови (Griboedov Canal) / Гостиный Двор / Зимний дворец |
@@ -63,7 +64,7 @@ The player cannot leave the strip: the border is an invisible wall (the scenery 
 
 URL parameters: `?tod=day|golden|night|overcast` (or a number 0..4), `?look=overcast|cloudy` (weather overlay), `?q=medium|performance`, `?t=40` (start time, s), `?cam=x,z,yaw,pitch` (yaw 0 = north, 90 = west; 5 numbers = free camera `x,y,z,yaw,pitch`),
 `?only=environment,streets,city` (build only some modules), `?allcity` (ignore landmark claims: plain prisms), `?noroof`, `?stats`, `?people=off`, `?tr=nomove`, `?wl=nobirds`, `?pdens=1.3` (crowd density), `?baked=0` (procedural build, no baked assets).
-Debug hooks: `window.__ctx`, `window.__setCam`, `window.__sim(t)`, `window.__bench(n)`.
+Debug hooks: `window.__ctx`, `window.__setCam`, `window.__sim(t)`, `window.__bench(n)`, `window.__knock` (`hit(x, z, kmh, dx, dz, kind)` knocks the nearest standing thing; `stats`, `list`; `tools/shot.mjs --pre` steps it before a shot).
 
 ## What is built
 
@@ -96,7 +97,7 @@ The world is the build list `MODULES` in `src/main.js` (each module is `src/worl
 | `traffic` | Moving and parked vehicles of 20+ Petersburg archetypes (Lada, crossovers, SUVs, taxis, vans, turquoise buses, trolleybuses with poles on the wires, the red double-decker "City Tour"), a car-following simulation with signals, queues, bus stops and giving way to pedestrians |
 | `people` | About a thousand anime pedestrians on pavements, zebras, the squares, the station hall and platforms; they board the real trains, use the metro doors, queue for taxis, photograph the horses and the obelisk, follow tour guides with umbrellas, busk, push prams, ride scooters, walk dogs |
 | `wildlife` | Pigeon flocks, sparrows, hooded crows, gulls, swifts at golden hour, mallards with ducklings; calm WebAudio ambience (city bed, lapping water, cafe murmur, metro hum) |
-| `drive` | The drivable red sports car (arcade handling, nitro, drift, collisions with the same solids as the walker, speedometer / tacho HUD, engine / tyre / wind sound) |
+| `drive` | The drivable garage of four cars (`drive/cars/`: red coupe, taxi pickup, Zhiguli, Tesla Roadster; per-car arcade handling, nitro / THRUST, drift, a gas hop for the Roadster, collisions with the same solids as the walker, speedometer / tacho HUD, engine / tyre / wind sound) |
 
 Engine (`src/core/`): renderer with colour-aware outlines and bloom, toon materials, sky, facade shader, physics with multi-level floors, first-person player, static batcher + outline proxies, canvas textures, WebAudio synth, region streaming of baked products.
 The look (four light presets, about 430 colours) is documented in [`docs/LOOK.md`](docs/LOOK.md).

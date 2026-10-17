@@ -8,6 +8,7 @@ import { COL, instances, hash2, nodeNear } from './furn.js';
 import { BUS_STOPS } from '../data/city.js';
 import { nearestWay, wayAt } from './net.js';
 import { WALK_Y, KERB_W } from './surface.js';
+import { knockInstances } from '../lib/knock-inst.js';
 
 const SHEL_W = 3.0, SHEL_D = 1.4;                                      // the shelter (shelterModel): along the road x deep
 /** the shelter place of a stop beside way w at arclength s on `side`: the platform node is a hint (its lateral distance is kept when it lies 1.4 .. 6 m behind the kerb, else 1.0 m + half the depth) */
@@ -59,6 +60,19 @@ function shelterModel(width = 3.0) {
   return { body: V.build(), wood: W.build(), glass: G, W: width, D, H };
 }
 
+/** the free-standing stop furniture: the bench of a stop without a shelter and the litter bin beside a shelter (local frame: foot at y 0, the bench's length along x) */
+function benchModel() {
+  const V = new VB();
+  V.box(1.6, 0.05, 0.4, COL.wood, [0, 0.45, 0]);                                                  // seat
+  V.box(0.06, 0.45, 0.36, COL.black, [-0.7, 0.22, 0]); V.box(0.06, 0.45, 0.36, COL.black, [0.7, 0.22, 0]);
+  return V.build();
+}
+function binModel() {
+  const V = new VB();
+  V.cyl(0.17, 0.15, 0.78, COL.black, [0, 0.39, 0], null, 6);
+  return V.build();
+}
+
 export function buildStops(ctx, net, stops, shared, root) {
   const { panels, poles } = shared;
   const F = ctx.tex.FONTS;
@@ -75,6 +89,7 @@ export function buildStops(ctx, net, stops, shared, root) {
   const list = [];
   const dummy = new THREE.Object3D();
   const placed = [];
+  const benchSpots = [], binSpots = [];                                         // with ctx.knock: the stop benches and the shelter bins are knockable instances (below), not merged pole parts
   for (const st of stops) {
     const { at, side, edge } = st;
     // the shelter place: beside the kerb of the stop's way, away from the road on the stop's side (kerbSpot)
@@ -101,19 +116,34 @@ export function buildStops(ctx, net, stops, shared, root) {
       const ntex = nameTex(st.name || 'Остановка');
       panels.panel(ntex, cx + frontX * (shel.D / 2 + 0.24), WALK_Y + shel.H - 0.17, cz + frontZ * (shel.D / 2 + 0.24), frontX, frontZ, 3.1, 0.31);
       // litter bin beside the shelter
-      poles.cyl(0.17, 0.15, 0.78, COL.black, [cx + tx * 1.95 + nOut[0] * 0.2, WALK_Y + 0.39, cz + tz * 1.95 + nOut[1] * 0.2], null, 6);
+      const bnx = cx + tx * 1.95 + nOut[0] * 0.2, bnz = cz + tz * 1.95 + nOut[1] * 0.2;
+      if (ctx.knock) binSpots.push({ x: bnx, y: WALK_Y, z: bnz, rotY });
+      else poles.cyl(0.17, 0.15, 0.78, COL.black, [bnx, WALK_Y + 0.39, bnz], null, 6);
       out.shelters++;
     } else {
       // no shelter: a bench + bin
       const bx = cx + nOut[0] * 0.3, bz = cz + nOut[1] * 0.3, ry = Math.atan2(frontX, frontZ);
-      poles.box(1.6, 0.05, 0.4, COL.wood, [bx, WALK_Y + 0.45, bz], [0, ry, 0]);
-      poles.box(0.06, 0.45, 0.36, COL.black, [bx + tx * 0.7, WALK_Y + 0.22, bz + tz * 0.7], [0, ry, 0]); poles.box(0.06, 0.45, 0.36, COL.black, [bx - tx * 0.7, WALK_Y + 0.22, bz - tz * 0.7], [0, ry, 0]);
+      if (ctx.knock) benchSpots.push({ x: bx, y: WALK_Y, z: bz, rotY: ry });
+      else {
+        poles.box(1.6, 0.05, 0.4, COL.wood, [bx, WALK_Y + 0.45, bz], [0, ry, 0]);
+        poles.box(0.06, 0.45, 0.36, COL.black, [bx + tx * 0.7, WALK_Y + 0.22, bz + tz * 0.7], [0, ry, 0]); poles.box(0.06, 0.45, 0.36, COL.black, [bx - tx * 0.7, WALK_Y + 0.22, bz - tz * 0.7], [0, ry, 0]);
+      }
     }
     out.stops++;
     // the bay on the kerb lane where the vehicles stop: 1.75 m inside the road edge, and the direction they travel there (one-way carriageways: with the polyline)
     const bayT = st.w.oneway ? 1 : (side > 0 ? 1 : -1), kn = [-at.tz * side, at.tx * side];
     out.list.push({ id: st.id, name: st.name, x: cx, z: cz, rotY, shelter: st.shelter, side, road: st.w.id, kind: st.trolley ? (st.bus ? 'both' : 'trolley') : 'bus', routes: st.routes, tram: st.tram ? 1 : 0, s: st.s,
       bay: { x: at.x + kn[0] * (edge - 1.75), z: at.z + kn[1] * (edge - 1.75), tx: at.tx * bayT, tz: at.tz * bayT }, pole: st.pole || null });
+  }
+  // knockable stop furniture (core/knock.js): a mass-based throw by the driven car; colliders exist only with ctx.knock (the headless collider counts stay as they were)
+  if (ctx.knock) {
+    if (benchSpots.length) knockInstances(ctx, { name: 'pt-stop-bench', parts: [{ geo: benchModel(), mat: mVC }], spots: benchSpots, far: 200,
+      items: (i, p) => ctx.physics.addBox(p.x, p.z, 1.6, 0.4, p.rotY, 0, WALK_Y + 0.5),
+      rec: { kind: 'bench', mass: 35, h: 0.5, w: 1.6, d: 0.4, hitK: 0.2, minDv: 0.5 } });
+    if (binSpots.length) knockInstances(ctx, { name: 'pt-stop-bin', parts: [{ geo: binModel(), mat: mVC }], spots: binSpots, far: 170,
+      items: (i, p) => ctx.physics.addCylinder(p.x, p.z, 0.2, 0, WALK_Y + 0.78),
+      rec: { kind: 'bin', mass: 14, h: 0.78, r: 0.17, hitK: 0.12, metal: true } });
+    out.knockBenches = benchSpots.length; out.knockBins = binSpots.length;
   }
   // shelters: bake the model into every placement and merge (one mesh per material instead of one per shelter)
   const bake = (geo) => {

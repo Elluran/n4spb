@@ -47,6 +47,7 @@ globalThis.performance = globalThis.performance || { now: () => Date.now() };
 const THREE = await import('three');
 const { createContext } = await import(pathToFileURL(path.join(root, 'src/core/ctx.js')).href);
 const { createAudio } = await import(pathToFileURL(path.join(root, 'src/core/audio.js')).href);
+const { createKnock } = await import(pathToFileURL(path.join(root, 'src/core/knock.js')).href);
 const { batchStatic } = await import(pathToFileURL(path.join(root, 'src/core/batch2.js')).href);
 const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);
 
@@ -62,6 +63,7 @@ const quality = { name: 'medium', pixelRatio: 1, msaa: 4, shadowMap: 2048, shado
 const ctx = createContext({ scene, camera, renderer: null, audio, quality, sunDir });
 ctx.buildList = process.argv.slice(2).filter(a => !a.startsWith('--'));      // lib/claims.js: landmark groups only count as owned when their module is checked together with city
 ctx.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight(), uniforms: {} };
+ctx.knock = createKnock(ctx);      // the knockable street furniture register during the module build, as in main.js
 
 function triCount(o) {
   const g = o.geometry; if (!g || !g.attributes.position) return 0;
@@ -89,6 +91,7 @@ for (const name of names) {
     await mod.build(ctx);
   } catch (e) { err = e; failed = true; }
   const ms = Date.now() - t0;
+  if (name === 'city' && ctx.physics.items.slice(colBefore).some((c) => c.source && c.source.knock)) { failed = true; console.log('KNOCK ERROR: a collider of the city module is registered as knockable (baked colliders are plain data: never register anything built by city/*)'); }
   scene.updateMatrixWorld(true);
   const added = []; scene.traverse(o => { if (!before.has(o)) added.push(o); });
   let tris = 0, meshes = 0, inst = 0, instances = 0, nan = 0;
@@ -131,6 +134,13 @@ for (const name of names) {
   console.log(JSON.stringify(report, null, 1));
   if (err) console.log(`BUILD ERROR in ${name}:\n${err.stack || err}`);
   if (updErr) console.log(`UPDATE ERROR in ${name}:\n${updErr.stack || updErr}`);
+}
+// knock census: every registered record that has colliders must still own them in ctx.physics (nothing was lost or double-registered), none in the city slice (checked above)
+{
+  const ks = ctx.knock.stats, owners = new Set(); for (const c of ctx.physics.items) if (c.source && c.source.knock) owners.add(c.source.knock);
+  const withItems = ctx.knock.list.filter((r) => r.items.length).length;
+  console.log(`knock: registered ${ks.registered} by kind ${JSON.stringify(ks.byKind)}`);
+  if (owners.size !== withItems) { failed = true; console.log(`KNOCK ERROR: ${withItems} records own colliders but ${owners.size} records are found on ctx.physics.items`); }
 }
 // batching sanity
 try { const b = batchStatic(ctx.staticRoot, { mat: ctx.mat }); console.log('batch:', JSON.stringify(b)); } catch (e) { failed = true; console.log('BATCH ERROR:\n' + (e.stack || e)); }

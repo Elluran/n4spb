@@ -220,7 +220,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
       else if (type === 'door') { const e = pickFrom(nav.entrances, a, (e) => e.node, (e) => e.w + 0.1); if (e && routeTo(a, e.node)) { a.goal = { type: 'door', e }; return true; } }
       else if (type === 'metro') { const e = nav.metroDoors.length ? pickFrom(nav.metroDoors, a, (e) => e.node, (e) => nav.densityFactor(e.x, e.z)) : null; if (e && routeTo(a, e.node)) { a.goal = { type: 'door', e }; return true; } }
       else if (type === 'bench') {
-        const b = nav.benches.length ? pickFrom(nav.benches, a, (b) => b.node, (b) => b.w + 0.1, (b) => b.seats.some((s) => s.taken < 0)) : null;
+        const b = nav.benches.length ? pickFrom(nav.benches, a, (b) => b.node, (b) => b.w + 0.1, (b) => !b.knocked && b.seats.some((s) => s.taken < 0)) : null;
         if (b) { const si = b.seats.findIndex((s) => s.taken < 0); if (si >= 0 && routeTo(a, b.node)) { b.seats[si].taken = a.i; a.goal = { type: 'bench', b, si }; return true; } }
       } else if (type === 'stop') {
         const s = nav.stops.length ? pickFrom(nav.stops, a, (s) => s.node, (s) => s.w + 0.1, (s) => s.spots.some((p) => p.taken < 0)) : null;
@@ -662,6 +662,21 @@ export function createSim(ctx, nav, crowd, opts = {}) {
   /** put an agent into a standing activity at (x, z): gestures list, duration, the goal it belongs to */
   sim.standAt = (a, x, z, yaw, gestures, dur, goal, t0 = 0, y = PAVE) => { place(a, x, z, yaw, y); a.kind = 'stand'; a.standG = gestures; a.until = t0 + dur; a.goal = goal || null; const n = nodeFor(a, 20); if (n >= 0) a.comp = nav.comp[n]; };
   sim.sitAt = (a, b, si, t0 = 0) => { a.goal = { type: 'bench', b, si }; b.seats[si].taken = a.i; a.hidden = false; a.comp = nav.comp[b.node]; sitDown(a, t0); a.until = t0 + rr(20, 220); };
+  /** a bench was knocked over (core/knock.js): everybody sitting on it, and everybody walking to it, gets up / picks a new goal, and its seats are gone for good (taken = 1e9: no goal picks them, no scene seats anybody).
+   *  The nav obstacle snapshot keeps the old bench collider (a ghost obstacle at the old spot): cosmetic. Returns how many agents were moved */
+  sim.knockBench = (b) => {
+    if (!b || b.knocked) return 0;
+    b.knocked = true; let n = 0; const t = sim.t || 0;
+    for (const a of agents) {
+      const g = a.goal; if (!(a.seat && a.seat.b === b) && !(g && g.type === 'bench' && g.b === b)) continue;
+      n++;
+      if (a.kind === 'sit' && a.seat) { standUp(a, t); continue; }
+      releaseGoal(a); a.seat = null; a.goal = null; a.rt = null;
+      if (a.leader) a.kind = 'walk'; else if (!a.hidden) newGoal(a, t);
+    }
+    for (const s of b.seats) s.taken = 1e9;
+    return n;
+  };
   sim.playAt = (a, x, z) => { place(a, x, z, R() * TAU, PAVE); a.kind = 'play'; a.pt = null; a.until = 0; a.comp = nav.comp[nodeFor(a, 30)] ?? -1; };
   // ---- scripting API for the vignettes (vignettes.js): custom goals, vanishing into a train / taxi / door, standing for a while
   sim.routeTo = routeTo; sim.newGoal = newGoal; sim.nodeFor = nodeFor; sim.enterBuilding = enterBuilding; sim.leaveQueue = leaveQueue; sim.hooks = [];

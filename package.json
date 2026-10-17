@@ -29,7 +29,8 @@
     "clip": "node tools/streets-clip-test.mjs",
     "landmarks": "node tools/landmarks-groups-check.mjs",
     "edge": "node tools/drive-edge-test.mjs",
-    "edgereal": "node tools/drive-edge-real.mjs"
+    "edgereal": "node tools/drive-edge-real.mjs",
+    "knock": "node tools/knock-test.mjs"
   },
   "devDependencies": {
     "puppeteer-core": "^23.11.1",

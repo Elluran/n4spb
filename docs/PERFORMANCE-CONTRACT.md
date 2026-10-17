@@ -29,6 +29,12 @@ city-wide. Validate the integrated scene at both ends of the strip (Vosstaniya S
   and conservative union bounds. Dynamic, reflected, transparent and custom-shader
   instances retain their original path. Run `tools/fixture-cells-test.mjs` when
   changing this pass; measure expanded-buffer memory as well as draw calls.
+* **Knockable instances** (`core/knock.js`, built through `world/lib/knock-inst.js`): their `instanceMatrix` is **Dynamic by contract** (that is what keeps them out of fixture cells, the instance
+  splitter and the outline proxies), so they are NOT batched and every type x cell is a draw in the colour, shadow and normal / depth passes. Therefore: split them per 384 m cell, register each mesh with
+  `registerLOD(mesh, far)` and a finite `far` (never `attach: true`: an attached Dynamic caster makes its whole sector uncullable for shadows; `tools/shadow-sector-test.mjs`), register during the
+  module build (before the post-module passes), never from a later frame, and keep non-knock types on the ordinary static path. `register()` adds 30 m to the mesh bounding sphere once (a thrown
+  instance must not be culled with its mesh). Without `ctx.knock` (headless tools) the module builds the single static meshes it always built. A frame writes matrices only; `knock.stats.updateMs`
+  is the cost of the busy updates (`tools/knock-test.mjs` case 12).
 * An instance buffer that is repacked, animated, or reassigned between LODs is dynamic,
   even when its parent is under `staticRoot`. Mark it accordingly and use
   `THREE.DynamicDrawUsage`; otherwise static splitting or outline proxies can capture

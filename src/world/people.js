@@ -105,6 +105,8 @@ export async function build(ctx) {
     trisPerPerson: crowd.trisPerPerson, drawCalls: crowd.drawCalls, shown: () => crowd.shownCount,
   };
   ctx.services.people.triangles = Math.round(crowd.trisPerPerson * 450);
+  // ---- a knocked bench (core/knock.js): it flies, the sitters get up and the seats are gone (the nav obstacles stay as baked)
+  if (ctx.knock && ctx.knock.listen) ctx.knock.listen((rec) => { if (rec.kind === 'bench') for (const b of nav.benchesNear(rec.x, rec.z)) sim.knockBench(b); });
   if (URLQ.get('people') === 'nav') drawGraph(ctx, nav, THREE);
   ctx.services.people.buildMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0); ctx.services.people.phases = tm;
 }

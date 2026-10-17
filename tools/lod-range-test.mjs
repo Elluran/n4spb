@@ -4,6 +4,10 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { LOD, SECTOR } from '../src/core/lod.js';
 import { installShadowSectorCulling } from '../src/core/renderer.js';
+import { splitInstanced } from '../src/core/spatial.js';
+import { Physics } from '../src/core/physics.js';
+import { createKnock } from '../src/core/knock.js';
+import { knockInstances } from '../src/world/lib/knock-inst.js';
 
 const root = new THREE.Group(), loose = new THREE.Group(); root.add(loose); LOD.init(root);
 const oldRoot = new THREE.Group(), oldLoose = new THREE.Group(), oldColour = new THREE.Group(), oldND = new THREE.Group(); oldRoot.add(oldLoose, oldColour, oldND);
@@ -145,4 +149,17 @@ assert.ok(newVisits < oldVisits * 0.7, 'whole hidden ranges reduce renderer obje
 function time(fn) { for (let n = 0; n < 30; n++) fn(); const start = performance.now(); for (let n = 0; n < 300; n++) fn(); return (performance.now() - start) / 300; }
 const legacyMs = time(() => legacyUpdate(player, camera)), groupedMs = time(() => LOD.update(player, camera));
 const legacyWalkMs = time(() => { legacyUpdate(player, camera); drawList(oldRoot, frustum, false, false); }), groupedWalkMs = time(() => { LOD.update(player, camera); drawList(root, frustum, false, false); });
+// Knockable instances (core/knock.js): their authored finite range survives the engine's instance pass and they are never cell-split again (the Dynamic usage keeps them out of it).
+{
+  const kroot = new THREE.Group(), kctx = { physics: new Physics(() => 0), onUpdate() {}, addStatic: o => kroot.add(o), noOutline: o => o };
+  kctx.knock = createKnock(kctx);
+  const spots = []; for (let i = 0; i < 40; i++) spots.push({ x: 20000 + i * 150, y: 0, z: 20000 + (i % 3) * 400, rotY: 0 });
+  const made = knockInstances(kctx, { name: 'knock-range', parts: [{ geo: geometry, mat: material, far: 333 }], spots, far: 250, rec: { kind: 'lamp', mass: 100, h: 3, r: 0.2, anchored: 10 } });
+  const plain = new THREE.InstancedMesh(geometry, material, 40); for (let i = 0; i < 40; i++) plain.setMatrixAt(i, new THREE.Matrix4().makeTranslation(20000 + i * 150, 0, 21500)); plain.computeBoundingSphere(); kroot.add(plain);
+  const before = made.meshes.map(m => ({ m, far: LOD.of(m).far, count: m.count }));
+  assert(before.length > 1 && before.every(b => b.far === 333), 'cell meshes carry the authored far of the part');
+  const report = splitInstanced(kroot); assert(report.split >= 1, 'the plain static mesh is split (control)');
+  for (const b of before) { assert.equal(LOD.of(b.m).far, 333, 'a knock mesh keeps its authored finite range'); assert.equal(b.m.count, b.count); assert(b.m.parent === kroot, 'still loose in its module root: not cell-split, not attached to a sector'); assert.equal(b.m.instanceMatrix.usage, THREE.DynamicDrawUsage); }
+  assert.equal(kroot.children.filter(o => o.isInstancedMesh && o.userData.knock).length, before.length, 'no knock mesh was replaced or duplicated');
+}
 console.log(`RESULT: OK (${pairs.length} registrations; randomized camera/scale/zone/shadow/add/remove equivalence; visits ${oldVisits} -> ${newVisits}; CPU LOD ${legacyMs.toFixed(3)} -> ${groupedMs.toFixed(3)} ms; LOD + frustum walk ${legacyWalkMs.toFixed(3)} -> ${groupedWalkMs.toFixed(3)} ms)`);

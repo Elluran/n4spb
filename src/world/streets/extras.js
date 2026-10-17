@@ -152,8 +152,9 @@ export function buildTramRails(net, P, Bed) {
 }
 
 /** speed-camera boxes (OSM FURNITURE kind speed_camera: 7 in the west, along Nevsky): a grey box on a slim black pole 5.5 m beside the kerb with a short arm over the lane, looking along
- *  the traffic (docs/research/west-life-furniture.md 3.3: "grey boxes on the mast arms, no flash"). Merged into the shared poles VB. */
-export function buildSpeedCameras(ctx, net, poles) {
+ *  the traffic (docs/research/west-life-furniture.md 3.3: "grey boxes on the mast arms, no flash"). Merged into the shared poles VB; with ctx.knock (kposts = shared.kposts of furn.js makeKnockPosts)
+ *  each camera is a knockable record of its own model (a 5.5 m steel pole with the box on the arm: 120 kg, anchored 16 km/h). */
+export function buildSpeedCameras(ctx, net, poles, kposts = null) {
   let n = 0;
   for (const f of FURNITURE) {
     if (f.kind !== 'speed_camera' || L.insideBuilding(f.x, f.z, 0.3) || deckAt(f.x, f.z, 1)) continue;
@@ -164,11 +165,15 @@ export function buildSpeedCameras(ctx, net, poles) {
     const x = at.x + nx * off, z = at.z + nz * off;
     if (!poleClear(net, x, z, 0.4)) continue;
     const dir = w.oneway ? 1 : (side > 0 ? 1 : -1), ry = Math.atan2(at.tx * dir, at.tz * dir);
-    poles.cyl(0.055, 0.085, 5.5, '#26292b', [x, WALK_Y + 2.75, z], null, 6, null, true);
-    poles.rod([x, WALK_Y + 5.3, z], [x - nx * 1.0, WALK_Y + 5.45, z - nz * 1.0], 0.035, '#26292b', 3, true);
-    poles.box(0.3, 0.26, 0.55, '#8d9296', [x - nx * 1.1, WALK_Y + 5.35, z - nz * 1.1], [0, ry, 0]);
-    poles.box(0.12, 0.1, 0.06, '#1b1d20', [x - nx * 1.1 + Math.sin(ry) * 0.29, WALK_Y + 5.33, z - nz * 1.1 + Math.cos(ry) * 0.29], [0, ry, 0]);   // the lens window
-    ctx.physics.addCylinder(x, z, 0.14, 0, 5.5);
+    const draw = (V, ox, oy, oz) => {                                  // the camera relative to (ox, oy, oz): (0, 0, 0) = the shared VB in world coordinates; (x, WALK_Y, z) = a local model with its foot at the origin
+      V.cyl(0.055, 0.085, 5.5, '#26292b', [x - ox, WALK_Y - oy + 2.75, z - oz], null, 6, null, true);
+      V.rod([x - ox, WALK_Y - oy + 5.3, z - oz], [x - ox - nx * 1.0, WALK_Y - oy + 5.45, z - oz - nz * 1.0], 0.035, '#26292b', 3, true);
+      V.box(0.3, 0.26, 0.55, '#8d9296', [x - ox - nx * 1.1, WALK_Y - oy + 5.35, z - oz - nz * 1.1], [0, ry, 0]);
+      V.box(0.12, 0.1, 0.06, '#1b1d20', [x - ox - nx * 1.1 + Math.sin(ry) * 0.29, WALK_Y - oy + 5.33, z - oz - nz * 1.1 + Math.cos(ry) * 0.29], [0, ry, 0]);   // the lens window
+    };
+    if (!kposts) draw(poles, 0, 0, 0);
+    const item = ctx.physics.addCylinder(x, z, 0.14, 0, 5.5);
+    if (kposts) kposts.add({ group: 'camera', model: kposts.model('camera|' + n, (V) => draw(V, x, WALK_Y, z)), x, z, rotY: 0, item, rec: { kind: 'camera', mass: 120, h: 5.5, r: 0.1, anchored: 16, hitK: 0.25, metal: true } });
     n++;
   }
   return n;

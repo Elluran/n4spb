@@ -7,7 +7,9 @@ import { atlasableTex, buildAtlas } from '../../core/batch2.js';
 import * as L from '../layout.js';
 import { deckAt } from './decks.js';
 import { segInfo, coverLocal } from './net.js';
-import { cg, mtx } from './vb.js';
+import { cg, mtx, VB } from './vb.js';
+import { WALK_Y } from './surface.js';
+import { knockInstances } from '../lib/knock-inst.js';
 
 export const COL = {
   pole: '#8d9298', poleD: '#6e747b', black: '#2a2c31', blackL: '#3a3d43', base: '#a3a8ae', lampBody: '#9aa0a6', steel: '#7f858c',
@@ -28,14 +30,36 @@ export function instances(ctx, geo, mat, list, name, o = {}) {
   return im;
 }
 
-/** textured quads merged per texture: panel(tex, x, y, z, nx, nz, w, h) with the normal (nx,nz) pointing at the viewer; double-sided basic material that brightens at night */
+const MOUNT_TH = 0.028, MOUNT_GAP = 0.008;          // the back plate of a mounted sign (thick) and the gap between it and the face
+
+/** The metal of a sign bolted to a pole, without the face: the thin galvanised back plate (a disc for round signs) just behind the face and, on a real pole (o.pole > 0, not o.kind 'plate'),
+ *  the TWO CLAMP BANDS around the pole. Same arguments as panels.mount; `poles` is any VB (the shared poles VB, or the local VB of a knockable model). */
+export const mountBody = (poles, x, y, z, nx, nz, wd, ht, o = {}) => {
+  const r = o.pole || 0, th = MOUNT_TH, ry = Math.atan2(nx, nz);
+  // the back plate = ONE one-sided quad (a disc for round signs) just behind the face, facing away: it hides the mirrored back of the face from behind, edge-on from the side (a 12-triangle box x 5000 signs was 60 k triangles)
+  const bx = x + nx * (r + th * 0.4), bz = z + nz * (r + th * 0.4);
+  if (o.round) poles.add(cg('backdisc', () => new THREE.CircleGeometry(1, 8)), COL.steel, mtx([bx, y, bz], [0, ry + Math.PI, 0], [wd * 0.5, wd * 0.5, 1]));
+  else poles.add(cg('band', () => new THREE.PlaneGeometry(1, 1)), COL.steel, mtx([bx, y, bz], [0, ry + Math.PI, 0], [wd * 0.985, ht * 0.985, 1]));
+  if (r > 0 && o.kind !== 'plate') for (const f of [-0.28, 0.28]) {                              // the clamp bands: a lighter strip across the pole on the rear of the plate, 4 cm high, a little wider than the pole
+    poles.add(cg('band', () => new THREE.PlaneGeometry(1, 1)), '#b9bec4', mtx([x - nx * (r + 0.004), y + ht * f, z - nz * (r + 0.004)], [0, ry + Math.PI, 0], [2 * r + 0.03, 0.04, 1]));
+  }
+};
+/** the face of a sign mounted with mountBody / panels.mount: { tex, x, y, z, nx, nz, w, h } (the centre of the textured quad, 3.6 cm in front of the pole axis for a standard pole) */
+export const faceOf = (tex, x, y, z, nx, nz, wd, ht, o = {}) => {
+  const s = (o.pole || 0) + MOUNT_TH + MOUNT_GAP;
+  return { tex, x: x + nx * s, y, z: z + nz * s, nx, nz, w: wd, h: ht };
+};
+
+/** textured quads merged per texture: panel(tex, x, y, z, nx, nz, w, h) with the normal (nx,nz) pointing at the viewer; double-sided basic material that brightens at night.
+ *  claim(tex): a texture that is drawn by INSTANCED faces (makeKnockPosts) joins the atlas without any merged quad; tileOf(tex) after finish() -> { mat, u0, v0, su, sv } the page material and the tile of the atlas. */
 export function makePanels(ctx) {
-  const map = new Map(), mats = [];
+  const map = new Map(), mats = [], tiles = new Map();
   const get = (tex, opts = {}) => {
     let m = map.get(tex); if (m) return m;
     const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false, name: 'pt-sign', alphaTest: 0.45 });
-    mats.push(mat); m = { tex, mb: new MB(), mat }; map.set(tex, m); return m;
+    mats.push(mat); m = { tex, mb: new MB(), mat, claimed: false }; map.set(tex, m); return m;
   };
+  const claim = (tex) => { get(tex).claimed = true; };
   const panel = (tex, x, y, z, nx, nz, wd, ht, o = {}) => {
     const { mb } = get(tex, o); const tx = nz, tz = -nx;
     const hx = tx * wd / 2, hz = tz * wd / 2;
@@ -47,7 +71,7 @@ export function makePanels(ctx) {
   };
   const finish = (root) => {
     // ~90 sign textures would be ~90 draw calls (a mesh per texture): the canvases are packed into 4096 px atlas pages (core/batch2.js buildAtlas) and merged into ONE mesh per page
-    const entries = [...map.values()].filter((e) => !e.mb.empty);
+    const entries = [...map.values()].filter((e) => !e.mb.empty || e.claimed);
     const packable = entries.filter((e) => atlasableTex(e.tex) && e.mb.uv.every((u) => u >= -0.002 && u <= 1.002));
     const atlas = packable.length > 1 ? buildAtlas(new Set(packable.map((e) => e.tex))) : { map: new Map(), texs: [] };
     const pageMB = atlas.texs.map(() => new MB()), pageMat = atlas.texs.map((t) => { const m = new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide, toneMapped: false, name: 'pt-sign-atlas', alphaTest: 0.45 }); mats.push(m); return m; });
@@ -60,10 +84,13 @@ export function makePanels(ctx) {
       for (let i = 0; i < mb.uv.length; i += 2) P.uv.push(tile.u0 + Math.min(1, Math.max(0, mb.uv[i])) * tile.su, tile.v0 + Math.min(1, Math.max(0, mb.uv[i + 1])) * tile.sv);
       for (let i = 0; i < mb.idx.length; i++) P.idx.push(mb.idx[i] + base);
       P.n += mb.n; done.add(e);
+      tiles.set(e.tex, { mat: pageMat[tile.page], u0: tile.u0, v0: tile.v0, su: tile.su, sv: tile.sv });
     }
     pageMB.forEach((P, i) => { if (P.empty) return; const m = new THREE.Mesh(P.build(), pageMat[i]); m.name = 'pt-signpanel'; m.castShadow = false; m.receiveShadow = false; ctx.noBatch(m); ctx.noOutline(m); root.add(m); });
     for (const e of entries) {
       if (done.has(e)) continue;
+      tiles.set(e.tex, { mat: e.mat, u0: 0, v0: 0, su: 1, sv: 1 });
+      if (e.mb.empty) continue;                                          // a claimed texture that no merged quad uses (instanced faces only) and that stays out of the atlas: its own material, no mesh
       const m = new THREE.Mesh(e.mb.build(), e.mat); m.name = 'pt-signpanel'; m.castShadow = false; m.receiveShadow = false; ctx.noBatch(m); ctx.noOutline(m); root.add(m);
     }
     ctx.onUpdate(() => { const n = ctx.shared.uNight ? ctx.shared.uNight.value : 0; for (const m of mats) m.color.setScalar(0.86 + 0.5 * n); });
@@ -72,18 +99,11 @@ export function makePanels(ctx) {
    *  galvanised back plate (hides the mirrored back of the quad) held by TWO CLAMP BANDS around the pole (flat strips 4 cm high, seen from behind; 4 triangles: the bands of the real mount, without the
    *  geometry of a ring); pole = 0: a sign hanging from a rod / wire, back plate only. Standard poles: plain grey round tube (streets/signals.js post()). Same as the Yakutsk fix fafd4c9. */
   const mount = (poles, tex, x, y, z, nx, nz, wd, ht, o = {}) => {
-    const r = o.pole || 0, th = 0.028, gap = 0.008, ry = Math.atan2(nx, nz);
-    panel(tex, x + nx * (r + th + gap), y, z + nz * (r + th + gap), nx, nz, wd, ht, o);
-    const cx = x + nx * (r + th / 2), cz = z + nz * (r + th / 2);
-    // the back plate = ONE one-sided quad (a disc for round signs) just behind the face, facing away: it hides the mirrored back of the face from behind, edge-on from the side (a 12-triangle box x 5000 signs was 60 k triangles)
-    const bx = x + nx * (r + th * 0.4), bz = z + nz * (r + th * 0.4);
-    if (o.round) poles.add(cg('backdisc', () => new THREE.CircleGeometry(1, 8)), COL.steel, mtx([bx, y, bz], [0, ry + Math.PI, 0], [wd * 0.5, wd * 0.5, 1]));
-    else poles.add(cg('band', () => new THREE.PlaneGeometry(1, 1)), COL.steel, mtx([bx, y, bz], [0, ry + Math.PI, 0], [wd * 0.985, ht * 0.985, 1]));
-    if (r > 0 && o.kind !== 'plate') for (const f of [-0.28, 0.28]) {                              // the clamp bands: a lighter strip across the pole on the rear of the plate, 4 cm high, a little wider than the pole
-      poles.add(cg('band', () => new THREE.PlaneGeometry(1, 1)), '#b9bec4', mtx([x - nx * (r + 0.004), y + ht * f, z - nz * (r + 0.004)], [0, ry + Math.PI, 0], [2 * r + 0.03, 0.04, 1]));
-    }
+    const r = o.pole || 0;
+    panel(tex, x + nx * (r + MOUNT_TH + MOUNT_GAP), y, z + nz * (r + MOUNT_TH + MOUNT_GAP), nx, nz, wd, ht, o);
+    mountBody(poles, x, y, z, nx, nz, wd, ht, o);
   };
-  return { panel, mount, finish };
+  return { panel, mount, finish, claim, tileOf: (tex) => tiles.get(tex) || null };
 }
 
 /** walk along the kerb runs of the net (kind 'edge'): cb({x,z,nx,nz,w,side,s}) at ~spacing m with a per-run phase; nx,nz = outward normal at the kerb */
@@ -184,4 +204,81 @@ export function nudgeClear(net, x, z, tx, tz, nx, nz, reach = 6, first = 1, gap 
   }
   return null;
 }
+
+// ================================================================ KNOCKABLE POSTS (ctx.knock): sign posts, traffic-signal poles, mast arms, speed cameras, bus-stop poles
+// With ctx.knock the posts of the street furniture are INSTANCES instead of parts of the shared pt-poles VB, so the driven car can knock them over (core/knock.js). The API (streets.js makes it
+// once, shared.kposts; it is null without ctx.knock and every builder then keeps its merged-VB path, R1):
+//   K.model(key, build)   a canonical body in a LOCAL frame: origin = the foot of the post at the pavement level, +z = the way the sign faces, build(V) fills a VB (the shaft, the clamps, a signal
+//                         head ...). Built once per key, instanced by every post that names it.
+//   K.signPost({ x, z, nx, nz, h, r, col, tex, w, ht, my, mount, base, variant, item, rec })   the whole sign post in one call: a round shaft h x r, a sign tex (w x ht) mounted at the height my
+//                         (mount = { kind, round } as panels.mount, pole = r), `base` an optional (V) => void for more body geometry (a ring), `variant` names it. Makes the collider unless `item`
+//                         is given, queues the record (kind 'sign', 28 kg, anchored 10 km/h, hitK 0.15 unless `rec` overrides). A caller must NOT also call poles.cyl / panels.mount (no ghost pole).
+//   K.add({ group, model, x, z, y, rotY, faces, parts, rec, item | items, extra, onKnock })   the general form: `model` the body at (x, y, z) turned by rotY; faces = [faceOf(...)] the textured
+//                         quads (instanced in the atlas page material, panels.claim joins the atlas); parts = [{ model, x, y, z, rotY }] more instances of other models (a signal head on a mast arm);
+//                         extra() -> [{ mesh, index }] parts that live in other meshes (the lens and countdown instances of signals.js), evaluated when the record is registered.
+//   K.finish()            ONCE, after panels.finish(root) (the atlas exists then): builds the cell-split dynamic meshes per model and per face (knockInstances, cells and ranges per group below, registerLOD, no attach) and
+//                         registers the records. Returns { records, meshes, byGroup }.
+// Groups (cell, far): 'post' 512 / 280 m, 'signal' 512 / 280, 'arm' 768 / 380, 'camera' 768 / 320 (measured on 60 poses at the signal heads: the knock meshes plus the rest of pt-poles are 47 visible draws against 46 for the old pt-poles pieces). A bus-stop pole (stops.js) is K.signPost({ ..., item: its collider, base: ring, rec: { h: 3, mass: 30 } }).
+const KP_GROUPS = { post: { cell: 512, far: 280 }, signal: { cell: 512, far: 280 }, arm: { cell: 768, far: 380 }, camera: { cell: 768, far: 320 } };
+export function makeKnockPosts(ctx, panels, mat) {
+  const models = new Map(), faceDefs = new Map(), texId = new Map(), groups = new Map(), stats = { posts: 0, byKind: {}, meshes: 0, records: 0 };
+  const UPV = new THREE.Vector3(0, 1, 0), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1);
+  const pose = (x, y, z, ry) => new THREE.Matrix4().compose(_p.set(x, y, z), _q.setFromAxisAngle(UPV, ry), ONE);
+  const model = (key, build) => { if (!models.has(key)) { const V = new VB(); build(V); models.set(key, { V }); } return key; };
+  const put = (pl, key, m) => { let a = pl.get(key); if (!a) pl.set(key, (a = [])); a.push(m); };
+  const add = (o) => {
+    if (!models.has(o.model)) return null;
+    const pl = new Map(), y = o.y ?? WALK_Y;
+    put(pl, o.model, pose(o.x, y, o.z, o.rotY || 0));
+    for (const p of o.parts || []) if (models.has(p.model)) put(pl, p.model, pose(p.x, p.y, p.z, p.rotY || 0));
+    for (const f of o.faces || []) {
+      if (!texId.has(f.tex)) texId.set(f.tex, texId.size);
+      const key = 'face' + texId.get(f.tex) + '-' + f.w + 'x' + f.h;
+      if (!faceDefs.has(key)) { faceDefs.set(key, { tex: f.tex, w: f.w, h: f.h }); panels.claim(f.tex); }
+      put(pl, key, pose(f.x, f.y, f.z, Math.atan2(f.nx, f.nz)));
+    }
+    const group = o.group || 'post', spot = { x: o.x, y, z: o.z, rotY: o.rotY || 0, pl, rec: { ...o.rec, onKnock: o.onKnock || null }, items: o.items || (o.item ? [o.item] : []), extra: o.extra || null };
+    let g = groups.get(group); if (!g) groups.set(group, (g = []));
+    g.push(spot); stats.posts++; stats.byKind[spot.rec.kind || 'thing'] = (stats.byKind[spot.rec.kind || 'thing'] || 0) + 1;
+    return spot;
+  };
+  const signPost = (o) => {
+    const r = o.r, h = o.h, col = o.col || COL.pole, mo = { pole: r, ...o.mount };
+    const key = model(['sp', h, r, col, o.my, o.w, o.ht, mo.kind || '', mo.round ? 1 : 0, o.variant || ''].join('|'), (V) => {
+      V.cyl(r, r * 1.1, h, col, [0, h / 2, 0], null, 5, null, true);
+      mountBody(V, 0, o.my, 0, 0, 1, o.w, o.ht, mo);
+      if (o.base) o.base(V);
+    });
+    const y = o.y ?? WALK_Y, item = o.item || ctx.physics.addCylinder(o.x, o.z, Math.max(r * 1.2, 0.08), 0, h);
+    return add({ model: key, x: o.x, z: o.z, y, rotY: Math.atan2(o.nx, o.nz), faces: [faceOf(o.tex, o.x, y + o.my, o.z, o.nx, o.nz, o.w, o.ht, mo)], item,
+      rec: { kind: 'sign', mass: 28, h, r: 0.06, anchored: 10, hitK: 0.15, metal: true, ...o.rec } });
+  };
+  const finish = () => {
+    const out = { records: 0, meshes: 0, byGroup: {} };
+    for (const [gname, spots] of groups) {
+      const G = KP_GROUPS[gname] || KP_GROUPS.post, keys = new Set(), parts = [];
+      for (const s of spots) for (const k of s.pl.keys()) keys.add(k);
+      for (const key of keys) {
+        const part = { name: key.replace(/[^A-Za-z0-9.]+/g, '_'), when: (s) => s.pl.has(key), place: (s) => s.pl.get(key) };
+        if (faceDefs.has(key)) {
+          const f = faceDefs.get(key), tile = panels.tileOf(f.tex); if (!tile) continue;
+          const g = new THREE.PlaneGeometry(f.w, f.h), uv = g.attributes.uv;
+          for (let i = 0; i < uv.count; i++) uv.setXY(i, tile.u0 + uv.getX(i) * tile.su, tile.v0 + uv.getY(i) * tile.sv);
+          Object.assign(part, { geo: g, mat: tile.mat, shadow: false, receive: false, noOutline: true });
+        } else {
+          const geo = models.get(key).V.build(); if (!geo) continue;
+          Object.assign(part, { geo, mat });
+        }
+        parts.push(part);
+      }
+      const res = knockInstances(ctx, { name: 'pt-kp-' + gname, parts, spots, items: (i, s) => s.items, rec: (s) => s.rec, far: G.far, cell: G.cell, extraParts: (i, s) => (s.extra ? s.extra() : null) });
+      const n = res.records.filter(Boolean).length;
+      out.records += n; out.meshes += res.meshes.length; out.byGroup[gname] = { spots: spots.length, records: n, meshes: res.meshes.length, models: parts.length };
+    }
+    groups.clear(); stats.records += out.records; stats.meshes += out.meshes;
+    return out;
+  };
+  return { model, add, signPost, finish, stats };
+}
+
 export { hash2, clamp, UP };

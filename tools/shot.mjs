@@ -10,6 +10,8 @@ import { bakedRevision } from './baked-revision.mjs';
 //            Names from layout.js: hero, v1..v5 (viewpoint keys 1..5), views (all five), overview (high, from the south),
 //            aerial (from the SE, high), top (straight down over Vosstaniya Square).
 //   --fov    vertical field of view in degrees (default 62); --params "nofog=1&allcity=1" adds URL parameters
+//   --pre    JS expression evaluated in the page BEFORE the shots (after --fov); its JSON result is printed as 'pre:'. A shot frame has dt = 0, so a pre hook that moves things steps the
+//            simulation itself: --pre "__knock.hit(x, z, 40, 1, 0); for (let i = 0; i < 40; i++) __advance(0.05)" (knockable furniture; add --params "baked=force" while the bake is stale)
 //   --eval   JS expression evaluated in the page after the shots; its JSON result is printed
 //   --t      simulation time in seconds (animations are fast-forwarded deterministically)
 //   --load   test the normal loading path (roof map + 10 s simulation included)
@@ -111,6 +113,7 @@ try {
     }
   }
   if (args.fov) await page.evaluate((f) => { window.__camera.fov = f; window.__camera.updateProjectionMatrix(); }, Number(args.fov));
+  if (args.pre) { const r = await page.evaluate(args.pre); console.log('pre:', JSON.stringify(r)); }
   const info = await page.evaluate(() => ({ errors: window.__errors, stats: window.__stats, gl: (() => { try { const gl = document.getElementById('scene').getContext('webgl2'); const d = gl.getExtension('WEBGL_debug_renderer_info'); return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : 'unknown'; } catch (e) { return 'n/a'; } })() }));
   for (let i = 0; i < cams.length; i++) {
     const v = cams[i].split(',').map(Number);

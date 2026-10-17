@@ -2,6 +2,9 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { installShadowSectorCulling } from '../src/core/renderer.js';
+import { Physics } from '../src/core/physics.js';
+import { createKnock } from '../src/core/knock.js';
+import { knockInstances } from '../src/world/lib/knock-inst.js';
 
 const scene = new THREE.Scene(), root = new THREE.Group(), frozen = new THREE.Group(), camera = new THREE.PerspectiveCamera();
 scene.add(frozen); frozen.add(root);
@@ -24,6 +27,12 @@ const instanceGroup = new THREE.Group(); instanceGroup.add(instanced); root.add(
 const moving = new THREE.InstancedMesh(geo, material, 1); moving.instanceMatrix.setUsage(THREE.DynamicDrawUsage); moving.castShadow = true;
 moving.setMatrixAt(0, new THREE.Matrix4().makeTranslation(3000, 4, 0)); moving.computeBoundingSphere();
 const movingGroup = new THREE.Group(); movingGroup.add(moving); root.add(movingGroup);
+// Knockable shadow casters (core/knock.js): Dynamic instances registered LOOSE (registerLOD without attach) stay in their module root, outside every sector group, so they never make a
+// sector uncullable; the same mesh attached into a sector group would (docs/PERFORMANCE-CONTRACT.md, "Knockable instances").
+const looseRoot = new THREE.Group(); frozen.add(looseRoot);
+const kctx = { physics: new Physics(() => 0), onUpdate() {}, addStatic: o => looseRoot.add(o), noOutline: o => o }; kctx.knock = createKnock(kctx);
+const knockMeshes = knockInstances(kctx, { name: 'knock-caster', parts: [{ geo, mat: material }], spots: [{ x: 4, y: 0, z: -25 }, { x: 6000, y: 0, z: 0 }], far: 220, cell: 1000, rec: { kind: 'lamp', mass: 100, h: 3, r: 0.2, anchored: 10 } }).meshes;
+assert.equal(knockMeshes.length, 2); assert(knockMeshes.every(m => m.castShadow && m.instanceMatrix.usage === THREE.DynamicDrawUsage && m.parent === looseRoot));
 scene.updateMatrixWorld(true);
 
 function sun(x, z) {
@@ -67,6 +76,13 @@ assert.equal(callbackVisibility[root.children.indexOf(uncullable)], true, 'expli
 assert.equal(callbackVisibility[root.children.indexOf(custom)], true, 'custom shadow callback preserved');
 assert.equal(callbackVisibility[root.children.indexOf(scaled)], true, 'scaled sphere spanning the shadow volume preserved');
 assert.equal(callbackVisibility[root.children.indexOf(movingGroup)], true, 'dynamic instance attribute opts out even without userData.dynamic');
+assert.equal(callbackVisibility[root.children.indexOf(distant)], false, 'a loose knock caster does not make far sectors uncullable');
+assert.equal(knockMeshes.some(m => m.parent === root || root.children.includes(m.parent)), false, 'loose knock meshes live outside the sector groups');
+assert.ok(drawn.includes(knockMeshes[0].id), 'a knock caster inside the sun volume is drawn from its module root');
+assert.ok(!drawn.includes(knockMeshes[1].id), 'and one far outside it is not');
+// the control: the same Dynamic mesh attached into a sector group makes that sector uncullable
+const attachedSector = new THREE.Group(); root.add(attachedSector); attachedSector.add(knockMeshes[1]); scene.updateMatrixWorld(true);
+compare(); assert.equal(callbackVisibility[root.children.indexOf(attachedSector)], true, 'an attached Dynamic caster opts its sector out of rejection (why knock meshes are never attached)');
 moving.setMatrixAt(0, new THREE.Matrix4().makeTranslation(0, 4, 0)); moving.computeBoundingSphere(); compare();
 assert.ok(drawn.includes(moving.id), 'moving instances enter the sun volume without stale sector bounds');
 compare([light, light2]);

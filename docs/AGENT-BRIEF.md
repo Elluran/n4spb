@@ -52,6 +52,14 @@ serially; an isolated preview is not integration or performance evidence.
 * **No flags in the scene for now**: no national / city / company / event flags, no pennants, no flag-bearing flagpoles (do not draw flagpoles at all), no tour-guide flags or flag-on-a-stick (guides carry a plain coloured umbrella or a bare pole-less sign instead), no flags on the obelisk / hotels / government buildings / boats / stations, no flag banners hanging from facades, no rail "flags". Plain street banners and signs are fine only if they are not flag-shaped. (Research docs mention flags; ignore those parts.)
 * **No alarm sounds**: no sirens, no ambulance / police / fire-engine sirens or horns, no car alarms, no train horns / crossing bells, no alarm-like or harsh warning beeps (ordinary short **car horns are allowed**: the user confirmed they stay as in the engine) (`core/audio.js` modules: only calm ambience: footsteps, soft traffic bed, birds, water, a quiet metro hum, soft announcement chimes are fine). Emergency vehicles may stand or drive silently, **without flashing beacons** too (keep their plain livery).
 
+## Knockable street furniture (user request 2026-10-17)
+
+* The driven car knocks over and throws benches, litter bins, pots, lamp posts, traffic-signal and sign poles, bollards and similar furniture (`src/core/knock.js`, `ctx.knock`; masses, break speeds and rules:
+  [DRIVING-COLLISIONS.md](DRIVING-COLLISIONS.md), [DESIGN.md](DESIGN.md) `ctx.knock` row). A module that builds such furniture registers it **during its build**, behind `if (ctx.knock)`, through
+  `knockInstances` (`world/lib/knock-inst.js`: Dynamic cell meshes + explicit `registerLOD`, never `attach`), keeps its service lists and collider handles, and builds exactly the old single static meshes when `ctx.knock` is missing.
+* Never register anything built by `city/*`, nor continuous runs (quay panels, railings, fences). Panels that hang on a knockable thing (a sign face, a poster, a name band) must be detached meshes that move with it (`{ obj }` parts), not merged world-space geometry.
+* Sounds: only the calm `clank` one-shot (steel struck), never an alarm. Tests: `npm run knock`; `node tools/check.mjs <module>` prints `knock: registered N by kind`.
+
 ## Road integrity rules (user request 2026-10-05: they apply to EVERY module and every new area; audits: `docs/ROADS-FIX-PLAN.md`)
 
 * **Nothing stands on a carriageway.** Lamps, traffic-light poles / mast arms, signs, bollards, planters, bins, benches, trolleybus masts, quay posts, trees, props: the footprint must keep clear of the real asphalt

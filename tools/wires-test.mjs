@@ -5,6 +5,8 @@
 //   2. every connected group of touching polylines contains at least one rosette / mast (nothing hangs in the air as a whole);
 //   3. every span has BOTH its ends on a rosette / mast; every rosette has a facade behind it (a building within 1.2 m behind the plate); every mast stands outside buildings;
 //   4. sanity: no NaN, no wire above 12 m or below 3 m (except the sag at the spans), nothing absurdly long.
+//   6. KNOCKABLE MASTS: the same module built a second time WITH ctx.knock (core/knock.js) draws the identical wires and publishes the identical masts; the kerb masts are records of
+//      kind 'mast' (350 kg, anchored, steel) that keep their collider and, knocked, drop it; only the masts of a bridge deck stay merged; the first build has no ctx.knock at all.
 // usage: node tools/wires-test.mjs [--verbose] [--dump file.json] [--tol 0.5]     exit code 1 on failure.  Prints build time and counts.
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -195,6 +197,41 @@ for (const p of parts) for (let i = 0; i + 1 < p.pts.length; i++) {
 }
 
 
+// ---------------------------------------------------------------- 6: knockable masts
+let knockLine = '';
+{
+  const { createKnock } = await import(pathToFileURL(path.join(root, 'src/core/knock.js')).href);
+  if (ctx.knock) fail('the first build must run without ctx.knock');
+  const ctx2 = createContext({ scene: new THREE.Scene(), camera, renderer: null, audio, quality, sunDir: new THREE.Vector3(...L.SUN_DIR).normalize() });
+  ctx2.buildList = ['streets', 'city'];
+  ctx2.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight(), uniforms: {} };
+  ctx2.knock = createKnock(ctx2);
+  const parts2 = [], orig2 = ctx2.wires.add.bind(ctx2.wires);
+  ctx2.wires.add = (pts, o = {}) => { parts2.push({ kind: o.kind || 'unknown', grp: o.grp || null, pts: pts.map((p) => (Array.isArray(p) ? p : [p.x, p.y, p.z])) }); return orig2(pts, o); };
+  await mod.build(ctx2);
+  const W2 = ctx2.services.streets.wires;
+  if (JSON.stringify(parts2) !== JSON.stringify(parts)) fail('the wires drawn with ctx.knock differ from the build without it');
+  if (JSON.stringify(W2.masts) !== JSON.stringify(W.masts) || W2.spans.length !== W.spans.length || W2.anchors.length !== W.anchors.length) fail('the published wires service differs with ctx.knock');
+  const recs = ctx2.knock.list.filter((r) => r.kind === 'mast');
+  const deck = W.masts.length - recs.length;
+  if (recs.length < W.masts.length * 0.8 || recs.length > W.masts.length) fail(`mast records: ${recs.length} of ${W.masts.length} masts (the rest may only be bridge-deck masts)`);
+  const byXZ = new Map(W.masts.map((m) => [m.x.toFixed(2) + ',' + m.z.toFixed(2), m]));
+  for (const r of recs) {
+    if (!byXZ.has(r.x.toFixed(2) + ',' + r.z.toFixed(2))) { fail(`mast record at (${r.x.toFixed(1)}, ${r.z.toFixed(1)}) is no mast of the wires service`); break; }
+    if (r.mass !== 350 || !r.anchored || r.anchored > 30 || r.items.length !== 1 || r.state !== 'stand' || r.h < 8 || !r.parts.length) { fail(`mast record at (${r.x.toFixed(1)}, ${r.z.toFixed(1)}) is malformed: ${JSON.stringify({ mass: r.mass, anchored: r.anchored, items: r.items.length, state: r.state, h: r.h })}`); break; }
+    if (!ctx2.physics.items.includes(r.items[0])) { fail(`mast record at (${r.x.toFixed(1)}, ${r.z.toFixed(1)}) lost its collider`); break; }
+  }
+  const colliders = ctx2.physics.items.filter((c) => c.source && c.source.knock && c.source.knock.kind === 'mast').length;
+  if (colliders !== recs.length) fail(`${colliders} mast colliders carry a knock source, ${recs.length} records`);
+  // a blow: the nearest mast leaves 'stand', gives up its collider and tells the listeners
+  let told = 0; ctx2.knock.listen((r) => { if (r.kind === 'mast') told++; });
+  const m0 = recs[0], hit = m0 && ctx2.knock.hit(m0.x, m0.z, 40, 1, 0, 'mast');
+  if (!hit || hit.state === 'stand' || told !== 1) fail('a hit at 40 km/h did not knock the mast (state ' + (hit && hit.state) + ', listeners told ' + told + ')');
+  else if (ctx2.physics.items.includes(m0.items[0])) fail('a knocked mast kept its collider');
+  const km = new Set(recs.map((r) => r.parts[0].mesh.name.split('|')[0]));
+  knockLine = `knockable masts: ${recs.length} of ${W.masts.length} (${deck} on bridge decks stay merged), mass ${recs[0] ? recs[0].mass : '-'} kg, break ${recs[0] ? recs[0].anchored : '-'} km/h, meshes ${[...km].join(',')}, wires identical with ctx.knock: ${JSON.stringify(parts2) === JSON.stringify(parts)}`;
+}
+
 // ---------------------------------------------------------------- optional plan image: --plan x0,z0,x1,z1,pxPerM,out.png (buildings grey, roads dark, wires coloured, free ends red, supports white)
 if (argv.includes('--plan')) {
   const [x0, z0, x1, z1, sc, out] = argv[argv.indexOf('--plan') + 1].split(',');
@@ -225,6 +262,7 @@ const ms = (n) => (n == null ? '-' : n + ' ms');
 console.log(`wires-test: streets built in ${buildMs} ms (wire builder ${ms(wireMs)}); parts ${parts.length} ${JSON.stringify(kinds)}; pairs ${W.pairs.length}, arcs ${W.arcs.length}, spans ${W.spans.length}, anchors ${W.anchors.length}, masts ${W.masts.length}, ${W.wireKm.toFixed(2)} km`);
 if (sstats) console.log('builder stats', JSON.stringify(sstats));
 console.log(`longest unsupported run ${worstRun.toFixed(0)} m (limit ${MAXRUN}), over a joint ${worstChain.toFixed(0)} m (limit ${CHAIN_MAX})`);
+if (knockLine) console.log(knockLine);
 console.log(`free ends: ${bad.length}, floating groups: ${floating}, other problems: ${fails.length - bad.length - floating}`);
 { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const p of parts) for (const q of p.pts) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); z0 = Math.min(z0, q[2]); z1 = Math.max(z1, q[2]); } console.log(`extent of the wires: x ${x0.toFixed(0)}..${x1.toFixed(0)}, z ${z0.toFixed(0)}..${z1.toFixed(0)}`); }
 if (argv.includes('--ties')) for (const p of parts) if (p.kind === 'tie') console.log(`tie from (${p.pts[0].map((v) => v.toFixed(1))}) to (${p.pts[1].map((v) => v.toFixed(1))}) len ${Math.hypot(p.pts[0][0] - p.pts[1][0], p.pts[0][2] - p.pts[1][2]).toFixed(1)}`);

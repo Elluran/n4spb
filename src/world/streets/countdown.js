@@ -2,13 +2,25 @@
 // every vehicle head and every pedestrian head gets a small black panel with a two-digit number under the housing: green digits count the seconds of green left, red digits the
 // seconds of red left; amber shows nothing. The digits are instanced quads of one glyph atlas; a per-instance uv offset (InstancedBufferAttribute 'uvOff') picks the glyph, so the
 // number is a pure function of the simulation time t (graph.signalInfo / pedInfo). Only the instances whose number changed are touched (once per second).
+// KNOCKABLE POLES (ctx.knock): the digits stay at their real pose for good and are switched by the glyph cell alone (a hidden digit shows the blank cell BLANK_UV beyond the atlas,
+// where the clamped edge texel is transparent), so no frame ever writes a digit matrix: core/knock.js moves the digit instances with their pole and the next second never snaps them back.
+// The black panels are then part of the pole models (signals.js calls countdownPanel).
 import * as THREE from 'three';
 import { createSignalDisplayClock } from './display-clock.js';
 
 const PANEL = new THREE.PlaneGeometry(1, 1);
+const BLANK_UV = 1.5;                                                      // uv offset past the right edge of the glyph atlas: the clamped texel there is transparent
 const COL = { red: new THREE.Color('#ff2a1a').multiplyScalar(1.6), green: new THREE.Color('#2cff78').multiplyScalar(1.5) };
 
+/** the two black one-sided quads (front and back) of the panel under a head: V any VB, (x, y, z) the LENS position of the head (head.x / y / z of signals.js), (dx, dz) its facing */
+export function countdownPanel(V, kind, x, y, z, dx, dz) {
+  const ry = Math.atan2(dx, dz), py = y - (kind === 'veh' ? 0.66 : 0.4);
+  V.geo(PANEL, '#15171a', [x - dx * 0.09, py, z - dz * 0.09], [0, ry, 0], [0.3, 0.19, 1]);
+  V.geo(PANEL, '#15171a', [x - dx * 0.1, py, z - dz * 0.1], [0, ry + Math.PI, 0], [0.3, 0.19, 1]);       // the back of the panel: a one-sided quad seen from behind showed only its outline (thin blue rectangles beside the heads)
+}
+
 export function buildCountdowns(ctx, heads, graph, poles) {
+  const KN = !!ctx.knock;                                                  // knockable poles: panels live in the pole models, the digit matrices never change
   const list = heads.filter((h) => h.kind === 'veh' || h.kind === 'ped');
   if (!list.length) return { count: 0 };
   const F = ctx.tex.FONTS;
@@ -19,8 +31,7 @@ export function buildCountdowns(ctx, heads, graph, poles) {
   // panels (static, merged into the poles VB): 0.3 x 0.2 x 0.06 black box under the housing
   for (const h of list) {
     const ry = Math.atan2(h.dx, h.dz), y = h.y - (h.kind === 'veh' ? 0.66 : 0.4);
-    poles.geo(PANEL, '#15171a', [h.x - h.dx * 0.09, y, h.z - h.dz * 0.09], [0, ry, 0], [0.3, 0.19, 1]);
-    poles.geo(PANEL, '#15171a', [h.x - h.dx * 0.1, y, h.z - h.dz * 0.1], [0, ry + Math.PI, 0], [0.3, 0.19, 1]);       // the back of the panel: a one-sided quad seen from behind showed only its outline (thin blue rectangles beside the heads)       // one quad (the 12-triangle box was a third of the head's cost)
+    if (!KN) countdownPanel(poles, h.kind, h.x, h.y, h.z, h.dx, h.dz);       // (one quad each: the 12-triangle box was a third of the head's cost)
     h.cd = { x: h.x + h.dx * 0.025, y, z: h.z + h.dz * 0.025, ry, rx: h.dz, rz: -h.dx };       // rx,rz = the viewer's right (local +X) in the world
   }
   const geo = new THREE.PlaneGeometry(0.1, 0.15), N = list.length * 2;
@@ -38,8 +49,9 @@ export function buildCountdowns(ctx, heads, graph, poles) {
     const c = h.cd;
     for (let k = 0; k < 2; k++) {
       const off = (k === 0 ? -0.055 : 0.055);
-      D.position.set(c.x + c.rx * off, c.y, c.z + c.rz * off); D.rotation.set(0, c.ry, 0); D.scale.setScalar(0.001); D.updateMatrix();
+      D.position.set(c.x + c.rx * off, c.y, c.z + c.rz * off); D.rotation.set(0, c.ry, 0); D.scale.setScalar(KN ? 1 : 0.001); D.updateMatrix();
       im.setMatrixAt(i * 2 + k, D.matrix); im.setColorAt(i * 2 + k, COL.red);
+      if (KN) uvOff.setX(i * 2 + k, BLANK_UV);
     }
   });
   im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
@@ -62,13 +74,14 @@ export function buildCountdowns(ctx, heads, graph, poles) {
       const m = MAT[i], d0 = Math.floor(n / 10), d1 = n % 10;
       for (let k = 0; k < 2; k++) {
         const on = show && !(k === 0 && n < 10);
+        if (KN) { im.setColorAt(i * 2 + k, green ? COL.green : COL.red); uvOff.setX(i * 2 + k, on ? (k === 0 ? d0 : d1) * 0.1 : BLANK_UV); continue; }
         im.setMatrixAt(i * 2 + k, on ? m.on[k] : m.off[k]); im.setColorAt(i * 2 + k, green ? COL.green : COL.red);
         uvOff.setX(i * 2 + k, (k === 0 ? d0 : d1) * 0.1);
       }
     }
-    if (dirty) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; uvOff.needsUpdate = true; }
+    if (dirty) { if (!KN) im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; uvOff.needsUpdate = true; }
   };
   update(0);
   ctx.onUpdate((dt, t) => update(t));
-  return { count: list.length };
+  return { count: list.length, im };
 }

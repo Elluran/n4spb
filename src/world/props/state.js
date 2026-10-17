@@ -3,6 +3,9 @@
 // width towards the building and towards the carriageway) that the placement modules walk along. Adapted from the Yakutsk props/state.js.
 // Registry seeds (what earlier modules already put on the ground): streets lamps / bus stops / crossings, city entrances, monuments, landmarksA's forecourt
 // furniture (benches, bins, racks, lamp groups, planters, pillars, booths: all inside the station frame zone, S.inForecourt), the rail module's lists, landmarksB entrances.
+// KNOCKABLES (core/knock.js, only when ctx.knock exists; without it the module builds exactly what it always built): the KNOCK types below are filed per 384 m cell (S.kinst), and
+// S.add(type) followed by the collider call (S.box / S.solidBox / S.solidCyl) at the same spot pairs the instance with its collider (S.link). flushInstances builds one Dynamic
+// InstancedMesh per type and cell, registers every pair with ctx.knock and gives each mesh an explicit LOD distance. Everything else keeps its whole-strip static mesh.
 import * as THREE from 'three';
 import * as L from '../layout.js';
 import { AREAS, GREEN } from '../data/city.js';
@@ -10,8 +13,31 @@ import { buildWorld, F } from './world.js';
 import { placeM, vcMat, instanced, hash01, clamp, makePanels, nightMat, staticMesh, ringHas } from './kit.js';
 import { signTextures } from './signs.js';
 import { streetTrackDist } from '../streets/net.js';
+import { registerLOD } from '../../core/spatial.js';
+
+const INST_CELL = 384;
 
 const BENCH_LENGTHS = { benchPark: 1.8, benchParkD: 1.8, benchParkL: 2.1, benchWhite: 1.9, benchWhiteL: 2.3, benchGranite: 2.0 };
+
+// KNOCKABLE TYPES: what the driven car can knock over and throw (mass kg, size m: r for round things, w x d for boxes, hitK = how much of a wall's blow the car takes, anchored = the
+// break speed in km/h of the car at contact, 0 = free, far = LOD range in m). The instance origin is the foot of every one of them. Not listed (stay solid): scooters, kiosks, stalls,
+// cabins, A-frames, pillars, city-lights (their posters and fascias are merged world-space panels: S.attach / S.panelObj make them travel, see ads.js / stands.js), terraces, heaters, clocks.
+const bench = (mass, w, o = {}) => ({ kind: 'bench', mass, h: 0.9, w, d: 0.6, hitK: 0.25, minDv: 0.5, far: 220, ...o });
+const bin = (mass, h, r, hitK, o = {}) => ({ kind: 'bin', mass, h, r, hitK, metal: true, minDv: 0.5, far: 170, ...o });
+const urn = (mass, h, r, hitK) => ({ kind: 'urn', mass, h, r, hitK, metal: true, minDv: 0.8, far: 200 });
+const cart = (h) => ({ kind: 'cart', mass: 110, h, w: 1.3, d: 1.0, hitK: 0.3, minDv: 0.5, far: 220 });
+const KNOCK = {
+  benchPark: bench(45, 1.8), benchParkD: bench(45, 1.8), benchParkL: bench(52, 2.1), benchWhite: bench(48, 1.9), benchWhiteL: bench(58, 2.3), benchGranite: bench(420, 2.0, { hitK: 0.6, minDv: 0.8 }),
+  binCast: bin(30, 0.78, 0.26, 0.15), binSteel: bin(14, 0.88, 0.2, 0.12), binCube: bin(70, 0.64, 0.3, 0.2, { metal: false }),
+  pot0: { kind: 'pot', mass: 10, h: 0.5, r: 0.21, hitK: 0.08, minDv: 0.4, far: 150 }, pot1: { kind: 'pot', mass: 10, h: 0.5, r: 0.21, hitK: 0.08, minDv: 0.4, far: 150 },
+  urnCast0: urn(110, 0.95, 0.4, 0.25), urnCast1: urn(110, 0.95, 0.4, 0.25), urnCastBig: urn(190, 1.14, 0.45, 0.3),
+  tubBirch: { kind: 'tub', mass: 250, h: 2.7, r: 0.5, hitK: 0.3, minDv: 1.0, far: 220 }, tubMaple: { kind: 'tub', mass: 250, h: 2.7, r: 0.5, hitK: 0.3, minDv: 1.0, far: 220 }, tubLilac: { kind: 'tub', mass: 250, h: 2.7, r: 0.5, hitK: 0.3, minDv: 1.0, far: 220 },
+  planterR0: { kind: 'planter', mass: 450, h: 0.5, r: 0.62, hitK: 0.35, minDv: 1.2, far: 200 }, planterR1: { kind: 'planter', mass: 450, h: 0.5, r: 0.62, hitK: 0.35, minDv: 1.2, far: 200 },
+  rack3: { kind: 'rack', mass: 25, h: 0.75, w: 1.5, d: 0.4, anchored: 8, hitK: 0.1, metal: true, minDv: 0, far: 170 }, rack5: { kind: 'rack', mass: 25, h: 0.75, w: 2.7, d: 0.4, anchored: 8, hitK: 0.1, metal: true, minDv: 0, far: 170 },
+  postBox: { kind: 'postbox', mass: 70, h: 1.28, w: 0.42, d: 0.36, anchored: 15, hitK: 0.3, metal: true, minDv: 0, far: 200 },
+  cabinet: { kind: 'cabinet', mass: 120, h: 1.33, w: 0.66, d: 0.4, anchored: 20, hitK: 0.35, metal: true, minDv: 0, far: 170 },
+  iceCart0: cart(3.0), iceCart1: cart(3.0), iceCart2: cart(3.0), cartRed: cart(2.3), iceCartHood: cart(2.0),
+};
 
 class Placed {                                              // spatial hash of occupied discs
   constructor() { this.h = new Map(); this.n = 0; }
@@ -30,6 +56,7 @@ export function makeState(ctx) {
     ctx, L, F, W: buildWorld(ctx), R: ctx.rng('spb-props'), placed: new Placed(),
     svc: { benches: [], lamps: [], bins: [], shelters: [], kiosks: [], racks: [], terraces: [], pillars: [], planters: [], clocks: [], stalls: [], urns: [], boxes: [] },
     inst: new Map(), geos: new Map(), stats: {}, tris: 0,
+    kinst: new Map(), knockables: [], last: null,              // knock types by 'type|cx,cz' -> { name, list: Matrix4[] }; the linked (instance, collider) pairs; the instance added last
     root: new THREE.Group(),
   };
   S.root.name = 'props'; ctx.addStatic(S.root);
@@ -44,13 +71,29 @@ export function makeState(ctx) {
   /** register an instanced prop type: S.type(name, () => Geo, {mat}) once; S.add(name, x, z, rotY, {y, s}) per instance */
   S.type = (name, mk, o = {}) => { S.geos.set(name, { mk, o }); };
   S.add = (name, x, z, rotY = 0, o = {}) => {
+    const y = o.y ?? S.levelAt(x, z), m = placeM(x, y, z, rotY, o.s ?? 1, new THREE.Matrix4());
+    if (ctx.knock && KNOCK[name]) {                              // a knockable: filed per 384 m cell, remembered for the collider call that follows
+      const key = name + '|' + Math.floor(x / INST_CELL) + ',' + Math.floor(z / INST_CELL);
+      let a = S.kinst.get(key); if (!a) S.kinst.set(key, (a = { name, list: [] }));
+      a.list.push(m); S.last = { name, m, x, y, z, rotY, s: o.s ?? 1, linked: false, extra: [], rec: null };
+      return;
+    }
     let a = S.inst.get(name); if (!a) S.inst.set(name, (a = []));
-    a.push(placeM(x, o.y ?? S.levelAt(x, z), z, rotY, o.s ?? 1, new THREE.Matrix4()));
+    a.push(m); S.last = null;
   };
+  /** the collider just added belongs to the instance just added (same spot, within 1 m, not yet linked): remember the pair for the knock registry; returns the collider */
+  S.link = (item, cx, cz) => {
+    const l = S.last; if (!l || l.linked || !item || Math.hypot(l.x - cx, l.z - cz) > 1.0) return item;
+    l.linked = true; l.rec = { ...l, item }; S.knockables.push(l.rec); S.lastLinked = l.rec; return item;
+  };
+  /** an extra object (a standalone poster / fascia from S.panelObj, a wrap) that travels with the knockable just linked; false when the last instance is not a linked knockable */
+  S.attach = (obj) => { const r = S.last && S.last.rec; if (!r || !obj) return false; r.extra.push({ obj }); return true; };
+  /** a textured quad as a standalone mesh in the dynamic root (see makePanels.object); S.attach it to a knockable */
+  S.panelObj = (tex, cx, cy, cz, nx, nz, w, h, o = {}) => S.panels.object(tex, cx, cy, cz, nx, nz, w, h, o);
   /** disc registry + raster reservation in one call */
   S.occupy = (x, z, r, tag = '') => { S.placed.add(x, z, r, tag); S.W.reserve(x, z, Math.min(r, 2.5)); };
-  S.solidBox = (cx, cz, w, d, rotY, h = 1.0, y0 = 0) => { ctx.physics.addBox(cx, cz, w, d, rotY, y0, h); };
-  S.solidCyl = (x, z, r, h = 1.0) => { ctx.physics.addCylinder(x, z, r, 0, h); };
+  S.solidBox = (cx, cz, w, d, rotY, h = 1.0, y0 = 0) => S.link(ctx.physics.addBox(cx, cz, w, d, rotY, y0, h), cx, cz);
+  S.solidCyl = (x, z, r, h = 1.0) => S.link(ctx.physics.addCylinder(x, z, r, 0, h), x, z);
   S.box = (cx, cz, w, d, rotY, h, o = {}) => {                 // collider + raster reservation + registry for an oriented box
     if (o.collide !== false) S.solidBox(cx, cz, w, d, rotY, h);
     S.W.reserveBox(cx, cz, w, d, rotY); S.placed.add(cx, cz, Math.min(Math.hypot(w, d) / 2, o.r ?? 1.2), o.tag || '');
@@ -172,6 +215,32 @@ export function flushInstances(S) {
     const mat = def.o.mat || S.vc;
     instanced(ctx, geo, mat, list, { name: 'pr-' + name, cast: def.o.cast, noOutline: def.o.noOutline });
     tris += (geo.index.count / 3) * list.length; n += list.length; (S.stats.byType = S.stats.byType || {})[name] = [list.length, geo.index.count / 3];
+  }
+  // the knock types: one Dynamic mesh per type and cell (a type with fewer than 16 instances in the strip: ONE mesh), the instance of a placement found by the IDENTITY of its matrix
+  if (S.kinst.size) {
+    const total = new Map(), cells = new Map(), built = new Map(), where = new Map(), lod = new Set(), bt = (S.stats.byType = S.stats.byType || {});
+    for (const [, a] of S.kinst) total.set(a.name, (total.get(a.name) || 0) + a.list.length);
+    for (const [key, a] of S.kinst) { const k = total.get(a.name) < 16 ? a.name + '|all' : key; let c = cells.get(k); if (!c) cells.set(k, (c = { name: a.name, list: [] })); c.list.push(...a.list); }
+    for (const [key, a] of cells) {
+      const def = S.geos.get(a.name); if (!def || !a.list.length) continue;
+      let geo = built.get(a.name); if (!geo) { geo = def.mk().build(false); built.set(a.name, geo); }
+      const mesh = instanced(ctx, geo, def.o.mat || S.vc, a.list, { name: 'pr-' + key, cast: def.o.cast, noOutline: def.o.noOutline });
+      for (let i = 0; i < a.list.length; i++) where.set(a.list[i], { mesh, index: i });
+      const t = geo.index.count / 3; tris += t * a.list.length; n += a.list.length;
+      bt[a.name] = bt[a.name] ? [bt[a.name][0] + a.list.length, t] : [a.list.length, t];
+    }
+    let kn = 0;
+    for (const k of S.knockables) {
+      const def = KNOCK[k.name], at = where.get(k.m); if (!def || !at) continue;
+      const sc = k.s;
+      const rec = ctx.knock.register({ ...def, x: k.x, z: k.z, y: k.y, rotY: k.rotY, h: def.h * sc, r: def.r ? def.r * sc : undefined, w: def.w ? def.w * sc : undefined, d: def.d ? def.d * sc : undefined,
+        mass: def.mass * sc * sc, item: k.item, parts: [{ mesh: at.mesh, index: at.index }, ...k.extra] });
+      if (!rec) continue;
+      kn++; if (!lod.has(at.mesh)) { lod.add(at.mesh); registerLOD(at.mesh, def.far); }       // after register(): its bounds are inflated for the thrown pieces
+    }
+    const linked = new Set(S.knockables.map((k) => k.m)), loose = {};          // knock-type instances that found no collider within 1 m (they stay as plain solid scenery)
+    for (const a of cells.values()) for (const m of a.list) if (!linked.has(m)) { loose[a.name] = (loose[a.name] || 0) + 1; if (typeof process !== 'undefined' && process.env && process.env.KNOCK_DEBUG) console.log('KNOCK loose', a.name, Math.round(m.elements[12] * 10) / 10, Math.round(m.elements[14] * 10) / 10); }
+    S.stats.knockables = kn; S.stats.knockMeshes = lod.size; S.stats.knockCells = cells.size; S.stats.knockLoose = loose;
   }
   S.stats.instTris = Math.round(tris); S.stats.instances = n;
   return tris;

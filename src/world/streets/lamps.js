@@ -8,11 +8,15 @@
 // TRIANGLE DIET (streets budget): every model is a handful of OPEN cylinders / 8-20 triangle balls (A 160, A stacked 150, D 60, S 55 / 95, L 56 triangles instead of 420 / 340 / 250),
 // the silhouette (pedestal + bowl, S-arms with globes, crook with the lantern) is kept; globes are 20-triangle icosahedra. Instanced; the globes glow at night (shared uNight) and drop
 // additive light pools on the road. Lamps keep clear of zebra crossings, junction mouths, bus stops, the owned square plazas and the facades.
+// KNOCKABLE (core/knock.js, lib/knock-inst.js): with ctx.knock the posts are instanced per 384 m cell (body 320 m / glow 500 m LOD, Dynamic, unbatched) and a lamp is registered with its
+// body, glow and light-pool instance (the pool stays ONE shared mesh); a car at the break speed knocks the post over and the glow and the pool vanish with it. Without ctx.knock the
+// module builds the single Static meshes it always built.
 // Returns { list: [{x, z, h, kind, nx, nz, ...}], count }.
 import * as THREE from 'three';
 import { VB } from './vb.js';
 import { clamp, PointGrid } from './util.js';
-import { instances, alongKerbs, hash2, nodeNear, inMergedStrip } from './furn.js';
+import { alongKerbs, hash2, nodeNear, inMergedStrip, INST_STATS } from './furn.js';
+import { knockInstances } from '../lib/knock-inst.js';
 import { nearCrossing } from './net.js';
 import { WALK_Y, KERB_W } from './surface.js';
 import { facadeDist } from './bld.js';
@@ -150,36 +154,49 @@ export function buildLamps(ctx, net, T, root, opts = {}) {
     if (deckAt(e.x, e.z, 1.5) || (skipAt && skipAt(e.x, e.z))) continue;
     sites.L2.push({ x: e.x, y: WALK_Y, z: e.z, rotY: e.rotY || 0, way: -1, kind: 'L2', nx: e.nx || 0, nz: e.nz || 1, run: -1, s: 0 }); taken.add(e.x, e.z);
   }
-  for (const key of Object.keys(sites)) for (const s of sites[key]) ctx.physics.addCylinder(s.x, s.z, key === 'D' || key === 'L' || key === 'L2' ? 0.16 : 0.34, 0, key === 'L' || key === 'L2' ? 2.5 : 3);
+  for (const key of Object.keys(sites)) for (const s of sites[key]) s.item = ctx.physics.addCylinder(s.x, s.z, key === 'D' || key === 'L' || key === 'L2' ? 0.16 : 0.34, 0, key === 'L' || key === 'L2' ? 2.5 : 3);
 
   const mVC = ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0.02, name: 'pt-lamp' });
   const mGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff0cc'), toneMapped: false, name: 'pt-lamp-glow' });
   const models = { A0: lampA(0, false), A1: lampA(1, false), A2: lampA(2, true), D: lampD(), S0: lampS(false), S1: lampS(true), L: lampL(), L2: lampL2() };
-  for (const key of Object.keys(sites)) {
-    const m = models[key]; if (!m || !sites[key].length) continue;
-    instances(ctx, m.body, mVC, sites[key], 'lamps-' + key);
-    const g = instances(ctx, m.glow, mGlow, sites[key], 'lamps-' + key + '-glow', { shadow: false });
-    if (g) ctx.noOutline(g);
-    out.tris += (m.body.index.count / 3) * sites[key].length;
-  }
-  // light pools on the road at night
+  // light pools on the road at night: ONE shared mesh (1 draw), built before the posts so that a knocked lamp can zero its own entry (poolBase[key] + the index in sites[key])
+  const poolBase = {}; let pool = null, mPool = null;
   {
     const list = [];
-    for (const key of Object.keys(sites)) { const m = models[key]; if (!m) continue; for (const s of sites[key]) list.push({ x: s.x - s.nx * (m.arm || 0.5), z: s.z - s.nz * (m.arm || 0.5), y: 0.07 }); }
+    for (const key of Object.keys(sites)) { const m = models[key]; if (!m) continue; poolBase[key] = list.length; for (const s of sites[key]) list.push({ x: s.x - s.nx * (m.arm || 0.5), z: s.z - s.nz * (m.arm || 0.5), y: 0.07 }); }
     if (list.length && tPool && !DBG.includes('nopool')) {
       const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
-      const mPool = new THREE.MeshBasicMaterial({ map: tPool, color: new THREE.Color('#ffd9a0'), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, name: 'pt-lamp-pool' });
+      mPool = new THREE.MeshBasicMaterial({ map: tPool, color: new THREE.Color('#ffd9a0'), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, name: 'pt-lamp-pool' });
       const im = new THREE.InstancedMesh(geo, mPool, list.length);
       const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(15, 1, 15);
       list.forEach((p, i) => { M.compose(new THREE.Vector3(p.x, p.y, p.z), Q, S); im.setMatrixAt(i, M); });
       im.frustumCulled = false; im.renderOrder = 5; ctx.noOutline(im); ctx.addStatic(im); im.visible = false;
-      ctx.onUpdate(() => {
-        const n = ctx.shared.uNight ? ctx.shared.uNight.value : 0, k = clamp((n - 0.05) / 0.5, 0, 1);
-        im.visible = k > 0.01; mPool.opacity = 0.5 * k;
-        mGlow.color.setRGB(1.0, 0.9, 0.7).multiplyScalar(0.7 + 1.5 * n);
-      });
-    } else ctx.onUpdate(() => { const n = ctx.shared.uNight ? ctx.shared.uNight.value : 0; mGlow.color.setRGB(1.0, 0.9, 0.7).multiplyScalar(0.7 + 1.5 * n); });
+      pool = im;
+    }
   }
+  // the knock record of a family (core/knock.js): mass kg, post radius, break speed of the car at contact in km/h, share of a wall-blow the car takes
+  const KNOCK = { A0: [500, 0.30, 22, 0.6], A1: [500, 0.30, 22, 0.6], A2: [500, 0.30, 22, 0.6], S0: [280, 0.25, 20, 0.55], S1: [280, 0.25, 20, 0.55], D: [140, 0.17, 16, 0.45], L: [160, 0.20, 16, 0.5], L2: [160, 0.20, 16, 0.5] };
+  for (const key of Object.keys(sites)) {
+    const m = models[key], spots = sites[key]; if (!m || !spots.length) continue;
+    const [mass, r, anchored, hitK] = KNOCK[key];
+    INST_STATS['lamps-' + key] = { n: spots.length, tris: Math.round(m.body.index.count / 3 * spots.length) };
+    INST_STATS['lamps-' + key + '-glow'] = { n: spots.length, tris: Math.round((m.glow.index ? m.glow.index.count : m.glow.attributes.position.count) / 3 * spots.length) };
+    knockInstances(ctx, {
+      name: 'lamps-' + key,
+      parts: [{ geo: m.body, mat: mVC, far: 320, name: 'body' }, { geo: m.glow, mat: mGlow, shadow: false, noOutline: true, hide: true, far: 500, name: 'glow' }],
+      spots: spots.map((s) => ({ x: s.x, y: s.y, z: s.z, rotY: s.rotY })), items: spots.map((s) => s.item),                // (a site's own `s` is its position along the kerb run, not a scale)
+      rec: { kind: 'lamp', mass, h: m.H, r, anchored, hitK, metal: true },
+      extraParts: pool ? (i) => [{ mesh: pool, index: poolBase[key] + i, hide: true }] : null,
+    });
+    out.tris += (m.body.index.count / 3) * spots.length;
+  }
+  if (pool) {
+    ctx.onUpdate(() => {
+      const n = ctx.shared.uNight ? ctx.shared.uNight.value : 0, k = clamp((n - 0.05) / 0.5, 0, 1);
+      pool.visible = k > 0.01; mPool.opacity = 0.5 * k;
+      mGlow.color.setRGB(1.0, 0.9, 0.7).multiplyScalar(0.7 + 1.5 * n);
+    });
+  } else ctx.onUpdate(() => { const n = ctx.shared.uNight ? ctx.shared.uNight.value : 0; mGlow.color.setRGB(1.0, 0.9, 0.7).multiplyScalar(0.7 + 1.5 * n); });
   for (const key of Object.keys(sites)) for (const s of sites[key]) out.list.push({ x: s.x, z: s.z, h: models[key].H, kind: s.kind, arm: models[key].arm, rotY: s.rotY, nx: s.nx, nz: s.nz, run: s.run, s: s.s, way: s.way });
   out.count = out.list.length;
   return out;

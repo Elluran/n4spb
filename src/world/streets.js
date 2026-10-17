@@ -50,7 +50,7 @@ import { buildQuay } from './streets/quay.js';
 import { planParking } from './streets/parking.js';
 import { buildWires } from './streets/wires.js';
 import { buildLots, buildBayLines, buildStopMarks, buildTramRails, placeParkSigns, buildSpeedCameras, placeBaySigns, TAXI_RANKS, COACH_BAYS } from './streets/extras.js';
-import { makePanels, INST_STATS } from './streets/furn.js';
+import { makePanels, makeKnockPosts, INST_STATS } from './streets/furn.js';
 import { makeSigns } from './streets/signs.js';
 import { makeLabels } from './streets/labels.js';
 import { MeshBuilder } from './lib/massing.js';
@@ -209,6 +209,7 @@ export async function build(ctx) {
   const shared = { panels: makePanels(ctx), poles: new VB(), signs: makeSigns(ctx) };
   ctx.services.labels = ctx.services.labels || makeLabels();             // the facade label registry (docs/rules/LABELS-API.md): plates reserve first, the city's shop signs ask later
   const mVC = mat.toon('#ffffff', { vertexColors: true, paint: 0.02, name: 'pt-furn' });
+  shared.kposts = ctx.knock ? makeKnockPosts(ctx, shared.panels, mVC) : null;      // knockable posts (furn.js): signal poles, mast arms, sign posts, speed cameras are instances with records; null without ctx.knock = the merged pt-poles path
   const signals = DBG.includes('nosig') ? { masts: 0, heads: 0, crossingSigns: 0, plates: 0, bilingual: 0, signTex: {} } : buildSignals(ctx, net, graph, T, shared, { isOwned: (id) => isOwned(owned, id) });
   lapMs('signals'); stats.polesBy = { signals: shared.poles.tris };
   if (signals.roadSign) stats.parkSigns = placeParkSigns(net, parkedSlots, signals.roadSign, signals.signTex.park);
@@ -228,7 +229,7 @@ export async function build(ctx) {
   lapMs('lamps');
   const stopOut = DBG.includes('nostops') ? { stops: 0, shelters: 0, list: [] } : buildStops(ctx, net, stops, shared, root);
   lapMs('stopsBuild'); stats.polesBy.stops = shared.poles.tris - stats.polesBy.signals;
-  stats.speedCameras = buildSpeedCameras(ctx, net, shared.poles);
+  stats.speedCameras = buildSpeedCameras(ctx, net, shared.poles, shared.kposts);
   const barriers = buildBarriers(ctx, net, walks, shared.poles, root, lamps.list); lapMs('barriers');
   stats.barriers = barriers.stats;
   stats.quay = !DBG.includes('noquay') ? buildQuay(ctx, net, root, [...stops.map((s) => [s.x, s.z]), ...entr]) : null;   // the quay railing is drawn by environment; this adds only the guard stones (?st=noquay skips them)
@@ -240,6 +241,7 @@ export async function build(ctx) {
     shared.panels.finish(root);
   }
   lapMs('poles');
+  if (shared.kposts) { stats.knockPosts = { ...shared.kposts.stats, ...shared.kposts.finish() }; lapMs('knockPosts'); }        // after panels.finish: the atlas tiles of the instanced sign faces exist
   stats.headList = signals.headList;
   stats.furniture = { lamps: lamps.count, masts: signals.masts, heads: signals.heads, crossingSigns: signals.crossingSigns, plates: signals.plates, stops: stopOut.stops, shelters: stopOut.shelters };
 
