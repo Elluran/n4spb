@@ -1,0 +1,137 @@
+// core/boot-guard.js - honest failure on phones: a readable fatal card (a failed build, an uncaught error while loading, a lost WebGL context) with a Reload button, a pre-start warning for
+// phones ("heavy scene, ~51 MB, ~1 GB RAM": Continue anyway) and a crash-loop guard (a tab that the OS keeps killing during the load: after two unfinished starts within a minute it offers the
+// performance tier). Desktop: only the fatal card and the context-loss handler exist; the warning and the loop guard are touch-only. Design: docs/MOBILE.md.
+//
+//   const guard = installBootGuard({ canvas, params, isTouch, qName });
+//   guard.gate().then(main).catch(guard.fatal)       // the build starts after the (maybe empty) warning
+//   guard.dead                                        // true once the fatal card is up: the main loop stops drawing
+const CSS = `
+#fatal { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgba(8,12,34,.82); backdrop-filter: blur(6px); font-family: "Golos Text", "Noto Sans", "Segoe UI", sans-serif; color: #fff; }
+#fatal .card { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 22px 24px; border-radius: 12px; background: #0f1a44; box-shadow: 0 24px 70px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.14); }
+#fatal h2 { margin: 0 0 8px; font: 700 20px/1.25 "Rubik", sans-serif; color: #f2c14e; }
+#fatal p { margin: 8px 0; font-size: 15px; line-height: 1.5; color: #e7eaf8; }
+#fatal p.en { color: #b9c0e6; font-size: 14px; }
+#fatal pre { margin: 10px 0 0; padding: 8px 10px; max-height: 110px; overflow: auto; border-radius: 6px; background: rgba(255,255,255,.07); font: 12px/1.4 ui-monospace, Consolas, monospace; color: #c9cfee; white-space: pre-wrap; word-break: break-word; }
+#fatal .btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+#fatal button { min-height: 48px; padding: 0 20px; border: 0; border-radius: 6px; background: #f2c14e; color: #0f1a44; font: 600 16px/1 "Golos Text", "Segoe UI", sans-serif; cursor: pointer; touch-action: manipulation; }
+#fatal button.alt { background: rgba(255,255,255,.14); color: #fff; }
+`;
+const LOOP_KEY = 'piter.boots', GATE_KEY = 'piter.gate';
+
+export function installBootGuard({ canvas, params = new URLSearchParams(), isTouch = false, qName = 'medium', win = window, doc = document } = {}) {
+  win.__mainStarted = true;      // index.html's loading watchdog tells "the scripts did not start" from "the build is slow" by this flag
+  const body = doc.body;
+  const guard = { dead: false, crashLoop: false, fatal: null, gate: null, markLoaded: null };
+  const session = (fn) => { try { return fn(win.sessionStorage); } catch (e) { return undefined; } };
+  const local = (fn) => { try { return fn(win.localStorage); } catch (e) { return undefined; } };
+
+  // ---------------------------------------------------------------- the card
+  function card(title, paragraphs, buttons, detail) {
+    let el = doc.getElementById('fatal');
+    if (!el) {
+      const st = doc.createElement('style'); st.textContent = CSS; doc.head.appendChild(st);
+      el = doc.createElement('div'); el.id = 'fatal'; el.setAttribute('role', 'alertdialog'); body.appendChild(el);
+    }
+    el.replaceChildren();
+    const c = doc.createElement('div'); c.className = 'card';
+    const h2 = doc.createElement('h2'); h2.textContent = title; c.append(h2);
+    for (const [ru, en] of paragraphs) {
+      const p = doc.createElement('p'); p.textContent = ru; c.append(p);
+      if (en) { const q = doc.createElement('p'); q.className = 'en'; q.textContent = en; c.append(q); }
+    }
+    if (detail) { const pre = doc.createElement('pre'); pre.textContent = String(detail).slice(0, 600); c.append(pre); }
+    const row = doc.createElement('div'); row.className = 'btns';
+    for (const [text, fn, alt] of buttons) { const b = doc.createElement('button'); b.type = 'button'; b.textContent = text; if (alt) b.className = 'alt'; b.addEventListener('click', fn); row.append(b); }
+    c.append(row); el.append(c);
+    return el;
+  }
+  const reload = () => { try { win.location.reload(); } catch (e) { win.location.href = win.location.href; } };
+
+  /** the fatal card: a failed build / a lost context. Stops the main loop (guard.dead). */
+  guard.fatal = function fatal(err, kind) {
+    if (guard.dead) return;
+    guard.dead = true;
+    const msg = err && (err.stack || err.message) ? (err.message || String(err)) : String(err || '');
+    console.error('[fatal]', err);
+    if (kind === 'context') {
+      card('Графика остановилась · The graphics stopped', [
+        ['Система забрала видеопамять у страницы (часто из-за нехватки памяти или сворачивания браузера). Перезагрузите страницу.', 'The system took the graphics memory away from the page (usually low memory, or the browser was backgrounded). Reload the page.'],
+      ], [['Перезагрузить · Reload', reload]]);
+    } else {
+      card('Не удалось запустить сцену · The scene could not start', [
+        ['Что-то пошло не так при загрузке. Проверьте сеть и попробуйте ещё раз; на телефоне может помочь лёгкий режим.', 'Something went wrong while loading. Check the connection and try again; on a phone the Performance tier can help.'],
+      ], [['Перезагрузить · Reload', reload], ...(qName !== 'performance' ? [['Лёгкий режим · Performance tier', () => { local((s) => s.setItem('piter.q', 'performance')); reload(); }, true]] : [])], msg);
+    }
+    try { win.dispatchEvent(new win.CustomEvent('piter-fatal', { detail: { kind: kind || 'error', message: msg } })); } catch (e) { /* ignore */ }
+  };
+
+  // ---------------------------------------------------------------- failures while loading
+  const loaded = () => body.classList.contains('loaded');
+  if (canvas) canvas.addEventListener('webglcontextlost', (e) => {
+    // three.js installs its own handler; a restore cannot work here: main.js releases the CPU copies of the geometry after the upload frame. Treat it as fatal.
+    try { e.preventDefault(); } catch (err) { /* ignore */ }
+    guard.fatal(new Error('webglcontextlost'), 'context');
+  });
+  win.addEventListener('error', (e) => {
+    if (loaded() || guard.dead || !e.error && !e.message) return;
+    if (/ResizeObserver/.test(e.message || '')) return;
+    if (e.filename ? !(e.filename.startsWith(win.location.origin) || /cdn\.jsdelivr\.net/.test(e.filename)) : !e.error) return;      // a browser extension / an opaque cross-origin 'Script error.': not ours (three.js itself comes from the CDN)
+    guard.fatal(e.error || new Error(e.message));
+  });
+  win.addEventListener('unhandledrejection', (e) => {
+    const r = e.reason, m = String(r && (r.message || r) || '');
+    if (loaded() || guard.dead) return;
+    if (/allocation failed|out of memory|Invalid array length|WebGL|context lost/i.test(m)) guard.fatal(r instanceof Error ? r : new Error(m));      // memory: nothing else will come
+    else console.warn('[unhandledrejection while loading]', m);
+  });
+
+  // ---------------------------------------------------------------- crash-loop guard (touch only)
+  const guardOn = isTouch && params.get('guard') !== '0';
+  if (guardOn) {
+    const now = Date.now();
+    let boots = []; try { boots = JSON.parse(session((s) => s.getItem(LOOP_KEY)) || '[]'); } catch (e) { boots = []; }
+    boots = Array.isArray(boots) ? boots.filter((b) => b && now - b.t < 60000) : [];
+    guard.crashLoop = boots.filter((b) => !b.ok).length >= 2;
+    boots.push({ t: now, ok: false });
+    session((s) => s.setItem(LOOP_KEY, JSON.stringify(boots)));
+    const mo = new win.MutationObserver(() => {
+      if (!loaded()) return;
+      mo.disconnect();
+      let list = []; try { list = JSON.parse(session((s) => s.getItem(LOOP_KEY)) || '[]'); } catch (e) { list = []; }
+      if (list.length) list[list.length - 1].ok = true;
+      session((s) => s.setItem(LOOP_KEY, JSON.stringify(list)));
+    });
+    mo.observe(body, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  // ---------------------------------------------------------------- the pre-start warning
+  guard.gate = function gate() {
+    return new Promise((resolve) => {
+      const phone = isTouch && Math.min(win.screen ? win.screen.width : 9999, win.screen ? win.screen.height : 9999) < 700;
+      const asked = session((s) => s.getItem(GATE_KEY)) === '1';
+      const go = () => { session((s) => s.setItem(GATE_KEY, '1')); const el = doc.getElementById('fatal'); if (el) el.remove(); resolve(); };
+      if (guard.crashLoop && params.get('gate') !== '0') {
+        const cleanup = () => session((s) => s.removeItem(LOOP_KEY));
+        const keepCurrent = () => session((s) => s.setItem(LOOP_KEY, JSON.stringify([{ t: Date.now(), ok: false }])));      // 'try anyway': the loop count restarts, this start is still tracked
+        const btns = [];
+        if (qName !== 'performance') btns.push(['Лёгкий режим · Use the Performance tier', () => { local((s) => s.setItem('piter.q', 'performance')); cleanup(); reload(); }]);
+        btns.push([qName !== 'performance' ? 'Всё равно загрузить · Try anyway' : 'Попробовать ещё раз · Try again', () => { keepCurrent(); go(); }, qName !== 'performance']);
+        card('Страница перезагружается · The page keeps reloading', [
+          ['Страница несколько раз подряд перезагрузилась, не закончив загрузку: скорее всего, устройству не хватает памяти (сцена тяжёлая, около 1 ГБ).', 'The page reloaded several times in a row before it finished loading: the device is most likely out of memory (the scene needs about 1 GB).'],
+          [qName !== 'performance' ? 'Лёгкий режим уменьшает тени и дальность прорисовки. Если не поможет, откройте страницу на планшете или компьютере.' : 'Режим уже лёгкий. Закройте другие вкладки и приложения и попробуйте ещё раз, либо откройте страницу на планшете или компьютере.', qName !== 'performance' ? 'The Performance tier trims shadows and view distance. If that does not help, open the page on a tablet or a computer.' : 'The lightest tier is already on. Close other tabs and apps and try again, or open the page on a tablet or a computer.'],
+        ], btns);
+        return;
+      }
+      if (!phone || asked || params.get('gate') === '0') { resolve(); return; }
+      const mem = nav_(win).deviceMemory, conn = nav_(win).connection;
+      const paragraphs = [[
+        'Тяжёлая 3D-сцена: около 51 МБ загрузки и примерно 1 ГБ памяти. Лучше всего работает на новом телефоне или планшете, горизонтально и по Wi-Fi; на старых телефонах страница может перезагрузиться.',
+        'A heavy 3D scene: about 51 MB to download and roughly 1 GB of memory. It runs best on a recent phone or tablet, in landscape, on Wi-Fi; on older phones the page may reload.']];
+      if (mem && mem < 4) paragraphs.push([`Устройство сообщает о ${mem} ГБ памяти: скорее всего, этого не хватит.`, `This device reports ${mem} GB of RAM: that is probably not enough.`]);
+      if (conn && (conn.saveData || /(^|-)2g|3g/.test(conn.effectiveType || '') || conn.type === 'cellular')) paragraphs.push(['Вы на мобильной сети: загрузка ~51 МБ.', 'You are on a mobile connection: the load is ~51 MB.']);
+      card('Прогулка по Невскому · Before you start', paragraphs, [['Продолжить · Continue anyway', go]]);
+    });
+  };
+  return guard;
+}
+const nav_ = (win) => win.navigator || {};

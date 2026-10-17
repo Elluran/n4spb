@@ -89,6 +89,7 @@ node tools/owns-table.mjs                  # claims table src/world/lib/owns-tab
 node tools/layout-test.mjs                 # RESULT: OK (group ids, free view poses, road helpers, areas)
 npm run check                              # headless build of every kept module (geometry, budget, warnings)
 npm run roads; npm run markings; npm run walls; npm run labels; npm run facade; npm run wires; npm run paving
+npm run touch                              # the touch controls' pure logic (curves, the drive.js input bridge against the real readInput, settings, layout geometry; docs/MOBILE.md)
 ```
 
 GPU (one job at a time, nothing else running on the GPU; headless Edge through puppeteer-core, `C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe`):
@@ -98,6 +99,7 @@ npm run bake                               # LAST step after every src/ or index
 npm run bakecheck                          # node tools/bake-manifest-check.mjs: manifest revision == source revision == BAKED_REVISION, sizes, no *.part
 npm run bakedcheck                         # node tools/baked-check.mjs medium|performance: hydrated nav, routes, field, teleport to the Admiralty, all regions
 npm run smoke -- --q medium                # walk, fly, roof landing, NPCs (its own static server: a static-hosting simulation)
+npm run touchbrowser                       # the touch UI in emulated multi-touch Edge (fast drive-only harness, screenshots in shots/touch/; --only full = the whole baked scene)
 npm run load -- --q high --out shots/load/high
 node tools/shot.mjs --base /n4spb --load --q medium --out shots/load/subpath    # sub-path hosting
 ```
@@ -117,24 +119,26 @@ There is no build step: deploying is copying files. The whitelist:
 
 ```
 index.html
+manifest.webmanifest       (PWA: fullscreen + landscape for add-to-home-screen, docs/MOBILE.md)
 src/                       (all .js; every module in MODULES is imported at page start)
 vendor/rapier/rapier.js    (+ vendor/rapier/LICENSE: Apache-2.0)
-assets/                    (assets/baked/manifest.json + *.bin.gz, assets/splash/*.jpg, assets/bibliotechka.png)
+assets/                    (assets/baked/manifest.json + *.bin.gz, assets/splash/*.jpg, assets/icons/*.png (the PWA icons), assets/bibliotechka.png)
 ```
 
 Not needed at run time: `tools/`, `docs/`, `node_modules/`, `shots/`, `package*.json`, `.git`. LICENSE, NOTICE.md, README.md and LICENSE-sakuragaoka-station.txt are good to ship next to them.
 
 ```sh
-mkdir dist && cp -r index.html src assets dist/ && mkdir -p dist/vendor/rapier && cp vendor/rapier/rapier.js vendor/rapier/LICENSE dist/vendor/rapier/
+mkdir dist && cp -r index.html src assets manifest.webmanifest dist/ && mkdir -p dist/vendor/rapier && cp vendor/rapier/rapier.js vendor/rapier/LICENSE dist/vendor/rapier/
 ```
 
 Required static-host behaviour:
 
 * **`*.bin.gz` must be served as plain bytes, WITHOUT `Content-Encoding: gzip`.** The page gunzips them itself (`DecompressionStream` in a module Worker); a host that adds the header or auto-decompresses `.gz` breaks the load, and the failed core products fall back to procedural generation.
-* Content types: `text/javascript` for `.js` (modules and the worker, same origin), `application/json` for the manifest.
+* Content types: `text/javascript` for `.js` (modules and the worker, same origin), `application/json` for the bake manifest, `application/manifest+json` (or any JSON type) for `manifest.webmanifest` (GitHub Pages serves it correctly; `tools/serve.mjs` does too).
 * Cache headers (what `tools/serve.mjs` does): `*.<20 hex>.bin.gz` -> `public, max-age=31536000, immutable` (content-addressed by the revision); `assets/baked/manifest.json`, `index.html` and `src/**/*.js` -> `no-cache` / revalidate
   (they are not content-hashed: a cached old `baked-revision.js` against a new manifest is a revision mismatch, i.e. the silent procedural rebuild); `vendor/` and `assets/splash/` may use a moderate `max-age`.
 * **Sub-path hosting works**: every URL is relative (`./src/main.js`, `new URL('../../assets/baked/', import.meta.url)`, the worker, the manifest). `/__baked_revision` is a 404 on a static host, which is handled (the page falls back to `BAKED_REVISION`; an SPA fallback answering `text/html` is fine too).
+* **Phones** (docs/MOBILE.md): the page needs HTTPS for the wake lock and device motion (GitHub Pages is), `manifest.webmanifest` + the `apple-mobile-web-app-*` meta tags make Add to Home Screen open fullscreen (the only fullscreen on an iPhone), and the pages workflow copies the manifest next to `index.html` (the icons are under `assets/icons/`, regenerate with `node tools/make-icons.mjs`).
 * No service worker, no `SharedArrayBuffer`, no COOP / COEP requirement. The largest single strip product is a few MiB, far below the 100 MB limit of GitHub-Pages-style hosts.
 * External run-time dependencies (not vendored): three 0.170.0 and its addons from `cdn.jsdelivr.net` (importmap in `index.html`), and Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`; the loader gives up after 6 s and uses system fonts).
 
