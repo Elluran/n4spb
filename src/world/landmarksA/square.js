@@ -3,11 +3,15 @@
 // the 4.5 m bronze laurel wreath, a tapering granite shaft, gilded star 1.8 m), the hedge ring and flowers, the station forecourt (3-head cast-iron lamps, round
 // planters, benches, taxi booths), the tourist bureau pavilion w353314781 and the kiosk w1215662501.  Photos SP/refs/station 77-81 (obelisk), 51, 53 (forecourt).
 // Obelisk centre = layout.OBELISK (592.2, 164.9); pentagon apex points north (as OSM).  Services: monuments, flagpoles, photoSpots (merged into ctx.services.landmarks).
+// KNOCKABLE (core/knock.js, lib/knock-inst.js): with ctx.knock the forecourt lamps (500 kg, static below 23 km/h), round planters, benches and bins are instances about their own foot
+// (one dynamic InstancedMesh per part, a record each; the lamp lantern and its halos vanish with the post) and the advertising pillar on the forecourt is its own group in the dynamic
+// root (1500 kg, breaks off above 40 km/h). Without ctx.knock the module merges them into the square meshes exactly as it always did.
 import * as THREE from 'three';
 import { Parts, TH, W, O, wbox, C } from './common.js';
 import { cellCap, ringOf, centroid } from './geom.js';
 import { AREAS } from '../data/city.js';
 import * as L from '../layout.js';
+import { knockInstances } from '../lib/knock-inst.js';
 
 const OB = L.OBELISK;
 const pent = (cx, cz, R, rot = 0) => Array.from({ length: 5 }, (_, k) => { const a = (-90 + 72 * k) * Math.PI / 180 + rot; return [cx + R * Math.cos(a), cz + R * Math.sin(a)]; });
@@ -126,19 +130,26 @@ export function buildSquare(Cc) {
   const clearXZ = (x, z, r) => !st || st.net.cover(x, z, {}) < -(r + 0.3);
   const clear = (u, d, r = 0.5) => { const [x, z] = W(u, d); return clearXZ(x, z, r); };
   P.push(O.x, 0, O.z, TH);
-  const lamp3 = (u, d) => {
-    if (!clear(u, d)) return;
+  // with ctx.knock the furniture is emitted ONCE about the origin of a template Parts and instanced per placement, KN.<family> = [{ x, z, rotY, item, v }]; otherwise into P in place
+  const KN = ctx.knock ? { lamp: [], planter: [], bench: [], bin: [] } : null;
+  const lampShape = (Q, u, d) => {
     const base = T('#1c1c1e');
-    P.box(base, u - 0.3, u + 0.3, 0, 0.9, d - 0.3, d + 0.3); P.cyl(base, u, d, 0.9, 5.2, 0.13, 0.09, 8); P.cyl(base, u, d, 0.9, 1.1, 0.2, 0.2, 8); P.cyl(base, u, d, 3.2, 3.35, 0.16, 0.16, 8);
+    Q.box(base, u - 0.3, u + 0.3, 0, 0.9, d - 0.3, d + 0.3); Q.cyl(base, u, d, 0.9, 5.2, 0.13, 0.09, 8); Q.cyl(base, u, d, 0.9, 1.1, 0.2, 0.2, 8); Q.cyl(base, u, d, 3.2, 3.35, 0.16, 0.16, 8);
     // three arms (two curved sideways, one straight up) with lanterns
     for (const s of [-1, 0, 1]) {
       const ux = u + s * 0.95, top = s === 0 ? 5.9 : 5.45;
-      if (s !== 0) { P.box(base, Math.min(u, ux) - 0.04, Math.max(u, ux) + 0.04, 5.1, 5.18, d - 0.04, d + 0.04); P.box(base, ux - 0.04, ux + 0.04, 5.1, 5.45, d - 0.04, d + 0.04); }
-      else P.cyl(base, u, d, 5.2, 5.6, 0.07, 0.07, 6);
-      P.cyl(glow, ux, d, top - 0.05, top + 0.5, 0.22, 0.16, 8); P.cyl(base, ux, d, top + 0.5, top + 0.62, 0.26, 0.04, 8);
-      P.glow(Cc.halo, ux, top + 0.25, d, 2.8);
+      if (s !== 0) { Q.box(base, Math.min(u, ux) - 0.04, Math.max(u, ux) + 0.04, 5.1, 5.18, d - 0.04, d + 0.04); Q.box(base, ux - 0.04, ux + 0.04, 5.1, 5.45, d - 0.04, d + 0.04); }
+      else Q.cyl(base, u, d, 5.2, 5.6, 0.07, 0.07, 6);
+      Q.cyl(glow, ux, d, top - 0.05, top + 0.5, 0.22, 0.16, 8); Q.cyl(base, ux, d, top + 0.5, top + 0.62, 0.26, 0.04, 8);
+      Q.glow(Cc.halo, ux, top + 0.25, d, 2.8);
     }
-    wbox(ctx, u - 0.3, u + 0.3, d - 0.3, d + 0.3, 0, 6);
+  };
+  const lamp3 = (u, d) => {
+    if (!clear(u, d)) return;
+    if (KN) KN.lamp.push({ x: W(u, d)[0], z: W(u, d)[1], rotY: TH });
+    else lampShape(P, u, d);
+    const item = wbox(ctx, u - 0.3, u + 0.3, d - 0.3, d + 0.3, 0, 6);
+    if (KN) KN.lamp[KN.lamp.length - 1].item = item;
     Cc.svc.lamps.push({ x: W(u, d)[0], z: W(u, d)[1], h: 6 });
   };
   for (const u of [-62, -38, -14, 14, 38, 62]) lamp3(u, -11);
@@ -148,12 +159,21 @@ export function buildSquare(Cc) {
   let pi = 0;
   for (const [u, d] of [[-50, -8], [-44, -26], [-20, -22], [20, -22], [44, -26], [50, -8], [-70, -16], [70, -16], [-30, -42], [30, -42]]) {
     if (!clear(u, d)) continue;
-    P.cyl(white, u, d, 0, 0.5, 0.5, 0.44, 12); const g = new THREE.SphereGeometry(0.5, 10, 6); P.geo(pet[pi++ % 3], g, u, 0.5, d, 0, 0, 0, 1, 0.45, 1); g.dispose();
-    ctx.physics.addCylinder(W(u, d)[0], W(u, d)[1], 0.55, 0, 0.8);
+    if (KN) KN.planter.push({ x: W(u, d)[0], z: W(u, d)[1], rotY: TH, v: pi++ % 3 });
+    else { P.cyl(white, u, d, 0, 0.5, 0.5, 0.44, 12); const g = new THREE.SphereGeometry(0.5, 10, 6); P.geo(pet[pi++ % 3], g, u, 0.5, d, 0, 0, 0, 1, 0.45, 1); g.dispose(); }
+    const item = ctx.physics.addCylinder(W(u, d)[0], W(u, d)[1], 0.55, 0, 0.8);
+    if (KN) KN.planter[KN.planter.length - 1].item = item;
   }
   // wooden benches (groups of three) facing the facade
   const wood = T(C.wood), metal = T(C.metal);
-  const bench = (u, d, rot) => { if (!clear(u, d, 1.1)) return; P.push(u, 0, d, rot); P.box(wood, -0.9, 0.9, 0.42, 0.48, -0.25, 0.25); P.box(wood, -0.9, 0.9, 0.55, 0.95, 0.25, 0.3); for (const s of [-1, 1]) P.box(metal, s * 0.85 - 0.04, s * 0.85 + 0.04, 0, 0.45, -0.22, 0.22); P.pop(); wbox(ctx, u - 0.95, u + 0.95, d - 0.3, d + 0.3, 0, 1.0); };
+  const benchShape = (Q) => { Q.box(wood, -0.9, 0.9, 0.42, 0.48, -0.25, 0.25); Q.box(wood, -0.9, 0.9, 0.55, 0.95, 0.25, 0.3); for (const s of [-1, 1]) Q.box(metal, s * 0.85 - 0.04, s * 0.85 + 0.04, 0, 0.45, -0.22, 0.22); };
+  const bench = (u, d, rot) => {
+    if (!clear(u, d, 1.1)) return;
+    if (KN) KN.bench.push({ x: W(u, d)[0], z: W(u, d)[1], rotY: TH + rot });
+    else { P.push(u, 0, d, rot); benchShape(P); P.pop(); }
+    const item = wbox(ctx, u - 0.95, u + 0.95, d - 0.3, d + 0.3, 0, 1.0);
+    if (KN) KN.bench[KN.bench.length - 1].item = item;
+  };
   for (const u of [-46, -43.6, -41.2]) bench(u, -14, Math.PI);
   for (const u of [41.2, 43.6, 46]) bench(u, -14, Math.PI);
   // taxi / parking booths at both ends of the forecourt (yellow-orange 2 x 3 m, white 1.5 x 2 m) with barrier arms
@@ -165,20 +185,59 @@ export function buildSquare(Cc) {
   if (clear(72.75, -45, 1.5)) { P.box(T('#e8e6e0'), 72, 73.5, 0, 2.4, -46, -44); wbox(ctx, 72, 73.5, -46, -44, 0, 3); }
   // round bins and bike racks along the forecourt
   const binM = T('#2f3a36', { name: 'st-bin' });
-  for (const [u, d] of [[-56, -12], [-30, -14], [30, -14], [56, -12], [-8, -4], [8, -4], [-66, -30], [66, -30]]) { if (!clear(u, d, 0.3)) continue; P.cyl(binM, u, d, 0, 0.9, 0.28, 0.3, 8); P.cyl(iron, u, d, 0.9, 0.96, 0.32, 0.32, 8); ctx.physics.addCylinder(W(u, d)[0], W(u, d)[1], 0.33, 0, 1); }
+  const binShape = (Q, u, d) => { Q.cyl(binM, u, d, 0, 0.9, 0.28, 0.3, 8); Q.cyl(iron, u, d, 0.9, 0.96, 0.32, 0.32, 8); };
+  for (const [u, d] of [[-56, -12], [-30, -14], [30, -14], [56, -12], [-8, -4], [8, -4], [-66, -30], [66, -30]]) {
+    if (!clear(u, d, 0.3)) continue;
+    if (KN) KN.bin.push({ x: W(u, d)[0], z: W(u, d)[1], rotY: TH }); else binShape(P, u, d);
+    const item = ctx.physics.addCylinder(W(u, d)[0], W(u, d)[1], 0.33, 0, 1);
+    if (KN) KN.bin[KN.bin.length - 1].item = item;
+  }
   for (const [u, d] of [[-64, -4], [64, -4]]) if (clear(u + 0.9, d, 0.9)) for (let i = 0; i < 4; i++) { P.box(iron, u + i * 0.6 - 0.02, u + i * 0.6 + 0.02, 0.0, 0.85, d - 0.02, d + 0.02); P.box(iron, u + i * 0.6 - 0.02, u + i * 0.6 + 0.02, 0.8, 0.85, d - 0.5, d + 0.5); }
   P.pop();
+  if (KN) {
+    const part = (Q, o = () => ({})) => Q.parts().map(({ mat, geo }) => ({ geo, mat, ...o(mat) }));
+    const spots = (list) => list.map((s) => ({ x: s.x, y: 0, z: s.z, rotY: s.rotY }));
+    if (KN.lamp.length) {
+      const Q = new Parts(); lampShape(Q, 0, 0);
+      knockInstances(ctx, { name: 'st-lamp', parts: part(Q, (m) => m === Cc.halo ? { name: 'halo', shadow: false, noOutline: true, hide: true, far: 500 } : m === glow ? { name: 'glow', hide: true, far: 500 } : { name: 'body' }),
+        spots: spots(KN.lamp), items: KN.lamp.map((s) => s.item), far: 320, rec: { kind: 'lamp', mass: 500, h: 6.2, w: 0.6, d: 0.6, anchored: 23, hitK: 0.65, metal: true } });
+    }
+    if (KN.bench.length) {
+      const Q = new Parts(); benchShape(Q);
+      knockInstances(ctx, { name: 'st-bench', parts: part(Q), spots: spots(KN.bench), items: KN.bench.map((s) => s.item), far: 200, rec: { kind: 'bench', mass: 45, h: 0.9, w: 1.9, d: 0.6, hitK: 0.25 } });
+    }
+    if (KN.bin.length) {
+      const Q = new Parts(); binShape(Q, 0, 0);
+      knockInstances(ctx, { name: 'st-bin', parts: part(Q), spots: spots(KN.bin), items: KN.bin.map((s) => s.item), far: 170, rec: { kind: 'bin', mass: 14, h: 0.9, r: 0.3, hitK: 0.12, metal: true } });
+    }
+    if (KN.planter.length) {
+      const Q = new Parts(); Q.cyl(white, 0, 0, 0, 0.5, 0.5, 0.44, 12);
+      const bloom = new THREE.SphereGeometry(0.5, 10, 6); bloom.scale(1, 0.45, 1); bloom.translate(0, 0.5, 0);               // the petunias: one shape, a material per colour
+      knockInstances(ctx, { name: 'st-planter', parts: [...part(Q), ...pet.map((mat, v) => ({ geo: bloom, mat, name: 'bloom' + v, when: (s, i) => KN.planter[i].v === v }))],
+        spots: spots(KN.planter), items: KN.planter.map((s) => s.item), far: 170, rec: { kind: 'planter', mass: 250, h: 0.8, r: 0.55, hitK: 0.4 } });
+    }
+  }
 
   // advertising pillars (round, black domed "тумба" with a lit generic poster), one on the island next to the obelisk, one on the forecourt
   {
     const posterTex = ctx.tex.draw(256, 128, (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#2a5fb0'); gr.addColorStop(1, '#e0713a'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = '#fff4d8'; g.font = '700 38px "Noto Sans", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('Афиша', w * 0.25, h * 0.3); g.font = '600 24px "Noto Sans", sans-serif'; g.fillText('Концерты · Театр', w * 0.25, h * 0.62); g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.arc(w * 0.75, h * 0.5, 34, 0, 7); g.fill(); }, { key: 'sq_poster' });
     const pm = T('#ffffff', { map: posterTex, paint: 0, name: 'sq-poster' }); pm.emissiveMap = posterTex; N.toon(pm, '#ffffff', 0.95, 0.0);
     const domeM = T('#1d1e22', { name: 'sq-dome', paint: 0.02 });
+    const pillarShape = (Q, x, z) => {
+      Q.cyl(domeM, x, z, 0, 0.55, 0.9, 0.85, 14);
+      const cg = new THREE.CylinderGeometry(0.82, 0.82, 1.9, 20, 1, true); Q.geo(pm, cg, x, 1.5, z); cg.dispose();
+      const dg = new THREE.SphereGeometry(0.95, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2); Q.geo(domeM, dg, x, 2.45, z, 0, 0, 0, 1, 0.8, 1); dg.dispose();
+      Q.cyl(domeM, x, z, 3.1, 3.5, 0.05, 0.02, 6); Q.cyl(domeM, x, z, 2.42, 2.55, 0.9, 0.9, 14);
+    };
     const pillar = (x, z) => {
-      P.cyl(domeM, x, z, 0, 0.55, 0.9, 0.85, 14);
-      const cg = new THREE.CylinderGeometry(0.82, 0.82, 1.9, 20, 1, true); P.geo(pm, cg, x, 1.5, z); cg.dispose();
-      const dg = new THREE.SphereGeometry(0.95, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2); P.geo(domeM, dg, x, 2.45, z, 0, 0, 0, 1, 0.8, 1); dg.dispose();
-      P.cyl(domeM, x, z, 3.1, 3.5, 0.05, 0.02, 6); P.cyl(domeM, x, z, 2.42, 2.55, 0.9, 0.9, 14);
+      if (ctx.knock) {                                                         // its own group about the foot, in the dynamic root (the zero-size halo quad of old is dropped)
+        const Q = new Parts(), grp = new THREE.Group(); grp.name = 'sq-ad-pillar'; pillarShape(Q, 0, 0); Q.build(grp, { name: 'sq-ad-pillar' }); grp.position.set(x, 0, z);
+        const item = ctx.physics.addCylinder(x, z, 0.95, 0, 3.5);
+        ctx.add(grp);
+        ctx.knock.register({ kind: 'column', x, z, y: 0, rotY: 0, mass: 1500, h: 3.5, r: 0.95, anchored: 40, hitK: 1.0, item, parts: [{ obj: grp }] });
+        return;
+      }
+      pillarShape(P, x, z);
       ctx.physics.addCylinder(x, z, 0.95, 0, 3.5);
       P.glow(Cc.halo, x, 1.5, z, 0.0);
     };

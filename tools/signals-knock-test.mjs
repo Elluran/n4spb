@@ -69,10 +69,10 @@ const K = await build(true);
 console.log(`built streets with ctx.knock in ${Date.now() - t0} ms`);
 const recs = (kind) => K.ctx.knock.list.filter((r) => r.kind === kind);
 
-check('1 census: 840 signal poles, 268 mast arms, 11 speed cameras, ~686 sign posts; every record owns its collider; the merged pole VB lost the knockable poles', () => {
+check('1 census: 840 signal poles, 268 mast arms, 11 speed cameras, ~686 sign posts + 60 bus-stop poles; every record owns its collider; the merged pole VB lost the knockable poles', () => {
   const by = K.ctx.knock.stats.byKind;
   assert.equal(by.signal, 840); assert.equal(by.arm, 268); assert.equal(by.camera, 11);
-  assert(by.sign >= 684 && by.sign <= 690, `sign posts ${by.sign}`);
+  assert(by.sign >= 744 && by.sign <= 750, `sign posts ${by.sign}`);                 // 686 road signs + the 60 bus-stop poles of package G2
   for (const kind of ['signal', 'arm', 'camera', 'sign']) for (const r of recs(kind)) { assert(r.items.length === 1 && r.items[0].source && r.items[0].source.knock === r, `${kind} at ${r.x.toFixed(1)}, ${r.z.toFixed(1)} owns its collider`); assert(r.anchored > 0 && r.state === 'stand'); }
   const kp = K.stats.knockPosts;
   assert.equal(kp.records, 840 + 268 + 11 + by.sign);
@@ -207,7 +207,7 @@ check('7 the real car: a mast arm holds at 30 km/h and breaks at 60 km/h (anchor
   assert(m.state === 'fly' || m.state === 'rest', `the mast arm breaks at 60 km/h (state ${m.state})`);
   console.log(`     mast hold@30: along ${hold.res.along.toFixed(2)} | break@60: along ${brk.along.toFixed(2)}, car left at ${brk.maxSpeed.toFixed(0)} km/h peak`);
 });
-check('8 the real car: a traffic-signal pole breaks at 30 km/h (anchored 14) but holds a 8 km/h bump', () => {
+check('8 the real car: a traffic-signal pole breaks at 30 km/h (anchored 18) but holds a 8 km/h bump', () => {
   const hold = drill('signal', 8); assert(hold, 'a signal pole with a free approach'); assert.equal(hold.r.state, 'stand', 'holds at 8 km/h'); assert(hold.res.along > -2.6, 'the car reached the pole and stopped on it (along ' + hold.res.along.toFixed(2) + ')');
   const brk = ram(K, hold.r, 30); assert(brk); assert(hold.r.state !== 'stand', 'breaks at 30 km/h');
 });

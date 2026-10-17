@@ -98,6 +98,49 @@ for the three garage masses; a new car needs `spec.mass`, not a retune):
   railings, fences, balustrades) and furniture on bridge decks / platforms / metro. People nav keeps a baked snapshot of the colliders: a knocked thing's old position stays an obstacle for pedestrians until the next bake.
 * Calm sounds only: a metal thing plays the existing `clank` one-shot (at most one per 0.15 s), never an alarm.
 
+### Tuning of the break speeds (measured in the real page)
+
+The thresholds are `anchored` (km/h of the car at contact) in the module that owns each family; the masses decide what a hit costs the car. Rules the table obeys: a parking-speed scrape
+(< 15 km/h) never breaks a lamp or a signal pole; a 25-30 km/h hit breaks a pedestal lamp, a signal pole, a sign post; a mast arm and an advertising column need 40+; free small things (bins, pots,
+A-frames, benches) always fly; every garage car can break things (the break test compares the car's SPEED, so the 3 t pickup and the Roadster break exactly what the 0.95 t Zhiguli breaks;
+the mass only decides how much speed the car loses).
+
+| family (kind) | mass kg | break speed km/h | where |
+|---|---|---|---|
+| street lamp A (pedestal, 500 kg) / S (swan neck, 280 kg) | 500 / 280 | 22 / 20 | streets/lamps.js |
+| street lamp D (side street, 140 kg) / L (embankment, 160 kg) | 140 / 160 | 18 / 18 | streets/lamps.js |
+| landmark lamps (forecourt, Palace Square, Oktyabrsky) | 500-600 | 23 | landmarksA/G, landmarksOktyabrsky |
+| traffic-signal pole | 90 | 18 | streets/signals.js |
+| sign post / bus-stop pole | 15-30 | 8-10 | streets/furn.js, signals.js |
+| mast arm (8 m truss) | 900 | 40 | streets/signals.js |
+| ad column | 1500 | 40-45 | props/state.js, landmarksA |
+| wire mast | 350 | 24 | streets/wires.js |
+| bollard post | 60 | 30 | streets/barriers.js |
+| bus shelter | 350 | 28 | streets/stops.js |
+| city-light box / cabinet / speed camera / post box | 150 / 120 / 120 / 70 | 20 / 20 / 18 / 18 | props/state.js, extras.js |
+| bin, bench, pot, urn, planter, tub, kiosk, cart, A-frame | 6-650 | free (always fly, `minDv` 0.3-1.2 m/s) | props/state.js |
+
+`node tools/knock-scene-test.mjs` (GPU, the real page; `baked=force` is added by itself while the bake is stale) drives each of the four cars (coupe, taxi pickup, Zhiguli, Roadster) at 15, 30 and
+50 km/h into a bin, a bench, a pedestal lamp, a side lamp, a signal pole, a sign post and a mast arm (a fresh record with a clear run-up each time) and prints what holds, what breaks and the speed
+lost 0.3 s after the contact. Last run (stale bake with every phase of the knock work, speed lost in % of the approach speed, range over the four cars):
+
+| target | 15 km/h | 30 km/h | 50 km/h |
+|---|---|---|---|
+| bin (14-70 kg) | breaks, 14-19 % | breaks, 8-11 % | breaks, 5-12 % |
+| bench (45-58 kg) | breaks, 16-18 % | breaks, 10-11 % | breaks, 7-9 % |
+| pedestal lamp (500 kg) | holds (stops) | breaks, 24-45 % | breaks, 21-43 % |
+| side lamp (140 kg) | holds (stops) | breaks, 13-21 % | breaks, 10-18 % |
+| signal pole (90 kg) | holds (stops) | breaks, 11-16 % | breaks, 8-14 % |
+| sign post (28 kg) | breaks, 15-17 % | breaks, 9-10 % | breaks, 6-7 % |
+| mast arm (900 kg) | holds (stops) | holds (stops, 94-96 %) | breaks, 31-58 % |
+
+The lightest car (Zhiguli 945 kg) loses the most against a lamp (45 %), the pickup the least (24 %). A mast arm holds at 38 km/h and breaks at 42; a pedestal lamp holds at 20 km/h and breaks
+at 25. After every break the car rolls on over the lying debris (1.1 s later it is still moving at 6+ km/h).
+
+**Rest boxes and the pavement.** The furniture stands on pavement that is drawn 0.1-0.12 m above the street level the car drives at (0.03, `handling.js groundAt`), so a rest box whose top
+was 0.42 m above ITS floor (0.54 absolute) stopped the car (STEP_HEIGHT 0.45 above 0.03 = 0.48): a lying lamp blocked the street. The rest top is now capped at 0.42 above the road level too
+(`b.level` in `knock.js floor()`; `tools/knock-test.mjs` case 4b: the car crosses a lying bench, bin and lamp that stood on a 0.12 m pavement).
+
 ## Shipping handoff
 
 The user requested small-area verification while another agent adds regions.

@@ -8,6 +8,9 @@
 //   * the 68 tubs with small trees of Nevsky (lilac, birch, maple), flower pots and black cast-iron urns beside shop doors, bike racks at shops, rows of rental scooters at the
 //     metro exits and crossings, bike-share docks.
 // Placement is driven by POIS and by the pavement stations (S.stations); everything registered in the occupancy registry + raster so nothing overlaps.
+// KNOCKABLE (ctx.knock, core/knock.js; the KNOCK rows are in props/state.js): the press / excursion kiosks, cabins, ticket booths, hot-dog / souvenir carts and the chalk A-frames are linked to their
+//   collider by S.add + S.box / S.solidBox; their fascias, posters and chalk boards are standalone panels (standPanel -> S.panelObj + S.attach) that the car throws along with the stand. Without
+//   ctx.knock every panel is still a merged world-space quad: the module builds what it always built. Scooter rows (one collider per row) and tourist stalls stay solid.
 import { POIS } from '../data/city.js';
 import * as L from '../layout.js';
 import { Geo, DEG, TAU, hash01, BOT, TOP, PX, NX } from './kit.js';
@@ -17,6 +20,15 @@ import { COL } from './furniture.js';
 import { faceRot, nearestWall, streetClass, insideFp } from './sites.js';
 
 const CANE = '#8a5f35', CANE_D = '#5f3f26', IRON = COL.black;
+
+/** a fascia / poster / chalk board of a stand. The stand just placed (S.add + its collider) that is a linked knockable (ctx.knock, core/knock.js) gets a STANDALONE panel that is attached to it and
+ *  travels with it when the car throws the stand over; everything else (no ctx.knock, a stand that is not knockable) keeps the merged world-space quad, so the build without ctx.knock is unchanged.
+ *  The standalone quad stands 1.2 cm further out: the fascia of the press kiosk is coplanar with the pediment of its roof, which the merged quad (drawn after the static meshes) used to win by draw order */
+export function standPanel(S, tex, cx, cy, cz, nx, nz, w, h, o = {}) {
+  if (S.ctx.knock && S.last && S.last.rec) { const obj = S.panelObj(tex, cx + nx * 0.012, cy, cz + nz * 0.012, nx, nz, w, h, o); if (obj && S.attach(obj)) return obj; }
+  S.panels.panel(tex, cx, cy, cz, nx, nz, w, h, o);
+  return null;
+}
 const UMB = [COL.burgundy, '#efe8d4', COL.green, COL.navy];
 
 // ------------------------------------------------------------------------------------------------------------------- geometry
@@ -173,8 +185,9 @@ export function placeTerraces(S) {
           S.add(R() < 0.5 ? 'aFrameR' : 'aFrameK', ax, az, rot);
           const lines = [['Бизнес-ланч', ['12:00 – 16:00', 'от 390 ₽', 'суп · горячее']], ['Кофе', ['Эспрессо 160 ₽', 'Капучино 220 ₽', 'Чай 150 ₽']], ['Летнее меню', ['окрошка', 'пельмени', 'морс']], ['Десерты', ['сырники', 'эклеры', 'мороженое']]][Math.floor(R() * 4)];
           const n = [Math.sin(rot), Math.cos(rot)], ya = S.levelAt(ax, az);
-          S.panels.panel(S.sign.chalk(lines[0], lines[1]), ax + n[0] * 0.2, ya + 0.56, az + n[1] * 0.2, n[0], n[1], 0.52, 0.8, { tilt: -0.42 });
-          S.solidBox(ax, az, 0.6, 0.8, rot, 1.0); S.placed.add(ax, az, 0.5, 'aframe'); cnt.aframes++;
+          S.solidBox(ax, az, 0.6, 0.8, rot, 1.0);                                   // (before the chalk board: it travels with the A-frame, see standPanel)
+          standPanel(S, S.sign.chalk(lines[0], lines[1]), ax + n[0] * 0.2, ya + 0.56, az + n[1] * 0.2, n[0], n[1], 0.52, 0.8, { tilt: -0.42 });
+          S.placed.add(ax, az, 0.5, 'aframe'); cnt.aframes++;
         }
         return true;
       }
@@ -241,8 +254,8 @@ export function placeStands(S) {
       const sp = standSpot(S, st, 2.5, 1.7, 1.2, 2.9); if (!sp) continue;
       S.add('pressKiosk', sp.px, sp.pz, sp.rot); S.box(sp.px, sp.pz, 2.4, 1.6, sp.rot, 2.8, { r: 1.5, tag: 'kiosk' });
       const n = [Math.sin(sp.rot), Math.cos(sp.rot)], y = S.levelAt(sp.px, sp.pz);
-      S.panels.panel(T.fascia('ПЕЧАТЬ', '#2f4f43', '#f3eedf', 'газеты · журналы'), sp.px + n[0] * 0.82, y + 2.2, sp.pz + n[1] * 0.82, n[0], n[1], 1.6, 0.34, { lit: true });
-      S.panels.panel(T.cityLight(2), sp.px + n[0] * 0.865, y + 1.15, sp.pz + n[1] * 0.865, n[0], n[1], 1.5, 0.9, { lit: true });
+      standPanel(S, T.fascia('ПЕЧАТЬ', '#2f4f43', '#f3eedf', 'газеты · журналы'), sp.px + n[0] * 0.82, y + 2.2, sp.pz + n[1] * 0.82, n[0], n[1], 1.6, 0.34, { lit: true });
+      standPanel(S, T.cityLight(2), sp.px + n[0] * 0.865, y + 1.15, sp.pz + n[1] * 0.865, n[0], n[1], 1.5, 0.9, { lit: true });
       S.svc.kiosks.push({ x: sp.px, z: sp.pz, rotY: sp.rot, kind: 'press' }); taken.push([st.x, st.z]); cnt.press++;
     }
   }
@@ -261,8 +274,8 @@ export function placeStands(S) {
         const n = [Math.sin(sp.rot), Math.cos(sp.rot)], y = S.levelAt(sp.px, sp.pz);
         if (type.startsWith('cabin')) {
           S.box(sp.px, sp.pz, 2.4, 1.8, sp.rot, 2.6, { r: 1.7, tag: 'stand' });
-          if (type === 'cabinBoats') S.panels.panel(T.boats(), sp.px + n[0] * 0.6, y + 2.88, sp.pz + n[1] * 0.6, n[0], n[1], 2.2, 0.82, { lit: true });
-          else S.panels.panel(T.fascia(text, col), sp.px + n[0] * 0.545, y + 2.9, sp.pz + n[1] * 0.545, n[0], n[1], 2.1, 0.54, { lit: true });
+          if (type === 'cabinBoats') standPanel(S, T.boats(), sp.px + n[0] * 0.6, y + 2.88, sp.pz + n[1] * 0.6, n[0], n[1], 2.2, 0.82, { lit: true });
+          else standPanel(S, T.fascia(text, col), sp.px + n[0] * 0.545, y + 2.9, sp.pz + n[1] * 0.545, n[0], n[1], 2.1, 0.54, { lit: true });
           cnt.stands++;
         } else if (type.startsWith('stall')) { S.box(sp.px, sp.pz, 3.0, 1.8, sp.rot, 2.6, { r: 1.7, tag: 'stand' }); cnt.stalls++; S.svc.stalls.push({ x: sp.px, z: sp.pz, rotY: sp.rot }); }
         else { S.box(sp.px, sp.pz, 1.3, 1.0, sp.rot, 1.1, { r: 1.0, tag: 'stand' }); cnt.carts++; }
@@ -281,7 +294,7 @@ export function placeStands(S) {
       if (W.span(px + pr.nx * 1.3, pz + pr.nz * 1.3, pr.nx, pr.nz, 6, F.ROAD | F.BLD | F.TREE) < 2.4) continue;
       S.add('cabinBoats', px, pz, rot); S.box(px, pz, 2.4, 1.8, rot, 2.6, { r: 1.7, tag: 'stand' });
       const n = [Math.sin(rot), Math.cos(rot)], y = S.levelAt(px, pz);
-      S.panels.panel(T.boats(), px + n[0] * 0.6, y + 2.88, pz + n[1] * 0.6, n[0], n[1], 2.2, 0.82, { lit: true });
+      standPanel(S, T.boats(), px + n[0] * 0.6, y + 2.88, pz + n[1] * 0.6, n[0], n[1], 2.2, 0.82, { lit: true });
       S.svc.kiosks.push({ x: px, z: pz, rotY: rot, kind: 'cabinBoats' }); cnt.stands++; cnt.boats++; done = true; break;
     } if (done) break; }
   }

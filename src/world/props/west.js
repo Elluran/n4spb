@@ -13,6 +13,7 @@ import * as L from '../layout.js';
 import { MANMADE } from '../data/city.js';
 import { hash01 } from './kit.js';
 import { faceRot, nearestWall } from './sites.js';
+import { standPanel } from './stands.js';
 
 // ------------------------------------------------------------------------------------------------------------------- the curated sites
 // at = anchor (map metres); R = search radius; face: 'away' (front looks away from the carriageway: pavement kiosks) | 'road' (carts: front to the street); pav: allow claimed paving (Gostiny promenade)
@@ -76,22 +77,23 @@ export function placeWest(S) {
     return null;
   };
 
+  /** the fascias / posters of a knockable (kiosk, cart, booth) are standalone panels that the car throws along with it (standPanel); the cafe kiosk is not knockable */
   const panelsFor = (o, x, z, rot, y) => {
     const n = [Math.sin(rot), Math.cos(rot)];
     if (o.t === 'pressKiosk2') {
-      S.panels.panel(T.fascia(o.text, '#2c4a3c', '#f3eedf', o.sub), x + n[0] * 0.9, y + 2.22, z + n[1] * 0.9, n[0], n[1], 1.3, 0.34, { lit: true });
-      S.panels.panel(T.cityLight(3), x + n[0] * 0.915, y + 1.15, z + n[1] * 0.915, n[0], n[1], 1.25, 0.95, { lit: true });
+      standPanel(S, T.fascia(o.text, '#2c4a3c', '#f3eedf', o.sub), x + n[0] * 0.9, y + 2.22, z + n[1] * 0.9, n[0], n[1], 1.3, 0.34, { lit: true });
+      standPanel(S, T.cityLight(3), x + n[0] * 0.915, y + 1.15, z + n[1] * 0.915, n[0], n[1], 1.25, 0.95, { lit: true });
     } else if (o.t === 'excKiosk') {
-      S.panels.panel(T.fascia('ЭКСКУРСИИ', '#1f56a8', '#ffffff', 'Петергоф · Пушкин · Павловск'), x + n[0] * 1.075, y + 1.85, z + n[1] * 1.075, n[0], n[1], 1.8, 0.5, { lit: true });
-      S.panels.panel(T.cityLight(5), x + n[0] * 1.075, y + 1.1, z + n[1] * 1.075, n[0], n[1], 1.5, 0.75, { lit: true });
+      standPanel(S, T.fascia('ЭКСКУРСИИ', '#1f56a8', '#ffffff', 'Петергоф · Пушкин · Павловск'), x + n[0] * 1.075, y + 1.85, z + n[1] * 1.075, n[0], n[1], 1.8, 0.5, { lit: true });
+      standPanel(S, T.cityLight(5), x + n[0] * 1.075, y + 1.1, z + n[1] * 1.075, n[0], n[1], 1.5, 0.75, { lit: true });
     } else if (o.t.startsWith('cartHot')) {
-      S.panels.panel(T.fascia(o.text, '#7d1d2b', '#f3eedf', o.sub), x + n[0] * 0.37, y + 0.55, z + n[1] * 0.37, n[0], n[1], 1.2, 0.3, {});
+      standPanel(S, T.fascia(o.text, '#7d1d2b', '#f3eedf', o.sub), x + n[0] * 0.37, y + 0.55, z + n[1] * 0.37, n[0], n[1], 1.2, 0.3, {});
     } else if (o.t === 'cartSouv') {
-      S.panels.panel(T.fascia(o.text, '#8a5a36', '#f6eedc', o.sub), x + n[0] * 0.41, y + 0.62, z + n[1] * 0.41, n[0], n[1], 1.2, 0.3, {});
+      standPanel(S, T.fascia(o.text, '#8a5a36', '#f6eedc', o.sub), x + n[0] * 0.41, y + 0.62, z + n[1] * 0.41, n[0], n[1], 1.2, 0.3, {});
     } else if (o.t === 'cafeKiosk') {
       S.panels.panel(T.fascia(o.text, '#6a3a28', '#f3eedf', null), x + n[0] * 0.98, y + 2.0, z + n[1] * 0.98, n[0], n[1], 2.4, 0.4, { lit: true });
     } else if (o.t === 'ticketBooth') {
-      S.panels.panel(T.boats(), x + n[0] * 0.74, y + 1.62, z + n[1] * 0.74, n[0], n[1], 1.3, 0.48, { lit: true });
+      standPanel(S, T.boats(), x + n[0] * 0.74, y + 1.62, z + n[1] * 0.74, n[0], n[1], 1.3, 0.48, { lit: true });
     }
   };
 

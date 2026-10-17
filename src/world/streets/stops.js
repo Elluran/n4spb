@@ -9,6 +9,7 @@ import { BUS_STOPS } from '../data/city.js';
 import { nearestWay, wayAt } from './net.js';
 import { WALK_Y, KERB_W } from './surface.js';
 import { knockInstances } from '../lib/knock-inst.js';
+import { registerLOD } from '../../core/spatial.js';
 
 const SHEL_W = 3.0, SHEL_D = 1.4;                                      // the shelter (shelterModel): along the road x deep
 /** the shelter place of a stop beside way w at arclength s on `side`: the platform node is a hint (its lateral distance is kept when it lies 1.4 .. 6 m behind the kerb, else 1.0 m + half the depth) */
@@ -75,8 +76,9 @@ function binModel() {
 
 export function buildStops(ctx, net, stops, shared, root) {
   const { panels, poles } = shared;
+  const K = shared.kposts || null;                                              // knockable posts (furn.js makeKnockPosts): the bus-stop poles; null without ctx.knock = the merged pt-poles path
   const F = ctx.tex.FONTS;
-  const out = { stops: 0, shelters: 0, list: [], bollards: 0, rails: 0, tris: 0 };
+  const out = { stops: 0, shelters: 0, list: [], bollards: 0, rails: 0, tris: 0, knockPoles: 0 };
   const busTex = shared.signs.tex('5.16'), [BUS_W, BUS_H] = shared.signs.size('5.16');
   const nameTex = (name) => ctx.tex.draw(512, 64, (g, w, h) => {
     g.fillStyle = '#16181c'; g.fillRect(0, 0, w, h);
@@ -89,6 +91,8 @@ export function buildStops(ctx, net, stops, shared, root) {
   const list = [];
   const dummy = new THREE.Object3D();
   const placed = [];
+  const shelterSpots = [], bandMats = [];                                       // with ctx.knock: the shelters are knockable instances, their name band a detached mesh that travels with the record
+  const bandGeo = ctx.knock ? new THREE.PlaneGeometry(3.1, 0.31) : null;
   const benchSpots = [], binSpots = [];                                         // with ctx.knock: the stop benches and the shelter bins are knockable instances (below), not merged pole parts
   for (const st of stops) {
     const { at, side, edge } = st;
@@ -103,18 +107,28 @@ export function buildStops(ctx, net, stops, shared, root) {
     // pole + blue sign 2.4 m before the shelter (looking along the travel direction of the nearest lane)
     const dirT = sp.dirT;                                                         // direction the traffic nearest the stop travels (one-way carriageways: with the polyline)
     const px = cx + tx * dirT * -2.4 + frontX * (shel.D / 2 - 0.1), pz = cz + tz * dirT * -2.4 + frontZ * (shel.D / 2 - 0.1);
-    ctx.physics.addCylinder(px, pz, 0.1, 0, 3);
-    poles.cyl(0.05, 0.06, 3.0, COL.black, [px, WALK_Y + 1.5, pz], null, 6, null, true); poles.cyl(0.09, 0.1, 0.1, COL.blackL, [px, WALK_Y + 0.05, pz], null, 6, null, true);
-    panels.mount(poles, busTex, px, WALK_Y + 2.58, pz, tx * dirT * -1, tz * dirT * -1, BUS_W, BUS_H, { pole: 0.05 });
+    const pitem = ctx.physics.addCylinder(px, pz, 0.1, 0, 3);
+    if (K) { K.signPost({ x: px, z: pz, nx: tx * dirT * -1, nz: tz * dirT * -1, h: 3.0, r: 0.05, col: COL.black, tex: busTex, w: BUS_W, ht: BUS_H, my: 2.58, variant: 'stop', item: pitem,
+      base: (V) => V.cyl(0.09, 0.1, 0.1, COL.blackL, [0, 0.05, 0], null, 6, null, true), rec: { mass: 30, h: 3.0 } }); out.knockPoles++; }                // knockable: shaft, ring, clamps and the blue face are one instance (no ghost pole in pt-poles)
+    else {
+      poles.cyl(0.05, 0.06, 3.0, COL.black, [px, WALK_Y + 1.5, pz], null, 6, null, true); poles.cyl(0.09, 0.1, 0.1, COL.blackL, [px, WALK_Y + 0.05, pz], null, 6, null, true);
+      panels.mount(poles, busTex, px, WALK_Y + 2.58, pz, tx * dirT * -1, tz * dirT * -1, BUS_W, BUS_H, { pole: 0.05 });
+    }
     st.pole = { x: px, z: pz };
     if (st.shelter) {
       list.push({ x: cx, z: cz, rotY, st });
+      const items = [];
       { const c = Math.cos(rotY), sn = Math.sin(rotY), back = -shel.D / 2 + 0.05;       // colliders: back panel + the two glass sides (the front stays open)
-        ctx.physics.addBox(cx + back * sn, cz + back * c, shel.W, 0.14, rotY, 0, 2.6);
-        for (const sx of [-1, 1]) { const lx = sx * (shel.W / 2 - 0.05); ctx.physics.addBox(cx + lx * c, cz - lx * sn, 0.12, shel.D, rotY, 0, 2.6); } }
+        items.push(ctx.physics.addBox(cx + back * sn, cz + back * c, shel.W, 0.14, rotY, 0, 2.6));
+        for (const sx of [-1, 1]) { const lx = sx * (shel.W / 2 - 0.05); items.push(ctx.physics.addBox(cx + lx * c, cz - lx * sn, 0.12, shel.D, rotY, 0, 2.6)); } }
       // name band on the front fascia
-      const ntex = nameTex(st.name || 'Остановка');
-      panels.panel(ntex, cx + frontX * (shel.D / 2 + 0.24), WALK_Y + shel.H - 0.17, cz + frontZ * (shel.D / 2 + 0.24), frontX, frontZ, 3.1, 0.31);
+      const ntex = nameTex(st.name || 'Остановка'), bx0 = cx + frontX * (shel.D / 2 + 0.24), by0 = WALK_Y + shel.H - 0.17, bz0 = cz + frontZ * (shel.D / 2 + 0.24);
+      if (ctx.knock) {                                                          // a mesh of its own (the dynamic root): the knocked shelter takes its band; the same quad as panels.panel with its own material
+        const mat = new THREE.MeshBasicMaterial({ map: ntex, side: THREE.DoubleSide, toneMapped: false, name: 'pt-stopname', alphaTest: 0.45 }); bandMats.push(mat);
+        const band = new THREE.Mesh(bandGeo, mat); band.name = 'pt-stop-band'; band.castShadow = false; band.receiveShadow = false;
+        band.position.set(bx0, by0, bz0); band.rotation.y = Math.atan2(frontX, frontZ); ctx.noOutline(band); ctx.add(band);
+        shelterSpots.push({ x: cx, y: WALK_Y, z: cz, rotY, items, band });
+      } else panels.panel(ntex, bx0, by0, bz0, frontX, frontZ, 3.1, 0.31);
       // litter bin beside the shelter
       const bnx = cx + tx * 1.95 + nOut[0] * 0.2, bnz = cz + tz * 1.95 + nOut[1] * 0.2;
       if (ctx.knock) binSpots.push({ x: bnx, y: WALK_Y, z: bnz, rotY });
@@ -144,6 +158,16 @@ export function buildStops(ctx, net, stops, shared, root) {
       items: (i, p) => ctx.physics.addCylinder(p.x, p.z, 0.2, 0, WALK_Y + 0.78),
       rec: { kind: 'bin', mass: 14, h: 0.78, r: 0.17, hitK: 0.12, metal: true } });
     out.knockBenches = benchSpots.length; out.knockBins = binSpots.length;
+    if (shelterSpots.length) {                                                  // body + wood + glass share one index; the 3 colliders go as items, the name band as the detached part
+      knockInstances(ctx, { name: 'pt-shelter', cell: 1024, far: 300,
+        parts: [{ name: 'body', geo: shel.body, mat: mVC }, { name: 'wood', geo: shel.wood, mat: woodM }, { name: 'glass', geo: shel.glass.build(), mat: glassM, shadow: false, receive: false, noOutline: true }],
+        spots: shelterSpots, items: (i, s) => s.items, extraParts: (i, s) => [{ obj: s.band }],
+        rec: { kind: 'shelter', mass: 350, h: shel.H, w: shel.W, d: shel.D, anchored: 28, hitK: 0.6, metal: true, minDv: 0 } });
+      for (const sp of shelterSpots) { sp.band.updateMatrixWorld(true); registerLOD(sp.band, 330); }     // the band goes with its shelter (300 m + the throw reach); a loose draw, no attach
+      ctx.onUpdate(() => { const n = ctx.shared.uNight ? ctx.shared.uNight.value : 0; for (const m of bandMats) m.color.setScalar(0.86 + 0.5 * n); });   // the bands brighten at night like the merged sign panels
+      out.tris += shel.body.index.count / 3 * shelterSpots.length; out.knockShelters = shelterSpots.length;
+    }
+    return out;                                                                 // (the merged shelter meshes below are the build without ctx.knock)
   }
   // shelters: bake the model into every placement and merge (one mesh per material instead of one per shelter)
   const bake = (geo) => {

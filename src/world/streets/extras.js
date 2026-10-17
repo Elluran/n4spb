@@ -153,7 +153,7 @@ export function buildTramRails(net, P, Bed) {
 
 /** speed-camera boxes (OSM FURNITURE kind speed_camera: 7 in the west, along Nevsky): a grey box on a slim black pole 5.5 m beside the kerb with a short arm over the lane, looking along
  *  the traffic (docs/research/west-life-furniture.md 3.3: "grey boxes on the mast arms, no flash"). Merged into the shared poles VB; with ctx.knock (kposts = shared.kposts of furn.js makeKnockPosts)
- *  each camera is a knockable record of its own model (a 5.5 m steel pole with the box on the arm: 120 kg, anchored 16 km/h). */
+ *  each camera is a knockable record of its own model (a 5.5 m steel pole with the box on the arm: 120 kg, anchored 18 km/h). */
 export function buildSpeedCameras(ctx, net, poles, kposts = null) {
   let n = 0;
   for (const f of FURNITURE) {
@@ -173,7 +173,7 @@ export function buildSpeedCameras(ctx, net, poles, kposts = null) {
     };
     if (!kposts) draw(poles, 0, 0, 0);
     const item = ctx.physics.addCylinder(x, z, 0.14, 0, 5.5);
-    if (kposts) kposts.add({ group: 'camera', model: kposts.model('camera|' + n, (V) => draw(V, x, WALK_Y, z)), x, z, rotY: 0, item, rec: { kind: 'camera', mass: 120, h: 5.5, r: 0.1, anchored: 16, hitK: 0.25, metal: true } });
+    if (kposts) kposts.add({ group: 'camera', model: kposts.model('camera|' + n, (V) => draw(V, x, WALK_Y, z)), x, z, rotY: 0, item, rec: { kind: 'camera', mass: 120, h: 5.5, r: 0.1, anchored: 18, hitK: 0.25, metal: true } });
     n++;
   }
   return n;

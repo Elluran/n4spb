@@ -10,8 +10,18 @@ import { ROADS, PARKING, GREEN } from '../data/city.js';
 import { HALL, W, M as toHall, HT, STAIR } from './frame.js';
 import { fillPolyClipped, coverFn, pairs, distToLine, inRing } from './surfaces.js';
 import { partsGeos, addInstanced, mat4 } from './inst.js';
+import { knockInstances } from '../lib/knock-inst.js';
 
 const TAU = Math.PI * 2;
+
+/** the instanced furniture of the plaza (lamps, bollards, poster stands): KNOCKABLE with ctx.knock (core/knock.js, lib/knock-inst.js: one Dynamic InstancedMesh per material, the same index in
+ *  every material, one record per placement owning its collider, a finite LOD range, no batching); without ctx.knock (the headless tools) exactly the addInstanced meshes of before. Returns the triangles. */
+function furniture(K, name, geos, spots, items, rec, far) {
+  const ctx = K.ctx;
+  if (!ctx.knock) return addInstanced(ctx, K.root, name, geos, spots.map((s) => mat4(s.x, s.y, s.z, s.rotY, 1))).tris;
+  knockInstances(ctx, { name, parts: geos.list.map(({ geo, mat }) => ({ geo, mat })), spots, items, rec, far });
+  return geos.list.reduce((n, { geo }) => n + (geo.index ? geo.index.count : geo.attributes.position.count) / 3 * spots.length, 0);
+}
 
 /** a twin-globe cast-iron lamp, 8.8 m (front = +z, arms along local x): ribbed bulbous base, tapering fluted shaft, two scrolled arms with opal globes under black caps */
 export function lampTwinParts(Q, M) {
@@ -70,13 +80,14 @@ export function build(K) {
 
   // ---------------------------------------------------------------------------------------- lamps (4 twin lamps in front of the stair)
   const lampGeo = partsGeos((Q) => lampTwinParts(Q, M));
-  const lm = [];
+  const lm = [], lmItems = [];
   for (const u of [1.5, 10.8, 46.7, 63.0]) {
     const p = W(u, -7.0);
     if (!ok(p.x, p.z, 1.0)) continue;
-    lm.push(mat4(p.x, 0, p.z, HALL.rot + Math.PI, 1)); ph.addCylinder(p.x, p.z, 0.3, 0, 9); K.svc.lamps.push({ x: p.x, z: p.z, h: 8.8 });
+    lm.push({ x: p.x, y: 0, z: p.z, rotY: HALL.rot + Math.PI }); lmItems.push(ph.addCylinder(p.x, p.z, 0.3, 0, 9)); K.svc.lamps.push({ x: p.x, z: p.z, h: 8.8 });
   }
-  K.extraTris += addInstanced(ctx, K.root, 'lmOkt-lamps', lampGeo, lm).tris;
+  // cast iron, anchored: holds a scrape, breaks off at the foot above 23 km/h (plan: package I; 103: streets/lamps.js)
+  K.extraTris += furniture(K, 'lmOkt-lamps', lampGeo, lm, lmItems, { kind: 'lamp', mass: 450, h: 8.8, r: 0.3, anchored: 23, hitK: 0.65, metal: true }, 300);
 
   // ---------------------------------------------------------------------------------------- bollards with chains along the Ligovsky kerb (the lot side)
   const roads = ROADS.filter((r) => r.id === 'w185184926' || r.id === 'w251949580');
@@ -95,16 +106,17 @@ export function build(K) {
     }
   }
   const sel = line.map((p) => ({ p, h: toHall(p.x, p.z) })).filter(({ h }) => h.u > -14 && h.u < 108 && h.v < -17 && h.v > -75).sort((a, b) => a.h.u - b.h.u);
-  const bGeo = partsGeos((Q) => bollardParts(Q, M)), bm = [], bp = [];
+  const bGeo = partsGeos((Q) => bollardParts(Q, M)), bm = [], bmItems = [], bp = [];
   let lastU = -1e9;
   for (const { p, h } of sel) {
     if (h.u - lastU < 5.0) continue;
     // not at the lot entrances / aisles: the stump and the chain ends must all stand clear of asphalt
     if (![-2.6, 0, 2.6].every((s) => ok(p.x + p.dx * s, p.z + p.dz * s, 0.6))) continue;
     lastU = h.u; bp.push(p);
-    bm.push(mat4(p.x, 0, p.z, Math.atan2(p.dz, -p.dx) + Math.PI / 2, 1)); ph.addCylinder(p.x, p.z, 0.26, 0, 0.8);
+    bm.push({ x: p.x, y: 0, z: p.z, rotY: Math.atan2(p.dz, -p.dx) + Math.PI / 2 }); bmItems.push(ph.addCylinder(p.x, p.z, 0.26, 0, 0.8));
   }
-  K.extraTris += addInstanced(ctx, K.root, 'lmOkt-bollards', bGeo, bm).tris;
+  // granite stump: heavy, holds below 30 km/h; the drawn chains stay (like 103's wires)
+  K.extraTris += furniture(K, 'lmOkt-bollards', bGeo, bm, bmItems, { kind: 'bollard', mass: 250, h: 0.8, r: 0.26, anchored: 30, hitK: 0.5 }, 240);
   // black chains between neighbours (a 0.25 m sag)
   const chainSegs = [];
   for (let i = 0; i + 1 < bp.length; i++) {
@@ -117,12 +129,12 @@ export function build(K) {
   K.svc.bollards = bp.length;
 
   // ---------------------------------------------------------------------------------------- citylight poster stands
-  const sGeo = partsGeos((Q) => standParts(Q, M)), sm = [];
+  const sGeo = partsGeos((Q) => standParts(Q, M)), sm = [], smItems = [];
   for (const [u, v] of [[2.5, -8.2], [72.0, -8.5]]) {
     const p = W(u, v); if (!ok(p.x, p.z, 0.8)) continue;
-    sm.push(mat4(p.x, 0, p.z, HALL.rot + Math.PI, 1)); ph.addBox(p.x, p.z, 1.3, 0.3, HALL.rot, 0, 2.1);
+    sm.push({ x: p.x, y: 0, z: p.z, rotY: HALL.rot + Math.PI }); smItems.push(ph.addBox(p.x, p.z, 1.3, 0.3, HALL.rot, 0, 2.1));
   }
-  K.extraTris += addInstanced(ctx, K.root, 'lmOkt-stands', sGeo, sm).tris;
+  K.extraTris += furniture(K, 'lmOkt-stands', sGeo, sm, smItems, { kind: 'citylight', mass: 90, h: 2.1, w: 1.3, d: 0.3, anchored: 15, hitK: 0.3, metal: true }, 220);
 
   // ---------------------------------------------------------------------------------------- people: photo spots, the audience on the stair
   const front = (u) => W(u, 0);

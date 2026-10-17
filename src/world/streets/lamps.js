@@ -175,7 +175,7 @@ export function buildLamps(ctx, net, T, root, opts = {}) {
     }
   }
   // the knock record of a family (core/knock.js): mass kg, post radius, break speed of the car at contact in km/h, share of a wall-blow the car takes
-  const KNOCK = { A0: [500, 0.30, 22, 0.6], A1: [500, 0.30, 22, 0.6], A2: [500, 0.30, 22, 0.6], S0: [280, 0.25, 20, 0.55], S1: [280, 0.25, 20, 0.55], D: [140, 0.17, 16, 0.45], L: [160, 0.20, 16, 0.5], L2: [160, 0.20, 16, 0.5] };
+  const KNOCK = { A0: [500, 0.30, 22, 0.6], A1: [500, 0.30, 22, 0.6], A2: [500, 0.30, 22, 0.6], S0: [280, 0.25, 20, 0.55], S1: [280, 0.25, 20, 0.55], D: [140, 0.17, 18, 0.45], L: [160, 0.20, 18, 0.5], L2: [160, 0.20, 18, 0.5] };
   for (const key of Object.keys(sites)) {
     const m = models[key], spots = sites[key]; if (!m || !spots.length) continue;
     const [mass, r, anchored, hitK] = KNOCK[key];

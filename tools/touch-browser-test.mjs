@@ -112,7 +112,7 @@ SCENARIOS.desktop = async () => {
       dTouch: getComputedStyle(document.querySelector('.d-touch')).display, sel: getComputedStyle(document.body).userSelect, overscroll: getComputedStyle(document.documentElement).overscrollBehaviorY, places: getComputedStyle(document.getElementById('places')).display,
       help: getComputedStyle(document.getElementById('help')).display, pos: getComputedStyle(document.documentElement).position, requestLock: String(__ctx.playerObj.requestLock).includes('{}') || String(__ctx.playerObj.requestLock).length < 40 }));
     check('desktop: no html.tc, no #tc, no window.__tc', !a.tc && !a.tcEl && a.tcObj === 'undefined', a);
-    check('desktop: tier medium with the full GPU settings (shadow 2048, MSAA 4)', a.q === 'medium' && a.shadow === 2048 && a.msaa === 4, a);
+    check('desktop: tier performance (the default) with the full GPU settings (shadow 2048, MSAA 4)', a.q === 'performance' && a.shadow === 2048 && a.msaa === 4, a);
     check('desktop: the old chips and help are shown, the old .d-touch buttons hidden, no touch CSS (user-select, overscroll, position)', a.places !== 'none' && a.help !== 'none' && a.dTouch === 'none' && a.sel !== 'none' && a.overscroll === 'auto' && a.pos === 'static', a);
     await s.page.click('#go'); await sleep(500);
     const p0 = await snap(s.page);
@@ -126,7 +126,7 @@ SCENARIOS.desktop = async () => {
   const f = await open({ mobile: false });
   try { await load(f.page, FAST + '&touch=1'); check('desktop ?touch=1: html.tc, #tc, tier performance', await f.page.evaluate(() => document.documentElement.classList.contains('tc') && !!document.getElementById('tc') && __ctx.quality.name === 'performance')); check('desktop ?touch=1: no console errors', f.errors.length === 0, f.errors); } finally { await f.close(); }
   const z = await open({});
-  try { await load(z.page, FAST + '&touch=0'); check('phone ?touch=0: the touch UI is off (no html.tc, no #tc), tier medium', await z.page.evaluate(() => !document.documentElement.classList.contains('tc') && !document.getElementById('tc') && __ctx.quality.name === 'medium')); } finally { await z.close(); }
+  try { await load(z.page, FAST + '&touch=0'); check('phone ?touch=0: the touch UI is off (no html.tc, no #tc), tier performance', await z.page.evaluate(() => !document.documentElement.classList.contains('tc') && !document.getElementById('tc') && __ctx.quality.name === 'performance')); } finally { await z.close(); }
 };
 
 // ---------------------------------------------------------------- 6-18 walk, fly, interact, drive, release safety (one page, 844 x 390 landscape)

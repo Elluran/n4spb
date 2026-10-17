@@ -4,7 +4,8 @@
 import * as THREE from 'three';
 import { C0, ROT, W, Mdl, boxAt, cylAt } from './frame.js';
 import { GREEN, BARRIERS, ROADS, FURNITURE, TREES } from '../data/city.js';
-import { ringToModel, ringOf, inPoly, recById, fenceRun, ribbon, tree, lantern, instances, benchGeo } from './util.js';
+import { ringToModel, ringOf, inPoly, recById, fenceRun, ribbon, tree, lantern, templateOf, benchGeo } from './util.js';
+import { knockInstances } from '../lib/knock-inst.js';
 
 const PARK = 'r2050448', FENCE = 'w151672020';
 const fountainModel = () => Mdl(-1571.4, -225.9);
@@ -114,8 +115,16 @@ function trees(K, ring) {
 }
 
 function lamps(K) {
-  const P = K.P, M = K.M, ph = K.ctx.physics;
-  for (const [x, z] of [[-55.5, 54.2], [-55.5, 91.4], [-14.5, 110.5], [14.5, 110.5]]) { lantern(P, M, x, z); cylAt(ph, x, z, 0.3, 0, 4); }
+  const P = K.P, M = K.M, ctx = K.ctx, ph = ctx.physics, spots = [], items = [];
+  for (const [x, z] of [[-55.5, 54.2], [-55.5, 91.4], [-14.5, 110.5], [14.5, 110.5]]) {
+    if (!ctx.knock) { lantern(P, M, x, z); cylAt(ph, x, z, 0.3, 0, 4); continue; }          // (no knock: the lantern is merged into the module, as ever)
+    const w = W(x, z); spots.push({ x: w.x, y: 0, z: w.z, rotY: ROT }); items.push(cylAt(ph, x, z, 0.3, 0, 4));
+  }
+  // knockable (core/knock.js): a cast-iron lantern, anchored: holds a bump, breaks off at the foot above 22 km/h and topples; iron pole + glass lantern are instances of one template
+  if (spots.length) knockInstances(ctx, {
+    name: 'lmF-vor-lanterns', parts: templateOf((T) => lantern(T, M, 0, 0)).map((t) => ({ geo: t.geo, mat: t.mat, name: t.mat === M.lampGlass ? 'glass' : 'iron' })),
+    spots, items, far: 260, rec: { kind: 'lamp', mass: 250, h: 4.25, r: 0.3, anchored: 22, hitK: 0.5, metal: true },
+  });
 }
 
 function benches(K, ring) {
@@ -126,7 +135,9 @@ function benches(K, ring) {
     list.push({ x: f.x, y: 0.14, z: f.z, rotY: Math.atan2(F.mx - m.mx, F.mz - m.mz) + ROT });
   }
   const mat = ctx.mat.toon('#ffffff', { vertexColors: true, name: 'lmF-bench', paint: 0.02 });
-  instances(ctx, benchGeo(), mat, list, 'lmF-vor-benches');
-  for (const b of list) ctx.physics.addBox(b.x, b.z, 1.7, 0.6, b.rotY, 0, 0.9);
+  const items = list.map((b) => ctx.physics.addBox(b.x, b.z, 1.7, 0.6, b.rotY, 0, 0.9));
+  // knockable (core/knock.js): a light park bench, free: slides and tumbles when the car hits it; without ctx.knock it is the one static instanced mesh of before
+  knockInstances(ctx, { name: 'lmF-vor-benches', parts: [{ geo: benchGeo(), mat, receive: false }], spots: list, items, far: 220,
+    rec: { kind: 'bench', mass: 42, h: 0.9, w: 1.7, d: 0.6, hitK: 0.25, minDv: 0.5 } });
   (K.svc.vorBenches ||= []).push(...list.map((b) => ({ x: b.x, z: b.z, rotY: b.rotY, len: 1.7 })));
 }

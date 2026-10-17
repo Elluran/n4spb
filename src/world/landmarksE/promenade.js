@@ -2,10 +2,13 @@
 // pale grey granite slabs with darker strips (OSM area r16467256, clipped at the facade line), a double row of young small-leaved lindens (5-6 m) at the OSM tree nodes, each in a lawn island with a
 // granite curb and clipped low shrubs (the 44 OSM flowerbed polygons), and the row of four-sided lanterns on slim dark-green poles with a round granite bench ring round each foot (11 units at
 // v 24.5, none in front of the portico).  Bus shelters, the kerb lamps with two globes and the advertising pillars belong to streets / props.
+// KNOCKABLE (core/knock.js, lib/knock-inst.js): with ctx.knock the 11 lanterns (pole + lantern, the glass vanishes at the knock) are instances a car at 22 km/h breaks off at the foot; the
+// granite bench ring stays in the Parts with its own low collider (the car steps over it). Without ctx.knock the lantern is merged into the Parts as ever.
 import * as THREE from 'three';
 import { AREAS, GREEN, TREES } from '../data/city.js';
 import { toUV, toWorld, ringOf } from './frame.js';
-import { band, ringEdges } from './kit.js';
+import { Parts, band, ringEdges } from './kit.js';
+import { knockInstances } from '../lib/knock-inst.js';
 
 const IN = (x, z) => { const q = toUV(x, z); return q.u > 495 && q.u < 745 && q.v > 8 && q.v < 40; };
 
@@ -19,6 +22,23 @@ function clipV(pts, vmax) {
   }
   return out;
 }
+
+/** the lantern in the collector P: the green cast pole with its collar, the four-sided glass lantern and the pyramid roof; y = the foot level (the numbers are heights above it) */
+function lantern(P, iron, glass, x, y, z) {
+  P.cyl(iron, [x, y, z], [x, y + 0.28, z], 0.22, 0.17, 8, true);
+  P.cyl(iron, [x, y + 0.28, z], [x, y + 4.28, z], 0.1, 0.075, 8, false);
+  P.cyl(iron, [x, y + 0.78, z], [x, y + 0.98, z], 0.17, 0.12, 8, true);
+  P.cyl(iron, [x, y + 4.23, z], [x, y + 4.48, z], 0.2, 0.16, 6, true);
+  P.cyl(glass, [x, y + 4.48, z], [x, y + 5.28, z], 0.4, 0.42, 4, true);                           // four-sided lantern (4-gon prism)
+  P.cyl(iron, [x, y + 5.28, z], [x, y + 5.83, z], 0.52, 0.03, 4, true);                           // pyramid roof with a spike
+}
+/** the knock template of the lantern (foot at y 0): one geometry per material, the glass part vanishes at the knock */
+function lanternModel(iron, glass) {
+  const T = new Parts();
+  lantern(T, iron, glass, 0, 0, 0);
+  return T.build(new THREE.Group()).map((m) => ({ geo: m.geometry, mat: m.material, shadow: m.castShadow, receive: m.receiveShadow, hide: m.material === glass }));
+}
+const LANTERN_Y = 0.12, LANTERN_H = 5.83;
 
 export function build(K, ctx) {
   const P = K.P, M = K.G.M, ph = ctx.physics;
@@ -50,14 +70,10 @@ export function build(K, ctx) {
   // ---- lanterns with granite bench rings (v 24.5), none in front of the portico (u 604-639)
   const iron = M.ironGreen, glass = K.G.M.lanternGlass || (K.G.M.lanternGlass = ctx.mat.emissive('#ffd9a0', 0.55));
   const us = [570, 581, 592, 604, 639, 650, 662, 674, 685, 696, 708];
+  const lampSpots = [], lampItems = [];
   for (const u of us) {
     const [x, z] = toWorld(u, 24.5);
-    P.cyl(iron, [x, 0.12, z], [x, 0.4, z], 0.22, 0.17, 8, true);
-    P.cyl(iron, [x, 0.4, z], [x, 4.4, z], 0.1, 0.075, 8, false);
-    P.cyl(iron, [x, 0.9, z], [x, 1.1, z], 0.17, 0.12, 8, true);
-    P.cyl(iron, [x, 4.35, z], [x, 4.6, z], 0.2, 0.16, 6, true);
-    P.cyl(glass, [x, 4.6, z], [x, 5.4, z], 0.4, 0.42, 4, true);                                     // four-sided lantern (4-gon prism)
-    P.cyl(iron, [x, 5.4, z], [x, 5.95, z], 0.52, 0.03, 4, true);                                    // pyramid roof with a spike
+    if (ctx.knock) lampSpots.push({ x, y: LANTERN_Y, z, rotY: 0 }); else lantern(P, iron, glass, x, LANTERN_Y, z);
     // round granite bench ring, 2 m across, 0.45 m high
     const seg = 14, r0 = 0.95, r1 = 1.5;
     for (let k = 0; k < seg; k++) {
@@ -66,9 +82,11 @@ export function build(K, ctx) {
       P.quad(M.graniteGrey, [x + c0 * r1, 0.0, z + s0 * r1], [x + c1 * r1, 0.0, z + s1 * r1], [x + c1 * r1, 0.45, z + s1 * r1], [x + c0 * r1, 0.45, z + s0 * r1], [c0 + c1, 0, s0 + s1]);
       P.quad(M.graniteGrey, [x + c1 * r0, 0.0, z + s1 * r0], [x + c0 * r0, 0.0, z + s0 * r0], [x + c0 * r0, 0.45, z + s0 * r0], [x + c1 * r0, 0.45, z + s1 * r0], [-(c0 + c1), 0, -(s0 + s1)]);
     }
-    ph.addCylinder(x, z, 1.5, 0, 0.45); ph.addCylinder(x, z, 0.2, 0, 5);
+    ph.addCylinder(x, z, 1.5, 0, 0.45); lampItems.push(ph.addCylinder(x, z, 0.2, 0, 5));
     K.svc.benches.push({ x, z, rotY: 0, len: 3.0 }); K.svc.lamps.push({ x, z, h: 6 });
   }
+  if (ctx.knock && lampSpots.length) knockInstances(ctx, { name: 'lmE-lantern', parts: lanternModel(iron, glass), spots: lampSpots, items: lampItems, far: 260,
+    rec: { kind: 'lamp', mass: 300, h: LANTERN_H, r: 0.2, anchored: 22, hitK: 0.5, metal: true } });
   K.svc.spots.promenade = { islands: n, trees: nt, lanterns: us.length };
   perinnayaPortico(K, ctx);
 }

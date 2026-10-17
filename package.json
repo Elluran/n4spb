@@ -32,6 +32,7 @@
     "edgereal": "node tools/drive-edge-real.mjs",
     "knock": "node tools/knock-test.mjs",
     "signals-knock": "node tools/signals-knock-test.mjs",
+    "knock-scene": "node tools/knock-scene-test.mjs",
     "hop": "node tools/drive-hop-test.mjs",
     "touch": "node tools/touch-logic-test.mjs",
     "touchbrowser": "node tools/touch-browser-test.mjs",

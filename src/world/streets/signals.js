@@ -2,7 +2,7 @@
 // pedestrian-crossing signs (blue square with a fluorescent yellow-green frame), 'СТОП' plates, blue lane-use signs, red-white chevron posts on the traffic islands, and the navy
 // street-name / house-number plates (plates.js). Lamps show the plan of streets/lanegraph.js (pure function of t). Look: docs/research/streets.md section 4, nevsky.md section 5, photos P09 P25 P48 P52 P53.
 // KNOCKABLE (ctx.knock, shared.kposts of furn.js makeKnockPosts): every pole of this file can be knocked down by the driven car: the 840 signal poles (stop line, mid-block, signalised zebra: 90 kg of
-// steel, anchored 14 km/h), the 268 mast arms (900 kg, anchored 40 km/h), the sign posts (zebra, 'P', island chevron, bay signs: 28 kg, anchored 10 km/h). Without ctx.knock the poles are merged into
+// steel, anchored 18 km/h), the 268 mast arms (900 kg, anchored 40 km/h), the sign posts (zebra, 'P', island chevron, bay signs: 28 kg, anchored 10 km/h). Without ctx.knock the poles are merged into
 // the shared pt-poles VB as ever. With it each pole is an instance of a LOCAL model (shaft + head housing + countdown panel + back plates + cabinet) plus an atlas FACE instance, and its heads carry their
 // lens and countdown instances (the shared lens / digit meshes) as extra parts, so the whole pole flies and lies as one thing. The lens and the digit meshes never get a matrix write after the build in
 // that mode (setLens writes the lens COLOUR: lit = white, off = dark; the digits are switched by the glyph cell): nothing snaps a knocked head back to the pole. The logical signal keeps cycling (the
@@ -55,7 +55,7 @@ export function buildSignals(ctx, net, graph, T, shared, opts = {}) {
 
   // ================================================================ KNOCKABLE models (K only): LOCAL frame, origin = the foot of the pole at the pavement level, +z = the way the head / sign faces
   // (the world pose of a pole is T(x, WALK_Y, z) R_y(atan2(face))); the parts are the ones the merged path draws, in the same places
-  const SIGNAL = { kind: 'signal', mass: 90, h: 3.3, r: 0.07, anchored: 14, hitK: 0.2, metal: true };       // a traffic-signal pole with head, plate, cabinet (a bump at 14 km/h knocks it)
+  const SIGNAL = { kind: 'signal', mass: 90, h: 3.3, r: 0.07, anchored: 18, hitK: 0.2, metal: true };       // a traffic-signal pole with head, plate, cabinet (holds a parking scrape, a car at 18 km/h knocks it)
   /** a mast falls ACROSS its arm (along the traffic, +-z of its frame): the knock turns the whole rigid structure about one horizontal axis, and a truss that lay along the fall would swing into the ground or up into the sky */
   const fallAcross = (rotY) => (r, b) => { const fx = Math.sin(rotY), fz = Math.cos(rotY), sg = b.dx * fx + b.dz * fz < 0 ? -1 : 1; b.dx = fx * sg; b.dz = fz * sg; };
   const ARM_LEN = [4, 6, 8, 10, 11, 13];                                                                    // the arm lengths of the models (the real ones cluster at 8, 11 and 13 m): a mast takes the nearest, so a cell holds a handful of models

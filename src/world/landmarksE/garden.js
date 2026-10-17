@@ -3,12 +3,14 @@
 //   granite curbs and low iron hoop edging, carpet flower beds (N round bed, S oval bed, the ring round the monument), clipped shrub clumps on the OSM scrub polygons, the black cast-iron lattice
 //   fence 1.2 m on posts with the "ЕII" cipher discs, four open gates, 37 white benches at the OSM bench nodes, the four cast candelabra at the monument (OSM lamps), 107 trees at the OSM tree nodes
 //   (instanced, crowns 12-20 m) and the Catherine II monument (monument.js).  The garden is open to walk in (the fence has the four 5 m gaps of the OSM data); colliders: fence, benches, trunks.
+//   KNOCKABLE (core/knock.js, lib/knock-inst.js): with ctx.knock the 37 benches are instances of one template (iron ends + slats, 2 parts) a car can knock over; without it the benches stay merged Parts.
 //   Services: K.svc.benches (props skips them), monuments, photo spots, crowd spots (monument, artists along the Nevsky fence, chess tables).  NO flags / banners / posters.
 import * as THREE from 'three';
 import { AREAS, GREEN, BARRIERS, ROADS, FURNITURE, TREES } from '../data/city.js';
 import { toWorld, toUV, ringOf, inRing, ROT } from './frame.js';
-import { band, ringEdges } from './kit.js';
+import { Parts, band, ringEdges } from './kit.js';
 import { monument, candelabrum } from './monument.js';
+import { knockInstances } from '../lib/knock-inst.js';
 
 const IN = (u0, u1, v0, v1) => (x, z) => { const q = toUV(x, z); return q.u >= u0 && q.u <= u1 && q.v >= v0 && q.v <= v1; };
 const inGarden = IN(317, 387, 18, 168);
@@ -88,13 +90,16 @@ export function build(K, ctx) {
   // ---- benches at the OSM bench nodes (white slats on black cast ends), facing the nearest gravel path
   const paths = ROADS.filter((r) => (r.hw === 'footway' || r.hw === 'path') && r.surface !== 'sett' && inGarden(r.pts[0], r.pts[1]));
   const near = (x, z) => { let best = null, bd = 1e9; for (const r of paths) for (let i = 0; i + 3 < r.pts.length; i += 2) { const ax = r.pts[i], az = r.pts[i + 1], bx = r.pts[i + 2], bz = r.pts[i + 3], dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1))), px = ax + dx * t, pz = az + dz * t, d = Math.hypot(px - x, pz - z); if (d < bd) { bd = d; best = [px, pz]; } } return best; };
-  let nb = 0;
+  let nb = 0; const benchSpots = [], benchItems = [];
   for (const f of FURNITURE) {
     if (f.kind !== 'bench' || !inGarden(f.x, f.z)) continue;
     const w = near(f.x, f.z), rot = w ? Math.atan2(w[0] - f.x, w[1] - f.z) : 0;
-    bench(K, f.x, f.z, rot); ph.addBox(f.x, f.z, 2.3, 0.7, rot, 0, 0.9);
+    if (ctx.knock) benchSpots.push({ x: f.x, y: Y.PAVE, z: f.z, rotY: rot }); else bench(K, f.x, f.z, rot);
+    benchItems.push(ph.addBox(f.x, f.z, 2.3, 0.7, rot, 0, 0.9));
     K.svc.benches.push({ x: f.x, z: f.z, rotY: rot, len: 2.3 }); nb++;
   }
+  if (ctx.knock && benchSpots.length) knockInstances(ctx, { name: 'lmE-bench', parts: benchModel(K.G.M), spots: benchSpots, items: benchItems, far: 200,
+    rec: { kind: 'bench', mass: 55, h: 0.9, w: 2.3, d: 0.7, hitK: 0.25 } });
 
   // ---- trees at the OSM tree nodes (instanced crowns)
   let nt = 0; const rng = ctx.rng(5522);
@@ -123,13 +128,23 @@ function flowerMat(K) {
   return K.ctx.mat.toon('#ffffff', { map: tex, name: 'lmE-flowers', polygonOffset: -6 });
 }
 
-/** a park bench: white slats on black cast-iron S-scroll ends, 2.3 m, faces local +z after rot */
-function bench(K, x, z, rot) {
-  const P = K.P, M = K.G.M;
-  P.push(x, 0.12, z, rot);
+/** the park bench in its own frame (foot at y 0): white slats on black cast-iron S-scroll ends, 2.3 m, faces local +z */
+function benchDraw(P, M) {
   for (const sx of [-1.05, 1.05]) { P.box(M.iron, sx - 0.04, sx + 0.04, 0.0, 0.46, -0.24, 0.24, 'b'); P.box(M.iron, sx - 0.04, sx + 0.04, 0.46, 0.92, -0.28, -0.2, 'b'); }
   for (let i = 0; i < 4; i++) P.box(M.bench, -1.15, 1.15, 0.45, 0.5, -0.24 + i * 0.12, -0.14 + i * 0.12, 'b');
   for (let i = 0; i < 3; i++) P.box(M.bench, -1.15, 1.15, 0.6 + i * 0.13, 0.68 + i * 0.13, -0.3 + i * 0.01, -0.26 + i * 0.01, '');
+}
+/** a park bench merged into the garden Parts at (x, 0.12, z), turned by rot (the build without ctx.knock) */
+function bench(K, x, z, rot) {
+  const P = K.P;
+  P.push(x, 0.12, z, rot);
+  benchDraw(P, K.G.M);
   P.pop();
+}
+/** the knock template of the bench: one geometry per material (iron ends, white slats), foot at y 0 */
+function benchModel(M) {
+  const T = new Parts();
+  benchDraw(T, M);
+  return T.build(new THREE.Group()).map((m) => ({ geo: m.geometry, mat: m.material, shadow: m.castShadow, receive: m.receiveShadow }));
 }
 void ROT;

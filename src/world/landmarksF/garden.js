@@ -9,6 +9,8 @@ import { C0, ROT, Mdl, W, boxAt, cylAt } from './frame.js';
 import { mound, arcWall, arcFlat } from './prims.js';
 import { figureMats } from '../lib/figures.js';
 import { kutuzov, barclay, trophies } from './statues.js';
+import { templateOf } from './util.js';
+import { knockInstances } from '../lib/knock-inst.js';
 const TAU = Math.PI * 2;
 
 const AREA_ID = 'w638329474', PARK = 'w115318448';
@@ -96,13 +98,21 @@ export function build(K) {
 
   // ------------------------------------------------------------------------------------------------ benches (OSM nodes inside the garden)
   const inGarden = (m) => park && pointIn(park, m.mx, m.mz);
-  let nb = 0;
+  let nb = 0; const benchSpots = [];
   for (const f of FURNITURE) {
     if (f.kind !== 'bench') continue; const m = Mdl(f.x, f.z); if (!inGarden({ mx: m.mx, mz: m.mz })) continue;
     const dx = fo.x - m.mx, dz = fo.z - m.mz, near = Math.hypot(dx, dz) < 26;
-    bench(P, M, m.mx, m.mz, near ? Math.atan2(dx, dz) : (m.mx < 0 ? Math.PI / 2 : -Math.PI / 2)); nb++; (svc.benchPoints ||= []).push({ x: f.x, z: f.z });
+    const rot = near ? Math.atan2(dx, dz) : (m.mx < 0 ? Math.PI / 2 : -Math.PI / 2);
+    if (ctx.knock) benchSpots.push({ x: f.x, y: 0.12, z: f.z, rotY: rot + ROT }); else bench(P, M, m.mx, m.mz, rot);
+    nb++; (svc.benchPoints ||= []).push({ x: f.x, z: f.z });
   }
   P.pop();
+  // knockable (core/knock.js): the same bench model as instances (iron ends + white slats), free; the benches had no collider before: the car now meets (and throws) them
+  if (benchSpots.length) knockInstances(ctx, {
+    name: 'lmF-kazan-benches', parts: templateOf((T) => bench(T, M, 0, 0, 0, 0)).map((t) => ({ geo: t.geo, mat: t.mat, name: t.mat === M.iron ? 'iron' : 'slats' })),
+    spots: benchSpots, items: (i, s) => ph.addBox(s.x, s.z, 1.6, 0.5, s.rotY, 0, 0.9), far: 220,
+    rec: { kind: 'bench', mass: 40, h: 0.9, w: 1.6, d: 0.5, hitK: 0.25, minDv: 0.5 },
+  });
   K.svc.benches = nb;
   svc.photoSpots.push({ x: W(0, -75).x, z: W(0, -75).z, yaw: L.yawToward(W(0, -75).x, W(0, -75).z, W(0, 40).x, W(0, 40).z), pitch: 8, name: 'Казанский собор с Невского' });
   svc.photoSpots.push({ x: W(0, -22).x, z: W(0, -22).z, yaw: L.yawToward(W(0, -22).x, W(0, -22).z, W(0, 72).x, W(0, 72).z), pitch: 14, name: 'Фонтан в Казанском сквере' });
@@ -194,8 +204,8 @@ function fenceRun(P, M, pts, h, closed, base = 0.1) {
 }
 
 /** a park bench: white slats on black cast-iron scroll ends; faces local +z after rot (model frame) */
-function bench(P, M, x, z, rot) {
-  P.push(x, 0.12, z, rot);
+function bench(P, M, x, z, rot, y = 0.12) {
+  P.push(x, y, z, rot);
   for (const sx of [-0.7, 0.7]) { P.box(M.iron, sx - 0.03, sx + 0.03, 0.0, 0.45, -0.22, 0.22, 'b'); P.box(M.iron, sx - 0.03, sx + 0.03, 0.45, 0.9, -0.24, -0.18, 'b'); }
   P.box(M.white, -0.8, 0.8, 0.45, 0.5, -0.22, 0.2, 'b');
   P.box(M.white, -0.8, 0.8, 0.62, 0.72, -0.25, -0.21, ''); P.box(M.white, -0.8, 0.8, 0.8, 0.9, -0.25, -0.21, '');

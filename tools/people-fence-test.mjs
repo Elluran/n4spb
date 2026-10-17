@@ -4,7 +4,7 @@
 //   node tools/people-fence-test.mjs --mods environment,streets,city,rail,landmarksA --walk [--fenceoff]    the PLAYER's detours (breadth-first search with the real collision, radius 0.3 m) from the start pose to the places of the square
 //   node tools/people-fence-test.mjs --mods environment,streets --eval probe.mjs                           builds the modules and runs probe.mjs (default export (ctx, L, THREE, fences)); --probe lists the fence-like meshes
 // Builds environment, streets, city, rail, landmarksA, metro, props, traffic and people in node (like tools/people-test.mjs; ~2 min, needs --max-old-space-size=10000), then
-//   1. STATIC: lists the fence-like segments (guard rails = services.streets.guardRails polylines minus 0.3 m at the run ends; chain spans = the chain colliders (or, with --fenceoff, consecutive
+//   1. STATIC: lists the fence-like segments (guard rails = services.streets.guardRails polylines minus 0.3 m at the run ends; chain spans = the chain colliders, one box per span (or, with --fenceoff, consecutive
 //      bollards closer than 3.2 m); thin wall colliders = physics boxes <= 0.45 m thick and >= 0.6 m long, 0.45 .. 1.7 m up) and counts the edges of the pedestrian routing graph that cross each
 //      class, plus the graph nodes that stand ON a rail (< 0.3 m) or between a rail and its kerb (--why prints the first offending edges with the colliders near the crossing point);
 //   2. DYNAMIC: runs the simulation for --minutes (the player stands at --at, default the station square 592,165) and records every visible pedestrian step (0.1 s) that crosses a
@@ -95,8 +95,12 @@ for (const g of st.guardRails || []) for (let i = 0; i + 1 < g.pts.length; i++) 
   let [ax, az] = g.pts[i], [bx, bz] = g.pts[i + 1]; const l = Math.hypot(bx - ax, bz - az) || 1, ux = (bx - ax) / l, uz = (bz - az) / l;
   if (i === 0 && l > 0.9) { ax += ux * 0.3; az += uz * 0.3; } if (i + 2 === g.pts.length && l > 0.9) { bx -= ux * 0.3; bz -= uz * 0.3; }
   fences.push({ cls: 'rail', id: g.id, ax, az, bx, bz }); }
-const chainBoxes = ctx.physics.items.filter((it) => it.fence && it.type === 'box' && it.y1 < 1);          // the chain colliders of barriers.js (when they exist): the exact spans
+const chainBoxes = ctx.physics.items.filter((it) => it.fence && it.type === 'box' && it.y1 < 1);          // the chain colliders of barriers.js (when they exist): ONE thin box per drawn chain span (streets/barriers.js F2: the spans are knockable, so no merged boxes), i.e. the exact spans
 for (const it of chainBoxes) { const hw = it.hw, hd = it.hd, ux = hw >= hd ? it.c : it.s, uz = hw >= hd ? -it.s : it.c, l = Math.max(hw, hd); fences.push({ cls: 'chain', id: 'cb', ax: it.cx - ux * l, az: it.cz - uz * l, bx: it.cx + ux * l, bz: it.cz + uz * l }); }
+// F2 guard: the chain boxes (0.12 m thick, 0.8 m high) are exactly the spans: as many as barriers.js reports and none longer than one span (the merged collinear boxes of before ran up to 14 m)
+let spanFail = 0;
+{ const bs = ctx.services.streetsStats && ctx.services.streetsStats.barriers, own = chainBoxes.filter((it) => it.y1 === 0.8 && Math.abs(Math.min(it.hw, it.hd) - 0.06) < 1e-6), longest = own.reduce((m, it) => Math.max(m, 2 * Math.max(it.hw, it.hd)), 0);
+  if (bs && !globalThis.__fenceOff) { if (own.length !== bs.chainBoxes || longest > 3.6) { spanFail = 1; console.log('FAIL chain spans: ' + own.length + ' chain-height boxes for ' + bs.chainBoxes + ' reported, longest ' + longest.toFixed(2) + ' m (a span box is <= 3.6 m)'); } else console.log('chain spans: ' + own.length + ' per-span boxes (' + bs.chains + ' spans drawn), longest ' + longest.toFixed(2) + ' m'); } }
 // the TALL fence runs a sight module builds (flagged `fence` like the chain colliders, 1 m and higher: the Academy garden fence, the cemetery bars, the Menshikov iron fence, the Kirova garden ring, the Sevkabel plates ...)
 for (const it of ctx.physics.items) { if (!(it.fence && it.type === 'box' && it.y1 >= 1 && it.y0 < 1.7)) continue; const hw = it.hw, hd = it.hd, ux = hw >= hd ? it.c : it.s, uz = hw >= hd ? -it.s : it.c, l = Math.max(hw, hd); fences.push({ cls: 'fence', id: 'fb', ax: it.cx - ux * l, az: it.cz - uz * l, bx: it.cx + ux * l, bz: it.cz + uz * l }); }
 if (!chainBoxes.length) { // (without colliders: the bollard pairs) chain spans: consecutive chain bollards (a cylinder r 0.11 .. 0.85 m high) within 3.2 m, each post linked to its nearest unlinked neighbours on its run
@@ -261,6 +265,6 @@ if (args.includes('--plot')) for (const spec of String(flag('plot', '')).split('
   fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true }); fs.writeFileSync(file, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))])); console.log('plot', file, Wp + 'x' + Hp);
 }
 if (args.includes('--json')) fs.writeFileSync(String(flag('json', 'fence.json')), JSON.stringify({ minutes: MIN, steps: nSteps, crossings: nCross, jumps: nJump, byCls, tab, cells: [...cells], stat, buildMs: P.phases, navMs: nav.stats.ms, obstacles: nav.obstacles }));
-const bad = (byCls.rail || 0) + (byCls.chain || 0) + (byCls.wall || 0) + (byCls.fence || 0);
+const bad = (byCls.rail || 0) + (byCls.chain || 0) + (byCls.wall || 0) + (byCls.fence || 0) + spanFail;
 console.log(bad ? 'RESULT: FAIL (' + bad + ' crossings)' : 'RESULT: OK');
 process.exit(args.includes('--strict') && bad ? 1 : 0);

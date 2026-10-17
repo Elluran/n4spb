@@ -66,7 +66,7 @@ const isTouch = document.documentElement.classList.contains('tc');      // the i
 // city details (balconies, railings ...), cull scales the vehicle / people / bird render radii on top of their own tier tables, petals = flower petals. (The population / tree / bird counts
 // of each module scale with quality.level (falls back to quality.name) inside the module.)
 // TWO TIERS (2026-10-17, as in 102_3d_piter): only `medium` and `performance` are offered, tested and baked; `high` and `low` are retired (kept commented for reference). The shipping bake
-// (tools/bake-scene.mjs) runs its base stage at medium (+ nav-medium) and a nav stage at performance (nav-low); ?q=high / ?q=low fall back to medium.
+// (tools/bake-scene.mjs) runs its base stage at medium (+ nav-medium) and a nav stage at performance (nav-low); ?q=high / ?q=low fall back to the default, performance.
 const QUALITY = {
   // high: { name: 'high', pixelRatio: Math.min(devicePixelRatio, 1.5), msaa: 4, shadowMap: 4096, shadowSize: 90, petals: 1.0, ndFar: 200, lod: 1, cull: 1 },
   medium: { name: 'medium', pixelRatio: Math.min(devicePixelRatio, 1.0), msaa: 4, shadowMap: 2048, shadowSize: 70, petals: 0.6, ndFar: 150, lod: 0.8, cull: 0.75 },
@@ -77,8 +77,8 @@ const QUALITY = {
   // ?far= and ?fogx= override the two for tuning (any tier).
   performance: { name: 'performance', level: 'low', pixelRatio: Math.min(devicePixelRatio, 1.0), msaa: 4, shadowMap: 2048, shadowSize: 50, petals: 0.35, ndFar: 110, lod: 0.6, cull: 0.55, far: 1800, fogScale: 2.5 },
 };
-let qName = params.get('q') || (() => { try { return localStorage.getItem('piter.q'); } catch (e) { return null; } })() || (isTouch ? 'performance' : 'medium');      // phones start on the lighter tier (a remembered choice or ?q= still wins)
-if (!QUALITY[qName]) qName = isTouch ? 'performance' : 'medium';                       // (a remembered 'high' / 'low' from before the two-tier policy lands here too)
+let qName = params.get('q') || (() => { try { return localStorage.getItem('piter.q'); } catch (e) { return null; } })() || 'performance';      // Performance is the default tier everywhere (a remembered choice or ?q=medium still wins)
+if (!QUALITY[qName]) qName = 'performance';                       // (a remembered 'high' / 'low' from before the two-tier policy lands here too)
 const quality = { ...QUALITY[qName] };
 if (isTouch) Object.assign(quality, { pixelRatio: Math.min(quality.pixelRatio, 1), shadowMap: Math.min(quality.shadowMap, 1024), msaa: Math.min(quality.msaa ?? 4, 2) });      // phones: the GPU side only (shadow map, MSAA, pixel ratio), so the bake and the `level` stay valid
 if (SHOT) { quality.pixelRatio = 1; }

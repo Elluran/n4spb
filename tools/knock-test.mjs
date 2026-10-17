@@ -66,10 +66,10 @@ const TABLE = {
   binCast: { kind: 'bin', mass: 30, h: 0.78, r: 0.26, hitK: 0.15, metal: true }, binSteel: { kind: 'bin', mass: 14, h: 0.88, r: 0.2, hitK: 0.12, metal: true }, binCube: { kind: 'bin', mass: 70, h: 0.64, r: 0.3, hitK: 0.2 },
   pot: { kind: 'pot', mass: 10, h: 0.5, r: 0.21, hitK: 0.08, minDv: 0.4 }, urn: { kind: 'urn', mass: 110, h: 0.95, r: 0.4, hitK: 0.25, metal: true, minDv: 0.8 },
   tub: { kind: 'tub', mass: 250, h: 2.7, r: 0.5, hitK: 0.3, minDv: 1.0 }, planter: { kind: 'planter', mass: 450, h: 0.5, r: 0.62, hitK: 0.35, minDv: 1.2 },
-  rack: { kind: 'rack', mass: 25, h: 0.75, w: 1.5, d: 0.4, anchored: 8, hitK: 0.1, metal: true }, postbox: { kind: 'postbox', mass: 70, h: 1.28, w: 0.42, d: 0.36, anchored: 15, hitK: 0.3, metal: true },
+  rack: { kind: 'rack', mass: 25, h: 0.75, w: 1.5, d: 0.4, anchored: 8, hitK: 0.1, metal: true }, postbox: { kind: 'postbox', mass: 70, h: 1.28, w: 0.42, d: 0.36, anchored: 18, hitK: 0.3, metal: true },
   cabinet: { kind: 'cabinet', mass: 120, h: 1.33, w: 0.66, d: 0.4, anchored: 20, hitK: 0.35, metal: true }, cart: { kind: 'cart', mass: 110, h: 2.3, w: 1.3, d: 1.0, hitK: 0.3 },
   lampA: { kind: 'lamp', mass: 500, h: 7.6, r: 0.30, anchored: 22, hitK: 0.6, metal: true }, lampS: { kind: 'lamp', mass: 280, h: 9.2, r: 0.25, anchored: 20, hitK: 0.55, metal: true },
-  lampD: { kind: 'lamp', mass: 140, h: 5.6, r: 0.17, anchored: 16, hitK: 0.45, metal: true }, lampL: { kind: 'lamp', mass: 160, h: 4.45, r: 0.20, anchored: 16, hitK: 0.5, metal: true },
+  lampD: { kind: 'lamp', mass: 140, h: 5.6, r: 0.17, anchored: 18, hitK: 0.45, metal: true }, lampL: { kind: 'lamp', mass: 160, h: 4.45, r: 0.20, anchored: 18, hitK: 0.5, metal: true },
   bollard: { kind: 'bollard', mass: 60, h: 0.85, r: 0.11, anchored: 30, hitK: 0.4, metal: true }, stopBench: { kind: 'bench', mass: 35, h: 0.5, w: 1.6, d: 0.4, hitK: 0.2 },
   stopBin: { kind: 'bin', mass: 14, h: 0.78, r: 0.17, hitK: 0.12, metal: true },
 };
@@ -132,6 +132,16 @@ check('4 the rest box is drive-over: the car crosses a thrown bench with no hit 
   const w2 = world(); const lamp = thing(w2, TABLE.lampD, 0, 40); w2.knock.hit(0, 40, 40, 0, 1); idle(w2, 5);
   assert.equal(lamp.rec.state, 'rest'); const lb = lamp.rec.item; assert(lb.y1 <= 0.42 + 1e-6, `lying lamp top ${lb.y1}`);
   w2.car.reset(lb.cx, lb.cz - 12, 0); w2.car.vz = 9; assert.deepEqual(run(w2, 2.4).filter((e) => e.type === 'hit'), []);
+});
+
+check('4b furniture on the pavement (drawn 0.12 m above the road the car drives at): the rest box top stays <= 0.45 absolute, the car crosses a lying bench, bin and lamp with no hit event', () => {
+  for (const row of ['bench', 'binSteel', 'lampD', 'lampA']) {
+    const w = world(), def = TABLE[row], t = thing(w, def, 0, 40, { y: 0.12 });
+    w.knock.hit(0, 40, 40, 0, 1); idle(w, 5); assert.equal(t.rec.state, 'rest', row); const rb = t.rec.item;
+    assert(rb.y1 <= 0.03 + 0.42 + 1e-6, `${row}: rest top ${rb.y1} must stay under the car's step limit (0.03 + 0.45)`);
+    w.car.reset(rb.cx, rb.cz - 12, 0); w.car.vz = 9;
+    const ev = run(w, 2.4); assert.deepEqual(ev.filter((e) => e.type === 'hit'), [], `no hit event on the lying ${row}`); assert(w.car.z > rb.cz + 2, `${row}: the car crossed it (z ${w.car.z.toFixed(1)} vs ${rb.cz.toFixed(1)})`);
+  }
 });
 
 check('5 anchored break speed uses the car speed BEFORE the impulse (armed flag): lamp 22 holds below, breaks above; all three garage masses', () => {

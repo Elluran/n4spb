@@ -1,6 +1,6 @@
 // End-to-end test of the drivable car in the REAL page (headless Edge / Chrome with GPU, not ?shot, so the HUD is drawn):
 //   load -> Start -> walk to the red car -> the "[E] Get in" prompt -> E -> accelerate (W) -> nitro (Shift) -> drift (A + Space) -> look around (mouse) -> brake -> E (get out) -> report.
-//   node tools/drive-test.mjs [--q medium|high|low] [--out shots/drive/test] [--only a,b,...] [--tod night] [--nofuzz] [--lenient-first-e] [--load-timeout ms] [--protocol-timeout ms]
+//   node tools/drive-test.mjs [--q medium|high|low] [--out shots/drive/test] [--only a,b,...] [--tod night] [--params "baked=force"] [--nofuzz] [--lenient-first-e] [--load-timeout ms] [--protocol-timeout ms]
 // Screenshots <out>_*.png are written at each stage. Exit code 1 on a page error, a module error or a failed check.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -44,6 +44,7 @@ try {
   page.on('pageerror', (e) => problems.push(`[pageerror] ${e.message}`));
   const q = new URLSearchParams({ q: args.q || 'medium', t: '30' }); if (args.only) q.set('only', args.only);
   if (args.tod) q.set('tod', args.tod);
+  if (args.params) for (const [k, v] of new URLSearchParams(args.params)) q.set(k, v);   // e.g. --params "baked=force" (the bake is stale after any src edit)
   await page.goto(`http://127.0.0.1:${port}/index.html?${q}`, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction("document.body.classList.contains('loaded')", { timeout: Number(args['load-timeout'] || 280000), polling: 250 });
   for (const e of await page.evaluate(() => window.__errors || [])) problems.push(`[module ${e.module}] ${e.message.split('\n').slice(0, 4).join(' | ')}`);

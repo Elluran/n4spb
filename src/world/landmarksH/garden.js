@@ -7,11 +7,14 @@
 //   monuments    Zhukovsky bust, Flora Farnese, Przhevalsky on a boulder (4.8 m), Hercules Farnese, two cannons on red granite blocks, torchere lamps round the fountain and along the alley
 //   trees        gtrees.js: lindens / elms / maples / ash / oak in alley rows and thickets, open sight lines to the tower and the Horseman
 // NO flags (user rule).  Benches / bins are the props module's (OSM furniture); lamps of the street network are streets'.
+// KNOCKABLE (core/knock.js, lib/knock-inst.js): with ctx.knock the 14 torcheres are instanced (iron body + glowing lantern, Dynamic, per 384 m cell, LOD 300 m) and registered, anchored at 20 km/h: a car
+// at the break speed knocks one over at the foot and its lantern goes dark. Without ctx.knock they are drawn into the module's Parts as before. Cannons and anchors (bronze) stay solid.
 import * as THREE from 'three';
 import * as L from '../layout.js';
 import { GREEN, AREAS } from '../data/city.js';
 import { ringFromFlat } from '../lib/massing.js';
 import { Parts } from './kit.js';
+import { knockInstances } from '../lib/knock-inst.js';
 import { GROUPS_LIST } from './groups.js';
 import { statue } from './tower.js';
 import { figureMats } from '../lib/figures.js';
@@ -119,15 +122,29 @@ export function build(K, ctx, H) {
   // ---------------------------------------------------------------- torchere lamps: black cast iron, a square lantern with a pointed cap (4.6 m): round the fountain and along the central alley
   const lampMat = M.iron, glow = ctx.mat.emissive ? ctx.mat.emissive('#ffd8a0', 0.5) : M.cream;
   const st = ctx.services.streets;
+  const torchModel = (Q, x, z) => {
+    Q.cyl(lampMat, [x, 0, z], [x, 0.9, z], 0.26, 0.2, 8, true); Q.cyl(lampMat, [x, 0.9, z], [x, 3.9, z], 0.1, 0.07, 6, true);
+    Q.box(lampMat, x - 0.28, x + 0.28, 3.9, 4.0, z - 0.28, z + 0.28, 'b'); Q.box(glow, x - 0.22, x + 0.22, 4.0, 4.55, z - 0.22, z + 0.22, '');
+    Q.cyl(lampMat, [x, 4.55, z], [x, 4.95, z], 0.34, 0.02, 4, true);
+  };
+  const torchSpots = [];                                                                           // (ctx.knock only) { x, y, z, rotY, item }
   const torch = (x, z) => {
     if (st && st.net.cover(x, z, {}) > -0.8) return;                                               // Admiralteysky proezd cuts the garden: no lamp on its asphalt (streets is built before this module)
-    P.cyl(lampMat, [x, 0, z], [x, 0.9, z], 0.26, 0.2, 8, true); P.cyl(lampMat, [x, 0.9, z], [x, 3.9, z], 0.1, 0.07, 6, true);
-    P.box(lampMat, x - 0.28, x + 0.28, 3.9, 4.0, z - 0.28, z + 0.28, 'b'); P.box(glow, x - 0.22, x + 0.22, 4.0, 4.55, z - 0.22, z + 0.22, '');
-    P.cyl(lampMat, [x, 4.55, z], [x, 4.95, z], 0.34, 0.02, 4, true);
-    ctx.physics.addCylinder(x, z, 0.22, 0, 5); K.svc.lamps.push({ x, z, h: 4.9 });
+    const item = ctx.physics.addCylinder(x, z, 0.22, 0, 5); K.svc.lamps.push({ x, z, h: 4.9 });
+    if (ctx.knock) torchSpots.push({ x, y: 0, z, rotY: 0, item }); else torchModel(P, x, z);
   };
   for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2 + 0.26; torch(FOUNTAIN[0] + Math.cos(a) * 22.5, FOUNTAIN[1] + Math.sin(a) * 22.5); }
   for (let b = -22; b > -70; b -= 24) for (const a of [-9.5, 9.5]) { const [x, z] = W(a, b); torch(x, z); }
+  if (torchSpots.length) {                                                                         // the knockable torcheres: iron body + lantern, templates at the origin
+    const tp = new Parts(); torchModel(tp, 0, 0);
+    const meshes = tp.build(new THREE.Group()), geoOf = (mat) => meshes.find((m) => m.material === mat).geometry;
+    knockInstances(ctx, {
+      name: 'lmH-torch',
+      parts: [{ geo: geoOf(lampMat), mat: lampMat, name: 'body' }, { geo: geoOf(glow), mat: glow, name: 'glow', shadow: false, noOutline: true, hide: true }],
+      spots: torchSpots, items: torchSpots.map((s) => s.item), far: 300,
+      rec: { kind: 'lamp', mass: 250, h: 4.9, r: 0.22, anchored: 20, hitK: 0.5, metal: true },
+    });
+  }
 
   // ---------------------------------------------------------------- trees
   const avoid = [[FOUNTAIN[0], FOUNTAIN[1], 23]];

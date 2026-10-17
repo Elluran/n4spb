@@ -9,12 +9,16 @@
 // Layers (y, polygonOffset): ground 0 < streets asphalt 0.03 / paint 0.037 < square asphalt 0.04 (-3) < zebra 0.052 (-4.5) < stone field 0.05 (-4) < GS strip 0.058 < outline / ring 0.085 (-5) < pink inlays 0.1 (-6) < pavement 0.12.
 // The OSM living-street trace round the field (w217399816, claimed in groups.js) is drawn by streets with kerbs and lane lines: not a real carriageway; see the report (streets should skip it).
 // No flags, no benches / kiosks on the stone field (dossier section 4).
+// KNOCKABLE (core/knock.js, lib/knock-inst.js): with ctx.knock the 18 Montferrand lamps are instanced (pole body + opal globes, Dynamic, one set of meshes per 384 m cell, LOD 320 m) and
+// registered, anchored at 23 km/h: a car at the break speed knocks the pole over at the foot and the globes go dark with it. Without ctx.knock they are drawn into the module's Parts as before.
+// The granite bollards and the stone-field candelabra stay solid (heritage, plan section 6).
 import * as THREE from 'three';
 import * as L from '../layout.js';
 import { AREAS, ROADS } from '../data/city.js';
-import { band } from './kit.js';
+import { band, Parts } from './kit.js';
 import { CX, CZ, toWorld, toUV, ARC } from './frame.js';
 import { GC } from './mats.js';
+import { knockInstances } from '../lib/knock-inst.js';
 
 // ---------------------------------------------------------------------------------------------- small helpers
 const ARC_U = ARC.u, ARC_R = ARC.R;
@@ -204,13 +208,19 @@ export function build(K, ctx) {
   }
   const gq = L.buildingById('w41289421');
   if (gq) for (const [u, v] of [[-92, -121], [-70, -121], [-46, -121], [-24, -121]]) { const [x, z] = toWorld(u, v); lamps.push({ x, z, globes: 3 }); }
-  for (const l of lamps) { if (L.insideBuilding(l.x, l.z, 0.5) || !offRoad(l.x, l.z, 0.25)) continue; lamp(K, GM, l.x, l.z, l.globes); ctx.physics.addCylinder(l.x, l.z, 0.22, 0, 6); }
+  const lampSpots = [];                                                                          // (ctx.knock only) the placements of the knockable Montferrand lamps: { x, y, z, rotY, globes, item }
+  const putLamp = (x, z, globes) => {
+    const item = ctx.physics.addCylinder(x, z, 0.22, 0, 6);
+    if (ctx.knock) lampSpots.push({ x, y: 0, z, rotY: -lampAngle(x, z), globes, item }); else lamp(K, GM, P, x, z, globes, lampAngle(x, z));
+  };
+  for (const l of lamps) { if (L.insideBuilding(l.x, l.z, 0.5) || !offRoad(l.x, l.z, 0.25)) continue; putLamp(l.x, l.z, l.globes); }
   // ------------------------------------------------------------------ lamp posts on the Winter Palace pavement (photo 016: black fluted poles every ~30 m, 2-3 m from the facade) and the bollards of the west road edge (photos 012 018)
   for (const [u, v, g] of [[-98.2, -14, 2], [-98.2, 14, 2], [-107.2, -45, 3], [-107.2, 45, 3], [-107.2, -80, 2], [-107.2, 80, 2]]) {
     const [x, z] = toWorld(u, v);
     if (L.insideBuilding(x, z, 0.8) || !offRoad(x, z, 0.25)) continue;
-    lamp(K, GM, x, z, g); ctx.physics.addCylinder(x, z, 0.22, 0, 6);
+    putLamp(x, z, g);
   }
+  if (lampSpots.length) knockLamps(ctx, K, GM, lampSpots);
   for (let v = 94; v <= 162; v += 3.6) {
     const [x, z] = toWorld(-92.6, v);
     if (L.insideBuilding(x, z, 0.4) || !offRoad(x, z, 0.15)) continue;
@@ -230,8 +240,8 @@ export function build(K, ctx) {
 }
 
 // ---------------------------------------------------------------------------------------------- the Montferrand lamp: fluted cast-iron pole, collar, 2 or 3 opal globes
-function lamp(K, GM, x, z, globes) {
-  const P = K.P, iron = GM.lamp;
+function lamp(K, GM, P, x, z, globes, ang) {
+  const iron = GM.lamp;
   P.cyl(iron, [x, 0, z], [x, 0.18, z], 0.34, 0.3, 10, true);
   P.cyl(iron, [x, 0.18, z], [x, 1.5, z], 0.27, 0.17, 10, false);
   P.cyl(iron, [x, 1.5, z], [x, 1.62, z], 0.22, 0.22, 10, true);
@@ -239,13 +249,36 @@ function lamp(K, GM, x, z, globes) {
   P.cyl(iron, [x, 6.2, z], [x, 6.4, z], 0.17, 0.12, 8, true);
   const globe = (gx, gy, gz, r) => P.geo(GM.globe, K.globeGeo || (K.globeGeo = new THREE.SphereGeometry(1, 10, 7)), gx, gy, gz, 0, 0, 0, r, r, r);
   if (globes === 3) globe(x, 6.75, z, 0.3); else P.geo(iron, K.finialGeo || (K.finialGeo = new THREE.ConeGeometry(0.1, 0.5, 6)), x, 6.65, z, 0, 0, 0, 1, 1, 1);
-  const ang = ((x * 7.3 + z * 3.1) % 3.14);                                                       // arms along a facade-independent direction
   for (const sgn of [-1, 1]) {
     const dx = Math.cos(ang) * sgn, dz = Math.sin(ang) * sgn;
     P.cyl(iron, [x, 6.0, z], [x + dx * 0.45, 6.4, z + dz * 0.45], 0.045, 0.035, 5, false);
     P.cyl(iron, [x + dx * 0.45, 6.4, z + dz * 0.45], [x + dx * 0.8, 6.25, z + dz * 0.8], 0.035, 0.03, 5, false);
     globe(x + dx * 0.82, 6.6, z + dz * 0.82, 0.27);
   }
+}
+
+/** the direction of the two arms (a facade-independent angle from the position) */
+const lampAngle = (x, z) => ((x * 7.3 + z * 3.1) % 3.14);
+
+/** the knockable lamps (ctx.knock): the pole + arms and the opal globes are templates at the origin (arms along +x, turned by rotY = -angle); the pole is ONE mesh for both kinds (the 3-globe lamp
+ *  keeps the 2-globe lamp's little finial, hidden inside its top globe), the globes are one mesh per kind */
+function knockLamps(ctx, K, GM, spots) {
+  const model = (globes) => {
+    const T = new Parts(); lamp(K, GM, T, 0, 0, globes, 0);
+    const tmp = new THREE.Group(), meshes = T.build(tmp), pick = (mat) => meshes.find((m) => m.material === mat).geometry;
+    return { body: pick(GM.lamp), glow: pick(GM.globe) };
+  };
+  const m2 = model(2), m3 = model(3);
+  knockInstances(ctx, {
+    name: 'lmG-lamp',
+    parts: [
+      { geo: m2.body, mat: GM.lamp, name: 'body' },
+      { geo: m2.glow, mat: GM.globe, name: 'glow2', shadow: false, noOutline: true, hide: true, when: (s) => s.globes !== 3 },
+      { geo: m3.glow, mat: GM.globe, name: 'glow3', shadow: false, noOutline: true, hide: true, when: (s) => s.globes === 3 },
+    ],
+    spots, items: spots.map((s) => s.item), far: 320, cell: 768,                                   // (18 lamps over ~330 m: two cells keep the draws at six)
+    rec: { kind: 'lamp', mass: 600, h: 6.2, r: 0.22, anchored: 23, hitK: 0.7, metal: true },
+  });
 }
 
 // ---------------------------------------------------------------------------------------------- five-lantern candelabrum (bronze-brown, dragon arms, amber lanterns)

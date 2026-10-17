@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { Mdl, W, boxAt } from './frame.js';
 import * as D from '../data/city.js';
+import { Parts } from './kit.js';
 
 /** flat [x, z, ...] world ring -> [[mx, mz], ...] */
 export const ringToModel = (flat) => { const o = []; for (let i = 0; i + 1 < flat.length; i += 2) { const p = Mdl(flat[i], flat[i + 1]); o.push([p.mx, p.mz]); } return o; };
@@ -69,6 +70,11 @@ export function instances(ctx, geo, mat, list, name, o = {}) {
   im.computeBoundingBox(); im.computeBoundingSphere();
   if (o.noOutline) ctx.noOutline(im);
   ctx.addStatic(im); return im;
+}
+/** the template geometries of a small model drawn by `draw(P)` at the origin, one per material: [{ mat, geo }] (a knockable piece is an instance of each, core/knock.js) */
+export function templateOf(draw) {
+  const P = new Parts(), g = new THREE.Group(); draw(P);
+  return P.build(g, {}).map((m) => ({ mat: m.material, geo: m.geometry }));
 }
 /** vertex-coloured box merge helper for small furniture models */
 export function vcModel(boxes) {

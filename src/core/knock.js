@@ -13,8 +13,8 @@
 // THE BODY  after the knock the collider is removed and the instance becomes a small rigid body: free things fly (vy from the speed, gravity 12, bounce 0.3, Coulomb slide 7 m/s^2,
 //   tumbling about their centre, settle on a side), anchored things topple about their foot (the tilt accelerates like a falling pole, stops flat on the ground) and slide a little.
 //   The floor is resolved per step: a walkable deck / step / pavement slab of ctx.physics (surfaceAt), else the terrain level where the thing stood, else OPEN WATER (waterLevelAt):
-//   the thing sinks and is `lost` (hidden, no rest collider, no sparks). At rest a low static collider (top <= 0.42, so the car drives over lying debris) is added at the resting
-//   pose. `hitK` scales the dents / shake / sound the car takes from the hit (drive.js applyImpacts): a bin is not a wall.
+//   the thing sinks and is `lost` (hidden, no rest collider, no sparks). At rest a low static collider (top <= 0.42 above the thing's floor AND <= 0.42 above the road level 0.03 the car drives at: furniture stands on a pavement drawn 0.1 m higher, a rest box
+//   0.42 above THAT would stop the car, so the car drives over lying debris) is added at the resting pose. `hitK` scales the dents / shake / sound the car takes from the hit (drive.js applyImpacts): a bin is not a wall.
 // PARTS  A record may carry any number of parts. A part is an instance { mesh, index, hide? } or an object { obj } (a single Object3D created with ctx.add, i.e. in the DYNAMIC root).
 //   Each part keeps its rest offset from the record origin (x, y + originY, z), so a traffic head or a lens instance sits where it stood and flies with the pole; a `hide` part
 //   (a glow, a light pool, a halo) is zero-scaled at the knock. Parts are normalised once at register(); a frame writes matrices only (no allocation).
@@ -26,7 +26,8 @@ import * as THREE from 'three';
 
 const G = 12, HALF_PI = Math.PI / 2, UP = new THREE.Vector3(0, 1, 0), ONE = new THREE.Vector3(1, 1, 1);
 const REACH = 30;                                                           // m added once to the bounding sphere of a knock mesh: a thrown instance must not be culled with its mesh
-const CLANK_GAP = 0.15;                                                     // s between two steel clanks
+const CLANK_GAP = 0.15;
+const LEVEL = 0.03;                                                         // m: the level the car drives at on the road (handling.js groundAt); the pavement the furniture stands on is drawn 0.1 m higher                                                     // s between two steel clanks
 const _m = new THREE.Matrix4(), _b = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _p = new THREE.Vector3(), _ax = new THREE.Vector3();
 const _surf = { y: -Infinity, kind: null, item: null };
 const ZERO_M = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -147,9 +148,9 @@ export function createKnock(ctx) {
   }
   /** the floor under a body: a deck / step / pavement slab, else open water (b.splash: the thing sinks), else the terrain level where it stood */
   function floor(x, z, it, b) {
-    b.splash = false;
+    b.splash = false; b.level = LEVEL;
     const s = ctx.physics.surfaceAt(x, z, Math.max(it.y, b.y) + 0.3, false, _surf);
-    if (s.kind === 'ramp' || s.kind === 'walk') return s.y;
+    if (s.kind === 'ramp' || s.kind === 'walk') { if (s.y > 0.3) b.level = s.y; return s.y; }       // (a low slab is a step the car takes from the road: its level is the road's)
     const L = ctx.L;
     if (L && L.waterLevelAt) { const w = L.waterLevelAt(x, z); if (w != null) { b.splash = true; return w - 1.2; } }
     return it.y > 0.05 ? it.y : 0;
@@ -158,8 +159,8 @@ export function createKnock(ctx) {
     const ph = ctx.physics;
     if (it.anchored) {                                                                // lying along the throw, the foot where it stood
       const len = it.h, cx = b.x + b.dx * len / 2, cz = b.z + b.dz * len / 2, th = Math.min(0.42, Math.max(0.3, it.r * 2));
-      it.item = ph.addBox(cx, cz, th, len, Math.atan2(b.dx, b.dz), b.ground - 0.05, b.ground + th);
-    } else it.item = ph.addBox(b.x, b.z, it.w, it.d, it.rotY + b.spin, b.ground - 0.05, b.ground + Math.min(it.h, Math.max(0.35, Math.min(it.w, it.d)), 0.42));
+      it.item = ph.addBox(cx, cz, th, len, Math.atan2(b.dx, b.dz), b.ground - 0.05, Math.min(b.ground + th, b.level + 0.42));
+    } else it.item = ph.addBox(b.x, b.z, it.w, it.d, it.rotY + b.spin, b.ground - 0.05, Math.min(b.ground + Math.min(it.h, Math.max(0.35, Math.min(it.w, it.d)), 0.42), b.level + 0.42));
     it.items = [it.item];                                                            // no source: a lying thing is a static solid the car drives over
   }
   function settle(b) {

@@ -3,6 +3,9 @@
 //     interrupted at crossings, bus stops and junction mouths (walks.js decides where). Instanced (posts and chain spans), colliders on the posts.
 //   * GUARD RAILS along Ligovsky and around Vosstaniya Square: black cast-iron panels 2.5 m x 1.0 m (top rail, pickets, bottom rail, posts) with a hanging flower box of pink
 //     petunias on the street side. Instanced panels cut to the run.
+// KNOCKABLE (core/knock.js, docs/DRIVING-COLLISIONS.md): the bollard posts break off at the foot; the chain spans are single light bodies of their own (one thin collider per SPAN, not the merged boxes of the rails:
+//   a car meeting the chain between two posts pushes it down and drives on) and fall with their post (the onKnock of a post takes the one or two spans that hang on it). Without ctx.knock (headless tools)
+//   the spans are one static mesh again; the colliders are per span in both cases.
 // A block has chains OR rails, never both. Returns { guardRails: [{id, pts}], stats }.
 // SOLID (2026-10-07, "people walk through the fences"): the panels and the chain spans have thin colliders (addFenceBoxes: the segments of a run merged into long boxes, flagged `fence`), so the player
 //   and, through people/nav.js (obstacles -> segBlocked / pushOut), every pedestrian is stopped by them; before, only the bollard posts were solid and the whole railing was open. The runs end where
@@ -20,6 +23,7 @@ import { WALK_Y } from './surface.js';
 const IRON = '#1c1e1d', IRON_L = '#2d3031';
 const FENCES_OFF = !!globalThis.__fenceOff || (typeof location !== 'undefined' && new URLSearchParams(location.search).get('fences') === 'off');          // A/B switch (?fences=off, tools/people-fence-test.mjs --fenceoff): no colliders on the rails / chains
 const SOLID_CHAINS = true;                     // the chain spans get thin colliders too (the bollard posts alone leave 2.4 m gaps between them)
+const SPAN_PULL_KMH = 8;                       // the speed at which a falling post drags the chain spans next to it (a gentle throw: they drop and tumble a little)
 const GATE_EVERY = 40, GATE_W = 2.6;           // a rail run longer than 40 m gets ceil(len / 40) - 1 gates of 2.6 m (an opening of one panel), evenly spaced
 
 /** the pieces of a rail run (polyline of [x, z]) that are left when its gates are cut out: [[x, z] ...] per piece; a run of up to `every` metres stays whole, a piece shorter than 1.2 m is dropped */
@@ -79,33 +83,61 @@ export function buildBarriers(ctx, net, walks, poles, root, lamps = []) {
   const posts = walks.chainPosts.filter((p) => !lampAt(p.x, p.z) && !onRoad(p.x, p.z));
   const postSpots = posts.map((p) => ({ x: p.x, y: WALK_Y, z: p.z, rotY: p.rotY }));
   const postItems = posts.map((p) => ctx.physics.addCylinder(p.x, p.z, 0.11, 0, 0.85));
+  const spansAt = new Map(), chainRecs = [];                       // 'x,z' of a post -> the indices (in `ch`) of the spans that end on it; chainRecs[i] = the knock record of span i (filled below, read by the post onKnock)
+  const pkey = (x, z) => x + ',' + z;
+  // a knocked post pulls down the chain spans that hang on it (103: "a knocked post takes the wire colliders next to it"): each is thrown gently along the fall of the post
+  const dropSpans = (rec, body) => {
+    if (!ctx.knock) return;
+    for (const si of spansAt.get(pkey(rec.x, rec.z)) || []) {
+      const sr = chainRecs[si]; if (!sr || sr.state !== 'stand') continue;
+      const nx = Math.sin(sr.rotY), nz = Math.cos(sr.rotY), side = nx * body.dx + nz * body.dz < 0 ? -1 : 1;       // (across the span, to the side the post falls: a span topples about its own length and lies flat, never on its end)
+      ctx.knock.hit(sr.x, sr.z, SPAN_PULL_KMH, nx * side, nz * side, 'chain');            // (the span's own centre is the nearest standing chain to itself)
+    }
+  };
   // knockable (core/knock.js): cast iron, anchored: holds a bump, breaks off at the foot above 30 km/h (103: streets/bollards.js); without ctx.knock it is the one static mesh of before
   knockInstances(ctx, { name: 'pt-chain-posts', parts: [{ geo: post, mat: mVC }], spots: postSpots, items: postItems, far: 240,
-    rec: { kind: 'bollard', mass: 60, h: 0.85, r: 0.11, anchored: 30, hitK: 0.4, metal: true } });
+    rec: (spot) => ({ kind: 'bollard', mass: 60, h: 0.85, r: 0.11, anchored: 30, hitK: 0.4, metal: true, onKnock: dropSpans }) });
   if (postSpots.length) INST_STATS['pt-chain-posts'] = { n: postSpots.length, tris: Math.round((post.index ? post.index.count : post.attributes.position.count) / 3 * postSpots.length) };
   const chain = chainModel(), ch = [], chainRuns0 = [];
   for (let [x0, z0, x1, z1] of walks.chains) {
     if (onRoad(x0, z0) || onRoad(x1, z1)) continue;
-    const l0 = lampAt(x0, z0), l1 = lampAt(x1, z1);
+    const o0 = pkey(x0, z0), o1 = pkey(x1, z1), l0 = lampAt(x0, z0), l1 = lampAt(x1, z1);
     if (l0) { x0 = l0.x; z0 = l0.z; } if (l1) { x1 = l1.x; z1 = l1.z; }
     const dx = x1 - x0, dz = z1 - z0, d = Math.hypot(dx, dz) || 1; if (d < 0.5) continue;
     const last = chainRuns0.length ? chainRuns0[chainRuns0.length - 1] : null;        // (the spans of one kerb come in order: a span that starts where the previous one ends continues its run)
-    if (last && last.length && Math.hypot(last[last.length - 1][2] - x0, last[last.length - 1][3] - z0) < 0.05) last.push([x0, z0, x1, z1]); else chainRuns0.push([[x0, z0, x1, z1]]);
+    const seg = [x0, z0, x1, z1]; seg.posts = [o0, o1];
+    if (last && last.length && Math.hypot(last[last.length - 1][2] - x0, last[last.length - 1][3] - z0) < 0.05) last.push(seg); else chainRuns0.push([seg]);
   }
   // a gate every GATE_EVERY m of a run, like the rails: the span nearest to the even spacing is left out (its two bollards stay as the gate posts: 2.4 m clear), the run is cut there
-  const chainRuns = []; let chainGates = 0;
+  let chainGates = 0;
   for (const run of chainRuns0) {
     const len = run.map((s) => Math.hypot(s[2] - s[0], s[3] - s[1])), total = len.reduce((p, q) => p + q, 0), n = total > GATE_EVERY ? Math.ceil(total / GATE_EVERY) - 1 : 0, gate = new Set();
     for (let k = 1; k <= n; k++) { const target = total * k / (n + 1); let acc = 0, best = -1, bd = 1e9; run.forEach((s, i) => { const d = Math.abs(acc + len[i] / 2 - target); if (d < bd && !gate.has(i)) { bd = d; best = i; } acc += len[i]; }); if (best >= 0) gate.add(best); }
-    let cur = null;
     run.forEach((s, i) => {
-      if (gate.has(i)) { cur = null; chainGates++; return; }
+      if (gate.has(i)) { chainGates++; return; }
       const dx = s[2] - s[0], dz = s[3] - s[1];
-      ch.push({ x: s[0], y: WALK_Y, z: s[1], rotY: Math.atan2(dx, dz), sz: len[i] });
-      if (!cur) chainRuns.push(cur = []); cur.push(s);
+      ch.push({ x: s[0], y: WALK_Y, z: s[1], x1: s[2], z1: s[3], rotY: Math.atan2(dx, dz), sz: len[i], posts: s.posts });
     });
   }
-  instances(ctx, chain, mVC, ch, 'pt-chain-links', { shadow: false });
+  // solid, per SPAN: a thin `fence` box each (people/nav.js reads them as walls: nobody steps through the chain between two bollards; the runs end at the crossings), the handle kept for the knock record
+  // (the rails keep their merged boxes below). The span ends are a hand's breadth beyond the posts, a junction fillet may shorten a box or leave a span without one.
+  const clearOfRoad = (x, z) => net.cover(x, z, {}) < -0.1;                         // (net.cover: > 0 on the asphalt incl. parking pockets and junction fillets)
+  const tFence = (typeof performance !== 'undefined' ? performance : Date).now();
+  const spanBox = new Array(ch.length).fill(null);
+  out.stats.chainBoxes = SOLID_CHAINS && !FENCES_OFF ? addFenceBoxes(ctx, ch.map((c) => [[c.x, c.z, c.x1, c.z1]]), 0.12, 0.8, clearOfRoad, (box, i) => { spanBox[i] = box; }) : 0;
+  ch.forEach((c, i) => { for (const k of c.posts) { let l = spansAt.get(k); if (!l) spansAt.set(k, (l = [])); l.push(i); } });
+  // the chain links: knockable, one light body per span (any touch of a moving car knocks it: it topples and lies on the pavement); the instance origin is the span start
+  // (the geometry runs 1 m along +Z, scaled to the span), the record sits at the middle of the span with the collider's turn. `anchored: 0.5` (km/h: any moving car) selects the TOPPLE body of core/knock.js, not a
+  // post: a free body tumbles about a pivot 0.4 m up and rests on a quarter turn, i.e. the chain would hang unchanged, float 0.4 m over the pavement or sink into it; the topple always ends flat on the ground,
+  // the chain 0.5 m beside where it hung (r 0.02: the strand lies on its thickness)
+  knockInstances(ctx, { name: 'pt-chain-links', far: 240,
+    parts: [{ geo: chain, mat: mVC, shadow: false, place: (c) => new THREE.Matrix4().compose(new THREE.Vector3(c.x, c.y, c.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), c.rotY), new THREE.Vector3(1, 1, c.sz)) }],
+    spots: ch, items: (i) => spanBox[i],
+    rec: (c) => {
+      const l = Math.hypot(c.x1 - c.x, c.z1 - c.z) || 1;
+      return { kind: 'chain', x: (c.x + c.x1) / 2, z: (c.z + c.z1) / 2, rotY: Math.atan2(-(c.z1 - c.z) / l, (c.x1 - c.x) / l), mass: 6, h: 0.5, r: 0.02, w: l + 0.1, d: 0.12, anchored: 0.5, hitK: 0.05, minDv: 0 };
+    } }).records.forEach((r, i) => { chainRecs[i] = r; });
+  if (ch.length) INST_STATS['pt-chain-links'] = { n: ch.length, tris: Math.round((chain.index ? chain.index.count : chain.attributes.position.count) / 3 * ch.length) };
   out.stats.posts = posts.length; out.stats.chains = ch.length; out.stats.chainGates = chainGates;
   // ---- guard rails: panels along every run
   const rail = railModel(), pan = [], panBox = [];
@@ -178,18 +210,15 @@ export function buildBarriers(ctx, net, walks, poles, root, lamps = []) {
   out.stats.rails = pan.length;
   // solid: the player and the pedestrians (people/nav.js reads the thin `fence` boxes as walls for its lattice and routes) are stopped by the panels like by the real railing; the runs end where the
   // pavement has its openings (crossings, bus stops, junction mouths), so the gaps are open
-  const clearOfRoad = (x, z) => net.cover(x, z, {}) < -0.1;                         // (net.cover: > 0 on the asphalt incl. parking pockets and junction fillets)
-  const tFence = (typeof performance !== 'undefined' ? performance : Date).now();
   out.stats.railBoxes = FENCES_OFF ? 0 : addFenceBoxes(ctx, runSegs, 0.12, 1.1, clearOfRoad);
-  out.stats.chainBoxes = SOLID_CHAINS && !FENCES_OFF ? addFenceBoxes(ctx, chainRuns, 0.12, 0.8, clearOfRoad) : 0;         // (the chain between two bollards is a barrier like the rail: nobody steps through it, the runs end at the crossings)
   out.stats.fenceMs = Math.round((typeof performance !== 'undefined' ? performance : Date).now() - tFence);
   return out;
 }
 
 /** thin solid boxes along fence runs: the panel segments of a run ([[ax, az, bx, bz] ...] in order) are merged while they stay collinear (every joint within 4 cm of the chord, chord <= 14 m) into ONE box each
- *  (a box per 2.5 m panel would put ~1000 solids into the collision grid and the pedestrian obstacle set); the box is `thick` m thick, 0 .. y1 high, flagged `fence` for people/nav.js. Returns the box count. */
-export function addFenceBoxes(ctx, runs, thick, y1, clear = null) {
-  let n = 0;
+ *  (a box per 2.5 m panel would put ~1000 solids into the collision grid and the pedestrian obstacle set); the box is `thick` m thick, 0 .. y1 high, flagged `fence` for people/nav.js. Returns the box count. `onBox(box, runIndex)` gets every box made (the chain spans pass one single-segment run each and keep the handle of their box). */
+export function addFenceBoxes(ctx, runs, thick, y1, clear = null, onBox = null) {
+  let n = 0, run = 0;
   const emit = (pts) => {
     const a = pts[0], b = pts[pts.length - 1], dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz); if (len < 0.2) return;
     const ux = dx / len, uz = dz / len, nx = -uz, nz = ux, h = thick / 2;
@@ -204,9 +233,10 @@ export function addFenceBoxes(ctx, runs, thick, y1, clear = null) {
       if (s1 - s0 < 0.4) return;
     }
     const m = (s0 + s1) / 2, box = ctx.physics.addBox(a[0] + ux * m, a[1] + uz * m, s1 - s0, thick, Math.atan2(-uz, ux), 0, y1); box.fence = true; n++;
+    if (onBox) onBox(box, run);
   };
-  for (const segs of runs) {
-    let cur = null;
+  for (run = 0; run < runs.length; run++) {
+    const segs = runs[run]; let cur = null;
     for (const s of segs) {
       if (cur && Math.hypot(s[0] - cur[cur.length - 1][0], s[1] - cur[cur.length - 1][1]) < 0.05) {
         const a = cur[0], dx = s[2] - a[0], dz = s[3] - a[1], len = Math.hypot(dx, dz) || 1;

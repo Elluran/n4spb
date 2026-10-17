@@ -178,6 +178,8 @@ export class Parts {
     }
     return this;
   }
+  /** the finished geometry per material, [{ mat, geo }]: a model emitted about its own origin, for the instanced knockables (core/knock.js) */
+  parts() { const tmp = new THREE.Group(); return this.build(tmp, {}).map((m) => ({ mat: m.material, geo: m.geometry })); }
   /** build one mesh per bucket (split below 65k vertices for 16 bit indices) and add them to `parent` */
   build(parent, o = {}) {
     const meshes = [];

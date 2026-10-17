@@ -1,10 +1,33 @@
 // landmarksK/precinct.js - the small buildings of the church precinct: the ticket kiosk "КАССЫ" (OSM r15746223, 7.8 x 5.2 m), the public toilets (w623509603), and the Iverskaya chapel-sacristy (r15746145: an octagon
 // on a cube, tan-yellow glazed brick, four white ogee gables on the diagonals, a steep dark-green copper octagonal roof with a gold cross; now the Museum of Stone).  The School of Folk Art (r15746147) is a stucco
 // house in houses.js.  Dossier 4, 5.3, photos refs/saviour 043 044 045 061 072.
+// KNOCKABLE (core/knock.js, lib/knock-inst.js): with ctx.knock the 5 stall kiosks and the 2 drink carts are instanced (one vertex-coloured model per kind and goods variant, Dynamic, per 384 m
+// cell, LOD 420 / 220 m) and registered, free things: the awning and the poles travel with the body. Without ctx.knock they are drawn into the module's Parts as before.
+import * as THREE from 'three';
 import * as L from '../layout.js';
 import { addPolyColliders } from '../lib/massing.js';
 import * as G from './geo.js';
-import { ringEdges, onEdge } from './kit.js';
+import { ringEdges, onEdge, Parts } from './kit.js';
+import { knockInstances } from '../lib/knock-inst.js';
+
+/** the buckets of a Parts collector as ONE vertex-coloured geometry (each bucket's material colour baked into the vertices), for an instanced model that a single draw can carry */
+function colouredGeo(parts) {
+  const pos = [], nrm = [], uv = [], col = [], idx = [];
+  for (const k of parts.b.values()) {
+    if (!k.n) continue;
+    const base = pos.length / 3, c = k.mat.color;
+    for (let i = 0; i < k.pos.length; i++) pos.push(k.pos[i]);
+    for (let i = 0; i < k.nrm.length; i++) nrm.push(k.nrm[i]);
+    for (let i = 0; i < k.uv.length; i++) uv.push(k.uv[i]);
+    for (let i = 0; i < k.n; i++) col.push(c.r, c.g, c.b);
+    for (let i = 0; i < k.idx.length; i++) idx.push(base + k.idx[i]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx.length > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
+  g.computeBoundingSphere();
+  return g;
+}
 
 /** extrude a footprint record into walls (one quad per edge) + a flat roof cap with a small overhang; returns the edges */
 function prism(K, rec, h, wallMat, roofMat, o = {}) {
@@ -114,8 +137,8 @@ function stalls(K) {
   const P = K.P, M = K.M, ph = K.ctx.physics, T = K.ctx.mat.toon;
   const wood = T('#8a5a36', { name: 'lmK-stallWood', paint: 0.04 }), awn = T('#5a2a2a', { name: 'lmK-stallAwn', side: 'double' }), blue = T('#4a5a78', { name: 'lmK-stallBlue', side: 'double' });
   const goods = ['#c8302a', '#e8c030', '#2a58a8', '#3a8a48', '#e8e0d0', '#b04a8a'].map((c, i) => T(c, { name: 'lmK-goods' + i }));
-  const put = (x, z, rot, kind, k) => {
-    P.push(x, 0, z, rot);
+  /** one stall in the current frame of P (a kiosk or a drink cart; k picks the goods colours / the umbrella) */
+  const draw = (P, kind, k) => {
     if (kind === 'kiosk') {
       G.tbox(P, wood, -1.3, 1.3, 0, 1.0, -0.8, 0.8, 2, 2, 'b');
       for (const [dx, dz] of [[-1.25, -0.75], [1.25, -0.75], [-1.25, 0.75], [1.25, 0.75]]) P.box(M.iron, dx - 0.04, dx + 0.04, 1.0, 2.5, dz - 0.04, dz + 0.04, 'tb');
@@ -123,18 +146,31 @@ function stalls(K) {
       P.quad(awn, [-1.5, 2.45, 1.1], [1.5, 2.45, 1.1], [1.5, 2.2, 1.1], [-1.5, 2.2, 1.1], [0, 0, 1]);
       for (let i = 0; i < 9; i++) P.box(goods[(i + k) % goods.length], -1.15 + i * 0.28, -0.9 + i * 0.28, 1.0, 1.0 + 0.25 + (i % 3) * 0.1, 0.1, 0.4, 'b');
       P.box(wood, -1.2, 1.2, 1.0, 1.06, -0.7, -0.1, 'b');
-      ph.addBox(x, z, 2.7, 1.9, rot, 0, 2.6);
     } else {
       G.tbox(P, M.white, -0.6, 0.6, 0.4, 1.0, -0.4, 0.4, 2, 2, 'b'); P.cyl(M.iron, [-0.5, 0, 0.35], [-0.5, 0.4, 0.35], 0.04, 0.04, 5, false); P.cyl(M.iron, [0.5, 0, 0.35], [0.5, 0.4, 0.35], 0.04, 0.04, 5, false);
       P.cyl(M.iron, [0, 1.0, 0], [0, 2.4, 0], 0.03, 0.03, 5, false);
       G.frustum(P, k % 2 ? [M.white, M.booth] : [M.white, M.white, M.booth, M.booth], 0, 0, 2.25, 2.65, 8, 1.35, 0.05, 0, 1, 1);
-      ph.addBox(x, z, 1.3, 0.9, rot, 0, 1.2);
     }
-    P.pop();
+  };
+  const spots = [];                                                                                // (ctx.knock only) { x, y, z, rotY, kind, v, item }
+  const put = (x, z, rot, kind, k) => {
+    const item = kind === 'kiosk' ? ph.addBox(x, z, 2.7, 1.9, rot, 0, 2.6) : ph.addBox(x, z, 1.3, 0.9, rot, 0, 1.2);
+    if (K.ctx.knock) { spots.push({ x, y: 0, z, rotY: rot, kind, v: kind === 'kiosk' ? k : k % 2, k, item }); return; }
+    P.push(x, 0, z, rot); draw(P, kind, k); P.pop();
   };
   const ks = [[-1233, -810.5], [-1239.5, -810.2], [-1246, -809.6], [-1252, -809.2], [-1258, -809.4]];
   ks.forEach(([x, z], i) => put(x, z, 0.0, 'kiosk', i));
   put(-1228, -813.5, 0, 'cart', 1); put(-1264, -812.5, 0, 'cart', 2);
+  if (spots.length) {                                                                              // the knockable stalls: a model per (kind, goods / umbrella variant) at the origin, one draw each
+    const mat = T('#ffffff', { vertexColors: true, paint: 0.04, side: 'double', name: 'lmK-stall' }), models = new Map();
+    for (const s of spots) { const key = s.kind + s.v; if (!models.has(key)) { const Q = new Parts(); draw(Q, s.kind, s.k); models.set(key, { geo: colouredGeo(Q), kind: s.kind, v: s.v }); } }
+    knockInstances(K.ctx, {
+      name: 'lmK-stall',
+      parts: [...models.values()].map((m) => ({ geo: m.geo, mat, name: m.kind + m.v, far: m.kind === 'kiosk' ? 420 : 220, when: (s) => s.kind === m.kind && s.v === m.v })),
+      spots, items: spots.map((s) => s.item),
+      rec: (s) => s.kind === 'kiosk' ? { kind: 'kiosk', mass: 350, h: 2.6, w: 2.7, d: 1.9, hitK: 0.6 } : { kind: 'cart', mass: 90, h: 1.2, w: 1.3, d: 0.9, hitK: 0.3 },
+    });
+  }
   K.svc.stalls = ks.map(([x, z]) => ({ x, z, rotY: 0 })).concat([{ x: -1228, z: -813.5, rotY: 0 }, { x: -1264, z: -812.5, rotY: 0 }]);
 }
 

@@ -34,9 +34,18 @@ const KNOCK = {
   tubBirch: { kind: 'tub', mass: 250, h: 2.7, r: 0.5, hitK: 0.3, minDv: 1.0, far: 220 }, tubMaple: { kind: 'tub', mass: 250, h: 2.7, r: 0.5, hitK: 0.3, minDv: 1.0, far: 220 }, tubLilac: { kind: 'tub', mass: 250, h: 2.7, r: 0.5, hitK: 0.3, minDv: 1.0, far: 220 },
   planterR0: { kind: 'planter', mass: 450, h: 0.5, r: 0.62, hitK: 0.35, minDv: 1.2, far: 200 }, planterR1: { kind: 'planter', mass: 450, h: 0.5, r: 0.62, hitK: 0.35, minDv: 1.2, far: 200 },
   rack3: { kind: 'rack', mass: 25, h: 0.75, w: 1.5, d: 0.4, anchored: 8, hitK: 0.1, metal: true, minDv: 0, far: 170 }, rack5: { kind: 'rack', mass: 25, h: 0.75, w: 2.7, d: 0.4, anchored: 8, hitK: 0.1, metal: true, minDv: 0, far: 170 },
-  postBox: { kind: 'postbox', mass: 70, h: 1.28, w: 0.42, d: 0.36, anchored: 15, hitK: 0.3, metal: true, minDv: 0, far: 200 },
+  postBox: { kind: 'postbox', mass: 70, h: 1.28, w: 0.42, d: 0.36, anchored: 18, hitK: 0.3, metal: true, minDv: 0, far: 200 },
   cabinet: { kind: 'cabinet', mass: 120, h: 1.33, w: 0.66, d: 0.4, anchored: 20, hitK: 0.35, metal: true, minDv: 0, far: 170 },
   iceCart0: cart(3.0), iceCart1: cart(3.0), iceCart2: cart(3.0), cartRed: cart(2.3), iceCartHood: cart(2.0),
+  // phase 2 (packages C, D: the types with detached posters / fascias; the rows are the plan's first values, tuned live)
+  pillar: { kind: 'column', mass: 1500, h: 3.1, r: 0.68, anchored: 45, hitK: 1.0, metal: true, minDv: 0, far: 400 },
+  cityLight: { kind: 'citylight', mass: 150, h: 2.5, w: 1.3, d: 0.45, anchored: 20, hitK: 0.4, metal: true, minDv: 0, far: 220 },
+  pressKiosk: { kind: 'kiosk', mass: 650, h: 2.8, w: 2.4, d: 1.6, hitK: 0.8, minDv: 0.5, far: 420 }, pressKiosk2: { kind: 'kiosk', mass: 700, h: 2.6, w: 1.8, d: 1.8, hitK: 0.8, minDv: 0.5, far: 420 },
+  excKiosk: { kind: 'kiosk', mass: 500, h: 2.7, w: 2.3, d: 2.3, hitK: 0.7, minDv: 0.5, far: 420 },
+  cabinIce: { kind: 'kiosk', mass: 600, h: 2.6, w: 2.4, d: 1.8, hitK: 0.7, minDv: 0.5, far: 420 }, cabinSouv: { kind: 'kiosk', mass: 600, h: 2.6, w: 2.4, d: 1.8, hitK: 0.7, minDv: 0.5, far: 420 }, cabinBoats: { kind: 'kiosk', mass: 600, h: 2.6, w: 2.4, d: 1.8, hitK: 0.7, minDv: 0.5, far: 420 },
+  ticketBooth: { kind: 'booth', mass: 400, h: 2.35, w: 1.5, d: 1.5, hitK: 0.6, minDv: 0.5, far: 300 },
+  cartHot0: cart(1.1), cartHot1: cart(1.1), cartSouv: cart(1.1),
+  aFrameR: { kind: 'aframe', mass: 6, h: 1.0, w: 0.6, d: 0.8, hitK: 0.05, minDv: 0.3, far: 150 }, aFrameK: { kind: 'aframe', mass: 6, h: 1.0, w: 0.6, d: 0.8, hitK: 0.05, minDv: 0.3, far: 150 },
 };
 
 class Placed {                                              // spatial hash of occupied discs

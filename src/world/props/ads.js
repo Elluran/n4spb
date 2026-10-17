@@ -36,9 +36,12 @@ export function addPillar(S, x, z, i = 0) {
   const y = S.levelAt(x, z), tex = S.sign.wrap(i);
   const mat = nightMat(S.ctx, '#ffffff', 0.92, 1.35, { map: tex, side: 'double' });
   const geo = new THREE.CylinderGeometry(0.62, 0.62, 1.88, 20, 1, true);
-  geo.rotateY(S.R() * Math.PI * 2); geo.translate(x, y + 1.44, z);
-  const m = new THREE.Mesh(geo, mat); m.name = 'pr-wrap'; m.castShadow = false; m.receiveShadow = false; S.ctx.noOutline(m); S.root.add(m);
-  S.solidCyl(x, z, 0.68, 3.1); S.occupy(x, z, 1.4, 'pillar'); S.svc.pillars.push({ x, z });
+  geo.rotateY(S.R() * Math.PI * 2);
+  const kn = !!S.ctx.knock;                                  // knockable: the wrap is built about its own origin in the dynamic root and travels with the pillar (S.attach below)
+  if (!kn) geo.translate(x, y + 1.44, z);
+  const m = new THREE.Mesh(geo, mat); m.name = 'pr-wrap'; m.castShadow = false; m.receiveShadow = false; S.ctx.noOutline(m);
+  if (kn) { m.position.set(x, y + 1.44, z); S.ctx.add(m); } else S.root.add(m);
+  S.solidCyl(x, z, 0.68, 3.1); if (kn) S.attach(m); S.occupy(x, z, 1.4, 'pillar'); S.svc.pillars.push({ x, z });
   S.tris += 80;
 }
 
@@ -127,9 +130,10 @@ export function placeAds(S) {
     if (W.span(px - st.nx * 0.5, pz - st.nz * 0.5, -st.nx, -st.nz, 8, F.BLD | F.TREE) < 2.5) continue;           // 2.5 m walking lane behind the box
     S.add('cityLight', px, pz, rot);
     const n = [Math.sin(rot), Math.cos(rot)], y = S.levelAt(px, pz), i = cnt.cityLights;
-    S.panels.panel(T.cityLight(i), px + n[0] * 0.08, y + 1.52, pz + n[1] * 0.08, n[0], n[1], 1.2, 1.8, { lit: true });
-    S.panels.panel(T.cityLight(i + 3), px - n[0] * 0.08, y + 1.52, pz - n[1] * 0.08, -n[0], -n[1], 1.2, 1.8, { lit: true });
+    const kn = !!S.ctx.knock, faces = [[T.cityLight(i), 0.08, 1], [T.cityLight(i + 3), -0.08, -1]];
+    if (!kn) for (const [tex, o, f] of faces) S.panels.panel(tex, px + n[0] * o, y + 1.52, pz + n[1] * o, n[0] * f, n[1] * f, 1.2, 1.8, { lit: true });
     S.box(px, pz, 1.3, 0.45, rot, 2.5, { r: 0.9, tag: 'citylight' });
+    if (kn) for (const [tex, o, f] of faces) S.attach(S.panelObj(tex, px + n[0] * o, y + 1.52, pz + n[1] * o, n[0] * f, n[1] * f, 1.2, 1.8, { lit: true }));   // the two lit posters travel with the box
     placedC.push({ x: st.x, z: st.z }); S.svc.boxes.push({ x: px, z: pz, rotY: rot }); cnt.cityLights++;
   }
 
