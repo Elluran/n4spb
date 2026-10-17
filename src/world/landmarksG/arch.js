@@ -108,6 +108,14 @@ export function build(K, ctx) {
     P.cyl(GM.bronze, [cxk, 11.9, 0.95], [cxk, 11.9, 1.25], 1.0, 1.0, 20, true);
     P.cyl(K.mats.shade, [cxk, 11.9, 1.25], [cxk, 11.9, 1.29], 0.82, 0.82, 20, true);
     P.box(GM.black, cxk - 0.04, cxk + 0.04, 11.9, 12.6, 1.29, 1.33, ''); P.box(GM.black, cxk, cxk + 0.55, 11.86, 11.94, 1.29, 1.33, '');
+    // the face opening is 0.6 m wider than the passage (archivolt frame): the ledge between them (two strips + a half ring, concentric, same springing) closes the slit into the hollow pier
+    { const r0 = spanI / 2, r1 = (spanI + 1.2) / 2, seg = 24, pt = (a, r) => [xci + Math.cos(a) * r, springI + Math.sin(a) * r, 0];
+      for (const sg of [-1, 1]) P.quad(GM.wall, [xci + sg * r0, 0, 0], [xci + sg * r1, 0, 0], [xci + sg * r1, springI, 0], [xci + sg * r0, springI, 0], [0, 0, 1]);
+      for (let i = 0; i < seg; i++) { const a0 = Math.PI * i / seg, a1 = Math.PI * (i + 1) / seg; P.quad(GM.wall, pt(a0, r0), pt(a0, r1), pt(a1, r1), pt(a1, r0), [0, 0, 1]); } }
+    // the side of the block towards +v (local x = 0 in this frame, outward = -x): no OSM building stands against it south of u = 175 (the wing w. r1453436 ends there), so from Bolshaya Morskaya
+    // the block was a hollow shell: the vault and the passage wall were seen through a missing wall. The full side is drawn (where the wing touches it the quad is inside the wing mass).
+    { const h = 22.9, uvs = 3; P.quad(GM.wall, [0, 0, 0], [0, 0, -Di], [0, h, -Di], [0, h, 0], [-1, 0, 0], [[0, 0], [Di / uvs, 0], [Di / uvs, h / uvs], [0, h / uvs]]);
+      P.box(plinthTex, -0.12, 0, 0, 2.6, -Di, 0, 'rb', 2.4); }
     P.pop();
   }
   // roof planes of both inner blocks

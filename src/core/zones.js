@@ -58,6 +58,10 @@ export function createZones({ scene, camera, sky, pipeline, shared, staticRoot, 
   const autoZone = { id: 'auto-underground', box: null, test: null, def: { id: 'auto-underground', indoor: { name: 'underground (default)' } }, p: norm({}), enabled: true, showUnder: true, underground: true };
   let amount = 0, appliedAmount = 0, zone = null;
   let underOn = false, deepOn = false;
+  // REVEAL volumes: from inside one the undergroundOnly nodes of the listed zone ids are drawn although the camera is on the street (a stairwell mouth: the view down the stairs and along the
+  // corridor at its foot must not end in the clear colour). No indoor look, no lighting change: only the visibility of those nodes.
+  const reveals = [], revealed = new Set();
+  let revealKey = null;
   // blended indoor parameters (current values; they glide toward the zone's own while inside)
   const cur = { sun: 0, skyKeep: 0, shadows: false, ambColor: new THREE.Color(), ambGround: new THREE.Color(), ambI: 1, fogColor: new THREE.Color(), fogD: 0.005, bg: new THREE.Color(),
     keyOn: 0, keyColor: new THREE.Color(), keyI: 1, keyDir: new THREE.Vector3(0, 1, 0), post: {}, far: null };
@@ -95,6 +99,21 @@ export function createZones({ scene, camera, sky, pipeline, shared, staticRoot, 
     return q;
   }
 
+  /** reveal({ id, zones: [userData.zone ids], test: (x, y, z) => bool }): the nodes tagged undergroundOnly with one of the zone ids are drawn while the camera is inside the volume (street level too) */
+  function reveal(def) {
+    if (!def || !def.test || !def.zones) throw new Error('zones.reveal: test and zones are required');
+    const q = { id: def.id ?? 'reveal' + reveals.length, zones: def.zones.slice(), test: def.test, remove() { const i = reveals.indexOf(q); if (i >= 0) reveals.splice(i, 1); revealKey = null; } };
+    const old = reveals.findIndex((o) => o.id === q.id); if (old >= 0) reveals.splice(old, 1);
+    reveals.push(q); revealKey = null;
+    return q;
+  }
+  function revealAt(p) {
+    revealed.clear();
+    for (let i = 0; i < reveals.length; i++) { const r = reveals[i]; if (r.test(p.x, p.y, p.z)) for (const z of r.zones) revealed.add(z); }
+    return revealed.size ? [...revealed].sort().join('|') : '';
+  }
+  const isRevealed = (n) => revealed.size > 0 && !!n.userData.zone && revealed.has(n.userData.zone);
+
   // ------------------------------------------------------------------ visibility registry
   const reg = { under: [], surf: [], units: [] };
   // a hidden subtree does not need its matrices composed every frame (the metro platforms and trains are ~1 200 objects): they are frozen while hidden and thawed when shown
@@ -125,7 +144,7 @@ export function createZones({ scene, camera, sky, pipeline, shared, staticRoot, 
     for (const r of roots) for (const c of r.children) { if (r === staticRoot && (c.name === 'static-batched' || c.name === 'static-nd')) units.push(...c.children); else units.push(c); }
     for (const c of scene.children) if (c !== staticRoot && c !== dynamicRoot && c !== sky.mesh && !c.isLight && c.visible) units.push(c);
     for (const n of units) if (!tagged.has(n) && !keepsUnder(n) && !n.userData.alwaysVisible) reg.units.push(n);
-    underOn = deepOn = null; applyVisibility(true);
+    underOn = deepOn = null; revealKey = null; applyVisibility(true);
   }
   /** registers the tagged nodes of a subtree attached after the build (a streamed region) and applies the current visibility to them: unlike refresh() it does not walk the
    *  whole static scene (~40 000 objects) nor re-mark every registered node, which cost a hitch per region while driving */
@@ -151,9 +170,10 @@ export function createZones({ scene, camera, sky, pipeline, shared, staticRoot, 
     const p = camera.position;
     const wantUnder = underOn ? (p.y < config.undergroundY + 0.5 || !!(zone && zone.showUnder)) : (p.y < config.undergroundY || !!(zone && zone.showUnder));
     const wantDeep = deepOn ? p.y < config.deepY + 3 : p.y < config.deepY;
-    if (!force && wantUnder === underOn && wantDeep === deepOn) return;
-    underOn = wantUnder; deepOn = wantDeep;
-    for (const n of reg.under) mark(n, !underOn, 'u');
+    const rk = revealAt(p);
+    if (!force && wantUnder === underOn && wantDeep === deepOn && rk === revealKey) return;
+    underOn = wantUnder; deepOn = wantDeep; revealKey = rk;
+    for (const n of reg.under) mark(n, !underOn && !isRevealed(n), 'u');
     for (const n of reg.surf) mark(n, deepOn, 's');
     if (config.autoSurface) for (const n of reg.units) mark(n, deepOn, 'n');
   }
@@ -214,11 +234,11 @@ export function createZones({ scene, camera, sky, pipeline, shared, staticRoot, 
   }
 
   return {
-    add, at, update, refresh, attach, track, config, list: () => list.slice(), get: (id) => list.find((q) => q.id === id) || null,
+    add, at, reveal, update, refresh, attach, track, config, list: () => list.slice(), get: (id) => list.find((q) => q.id === id) || null,
     remove(idOrZone) { const q = typeof idOrZone === 'object' ? idOrZone : list.find((z) => z.id === idOrZone); if (q) q.remove(); return !!q; },
     overlay: { apply, get active() { return amount > 0 || appliedAmount > 0; } },
     get amount() { return amount; }, get current() { return zone; },
     /** { under: undergroundOnly meshes drawn, deep: surface hidden } and the registry sizes (tools / tests) */
-    get visibility() { return { under: underOn, deep: deepOn, undergroundNodes: reg.under.length, surfaceNodes: reg.surf.length, autoUnits: reg.units.length }; },
+    get visibility() { return { under: underOn, deep: deepOn, revealed: [...revealed], undergroundNodes: reg.under.length, surfaceNodes: reg.surf.length, autoUnits: reg.units.length }; },
   };
 }

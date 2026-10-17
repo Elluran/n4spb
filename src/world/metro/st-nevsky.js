@@ -228,14 +228,16 @@ export function buildNevsky(ctx, M, X) {
   const pitInfo = [];
   for (const p of PITS) {
     const yaw = Math.atan2(p.e[0], p.e[1]), run = 4.5 / Math.tan(Math.PI / 6), n = 30, c = Math.cos(yaw), s = Math.sin(yaw);
+    const zEnd = Math.max(run + 0.1, (p.foot[0] - p.mouth[0]) * p.e[0] + (p.foot[1] - p.mouth[1]) * p.e[1] + 0.1);       // the cross tunnel starts at the foot, 1.2 m beyond the last step: the shell (walls, floor, lid) runs up to it
     const wp = (lx, lz) => [p.mouth[0] + lx * c + lz * s, p.mouth[1] - lx * s + lz * c];                 // local x lateral, z along the descent
     const g = new THREE.Group(); g.position.set(p.mouth[0], 0, p.mouth[1]); g.rotation.y = yaw; pitGroup.add(g); const k3 = ctx.kit(g);
-    for (let i = 0; i < n; i++) { const z = (i + 0.5) * run / n, y = -4.5 * (i + 1) / n; k3.box(4.0, 0.17, run / n, i === 0 ? M.yellow : stepsMat, [0, y - 0.085 + 0.0, z]); }
+    for (let i = 0; i < n; i++) { const z = (i + 0.5) * run / n, y = -4.5 * (i + 1) / n; k3.box(4.5, 0.17, run / n, i === 0 ? M.yellow : stepsMat, [0, y - 0.085 + 0.0, z]); }
     // side walls: parapet 1.1 m above the pavement for the open part (4.4 m), earth walls below
-    const prof = [[0, 1.1], [4.4, 1.1], [4.4, 0.0], [run + 0.1, 0.0], [run + 0.1, -4.9], [0, -0.3]];
+    const prof = [[0, 1.1], [4.4, 1.1], [4.4, 0.0], [zEnd, 0.0], [zEnd, -4.9], [run + 0.1, -4.9], [0, -0.3]];
     for (const sx of [-1, 1]) { const m = new THREE.Mesh(extrudeX(prof, sx * 2.45 - 0.225, sx * 2.45 + 0.225), parapet); g.add(m); }
     for (const sx of [-1, 1]) { k3.box(0.55, 0.1, 4.5, coping, [sx * 2.45, 1.15, 2.2]); k3.cyl(0.03, 0.03, 4.2, rail, [sx * 2.0, 1.05, 2.0], [Math.PI / 2 - 0.0, 0, 0], 6); }
-    k3.box(4.0, 0.2, run - 4.2, M.concreteDark, [0, -0.3, 4.4 + (run - 4.4) / 2 + 0.1]);                                           // the ceiling (the earth) over the lower flight
+    k3.box(4.5, 0.2, zEnd + 0.1 - 4.4, M.concreteDark, [0, -0.3, (4.4 + zEnd + 0.1) / 2]);
+    k3.box(4.5, 0.1, zEnd - 0.1 - run, stepsMat, [0, -4.55, (run + zEnd - 0.1) / 2]);                                                       // the landing between the last step and the tunnel (the stairs ended in a void)                                           // the ceiling (the earth) over the lower flight
     // the lit oval sign on two granite posts across the mouth, a bit uphill of the stairs
     for (const sx of [-1, 1]) k3.box(0.5, 2.9, 0.5, parapet, [sx * 2.45, 1.45, -0.55]);
     const sg = k3.plane(2.8, 0.7, ovalMat, [0, 2.45, -0.55 - 0.26], [0, Math.PI, 0]); sg.castShadow = false; const sg2 = k3.plane(2.8, 0.7, ovalMat, [0, 2.45, -0.55 + 0.26], [0, 0, 0]); sg2.castShadow = false;
@@ -249,6 +251,13 @@ export function buildNevsky(ctx, M, X) {
     pitInfo.push({ ...p, run, yaw });
   }
   res.pits = pitInfo;
+  // seen from the street the stairwell is a window into the underground (zones.js hides every undergroundOnly node above -2 m): looking down the stairs and under the earth lid at the lower flight
+  // one sees the foot of the stairs and the cross tunnel behind it. Near a mouth (the approach strip on the uphill side + the stairwell) the underpass tunnels and junction rooms are drawn
+  // from the street too, so the opening ends in a tunnel and not in the clear colour (it showed a flat sky-blue rectangle and a floating slab).
+  for (const p of pitInfo) {
+    const ex = p.e[0], ez = p.e[1];
+    ctx.zones?.reveal({ id: 'nevsky-pit-' + p.n + '-view', zones: ['nevsky-underpass', 'nevsky-junction-S', 'nevsky-junction-N'], test: (x, y, z) => { const dx = x - p.mouth[0], dz = z - p.mouth[1], a = dx * ex + dz * ez, l = -dx * ez + dz * ex; return y > -2.5 && a > -30 && a < p.run && Math.abs(l) < 7; } });
+  }
 
   // ================================================================ the canal exit: a hall in the Engelhardt house (Nevsky 30 / Griboedov canal 16) + a 3-lane incline
   const E2 = ESC2.canal, Sk = new Space(ctx, E2.eframe, { name: 'nevsky-canal-esc' });
