@@ -20,7 +20,7 @@ const STEP = 2.5;
 
 export function buildDucks(ctx, W, say, opts = {}) {
   const T = THREE, rng = ctx.rng('wildlife-ducks'), L = ctx.L, WATER = L.RIVER_Y.water;
-  const qn = ctx.quality?.name, Q = qn === 'low' ? 0.5 : qn === 'medium' ? 0.75 : 1;
+  const qn = ctx.quality?.level || ctx.quality?.name, Q = qn === 'low' ? 0.5 : qn === 'medium' ? 0.75 : 1;
   const group = new T.Group(); group.name = 'wildlife-ducks';
   const out = { group, ducks: [], groups: [], lanes: [], update() {}, triangles: 0 };
   const matSolid = ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0, name: 'wl-duck' });

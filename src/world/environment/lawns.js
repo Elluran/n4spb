@@ -210,7 +210,7 @@ function clumpGeometry() {
 
 export function buildTufts(ctx, root, field) {
   const T = ctx.THREE;
-  const q = ctx.quality && ctx.quality.name;
+  const q = ctx.quality && (ctx.quality.level || ctx.quality.name);
   const scale = q === 'low' ? 0.5 : q === 'medium' ? 0.75 : 1;
   const SHORT_R = 7 * scale + 1, RIN = 11 * scale + 3, ROUT = 30 * scale + 6, CELL_IN = q === 'low' ? 0.85 : 0.62, CELL_OUT = 1.25;
   const MAX = Math.round(4800 * scale * scale + 500);

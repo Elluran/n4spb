@@ -30,7 +30,7 @@
 // Services: ctx.services.wildlife = { birds, dogs: [], spots, crowds ([{ x, z, r, f, l }]: the tourist squares for core/audio.js 'crowd'), cafes (the cafe pavements where crumbs fall: core/audio.js plays a terrace murmur near them), ducks, perches, flocks, zones, sites,
 //   debug } - `birds` are the live state objects ({ sp, st, x, y, z, yaw, ... }); `spots` are viewpoints { name, x, z, yaw, kind, target } from which a flock / the gulls / the ducks can be watched
 //   (stand there, look along yaw; the flocks move with the player, so a flock zone spot shows its flock only when the player has been about for a few seconds).
-// Quality: ctx.quality.name 'medium' = 70 %, 'low' = 45 % of the animals.  Triangles: ~40 k static-equivalent (instanced), budget 100 k.  Draw calls: 16 birds + 7 ducks meshes (instanced).
+// Quality: ctx.quality.level (or .name) 'medium' = 70 %, 'low' = 45 % of the animals.  Triangles: ~40 k static-equivalent (instanced), budget 100 k.  Draw calls: 16 birds + 7 ducks meshes (instanced).
 // Build time: 0.25 - 0.6 s (svc.debug.timing: per part and per phase; tools/wildlife-test.mjs prints it and limits it to 700 ms). It was 1.8 s once the map had the island: the sparrow shelters scanned every tree of the map per
 //   candidate, the lane test of the streets ran five full grid scans per 0.25 m memo cell (now one pass: world.js onLane), the foraging sites (~2 000) were validated one by one at build (now lazily: birds.js siteOk), the duck obstacles
 //   were tested linearly (now a 40 m hash), the cafe search scanned its taken points linearly, and the roof / water lattices were denser than the animals need.

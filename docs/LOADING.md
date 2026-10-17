@@ -111,7 +111,7 @@ network SLA or an under-15-second result. The complete shipping bake is about
 traffic and crowds still build at startup. Further reducing those costs and
 network payload is necessary for a much faster first visit.
 
-Differential checks (`tools/baked-check.mjs`) pass all three quality tiers
+Differential checks (`tools/baked-check.mjs`) passed all three quality tiers of that time (high / medium / low; since 2026-10-17 only medium and performance exist, see docs/PERFORMANCE.md)
 (every node/edge, 20 routes, 1,000 field samples, destination and all-region
 loading). Subfolder hosting is verified with
 `node tools/shot.mjs --base /n4spb --load --q medium --out shots/load/subpath`,

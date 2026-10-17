@@ -38,7 +38,7 @@ const FOOD_SUBS = ['cafe', 'restaurant', 'fast_food', 'bar', 'bakery', 'ice_crea
 
 export function buildBirds(ctx, W, say, opts = {}) {
   const T = THREE, rng = ctx.rng('wildlife-birds'), L = ctx.L;
-  const qn = ctx.quality?.name, Q = qn === 'low' ? 0.45 : qn === 'medium' ? 0.7 : 1;
+  const qn = ctx.quality?.level || ctx.quality?.name, Q = qn === 'low' ? 0.45 : qn === 'medium' ? 0.7 : 1;
   const group = new T.Group(); group.name = 'wildlife-birds';
   const matSolid = ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0, name: 'wl-bird' });
   const matWing = ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0, name: 'wl-bird-wing', side: 'double' });

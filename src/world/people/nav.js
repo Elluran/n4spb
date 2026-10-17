@@ -650,7 +650,7 @@ export function buildNav(ctx, cfg = {}) {
   // every street-level node gets its own height once (the sim interpolates along the route, so people climb the crown smoothly)
   if (!FINAL) for (let i = 0; i < N.x.length; i++) { const k = N.k[i]; if (k === 's' || k === 'a' || k === 'p' || k === 'c' || k === 'e' || k === 'b' || k === 'k') N.y[i] = nav.surfaceY(N.x[i], N.z[i], N.y[i]); }
   // the bake: the static graph with its final heights, the component labels of the bake point and the chains above (`final`: nav hydrates past this point; an older bake without it takes the long way)
-  if (ctx.recordBake) ctx.recordBake(`nav-${ctx.quality.name}`, {
+  if (ctx.recordBake) ctx.recordBake(`nav-${ctx.quality.level || ctx.quality.name}`, {
     N: { x: new Float64Array(N.x), z: new Float64Array(N.z), y: new Float64Array(N.y), k: N.k, g: new Float64Array(N.g) },
     edges: Object.fromEntries(['a', 'b', 'len', 'kind', 'cid', 'cost'].map(key => [key, E.columns[key].slice(0, E.length)])),
     cws, groupId, nSidewalk, nPolyEnd, latList: new Uint32Array(latList), final: 1,

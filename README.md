@@ -61,7 +61,7 @@ Note that the page loads fast only while the shipping bake in `assets/baked/` ma
 Touch: drag the left side to walk, the right side to look; the **Fly** button takes off and lands. Quality (High / Medium / Low) is in the top-right corner (remembered; phones start on Medium).
 The player cannot leave the strip: the border is an invisible wall (the scenery goes on for 120 m beyond it and then fades into the city beyond the data).
 
-URL parameters: `?tod=day|golden|night|overcast` (or a number 0..4), `?look=overcast|cloudy` (weather overlay), `?q=high|medium|low`, `?t=40` (start time, s), `?cam=x,z,yaw,pitch` (yaw 0 = north, 90 = west; 5 numbers = free camera `x,y,z,yaw,pitch`),
+URL parameters: `?tod=day|golden|night|overcast` (or a number 0..4), `?look=overcast|cloudy` (weather overlay), `?q=medium|performance`, `?t=40` (start time, s), `?cam=x,z,yaw,pitch` (yaw 0 = north, 90 = west; 5 numbers = free camera `x,y,z,yaw,pitch`),
 `?only=environment,streets,city` (build only some modules), `?allcity` (ignore landmark claims: plain prisms), `?noroof`, `?stats`, `?people=off`, `?tr=nomove`, `?wl=nobirds`, `?pdens=1.3` (crowd density), `?baked=0` (procedural build, no baked assets).
 Debug hooks: `window.__ctx`, `window.__setCam`, `window.__sim(t)`, `window.__bench(n)`.
 

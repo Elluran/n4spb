@@ -58,7 +58,7 @@ const camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.1, 2500);
 camera.position.set(0, 1.6, 30);
 const sunDir = new THREE.Vector3(...L.SUN_DIR).normalize();
 let audio; try { audio = createAudio(); } catch (e) { console.log('audio createAudio() threw:', e.message); audio = null; }
-const quality = { name: 'high', pixelRatio: 1, msaa: 4, shadowMap: 4096, shadowSize: 75, petals: 1 };
+const quality = { name: 'medium', pixelRatio: 1, msaa: 4, shadowMap: 2048, shadowSize: 70, petals: 0.6 };
 const ctx = createContext({ scene, camera, renderer: null, audio, quality, sunDir });
 ctx.buildList = process.argv.slice(2).filter(a => !a.startsWith('--'));      // lib/claims.js: landmark groups only count as owned when their module is checked together with city
 ctx.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight(), uniforms: {} };

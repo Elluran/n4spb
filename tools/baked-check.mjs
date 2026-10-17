@@ -51,7 +51,7 @@ const expression = `(async()=>{
  if(__regions.stats.loaded!==total)throw Error('Incomplete streaming');
  return {nodes:original.N.x.length,edges:original.E.length,routes:20,fieldSamples:1000,initial,total,loaded:__regions.stats.loaded,failures:ctx.services.baked.failures};
 })()`;
-const quality=process.argv[2]||'high';
+const quality=process.argv[2]||'medium';
 // Explicit source-versus-bake QA retains extra navigation graphs and constructs
 // another full raster. This allowance is not used by normal runtime/FPS tests.
 const result=spawnSync(process.execPath,['tools/shot.mjs','--load','--q',quality,'--browser-heap','12288','--protocol-timeout','900000','--load-timeout','600000','--out',path.join(tmpdir(),`piter-baked-check-${quality}`),'--eval',expression],{stdio:'inherit'});

@@ -1419,3 +1419,14 @@ Z-fighting probe (`node tools/zfight.mjs`, 6 frames): identical to the old build
 * Static InstancedMeshes (lamps, benches, rails; 600 k tris) are drawn city-wide in the colour pass: baking them into the batch cells (convertible toon materials only) would cull them by cell.
 * `ndMat` flips between its instanced / plain program ~100 times per frame (`getParameters`, ~0.5 ms): sort the proxies first (`renderOrder`) or use two override passes.
 * `streets` module: `net.js` ways x segments queries (`cover`, `segInfo`) still ~0.5 s; `people/nav` + `traffic/sim` start-up ~1 s each.
+
+
+## 2026-10-17: two quality tiers (medium, performance); the strip's bake runs two stages
+
+Adopted from `102_3d_piter` (its commits "Performance quality tier" and "two quality tiers"), so that development, the tests and the shipping bake cover two tiers and the bake is faster and smaller.
+
+* The quality menu (`index.html`, `?q=`) offers **medium** (the default everywhere, touch included) and **performance** (`?q=performance`). `high` and `low` are retired: their `QUALITY` entries stay in `src/main.js` as comments, and `?q=high` / `?q=low` or a remembered `piter.q` of an old session fall back to medium.
+* **performance** is the frame-rate tier: `quality.far` 1 800 m (the camera far plane; 7 000 m at medium; `?far=` overrides it on any tier), `quality.fogScale` 2.5 (`core/timeofday.js` multiplies every preset's fog density so that the cut is hidden; `?fogx=` overrides), and `quality.level` 'low': the population, trees, lawn tufts, far trees, birds, ducks, cloud steps and the nav product follow the old Low tier (the modules read `ctx.quality.level || ctx.quality.name`), as do the LOD scale 0.6, the traffic / crowd cull 0.55 and the outline range 110 m. The pixel ratio stays 1 and MSAA 4 (the frame is CPU draw-submission bound, not GPU bound).
+* **The bake** (`tools/bake-scene.mjs`) has two stages: `medium` = the base products (field, roof, street textures / kerbs / surfaces, city-base) + `nav-medium`; `performance` = `nav-low` (the performance tier's level). The `nav-high` product is gone from the manifest (`tools/bake-manifest-check.mjs` checks `nav-medium` and `nav-low`). The products are quality independent except the nav lattices; `node tools/baked-check.mjs medium|performance` compares source and bake.
+* Tool defaults moved to medium (`tools/shot.mjs`, `tools/check.mjs`, `tools/baked-check.mjs`). The headless harnesses that build a fake context with `name: 'high'` (full density) and the browser tools that pass `q=low` are unchanged: a harness context does not go through the menu, and `q=low` now means medium.
+* Not adopted from 102: the static-scene stage and the decoder-worker buffer split (n4spb has no baked static scene).

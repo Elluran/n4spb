@@ -20,7 +20,7 @@ import { bakedData } from '../core/baked-world.js';
 // Behaviour: routes keep to pavements, zebras, squares, the bridge pavements, the hall and the platforms; signalised zebras are entered on pedState 'walk' only (queues at the kerb), side-street
 // mouths and unsignalised zebras when no car is close; benches, bus stops, metro doors (people walk in and fade at the door, others come out), photo spots; nobody appears or vanishes in view
 // except at doors; people step around the player and glance at the camera (non-solid: ?psolid=1 makes them colliders).  Night (?tod=night): ~22 % of the people stay.
-// Quality: ctx.quality.name 'high' | 'medium' | 'low' scales the population 1 / 0.7 / 0.45 and the render radius 250 / 190 / 130 m (URL ?pdens=1.3 multiplies the population, ?prad=300 sets the radius).
+// Quality: ctx.quality.level (falls back to .name) 'high' | 'medium' | 'low' scales the population 1 / 0.7 / 0.45 and the render radius 250 / 190 / 130 m (the performance tier is level 'low') (URL ?pdens=1.3 multiplies the population, ?prad=300 sets the radius).
 // URL: ?people=lineup (characters lineup), ?people=nav (draw the routing graph), ?people=off, ?mars=off (without the castle population).
 // Services: ctx.services.people = { walkerPaths: [{id, pts, kind}], crossingBusy(crossingId), crossers(), count, positions(), list(), nav stats, triangles / drawCalls }.
 // ================================================================== DENSITY: the tuning table (everything that scales the crowd lives here)
@@ -50,15 +50,15 @@ export async function build(ctx) {
   const [{ buildNav }, { createCrowd }, { createSim, STEP, MICRO }, { populate }] = await Promise.all([import('./people/nav.js'), import('./people/chars.js'), import('./people/sim.js'), import('./people/scenes.js')]);
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const tm = { t0 }, tick = (k) => { tm[k] = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - tm.t0); };
-  ctx.navBake = await bakedData(ctx, `nav-${ctx.quality.name}`);
-  const qf = ctx.quality && ctx.quality.name === 'low' ? 0.45 : ctx.quality && ctx.quality.name === 'medium' ? 0.7 : 1;        // the quality tiers scale the head-count cap of the castle zone too
+  ctx.navBake = await bakedData(ctx, `nav-${ctx.quality.level || ctx.quality.name}`);
+  const qLevel = ctx.quality && (ctx.quality.level || ctx.quality.name), qf = qLevel === 'low' ? 0.45 : qLevel === 'medium' ? 0.7 : 1;        // the quality tiers scale the head-count cap of the castle zone too
   const marsOff = URLQ.get('mars') === 'off' || !!globalThis.__marsOff;                  // ?mars=off: without the castle population (A / B comparisons)
   const zoneCaps = DENSITY.mars.zones.map((z) => ({ ...z, maxPeople: Math.round(z.maxPeople * qf) }));
   const nav = buildNav(ctx, { ...DENSITY, mars: marsOff ? { off: true, zones: [], scale: 1 } : { ...DENSITY.mars, zones: zoneCaps } }); tick('nav');
-  ctx.navBake = null; ctx.baked?.release?.(`nav-${ctx.quality.name}`);
+  ctx.navBake = null; ctx.baked?.release?.(`nav-${ctx.quality.level || ctx.quality.name}`);
   const crowd = createCrowd(ctx); tick('crowd');
   const sim = createSim(ctx, nav, crowd); tick('sim');
-  const q = ctx.quality && ctx.quality.name, density = (q === 'low' ? 0.45 : q === 'medium' ? 0.7 : 1) * (Number(URLQ.get('pdens')) || 1) * DENSITY.global;
+  const q = ctx.quality && (ctx.quality.level || ctx.quality.name), density = (q === 'low' ? 0.45 : q === 'medium' ? 0.7 : 1) * (Number(URLQ.get('pdens')) || 1) * DENSITY.global;
   sim.renderR = Number(URLQ.get('prad')) || (q === 'low' ? 130 : q === 'medium' ? 190 : 250); sim.farR = sim.farEff = q === 'low' ? 40 : q === 'medium' ? 55 : 70; sim.nearCap = q === 'low' ? 120 : q === 'medium' ? 180 : 250;
   const plan = populate(ctx, nav, sim, { density, west: DENSITY.west, mars: DENSITY.mars, qf }); tick('populate');
   crowd.finalize(); tick('finalize');

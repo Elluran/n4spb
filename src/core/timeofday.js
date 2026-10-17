@@ -58,7 +58,7 @@ export const VARIANTS = {
 /** overlay (optional): { apply(), active } from core/zones.js. apply() is called at the END of every apply(k) and rewrites the sun / ambient / fog / sky / post
  *  values for the indoor zone the camera is in; while overlay.active (inside a zone or fading out of it) the whole preset is re-applied every frame, so the overlay
  *  always blends over fresh preset values (the time-of-day system and the T key keep working underground). */
-export function createTimeOfDay({ sky, scene, shared, sunDir, pipeline, season = 'summer', overlay = null }) {
+export function createTimeOfDay({ sky, scene, shared, sunDir, pipeline, season = 'summer', overlay = null, fogScale = 1 }) {      // fogScale: the quality tier's fog multiplier (main.js, the performance tier hides its short far plane in haze)
   const A = new THREE.Color(), B = new THREE.Color(), V = new THREE.Vector3(), W = new THREE.Vector3();
   const dayDir = sunDir.clone().normalize();      // layout.SUN_DIR, as handed over by main.js
   let table = SEASONS[season] || PRESETS, variant = null;
@@ -89,7 +89,7 @@ export function createTimeOfDay({ sky, scene, shared, sunDir, pipeline, season =
     const u = sky.uniforms;
     lerpColor(u.uZenith.value, a.zenith, b.zenith, t); lerpColor(u.uMid.value, a.mid, b.mid, t);
     lerpColor(u.uHorizon.value, a.horizon, b.horizon, t); lerpColor(u.uWarm.value, a.warm, b.warm, t);
-    lerpColor(u.uFog.value, a.fog, b.fog, t); scene.fog.color.copy(u.uFog.value); scene.fog.density = m(a.fogD, b.fogD);
+    lerpColor(u.uFog.value, a.fog, b.fog, t); scene.fog.color.copy(u.uFog.value); scene.fog.density = m(a.fogD, b.fogD) * fogScale;
     lerpColor(u.uCloudLit.value, a.cloudLit, b.cloudLit, t); lerpColor(u.uCloudShade.value, a.cloudShade, b.cloudShade, t);
     lerpColor(u.uCloudBase.value, a.cloudBase, b.cloudBase, t); lerpColor(u.uCloudGlow.value, a.cloudGlow, b.cloudGlow, t);
     lerpColor(u.uAnti.value, a.anti, b.anti, t); lerpColor(u.uOverCol.value, a.overCol, b.overCol, t);

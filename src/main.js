@@ -61,14 +61,21 @@ const $ = (id) => document.getElementById(id);
 const isTouch = matchMedia('(pointer: coarse)').matches;
 // Tiers: pixelRatio / msaa / shadow map + box are the GPU side; ndFar = distance of the outline (normal / depth) pass (the outline fades out at 190 m anyway), lod scales the distance LOD of the
 // city details (balconies, railings ...), cull scales the vehicle / people / bird render radii on top of their own tier tables, petals = flower petals. (The population / tree / bird counts
-// of each module scale with quality.name inside the module.)
+// of each module scale with quality.level (falls back to quality.name) inside the module.)
+// TWO TIERS (2026-10-17, as in 102_3d_piter): only `medium` and `performance` are offered, tested and baked; `high` and `low` are retired (kept commented for reference). The shipping bake
+// (tools/bake-scene.mjs) runs its base stage at medium (+ nav-medium) and a nav stage at performance (nav-low); ?q=high / ?q=low fall back to medium.
 const QUALITY = {
-  high: { name: 'high', pixelRatio: Math.min(devicePixelRatio, 1.5), msaa: 4, shadowMap: 4096, shadowSize: 90, petals: 1.0, ndFar: 200, lod: 1, cull: 1 },
+  // high: { name: 'high', pixelRatio: Math.min(devicePixelRatio, 1.5), msaa: 4, shadowMap: 4096, shadowSize: 90, petals: 1.0, ndFar: 200, lod: 1, cull: 1 },
   medium: { name: 'medium', pixelRatio: Math.min(devicePixelRatio, 1.0), msaa: 4, shadowMap: 2048, shadowSize: 70, petals: 0.6, ndFar: 150, lod: 0.8, cull: 0.75 },
-  low: { name: 'low', pixelRatio: Math.min(devicePixelRatio, 0.75), msaa: 0, shadowMap: 2048, shadowSize: 50, petals: 0.35, ndFar: 110, lod: 0.6, cull: 0.55 },
+  // low: { name: 'low', pixelRatio: Math.min(devicePixelRatio, 0.75), msaa: 0, shadowMap: 2048, shadowSize: 50, petals: 0.35, ndFar: 110, lod: 0.6, cull: 0.55 },
+  // performance: the frame-rate tier (docs/PERFORMANCE.md: the frame is CPU draw-submission bound, so fewer draws is what helps, not fewer pixels). level 'low' = the population / tree /
+  // bird / lawn counts and the nav product of the low tier (ctx.quality.level); far = the camera far plane (1.8 km instead of 7 km: the colour calls beyond it were about half of the
+  // render at street level); fogScale thickens the fog so that the cut is hidden (~97 % at the far plane, day: 500 m 24 %, 1 km 66 %). The GPU side stays at medium (pixel ratio 1, MSAA).
+  // ?far= and ?fogx= override the two for tuning (any tier).
+  performance: { name: 'performance', level: 'low', pixelRatio: Math.min(devicePixelRatio, 1.0), msaa: 4, shadowMap: 2048, shadowSize: 50, petals: 0.35, ndFar: 110, lod: 0.6, cull: 0.55, far: 1800, fogScale: 2.5 },
 };
-let qName = params.get('q') || (() => { try { return localStorage.getItem('piter.q'); } catch (e) { return null; } })() || (isTouch ? 'medium' : 'high');
-if (!QUALITY[qName]) qName = 'high';
+let qName = params.get('q') || (() => { try { return localStorage.getItem('piter.q'); } catch (e) { return null; } })() || 'medium';
+if (!QUALITY[qName]) qName = 'medium';                       // (a remembered 'high' / 'low' from before the two-tier policy lands here too)
 const quality = { ...QUALITY[qName] };
 if (SHOT) { quality.pixelRatio = 1; }
 
@@ -83,7 +90,8 @@ renderer.toneMapping = THREE.NoToneMapping;
 renderer.info.autoReset = false;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.25, 7000);
+const CAM_FAR = params.has('far') ? Number(params.get('far')) || 7000 : (quality.far || 7000);      // ?far= m: the camera far plane (the performance tier shortens it; pair it with ?fogx=)
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.25, CAM_FAR);
 const sunDir = new THREE.Vector3(...L.SUN_DIR).normalize();
 const sky = createSky(scene, sunDir, quality);
 const pipeline = createRenderPipeline(renderer, quality);
@@ -96,7 +104,7 @@ const zones = createZones({ scene, camera, sky, pipeline, shared: ctx.shared, st
 ctx.zones = zones;
 if (params.get('nofreeze') === '1' || params.get('nofreeze') === 'zones') zones.config.freezeHidden = false;
 if (params.has('freezekinds')) zones.config.freezeKinds = params.get('freezekinds');      // debug / A-B
-const tod = createTimeOfDay({ sky, scene, shared: ctx.shared, sunDir, pipeline, overlay: zones.overlay });
+const tod = createTimeOfDay({ sky, scene, shared: ctx.shared, sunDir, pipeline, overlay: zones.overlay, fogScale: params.has('fogx') ? Number(params.get('fogx')) || 1 : (quality.fogScale || 1) });      // ?fogx= multiplies every preset's fog density
 if (params.has('tod')) tod.set(params.get('tod'), true);
 if (params.has('nofog')) Object.defineProperty(scene.fog, 'density', { get: () => 0, set: () => {} });   // debug: clear air (tools/overlay.mjs looks from 1+ km)
 window.__ctx = ctx; window.__tod = tod; window.__zones = zones; window.THREE = THREE; window.__pipeline = pipeline; window.__camera = camera;   // debug / test hooks

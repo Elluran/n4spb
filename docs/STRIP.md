@@ -96,7 +96,7 @@ GPU (one job at a time, nothing else running on the GPU; headless Edge through p
 ```sh
 npm run bake                               # LAST step after every src/ or index.html edit; BAKE_VERBOSE=1, run it in the background (minutes)
 npm run bakecheck                          # node tools/bake-manifest-check.mjs: manifest revision == source revision == BAKED_REVISION, sizes, no *.part
-npm run bakedcheck                         # node tools/baked-check.mjs high|medium|low: hydrated nav, routes, field, teleport to the Admiralty, all regions
+npm run bakedcheck                         # node tools/baked-check.mjs medium|performance: hydrated nav, routes, field, teleport to the Admiralty, all regions
 npm run smoke -- --q medium                # walk, fly, roof landing, NPCs (its own static server: a static-hosting simulation)
 npm run load -- --q high --out shots/load/high
 node tools/shot.mjs --base /n4spb --load --q medium --out shots/load/subpath    # sub-path hosting

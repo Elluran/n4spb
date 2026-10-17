@@ -57,7 +57,7 @@ export function installBaker(ctx) {
   const pending = []; ctx.bakeUploads = pending; let tail = Promise.resolve();
   ctx.bakeNavOnly = new URLSearchParams(location.search).get('bake') === 'nav';
   if (ctx.bakeNavOnly) {
-    // These inputs are quality independent. Reuse the completed high-stage products
+    // These inputs are quality independent. Reuse the completed base-stage products
     // without exposing a partial shipping manifest or enabling region streaming.
     const inputs = (async () => {
       const r = await fetch('/__bake_inputs');
@@ -117,7 +117,7 @@ export async function openBakedWorld(ctx, params) {
       release(name) { if (requests.delete(name)) diagnostics.released++; delete baked.data[name]; } };
     ctx.services.baked = diagnostics;
     // Network/decompression overlaps fonts and the preceding landmark modules.
-    for (const name of ['field', 'street-textures', 'street-kerbs', 'street-surfaces', 'city-base', 'roof', `nav-${ctx.quality.name}`]) {
+    for (const name of ['field', 'street-textures', 'street-kerbs', 'street-surfaces', 'city-base', 'roof', `nav-${ctx.quality.level || ctx.quality.name}`]) {
       const p = load(name); p.catch(e => diagnostics.failures.push(String(e)));
       baked.data[name] = p;
     }

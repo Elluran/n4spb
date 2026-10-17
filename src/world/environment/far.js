@@ -142,7 +142,7 @@ function genBlocks(ctx) {
   const rail = (x, z) => { const t = (z - 900) / 0.974; if (t < -150) return false; const cx = 690 + 0.225 * t; return Math.abs(x - cx) < 150; };
   const rot0 = Math.PI / 2 - (L.GRID_DEG * Math.PI) / 180;
   const RMAX = 4300;
-  const q = ctx.quality && ctx.quality.name, thin = q === 'low' ? 0.5 : q === 'medium' ? 0.75 : 1;
+  const q = ctx.quality && (ctx.quality.level || ctx.quality.name), thin = q === 'low' ? 0.5 : q === 'medium' ? 0.75 : 1;
   const N = 31, NP = 72;                                                          // 31 cells each way round the Square; the belt round the strip's far ends needs up to 72 (its cells come AFTER the inner ones: the inner blocks keep their order)
   const cells = []; for (let i = -N; i <= N; i++) for (let j = -N; j <= N; j++) cells.push([i, j]);
   for (let i = -NP; i <= NP; i++) for (let j = -NP; j <= NP; j++) if (Math.abs(i) > N || Math.abs(j) > N) cells.push([i, j]);
@@ -210,7 +210,7 @@ function buildBlocks(ctx, group, gen) {
 
 // ---------------------------------------------------------------- distant trees: 20-triangle blobs (limes / maples) in the park cells and a few between the blocks
 function buildFarTrees(ctx, group, items, parks) {
-  const q = ctx.quality && ctx.quality.name, cap = q === 'low' ? 1200 : q === 'medium' ? 2400 : 3600, E = EXTENT;
+  const q = ctx.quality && (ctx.quality.level || ctx.quality.name), cap = q === 'low' ? 1200 : q === 'medium' ? 2400 : 3600, E = EXTENT;
   const list = [];
   for (const p of parks) {                                                           // park cells: a loose grove
     const c = Math.cos(p.rot), s = Math.sin(p.rot), n = 26 + Math.floor(hash2(Math.round(p.x), Math.round(p.z), 311) * 16);

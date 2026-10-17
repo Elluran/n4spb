@@ -192,7 +192,7 @@ export function createSky(scene, sunDir, quality) {
         col = mix(col, uIndoorBg, uIndoorAmt);                  // indoor zone: a plain background instead of the sky
         gl_FragColor = vec4(col, 1.0);
       }`,
-    defines: { CUM_STEPS: quality.name === 'low' ? 5 : 8 },          // low quality marches fewer steps through the cloud layer
+    defines: { CUM_STEPS: (quality.level || quality.name) === 'low' ? 5 : 8 },          // low quality marches fewer steps through the cloud layer
     side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false,
   });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(5200, 48, 24), mat);

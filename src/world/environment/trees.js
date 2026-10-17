@@ -103,7 +103,7 @@ export function placeTrees(ctx, field, owned, extraAvoid = []) {
   const hashXZ = (x, z, salt) => (Math.imul(Math.round(x * 4) | 0, 73856093) ^ Math.imul(Math.round(z * 4) | 0, 19349663) ^ Math.imul(salt | 0, 83492791)) >>> 0;
   const seed = (v) => { _a = (typeof v === 'number' ? v : hashStr(v)) | 0; R(); R(); };
   seed('env-trees-pb');
-  const q = ctx.quality && ctx.quality.name, density = q === 'low' ? 0.5 : q === 'medium' ? 0.75 : 1;
+  const q = ctx.quality && (ctx.quality.level || ctx.quality.name), density = q === 'low' ? 0.5 : q === 'medium' ? 0.75 : 1;
   const list = [], grid = new Map(), stats = {}, rej = {};
   const key = (i, j) => i * 100003 + j, cellOf = (v) => Math.floor(v / 8);
   const near = (x, z) => { const out = []; const ci = cellOf(x), cj = cellOf(z); for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) { const a = grid.get(key(i, j)); if (a) out.push(...a); } return out; };

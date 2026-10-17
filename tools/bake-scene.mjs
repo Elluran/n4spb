@@ -17,7 +17,7 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://local');
     if (url.pathname === '/__baked_revision') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ revision })); }
     if (url.pathname === '/__bake_inputs') {
-      if (!files.field || !files['street-kerbs']) { res.writeHead(409); return res.end('The high-quality field and kerb bakes are not complete'); }
+      if (!files.field || !files['street-kerbs']) { res.writeHead(409); return res.end('The medium-quality field and kerb bakes are not complete'); }
       res.setHeader('Content-Type', 'application/json'); res.setHeader('Cache-Control', 'no-store');
       const inputs=Object.keys(files).filter(name=>name==='field'||name.startsWith('field-')||name==='street-kerbs');
       return res.end(JSON.stringify({ revision, files:Object.fromEntries(inputs.map(name=>[name,files[name]])),
@@ -56,7 +56,9 @@ const executablePath = ['C:/Program Files (x86)/Microsoft/Edge/Application/msedg
 const browser = await puppeteer.launch({ executablePath, headless: true, protocolTimeout: 3600000,
   args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', '--disable-gpu-sandbox', `--js-flags=--max-old-space-size=${process.env.BAKE_HEAP || 8192}`], defaultViewport: { width: 1280, height: 720 } });
 try {
-  for (const quality of ['high', 'medium', 'low']) {
+  // Stages (two tiers since 2026-10-17): medium = the geometry / texture / field / roof / street products + nav-medium; performance = its nav product (nav-low, the performance tier's level).
+  // The products are quality independent except the nav lattices. The retired high / low tiers are not baked.
+  for (const quality of ['medium', 'performance']) {
     const page = await browser.newPage();
     await (await import('./font-transport.mjs')).installFontTransport(page);
     // Intercept only CDN scripts: intercepting large binary POST uploads would
@@ -89,12 +91,12 @@ try {
         new MutationObserver(report).observe(label, { childList: true, characterData: true, subtree: true }); report();
       }, { once: true });
     });
-    console.log(`Baking ${quality} (${quality === 'high' ? 'static geometry, textures, field, roof, navigation' : 'navigation'})…`);
+    console.log(`Baking ${quality} (${quality === 'medium' ? 'static geometry, textures, field, roof, navigation' : 'navigation'})…`);
     page.on('requestfailed', r => console.error('REQUEST FAILED:', r.url().slice(0, 160), r.failure() && r.failure().errorText));
     page.on('response', r => { if (r.status() >= 400) console.error('HTTP', r.status(), r.url().slice(0, 160)); });
     const heartbeat = setInterval(() => console.log(`[${quality} ${Math.round((Date.now() - T0) / 1000)}s] ${progress}; ${Object.keys(files).length} products complete`), 30000);
     try {
-      const resp = await page.goto(`http://127.0.0.1:${server.address().port}/?shot=1&bake=${quality === 'high' ? '1' : 'nav'}&q=${quality}&t=0`, { waitUntil: 'load', timeout: 180000 });
+      const resp = await page.goto(`http://127.0.0.1:${server.address().port}/?shot=1&bake=${quality === 'medium' ? '1' : 'nav'}&q=${quality}&t=0`, { waitUntil: 'load', timeout: 180000 });
       console.log(`page loaded: HTTP ${resp && resp.status()} ${page.url().slice(0, 80)} "${await page.title()}"`);
       await Promise.race([
         page.waitForFunction('window.__bakeReady === true', { timeout: 3600000, polling: 1000 }),
@@ -107,7 +109,7 @@ try {
       throw e;
     } finally { clearInterval(heartbeat); await page.close().catch(() => {}); }
   }
-  for (const name of ['field', 'roof', 'street-textures', 'street-kerbs', 'street-surfaces', 'city-base', 'nav-high', 'nav-medium', 'nav-low']) if (!files[name]) throw new Error(`Missing product ${name}`);
+  for (const name of ['field', 'roof', 'street-textures', 'street-kerbs', 'street-surfaces', 'city-base', 'nav-medium', 'nav-low']) if (!files[name]) throw new Error(`Missing product ${name}`);
   if (bakedRevision(root) !== revision) throw new Error('Source changed during the bake; refusing to publish stale assets');
   const manifest = { format: 1, revision, files, sizes };
   const revisionFile = path.join(root, 'src/core/baked-revision.js');

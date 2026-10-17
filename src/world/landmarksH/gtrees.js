@@ -54,7 +54,7 @@ const nearSeg = (c, x, z) => { const dx = c.bx - c.ax, dz = c.bz - c.az, l2 = dx
 
 export function buildGardenTrees(K, ctx, H, o) {
   const R = ctx.rng('landmarksH-trees');
-  const quality = ctx.quality && ctx.quality.name, density = quality === 'low' ? 0.55 : quality === 'medium' ? 0.78 : 1;
+  const quality = ctx.quality && (ctx.quality.level || ctx.quality.name), density = quality === 'low' ? 0.55 : quality === 'medium' ? 0.78 : 1;
   const list = [], grid = new Map(), key = (i, j) => i * 100003 + j, cellOf = (v) => Math.floor(v / 8);
   const near = (x, z) => { const out = []; const ci = cellOf(x), cj = cellOf(z); for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) { const a = grid.get(key(i, j)); if (a) out.push(...a); } return out; };
   const CL = clearings(o.clear);

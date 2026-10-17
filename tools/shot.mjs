@@ -76,7 +76,7 @@ try {
   if (args.init) await page.evaluateOnNewDocument(args.init);      // --init "<js>": runs before the page scripts (debug hooks, e.g. patching window.THREE through a setter)
   const cdp = args.profile ? await page.createCDPSession() : null;
   if (cdp) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 1000 }); await cdp.send('Profiler.start'); }
-  const q = new URLSearchParams({ w: String(W), h: String(H), t: String(args.t ?? (args.load ? 10 : 0)), q: args.q || 'high' });
+  const q = new URLSearchParams({ w: String(W), h: String(H), t: String(args.t ?? (args.load ? 10 : 0)), q: args.q || 'medium' });
   if (!args.load) q.set('shot', '1');
   if (args.only) q.set('only', args.only);
   if (args.batch) q.set('batch', args.batch);
