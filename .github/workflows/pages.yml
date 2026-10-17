@@ -1,0 +1,45 @@
+# Deploys the static scene to GitHub Pages (https://averkij.github.io/n4spb/): no build step, the deployment whitelist of docs/STRIP.md section 7.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # a stale bake makes the page silently rebuild everything procedurally (minutes of load): refuse to publish it
+      - name: Baked scene matches the source
+        run: node tools/bake-manifest-check.mjs
+      - name: Assemble the site
+        run: |
+          mkdir dist
+          cp -r index.html src assets dist/
+          mkdir -p dist/vendor/rapier
+          cp vendor/rapier/rapier.js vendor/rapier/LICENSE dist/vendor/rapier/
+          cp LICENSE LICENSE-sakuragaoka-station.txt NOTICE.md README.md dist/
+          touch dist/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
