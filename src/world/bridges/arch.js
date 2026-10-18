@@ -203,7 +203,15 @@ export function makeArch(env, site) {
       const fmat = look ? look.fas : stone ? (site.style === 'stone2' ? M.graniteRed : M.graniteDark) : (site.style === 'green' ? M.fasGreen : site.style === 'blue' ? M.fasBlue : site.style === 'red' ? M.fasRed : site.style === 'pevchesky' ? M.fasPev : M.granite);
       // for iron bridges the lower abutment columns are granite, the spandrel above the springing the painted fascia: the opening is bounded by the soffit curve
       if (stone) faceShape(fmat, clean, v, sg, tile, 0, yFoot);
-      else {
+      else if (look && look.abut) {
+        // cast-iron arch between two full-height granite abutments (look.abut, 1st Engineer Bridge): the ashlar runs up to the cornice at both ends, the iron fascia spans bank to bank only
+        const topAt = (u) => yDeck(u) - corniceDrop, col = (u0, u1, k) => { const pts = [[u0, yFoot], [u1, yFoot]]; for (let i = 0; i <= k; i++) { const u = u1 + (u0 - u1) * i / k; pts.push([u, topAt(u)]); } faceShape(look.abut, pts, v, sg, tile, 0, yFoot); };
+        col(uA, a, 3); col(b, uB, 3);
+        const up = [...arch]; up.push([b, topAt(b)]);
+        for (let i = nTop - 1; i >= 1; i--) { const u = a + (b - a) * i / nTop; up.push([u, topAt(u)]); }
+        up.push([a, topAt(a)]);
+        faceShape(fmat, up, v, sg, tile, 0, yFoot);
+      } else {
         const col = (pts) => faceShape(M.granite, pts, v, sg, tile, 0, yFoot);
         col([[uA, yFoot], [a, yFoot], [a, springY], [uA, springY]]); col([[b, yFoot], [uB, yFoot], [uB, springY], [b, springY]]);
         // fascia: above the springing line, between the arch curve and the deck, over the whole length
@@ -228,13 +236,14 @@ export function makeArch(env, site) {
           P.quad(bandMat, [ua, ya - h, v + sd], [ub, yb2 - h, v + sd], [ub, yb2, v + sd], [ua, ya, v + sd], [0, 0, sg], [[ua / 2.6, 0], [ub / 2.6, 0], [ub / 2.6, 1], [ua / 2.6, 1]]);
                   }
         // arch ring edge (a light rolled moulding along the soffit line)
-        tube(M.copingDark, arch, v + sg * 0.03, 0.07, 5);
+        tube(look && look.mould || M.copingDark, arch, v + sg * 0.03, 0.07, 5);
       }
       }
-      // cornice slab along the deck edge (projects 0.12 m beyond the face)
-      for (let i = 0; i < 10; i++) {
-        const ua = uA + (uB - uA) * i / 10, ub = uA + (uB - uA) * (i + 1) / 10, ya = yDeck(ua), yb2 = yDeck(ub), yt = -0.03, dy = stone ? 0.16 : 0.2;
-        const cm = stone ? M.coping : M.copingDark, o = sg * (stone ? 0.07 : 0.12);
+      // cornice slab along the deck edge (projects 0.12 m beyond the face); a look with granite abutments (look.abut) has a stone cornice over them and its own iron cornice between
+      const runs = look && look.abut ? [[uA, a, 2, true], [a, b, 6, false], [b, uB, 2, true]] : [[uA, uB, 10, stone]];
+      for (const [r0, r1, nr, stoneRun] of runs) for (let i = 0; i < nr; i++) {
+        const ua = r0 + (r1 - r0) * i / nr, ub = r0 + (r1 - r0) * (i + 1) / nr, ya = yDeck(ua), yb2 = yDeck(ub), yt = -0.03, dy = stoneRun && !(look && look.abut) ? 0.16 : 0.2;
+        const cm = stoneRun ? M.coping : (look && look.cornice) || M.copingDark, o = sg * (stoneRun ? 0.07 : 0.12);
         P.quad(cm, [ua, ya - dy, v + o], [ub, yb2 - dy, v + o], [ub, yb2 + yt, v + o], [ua, ya + yt, v + o], [0, 0, sg], [[ua / 2.2, 0], [ub / 2.2, 0], [ub / 2.2, 0.2], [ua / 2.2, 0.2]]);
         P.quad(cm, [ua, ya + yt, v + o], [ub, yb2 + yt, v + o], [ub, yb2 + yt, v - sg * 0.5], [ua, ya + yt, v - sg * 0.5], [0, 1, 0]);
         P.quad(cm, [ua, ya - dy, v], [ub, yb2 - dy, v], [ub, yb2 - dy, v + o], [ua, ya - dy, v + o], [0, -1, 0]);

@@ -148,7 +148,7 @@ export function makeMats(ctx) {
 
   // ------------------------------------------------------------------ boards and plates
   const sign = (key, draw, w = 128, h = 128) => T('#ffffff', { map: tex.draw(w, h, draw, { key: 'brg-sign-' + key, repeat: [1, 1] }), name: 'brg-sign-' + key });
-  M.clear = (txt) => sign('clear-' + txt, (g, w, h) => { g.fillStyle = '#d0242e'; g.fillRect(0, 0, w, h); g.fillStyle = '#f6f4ee'; g.fillRect(8, 8, w - 16, h - 16); g.fillStyle = '#16181a'; tex.fitText(g, txt, w / 2, h * 0.54, w * 0.74, h * 0.46, tex.FONTS.sans, 800); });
+  M.clear = (txt) => sign('clear-' + txt, (g, w, h) => { g.fillStyle = '#d0242e'; g.fillRect(0, 0, w, h); g.fillStyle = '#f6f4ee'; g.fillRect(8, 8, w - 16, h - 16); g.fillStyle = '#16181a'; g.textAlign = 'center'; tex.fitText(g, txt, w / 2, h * 0.64, w * 0.7, h * 0.46, tex.FONTS.sans, 800); });   // (textAlign centre: the text used to start at the board's middle and run off its right edge)
   M.boat = sign('boat', (g, w, h) => { g.fillStyle = '#1b5fb0'; g.fillRect(0, 0, w, h); g.strokeStyle = '#f6f4ee'; g.lineWidth = 5; g.strokeRect(5, 5, w - 10, h - 10); g.fillStyle = '#f6f4ee'; g.beginPath(); g.moveTo(24, 74); g.lineTo(104, 74); g.lineTo(92, 96); g.lineTo(36, 96); g.closePath(); g.fill(); g.fillRect(48, 52, 34, 20); g.fillRect(56, 38, 12, 14); g.fillRect(28, 102, 72, 5); });
   M.noShips = sign('noships', (g, w, h) => {                      // black plate, white stacked lettering (Kazansky: "ПРОХОД СУДОВ ЗАПРЕЩЁН")
     g.fillStyle = '#17191b'; g.fillRect(0, 0, w, h); g.strokeStyle = '#d8d8d2'; g.lineWidth = 3; g.strokeRect(5, 5, w - 10, h - 10);
@@ -177,7 +177,8 @@ export function makeMats(ctx) {
   M.looks = {
     'swan-upper': { fas: M.graniteSwan }, 'swan-lower': { fas: M.graniteLower }, arch3: { fas: M.graniteLaundry },
     pantel: L('pantel', '#4f7a5a', '#33503c', T('#ffffff', { map: bandTex('pantel', '#7f9a6a', '#d8aa30', '#4f6a42', 'lozenge'), paint: 0.03, name: 'brg-band-pantel' })),
-    eng1: L('eng1', '#587e62', '#3c5c48', T('#ffffff', { map: bandTex('eng1', '#587e62', '#8cb89c', '#365a44', 'rosette'), paint: 0.03, name: 'brg-band-eng1' })),
+    // 1st Engineer: dark grey-green cast iron arch between full-height pink-grey granite abutments (look.abut), iron cornice + moulding, no painted band (the medallions are modelled: bridges/eng1.js)
+    eng1: { fas: T('#444d48', { paint: 0.04, name: 'brg-fas-eng1' }), soffit: T('#2b3230', { paint: 0.04, name: 'brg-soffit-eng1' }), band: null, abut: gm('granite-eng1', '#b4a39a'), cornice: T('#2e3532', { paint: 0.03, name: 'brg-cornice-eng1' }), mould: T('#5b665f', { paint: 0.03, name: 'brg-mould-eng1' }) },
     garden1: L('garden1', '#5d8466', '#3c5e48', T('#ffffff', { map: bandTex('garden1', '#5d8466', '#d8aa30', '#3a6a4a', 'rosette'), paint: 0.03, name: 'brg-band-garden1' })),
     garden2: L('garden2', '#8da898', '#5e7a6a', T('#ffffff', { map: bandTex('garden2', '#8da898', '#c4d8cc', '#6a8576', 'chevron'), paint: 0.03, name: 'brg-band-garden2' })),
     konyush: L('konyush', '#2f4a3a', '#1f3328', T('#ffffff', { map: bandTex('konyush', '#2f4a3a', '#d8aa30', '#1c2f24', 'rosette'), paint: 0.03, name: 'brg-band-konyush' })),

@@ -8,7 +8,7 @@ Everything the cut removed was removed on purpose; nothing in the kept code is s
 ## 1. The strip
 
 Metres, x east, z south, origin on Nevsky Prospekt at Mayakovskogo (the engine's street frame; `ORIGIN` lon 30.351279, lat 59.932421 in `src/world/data/city.js`).
-The **play area** is the union of eight rectangles (`PLAY_RECTS`, names in `RECT_NAMES`); the **data extent** (`EXTENT_RECTS`) is each of them grown by 120 m.
+The **play area** is the union of nine rectangles (the eight of the original cut and SG, added 2026-10-18: section 10) (`PLAY_RECTS`, names in `RECT_NAMES`); the **data extent** (`EXTENT_RECTS`) is each of them grown by 120 m.
 
 | Name | x | z | Size (m) | Area (km2) | What is in it |
 |---|---|---|---|---|---|
@@ -20,14 +20,15 @@ The **play area** is the union of eight rectangles (`PLAY_RECTS`, names in `RECT
 | W2c | -2450 .. -2200 | -1010 .. 170 | 250 x 1180 | 0.295 | the Admiralty, Alexander Garden, the Palace Bridge |
 | W2d | -2700 .. -2450 | -800 .. 240 | 250 x 1040 | 0.260 | St Isaac's Cathedral and square, the Moika |
 | W2e | -2900 .. -2700 | -620 .. 240 | 200 x 860 | 0.172 | Senate Square, the Bronze Horseman |
+| SG | -1000 .. -600 | -1300 .. -1000 | 400 x 300 | 0.120 | the Fontanka mouth: the 1st Engineer and Panteleymonovsky bridges, the Chizhik-Pyzhik corner, the Moika source, the south half of the Summer Garden, the Swan Canal (section 10) |
 
-* Union area **4.90 km2** (extent union 6.44 km2); bounding box x -2900 .. 835, z -1300 .. 1060 = **3735 x 2360 m**; the strip is a staircase, so the bounding box has two empty notches (north-east and south-west). The length along Nevsky is about 3.1 km.
+* Union area **5.02 km2** (extent union 6.63 km2; 4.90 / 6.44 without SG); bounding box x -2900 .. 835, z -1300 .. 1060 = **3735 x 2360 m**; the strip is a staircase, so the bounding box has two empty notches (north-east and south-west). The length along Nevsky is about 3.1 km.
 * `src/world/data/city.js` is the stitched data (OLD = `city-east.js`, then `city-w1.js`, `city-n1.js`, `city-w2a.js` .. `city-w2e.js`); every other region part is gone.
 * The start is Vosstaniya Square (`HERO`, key 1); the viewpoint keys are defined in `src/world/layout.js` (`VIEWS`).
 
 ## 2. What was dropped, and why
 
-The goal is a small, fast, honest strip, not a thinner city: every module whose play area lies outside the eight rectangles was removed from `MODULES` in `src/main.js`
+The goal is a small, fast, honest strip, not a thinner city: every module whose play area lies outside the rectangles was removed from `MODULES` in `src/main.js`
 (the engine builds and bakes exactly that list; claims are derived from it). Dropped: the east (Lavra, east bridges), the north (Smolny, Tauride, Suvorov, Kirochnaya, Transfiguration, Zhdanovka),
 the Mars Field, Summer Garden, New Holland, Mariinsky, Yusupov, Nikolsky, the Peter and Paul Fortress, the Spit, University, Troitskaya, Aurora, Kronverk, Kamennoostrovsky, Vladimir, Karpovka,
 all of Vasilievsky Island (Academy, Andrew, Mining, Menshikov, Naval Corps, Smolensky, Sevkabel, Sea Terminal, Marine Facade, Gavan, Sredny, Makarova, Kirova, Pribaltiyskaya, Modern VO, VO statues),
@@ -49,7 +50,7 @@ the far Neva and canal scenery is still drawn beyond the extent, (c) drops tree 
 only the ones entirely outside are dropped, with the overlaps that name them) and keeps `SUBWAY_ROUTES` / `BUS_ROUTES` whole (the metro net resolves stops by name), and (d) with `--recover <dir of the full-city data>` appends records of the original that cross the strip but lived in a region that is gone
 (for example the Moika / Swan Canal water polygons the bridges look up by id). It is idempotent: `node tools/strip-data-clip.mjs --check` writes nothing and exits 1 when a part file would change.
 `tools/bake-osm.mjs` and `tools/osm-lib.mjs` are still here **only** because the clipping reuses `osm-lib.mjs`; they encode the full-city frame rectangles and the raw OSM cache (`data/osm-raw`, not in this repository),
-so they must not be used to re-fetch the map. If the strip is ever re-fetched they must be rewritten for the eight rectangles first.
+so they must not be used to re-fetch the map. If the strip is ever re-fetched they must be rewritten for the nine rectangles first (`tools/strip-data-extend.mjs` is the way new rectangles are added).
 
 ## 4. The metro
 
@@ -152,4 +153,12 @@ their numbers do not (re-measure on the strip). [HANDOFF.md](HANDOFF.md) is the 
 
 ## 9. Easter eggs
 
-* **Chizhik-Pyzhik** (user request 2026-10-18): the little bronze siskin of the Fontanka, `src/world/landmarksCastle/chizhik.js`. The real one (11 cm, 1994) sits on a ledge of the wall at the Panteleymonovsky Bridge, which is outside the play area (play stops at z = -1000) and below street level, so the scene has a larger copy (about 20 cm) on a small granite plinth with a plaque and coins, on the pavement of the same east bank, behind the quay railing, at the first lamp-free stretch inside the play area (around (-634, -976), looking toward the bridge). `[E]` pets it (a toast with the story); pedestrians stop to photograph it (it is in `landmarks.monuments`).
+* **Chizhik-Pyzhik** (user request 2026-10-18): the little bronze siskin of the Fontanka, `src/world/landmarksCastle/chizhik.js`, on its real place: a small granite ledge fixed to the wall of the Fontanka west bank 5 m south-east of the 1st Engineer Bridge (about (-736, -1029)), 1.15 m above the water, with the bird (about twice the real 11 cm) looking toward the bridge and a few coins on the ledge. It is below the street, so it is seen from the water, from flight, or by looking down over the railing; `[E]` on the quay above it gives a toast with the story; pedestrians stop on the quay to photograph it (it is in `landmarks.monuments`). The first version (a copy on a plinth on the pavement of the east bank) was replaced when the area north of z = -1000 became playable (section 10).
+
+## 10. The Summer Garden extension (SG, 2026-10-18)
+
+The first cut ended at z = -1000 north of the Mikhailovsky Garden, so the Fontanka mouth (the Moika source with the 1st Engineer Bridge, the Panteleymonovsky Bridge, the corner where the Chizhik-Pyzhik sits) was scenery. It is now the ninth play rectangle, **SG** (x -1000 .. -600, z -1300 .. -1000, 0.12 km2; extent x -1120 .. -480, z -1420 .. -880). Walking, flying and driving work there like anywhere else (the car edge test `npm run edge` runs on the nine-rectangle shape).
+
+* **Data:** the part `src/world/data/city-sg.js` (region `SG`, listed in `RECT_NAMES` / `REGIONS`) holds only what the old extent union did not cover: the band x -1120 .. -480, z -1420 .. -1120 (24 buildings, 166 road pieces, 57 green polygons, 270 trees, 312 furniture points ...). `tools/strip-data-extend.mjs` builds it from the full-city data of `102_3d_piter` (`--orig <its src/world/data>`, default `D:/git2/agi-fun-tests/102_3d_piter/src/world/data`): it selects whole records of the original (buildings by centroid, points inside, lines / polygons whose bbox touches the band), clips them with the clip functions of `tools/strip-data-clip.mjs` run on a one-rectangle scratch facade, writes the part and patches `city.js` once (import, rectangles, concat lists). `strip-data-clip.mjs --check` stays idempotent with it. Lines and polygons that cross z = -1120 are split there like at every other seam of the strip. The water already reached 600 m beyond the old extent, so no water was added (the Fontanka is cut at z about -1720, 300 m beyond the new extent).
+* **Code:** `city/district.js` lists `SG` among the frozen regions (generic facade grammar). The Mars Field / Summer Garden modules of the original are still not part of the strip: the Summer Garden is OSM green, paths, fountains and trees, the buildings around it are generic `city` buildings.
+* **Chizhik-Pyzhik** (`landmarksCastle/chizhik.js`) now sits on its real place, a granite ledge on the Fontanka wall 5 m south-east of the 1st Engineer Bridge, 1.15 m above the water (see section 9).

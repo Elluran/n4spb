@@ -19,6 +19,7 @@ export const PATTERNS2 = {
   wheel: { W: 2.2, H: 0.95 }, wheelG: { W: 2.2, H: 0.95 },
   aegis: { W: 2.0, H: 1.05 }, aegisG: { W: 2.0, H: 1.05 },
   whip: { W: 2.4, H: 1.1 },
+  barsE: { W: 2.3, H: 1.0 },                                                                // 1st Engineer Bridge: thin vertical bars between a top rail and a bottom rail (the trophy medallions stand on the posts: bridges/eng1.js)
   // the south-west reach (docs/research/sw-canals-bridges.md section 3)
   palmettes: { W: 2.0, H: 0.95 }, acacia: { W: 2.0, H: 1.0 }, rosettes: { W: 2.0, H: 1.0 }, fleur: { W: 2.4, H: 1.0 }, lyre: { W: 2.2, H: 1.0 }, arches: { W: 2.0, H: 0.95 },
   lancetarc: { W: 2.2, H: 1.1 }, trident: { W: 2.5, H: 1.1 }, hairpin: { W: 2.4, H: 1.1 }, ringbal: { W: 2.0, H: 1.15 }, hpipes: { W: 2.0, H: 1.1 }, barsring: { W: 2.25, H: 1.0 },   // the big bridges of the Petrograd side (docs/research/petro-bridges.md)
@@ -156,6 +157,10 @@ export function paint2(g, W, H, kind) {
         for (const sx of [-1, 1]) for (let k = 0; k < 4; k++) ell(cx + sx * (0.1 + k * 0.045), 0.62 + k * 0.05, 0.045, 0.014, sx * (0.5 + k * 0.2));
         const n = Math.round(w / 0.1); for (let i = 0; i < n; i++) ell((i + 0.5) * w / n, 0.095, 0.014, 0.03);
       }
+    } else if (base === 'barsE') {                                       // 1st Engineer (photo): a flat top rail with a thin rod under it, round bars every 0.115 m, a bottom rail of two flat bars
+      rect(0, 0, w, 0.05); rect(0, 0.075, w, 0.088);
+      const n = Math.round(w / 0.115); for (let i = 0; i < n; i++) line((i + 0.5) * w / n, 0.08, (i + 0.5) * w / n, h - 0.06, 0.02);
+      rect(0, h - 0.17, w, h - 0.145); rect(0, h - 0.07, w, h);
     } else if (base === 'whip') {
       rect(0, 0, w, 0.06); rect(0, 0.74, w, 0.86);
       for (let i = 0; i < 2; i++) {

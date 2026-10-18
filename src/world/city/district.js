@@ -19,7 +19,7 @@ import { ARCH } from './wallmat.js';
 // THE FROZEN SET. The strip keeps only the 8 rectangles of the first builds (OLD, W1, N1, W2a..W2e): every record of data/city.js is "old" and keeps the generic grammar bit for bit.
 // The Petrograd-side / Vasilievsky grammar below is not reachable in the strip (districtOf is null for every house); it stays, with the same exports, because archetypes.js, heights.js,
 // edges.js, walls.js and prep.js import it.
-export const OLD_REGIONS = ['OLD', 'W1', 'N1', 'W2a', 'W2b', 'W2c', 'W2d', 'W2e'];
+export const OLD_REGIONS = ['OLD', 'W1', 'N1', 'W2a', 'W2b', 'W2c', 'W2d', 'W2e', 'SG'];
 const oldIds = new Set();
 for (const b of BUILDINGS) oldIds.add(b.id);
 /** Regions that are not frozen, in bake order (none in the strip; read by tools/city-signature.mjs and tools/city-petro-audit.mjs). */

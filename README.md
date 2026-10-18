@@ -10,7 +10,7 @@ The streets are made of **real OpenStreetMap footprints**, on a July afternoon w
 and a golden evening, a white night and an overcast day (key **T**).
 The driven car **knocks over and throws the street furniture** by weight (`src/core/knock.js`): benches, litter bins, flower pots and urns slide and tumble, lamp posts, traffic-signal and sign poles, bollards and cabinets hold below a break speed and then topple, and what lies on the ground can be driven over.
 
-This is a cut-down copy of the whole-city project `102_3d_piter`: **one strip of 4.9 km2** (3.7 x 2.4 km bounding box), kept small so that it can be deployed as a static site and load fast.
+This is a cut-down copy of the whole-city project `102_3d_piter`: **one strip of 5.0 km2** (3.7 x 2.4 km bounding box), kept small so that it can be deployed as a static site and load fast.
 What the strip is, what was dropped and why, how to rebuild and deploy it: [`docs/STRIP.md`](docs/STRIP.md).
 
 The strip, west to east (x east, z south in metres; start at about x 560, z 192):
@@ -160,7 +160,7 @@ docs/                 the guides (below)
 
 | Doc | Read it for |
 |---|---|
-| [`docs/STRIP.md`](docs/STRIP.md) | The strip: the eight rectangles, what was dropped, the clipped data, the metro scheme, the border, rebuild / bake / deploy |
+| [`docs/STRIP.md`](docs/STRIP.md) | The strip: the nine rectangles, what was dropped, the clipped data, the metro scheme, the border, rebuild / bake / deploy |
 | [`docs/MOBILE.md`](docs/MOBILE.md) | Phones and tablets: the touch layouts, how touch reaches the game, settings, the hardened boot, tests, the real-device checklist |
 | [`docs/HANDOFF.md`](docs/HANDOFF.md) | The state of this repository, gotchas, how to resume |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Builder guide: module contract, ctx API, coordinates, performance, verification, z-fighting |
@@ -189,7 +189,7 @@ The headless tools drive Edge or Chrome through `puppeteer-core` (paths for Wind
 ## Known limits
 
 * **Seven metro stations have real halls**; the line ends are one generic hall each (re-labelled while the train is in the tunnel) with no way out. Line 6 and the other stations of the city are not part of the strip. Rides run in real time; you cannot walk from car to car.
-* The strip is 4.9 km2: beyond its border there is only scenery. Buildings that the whole-city project drew as separate landmarks outside the strip (and in the 120 m margin) are ordinary generic buildings here.
+* The strip is 5.0 km2: beyond its border there is only scenery. Buildings that the whole-city project drew as separate landmarks outside the strip (and in the 120 m margin) are ordinary generic buildings here.
 * Ordinary houses have flat sheet-iron roofs (no pitched roofs) and few interiors (the station hall, Kassovy zal, Kazan Cathedral, the Galereya mall, metro vestibules, shopfronts with painted interiors). Architectural ornament is stylised and photo-derived; this is not a survey-accurate digital twin.
 * Startup is heavy when the baked assets do not match the source (see above). Medium / Low in the corner help on weaker machines.
 

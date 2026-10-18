@@ -3,7 +3,7 @@
 //   swan-lower  low pink-red arch, dark green `wheel` railing, pink granite end blocks with cushion tops (photos 12 13)
 //   arch3       the Laundry Bridge: three unequal arches (arch.js site.spans), solid rolled parapet, two oval lucarnes over the piers, round upstream / pointed downstream cutwaters (photos 28 33)
 //   pantel      Panteleymonovsky: green girder with a pale olive gilded band, 13 gilded Gorgon masks per face, `lancesT` railing, four spear-bundle standards with shield, wreath and the gilded eagle (photos 37 42 43)
-//   eng1        1st Engineer: green steel frame, `lances` railing with trophy plaques, four spear standards, board "2.6" (photo 46)
+//   eng1        1st Engineer (bridges/eng1.js): dark cast-iron arch with a medallion row + baluster edge between granite abutments, black bar railing with trophy posts, granite end-posts with black lamp standards, board "2.6"
 //   garden1     1st Sadovy: green arch with 11 gilded plates per face, `discs` railing, spear standards on pink blocks, two tram tracks, tripod pole "Садовый мост 1" (photos 53 55)
 //   garden2     2nd Sadovy: flat sage girder, `lances2` railing (S-scroll frieze, Greek key base), spear standards (photos 56 60)
 //   konyush     Bolshoy Konyushenny: dark green iron arch, `lancesW` railing with a gilded cap, four leaf-base standards, kerb bollards (photos 64 66)
@@ -14,6 +14,7 @@ import { pylon, tripod } from './sculpt.js';
 import { SITES, inDeck } from './sites.js';
 import { torchere, lampLeaf, lampGlobe, eagle } from './sculpt2.js';
 import { obeliskLamp } from './sculpt3.js';
+import { eng1 } from './eng1.js';
 
 const frame = (B, P, fn) => { P.push(B.f.cx, 0, B.f.cz, -B.T); try { fn(); } finally { P.pop(); } };
 const tint = (ctx, hex) => ctx.mat.toon(hex, { paint: 0.03, name: 'brg-t-' + hex });
@@ -130,21 +131,6 @@ const pantel = (e, B) => {
       torchere(P, M, u, top, v, Math.PI / 2, { h: 2.6, shield: true, wreath: true, eagle: true, arm: sg, face: 0 });
       if (ts < 0 && sg < 0) tripod(P, M, box[0] - 0.9, y0 + 0.1, box[2] + 0.6, B.site.pole);
     });
-  });
-};
-
-const eng1 = (e, B) => {
-  const { P, M, ctx } = e, post = tint(ctx, '#4f7a5a');
-  frame(B, P, () => {
-    for (const sg of [-1, 1]) {
-      const fi = B.faceInfo(sg), a = fi.a, b = fi.b;
-      B.railLine(sg, a, b, 'lances', '#4f7a5a', { postMat: post, postW: 0.2, gold: { kind: 'lancesG', hex: GOLD } });
-      plates(e, B, sg, a, b, Math.round((b - a) / 2.0), 0.16, 0.16);
-      parapets(e, B, sg, a - 0.9, b + 0.9, 4.2, 1.05, 0.5, M.parapetPink);
-      board(P, M.clear(B.site.clear), B, sg, B.uc, B.crownY + 0.6, 0.45, 0.45);
-      B.faceCollider(sg, a - 5.2, b + 5.2, 0.25, 0.6);
-    }
-    cornerBlocks(e, B, 0.9, 0.9, 1.1, (u, top, v, sg) => torchere(P, M, u, top, v, Math.PI / 2, { h: 2.0, shield: true, wreath: false, arm: sg }));
   });
 };
 
