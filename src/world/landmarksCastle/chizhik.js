@@ -1,15 +1,15 @@
 // landmarksCastle/chizhik.js - the CHIZHIK-PYZHIK (Чижик-Пыжик) Easter egg, on its REAL place: the little bronze siskin of the Fontanka (Rafail Bogatyrev, 1994, 11 cm, 5 kg) sits on a small granite
 // ledge of the embankment wall just above the water, at the corner by the 1st Engineer Bridge (the Moika mouth) opposite the Summer Garden, below the Engineering Castle; tourists throw coins and a coin
 // that stays on the ledge makes a wish come true.
-// The ledge is fixed to the wall face of the Fontanka west bank, about 5 m south-east of the corner where the wall meets the bridge (the nearest wall piece to ANCHOR), 1.15 m above the water, and the bird
+// The ledge is fixed to the wall face of the short wall piece at the corner by the bridge, about 13 m east of the bridge centre (the nearest wall piece to ANCHOR), 1.15 m above the water, and the bird
 // looks along the wall toward the bridge. The bird is about twice the real size (about 22 cm) so that it can be seen from the quay above; a few real-size coins lie on the ledge.
 // Nobody can stand on the ledge (it is below the street, in front of the quay collider): it is seen from above (look down over the railing; [E] prompt on the quay), from the water and from flight.
 // Bronze: bright and rubbed (#a8793a, a little emissive), as the real one; coins M.gold. Built with Parts boxes / cylinders / ellipsoids (about 450 triangles).
 // Services: svc.monuments (id 'chizhik'; people/nav.js sends the pedestrians to photograph monuments, props keep 3 m clear), ctx.interact prompt, svc.chizhik. No sound, no flag, no brand.
 import * as THREE from 'three';
 
-const ANCHOR = [-736.0, -1029.4];               // on the Fontanka west-bank wall, 5 m from the wall corner at the bridge end
-const CORNER = [-738.7, -1033.6];               // where the bird looks (toward the bridge)
+const ANCHOR = [-741.4, -1033.6];               // the short wall piece at the corner by the bridge (the user's spot: seen from -741.4, -1034.1 looking south)
+const CORNER = [-760, -1034];                   // where the bird looks (west, toward the bridge)
 const LEDGE_ABOVE_WATER = 1.15;                 // metres of wall between the water line and the top of the ledge
 const OUT = 0.46;                               // how far the ledge reaches from the wall face
 

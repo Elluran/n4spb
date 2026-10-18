@@ -215,6 +215,10 @@ function build() {
   // FORCED BANK: the 1.2 m corner edge of the Neva polygon at the same spot touches the Bolshaya Neva polygon in one vertex, which the 1.8 m slack rule of same-waterway pieces reads as a join: it is shore
   // (land to the west), and without it the two chains end 1.204 m apart (the stitch limit is 1.2 m)
   const FORCED_BANK = [[-2460.8, -1097.5, -2460.7, -1098.7]];
+  // OPEN MOUTH: the Moika leaves the Fontanka under the 1st Engineer Bridge, but the Moika polygon ends 1-3 m off the Fontanka edge across its mouth, so the join test above misses it and the Fontanka quay wall
+  // closed the arch from the Fontanka side. An edge that lies along one of these segments is water on both sides, no bank.
+  const OPEN_MOUTHS = [[-744, -1034.5, -757.4, -1054.4]];
+  const isOpenMouth = (ax, az, bx, bz) => OPEN_MOUTHS.some((e) => segDist(ax, az, e[0], e[1], e[2], e[3]) < 1.5 && segDist(bx, bz, e[0], e[1], e[2], e[3]) < 1.5);
   function isForcedBank(ax, az, bx, bz) { return FORCED_BANK.some((e) => (Math.hypot(e[0] - ax, e[1] - az) < 0.3 && Math.hypot(e[2] - bx, e[3] - bz) < 0.3) || (Math.hypot(e[0] - bx, e[1] - bz) < 0.3 && Math.hypot(e[2] - ax, e[3] - az) < 0.3)); }
   // A PLUG is a hand-made strip (under the Palace Bridge) whose short end edge lies ON the shore of the Spit: there a data edge that runs along it is a real bank (land on one side), not an open join. Until the
   // Petrograd side bake that shore was far scenery; with the rule "any coinciding edge is a join" the Spit quay had a 20 m hole beside the north head of the Palace Bridge ((-2460.8,-1097.5)..(-2471.7,-1114.1)).
@@ -237,7 +241,7 @@ function build() {
   const chains = [];
   for (let gi = 0; gi < rings.length; gi++) {
     const g = rings[gi], { o, n } = g, flags = [];
-    for (let i = 0; i < n; i++) { const j = (i + 1) % n; const ax = o[i * 2], az = o[i * 2 + 1], bx = o[j * 2], bz = o[j * 2 + 1]; flags.push(isForcedBank(ax, az, bx, bz) || (Math.hypot(bx - ax, bz - az) > 0.05 && !onClipLine(ax, az, bx, bz) && !(g.key === 'neva' && (onDataLine(ax, az, bx, bz) || onFarJoin(ax, az, bx, bz))) && !coincides(gi, ax, az, bx, bz) && !insideSame(gi, ax, az, bx, bz))); }
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n; const ax = o[i * 2], az = o[i * 2 + 1], bx = o[j * 2], bz = o[j * 2 + 1]; flags.push(isForcedBank(ax, az, bx, bz) || (Math.hypot(bx - ax, bz - az) > 0.05 && !onClipLine(ax, az, bx, bz) && !(g.key === 'neva' && (onDataLine(ax, az, bx, bz) || onFarJoin(ax, az, bx, bz))) && !coincides(gi, ax, az, bx, bz) && !isOpenMouth(ax, az, bx, bz) && !insideSame(gi, ax, az, bx, bz))); }
     if (flags.every(Boolean)) {
       const pts = []; for (let i = 0; i < n; i++) pts.push([o[i * 2], o[i * 2 + 1]]); pts.push(pts[0]);
       chains.push({ key: g.key, pts: g.waterLeft ? pts : pts.reverse(), closed: true });
