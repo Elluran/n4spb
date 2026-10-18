@@ -13,6 +13,34 @@ The driven car **knocks over and throws the street furniture** by weight (`src/c
 This is a cut-down copy of the whole-city project `102_3d_piter`: **one strip of 5.0 km2** (3.7 x 2.4 km bounding box), kept small so that it can be deployed as a static site and load fast.
 What the strip is, what was dropped and why, how to rebuild and deploy it: [`docs/STRIP.md`](docs/STRIP.md).
 
+## Gallery
+
+Screenshots of the shipping scene (Medium, a July afternoon unless the caption says otherwise), made with `tools/shot.mjs` from the real baked page; the cameras are the numbered places of the controls table and a few free cameras.
+
+### Sights
+
+| | |
+|---|---|
+| ![Moscow Railway Station (Thon, 1851) with its clock tower, seen from Vosstaniya Square](docs/screenshots/station.jpg)<br>**Moscow Railway Station** (Thon, 1851) with its clock tower, seen from Vosstaniya Square | ![The Hero City obelisk and Hotel Oktyabrskaya](docs/screenshots/obelisk.jpg)<br>The **Hero City obelisk** and Hotel Oktyabrskaya |
+| ![The Anichkov Bridge over the Fontanka with Klodt's horse tamers and the traffic lights](docs/screenshots/anichkov-bridge.jpg)<br>The **Anichkov Bridge** over the Fontanka with Klodt's horse tamers and the traffic lights | ![Gostiny Dvor on Nevsky Prospekt, behind the black chain bollards](docs/screenshots/gostiny-dvor.jpg)<br>**Gostiny Dvor** on Nevsky Prospekt, behind the black chain bollards |
+| ![Kazan Cathedral with its colonnade, seen from the Kazan Square garden](docs/screenshots/kazan-cathedral.jpg)<br>**Kazan Cathedral** with its colonnade, seen from the Kazan Square garden | ![The Church of the Saviour on Spilled Blood on the Griboedov Canal](docs/screenshots/saviour-on-blood.jpg)<br>The **Church of the Saviour on Spilled Blood** on the Griboedov Canal |
+| ![The Winter Palace from the Palace Embankment, a turquoise bus in front](docs/screenshots/winter-palace.jpg)<br>The **Winter Palace** from the Palace Embankment, a turquoise bus in front | ![Palace Square and the Alexander Column in the golden evening (key T)](docs/screenshots/palace-square-golden.jpg)<br>**Palace Square** and the Alexander Column in the golden evening (key **T**) |
+| ![St Isaac's Cathedral across its square](docs/screenshots/st-isaac.jpg)<br>**St Isaac's Cathedral** across its square | ![The Bronze Horseman on Senate Square](docs/screenshots/bronze-horseman.jpg)<br>The **Bronze Horseman** on Senate Square |
+| ![The Mayakovskaya metro hall, 51 m underground (one of seven real stations)](docs/screenshots/metro-mayakovskaya.jpg)<br>The **Mayakovskaya** metro hall, 51 m underground (one of seven real stations) | ![The 1st Engineer Bridge at the Moika source: flat arch with medallions, trophy posts, lamp standards](docs/screenshots/engineer-bridge.jpg)<br>The **1st Engineer Bridge** at the Moika source: flat arch with medallions, trophy posts, lamp standards |
+| ![The Fontanka mouth from above: the Summer Garden, the Panteleymonovsky and 1st Engineer bridges](docs/screenshots/summer-garden.jpg)<br>The **Fontanka mouth** from above: the Summer Garden, the Panteleymonovsky and 1st Engineer bridges | ![The Chizhik-Pyzhik, the little bronze siskin, on its granite ledge of the Fontanka wall (an Easter egg: look down from the quay by the 1st Engineer Bridge, E gives its story)](docs/screenshots/chizhik.jpg)<br>The **Chizhik-Pyzhik**, the little bronze siskin, on its granite ledge of the Fontanka wall (an Easter egg: look down from the quay by the 1st Engineer Bridge, **E** gives its story) |
+
+### Cars
+
+Four garage cars wait on the Moscow station forecourt (press **E** next to one). Each has its own model, engine voice, handling, cockpit and damage; all of them break and throw the street furniture by weight.
+
+| | |
+|---|---|
+| ![The red sports car at the Moscow station's taxi rank](docs/screenshots/car-coupe.jpg)<br>The **red sports car** at the Moscow station's taxi rank | ![The white Tesla Roadster (2026): thrusters on Shift, hops on X and C](docs/screenshots/car-roadster.jpg)<br>The white **Tesla Roadster** (2026): thrusters on **Shift**, hops on **X** and **C** |
+| ![The taxi pickup (heavier, a bit slower, roof sign "ТАКСИ")](docs/screenshots/car-taxi-pickup.jpg)<br>The **taxi pickup** (heavier, a bit slower, roof sign "ТАКСИ") | ![The eggplant Zhiguli (VAZ-2106): lighter and loose](docs/screenshots/car-zhiguli.jpg)<br>The eggplant **Zhiguli** (VAZ-2106): lighter and loose |
+| ![Driving the Roadster with the chase camera: the four thruster nozzles at the back](docs/screenshots/drive-roadster.jpg)<br>Driving the Roadster with the chase camera: the four thruster nozzles at the back | ![The Roadster's barrel hop (C): a roll with side thruster streams](docs/screenshots/drive-roadster-barrel-hop.jpg)<br>The Roadster's **barrel hop** (**C**): a roll with side thruster streams |
+| ![Drifting the sports car round the corner with the handbrake](docs/screenshots/drive-coupe-drift.jpg)<br>Drifting the sports car round the corner with the handbrake | ![The taxi pickup at a red light (the countdown box shows the seconds left)](docs/screenshots/drive-taxi-pickup.jpg)<br>The taxi pickup at a red light (the countdown box shows the seconds left) |
+
+
 The strip, west to east (x east, z south in metres; start at about x 560, z 192):
 
 | Part | What you can walk to |
@@ -20,6 +48,7 @@ The strip, west to east (x east, z south in metres; start at about x 560, z 192)
 | Station end | Moscow Railway Station (hall, ticket hall with the bust of Peter I, platforms with trains), Vosstaniya Square and the obelisk, Hotel Oktyabrskaya, the Galereya mall, the rail yard, the Oktyabrsky concert hall, Ligovsky Prospekt |
 | Nevsky east | Nevsky Atrium and the Mayakovskaya metro portal, Vladimirsky Cathedral, the National Library, Anichkov Bridge with Klodt's horse tamers, Anichkov Palace, Belinsky Bridge and the Circus |
 | Nevsky centre | Gostiny Dvor, the Catherine Garden and the Alexandrinsky Theatre, Singer House, Kazan Cathedral, the Griboedov Canal with the Church of the Saviour on Blood, the Russian Museum, the Mikhailovsky Castle and Garden |
+| The Fontanka mouth | The Summer Garden (south half) with the Swan Canal, the Moika source with the **1st Engineer Bridge**, the **Panteleymonovsky Bridge**, the **Chizhik-Pyzhik** on its ledge of the Fontanka wall |
 | The west | Palace Square with the General Staff arch and the Alexander Column, the Winter Palace and the Hermitage, the Admiralty and Alexander Garden, St Isaac's Cathedral, Senate Square with the Bronze Horseman, the Palace Bridge |
 
 ## Start it
