@@ -149,3 +149,7 @@ but bake and commit `assets/baked/` and `src/core/baked-revision.js` only at dep
 
 [PERFORMANCE.md](PERFORMANCE.md), [LOADING.md](LOADING.md), [PERFORMANCE-PLAN-2026-10-15.md](PERFORMANCE-PLAN-2026-10-15.md) and the island / Vasilievsky / Petrograd sections of [city-api.md](city-api.md), [streets-api.md](streets-api.md) and `rules/` describe the whole city: their method applies,
 their numbers do not (re-measure on the strip). [HANDOFF.md](HANDOFF.md) is the state of this repository; [DESIGN.md](DESIGN.md), [AGENT-BRIEF.md](AGENT-BRIEF.md) and [PERFORMANCE-CONTRACT.md](PERFORMANCE-CONTRACT.md) are the working rules.
+
+## 9. Easter eggs
+
+* **Chizhik-Pyzhik** (user request 2026-10-18): the little bronze siskin of the Fontanka, `src/world/landmarksCastle/chizhik.js`. The real one (11 cm, 1994) sits on a ledge of the wall at the Panteleymonovsky Bridge, which is outside the play area (play stops at z = -1000) and below street level, so the scene has a larger copy (about 20 cm) on a small granite plinth with a plaque and coins, on the pavement of the same east bank, behind the quay railing, at the first lamp-free stretch inside the play area (around (-634, -976), looking toward the bridge). `[E]` pets it (a toast with the story); pedestrians stop to photograph it (it is in `landmarks.monuments`).

@@ -1,6 +1,6 @@
 // landmarksCastle - the Engineering (Mikhailovsky) Castle (Bazhenov / Brenna 1797-1801) with its court, south portal and obelisks, north loggia, church rotunda, 64 m gilded spire, green copper roofs;
 // the Peter I monument (Rastrelli) with its pink Olonets marble pedestal 77 m south of the portal; the Three-part bridge over the restored Voskresensky canal; the two Kordegardiya guardhouses on
-// Klenovaya alley; the iron-and-granite precinct (moat railings, flower beds, chain posts, benches).  Dossier docs/research/summer-garden.md section 8, photos refs/summer-garden 104 107 111 120 135 143 157 165 247.
+// Klenovaya alley; the iron-and-granite precinct (moat railings, flower beds, chain posts, benches); the little bronze Chizhik-Pyzhik (chizhik.js, an Easter egg on the Fontanka embankment inside the play area).  Dossier docs/research/summer-garden.md section 8, photos refs/summer-garden 104 107 111 120 135 143 157 165 247.
 // User rules: no flags / flagpoles (the roof flag is omitted), no alarm sounds.  The moat water belongs to environment, the bridges over the Moika / Fontanka to bridges.
 // Files: landmarksCastle/frame.js (frame C) mats.js geo.js castle.js (walls, windows, bands, colliders) roof.js (roofs, chimneys, dome, spire, court floor) portal.js (south portal, obelisks, colonnades, passage)
 // north.js (loggia, stair, Hercules / Flora) court.js (court details, Paul I) monument.js (Peter I) bridge.js (Three-part bridge) guards.js (guardhouses) precinct.js (fences, beds, benches) groups.js (claims)
@@ -24,6 +24,7 @@ const PARTS = [
   ['bridge', () => import('./landmarksCastle/bridge.js').then((m) => (K, M, D, svc) => m.build(K, M, D, svc))],
   ['guards', () => import('./landmarksCastle/guards.js').then((m) => (K, M, D, svc) => m.build(K, M, D, svc))],
   ['precinct', () => import('./landmarksCastle/precinct.js').then((m) => (K, M, D, svc) => m.build(K, M, D, svc))],
+  ['chizhik', () => import('./landmarksCastle/chizhik.js').then((m) => (K, M, D, svc) => m.build(K, M, D, svc))],      // the Chizhik-Pyzhik Easter egg on the Fontanka embankment
 ];
 
 export async function build(ctx) {
