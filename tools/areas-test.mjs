@@ -7,6 +7,9 @@
 // both headings - is resolved by handoff.resolveArrival with the DESTINATION layout and 100 percent valid, and the band-parity hook tools/band-parity.mjs `bandParity({ gate, root, REGISTRY })`
 // when the data task provides it); synthetic gate fixtures exercise every one of those checks (and every way they must fail) even while no real gate exists; the generated area pages
 // (tools/gen-area-html.mjs: fixtures, the page.json files, and for a real area the page on disk); the shape of each area module's TEST.
+// M5 adds the BAND LANDMARK parity of every non-dev gate with the strip on one side (tools/band-parity.mjs bandLandmarks; the claims of both areas come from tools/lib/claims-dump.mjs, run as
+// `node tools/area.mjs <area> tools/lib/claims-dump.mjs`): every landmark claim of the strip whose record lies in the band must be claimed in the other area, by id and sub-group key, by a module that is in that
+// area's MODULES and owns the sub-group; synthetic fixtures cover a missing claim, an owner outside MODULES, an id nobody claims, a wrong key, a lost part and a vacuous band.
 //   node tools/areas-test.mjs [--area <id>]        a gate whose destination is another area runs its arrival grid in a child: node tools/area.mjs <to> tools/areas-test.mjs --arrival-only <gate>
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,6 +23,7 @@ import * as GG from './lib/gate-geometry.mjs';
 import { testShapeProblems, stripTest, resolveTest } from './lib/area-test-data.mjs';
 import { generatePage, generateFor, validatePage, pageJsonFile } from './gen-area-html.mjs';
 import { resolveArea } from './lib/area-page.mjs';
+import { landmarkBandProblems, bandLandmarks, bandRects, PLAN_BAND_IDS } from './band-parity.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let fails = 0, passes = 0;
@@ -266,6 +270,56 @@ check('fixture: an arrival grid inside the reverse zone depth but outside its la
   check('fixture: a car arrival needs a drivable lane (an area without roads fails the car grid, not the walk grid)', () => { assert(noRoad.badCount > 0 && noRoad.badCount <= noRoad.total / 3 + 1, JSON.stringify([noRoad.badCount, noRoad.total])); assert(/car/.test(noRoad.bad[0])); });
 }
 
+// ---------------------------------------------------------------------------------------------- band landmark parity (tools/band-parity.mjs landmarkBandProblems, tools/lib/claims-dump.mjs)
+console.log('band landmark parity fixtures (a landmark of the strip in the band must be built by a module of the other area):');
+{
+  const BAND = [R(-420, 835, -405, -205)];
+  const row = (id, module, group, cx, cz, o = {}) => ({ id, module, group, via: 'id', present: true, cx, cz, inModules: true, owns: true, owned: true, ...o });
+  const SRC_ROWS = [
+    row('wLib', 'landmarksD', 'library', -334, -311), row('wPod', 'landmarksNorth', 'north-podpisnye', -204, -267),
+    row('wC1', 'landmarksNorth', 'north-corridor-houses', 183, -356), row('wC2', 'landmarksNorth', 'north-corridor-houses', 537, -283),
+    row('wHall', 'landmarksOktyabrsky', 'oktyabrsky-hall', 798, -347), row('wHallPart', 'landmarksOktyabrsky', 'oktyabrsky-hall', 803, -344, { via: 'parent', parent: 'wHall' }),
+    row('wFar', 'landmarksNorth', 'north-corridor-houses', 142, -54),            // outside the band (31 m south of it): not required in the other area
+    row('wKaz', 'landmarksF', 'kazan-cathedral', -1568, -186),                   // far outside
+    row('wBlock', 'landmarksX', 'unowned-group', 0, -300, { owned: false, owns: false }),      // claimed in the strip but not built by a module there (the generic city draws it): not required
+  ];
+  const IDS = ['wLib', 'wPod', 'wC1', 'wC2', 'wHall', 'wHallPart'];
+  const SRC = { area: 'strip', modules: ['landmarksD', 'landmarksNorth', 'landmarksOktyabrsky'], rows: SRC_ROWS };
+  // a good destination: the same ids and sub-group keys, the North's own module name for the corridor (landmarksNorthFull), the concert hall part through its parent
+  const DST_ROWS = [
+    row('wLib', 'landmarksD', 'library', -334, -311), row('wPod', 'landmarksNorthFull', 'north-podpisnye', -204, -267),
+    row('wC1', 'landmarksNorthFull', 'north-corridor-houses', 183, -356), row('wC2', 'landmarksNorthFull', 'north-corridor-houses', 537, -283),
+    row('wHall', 'landmarksOktyabrsky', 'oktyabrsky-hall', 798, -347), row('wHallPart', 'landmarksOktyabrsky', 'oktyabrsky-hall', 803, -344, { via: 'parent', parent: 'wHall' }),
+  ];
+  const dst = (rows) => ({ area: 'north', modules: ['landmarksNorthFull', 'landmarksD', 'landmarksOktyabrsky'], rows });
+  const run = (rows, extra = {}) => landmarkBandProblems({ source: SRC, dest: dst(rows), band: BAND, expect: IDS, ...extra });
+  const landmarkFails = (name, rows, re, extra) => check(`fixture: ${name} is caught`, () => { const p = run(rows, extra).join('\n'); assert(re.test(p), p || '(no problem reported)'); });
+  check('fixture: a good destination (same ids and sub-group keys, a different module name for the corridor, an id outside the band missing, a source claim nobody builds ignored) has no problem', () => assert.deepEqual(run(DST_ROWS), []));
+  landmarkFails('a claim of the band that the destination does not list (wC2 missing from a sub-group that has its other id)', DST_ROWS.filter((r) => r.id !== 'wC2'), /wC2 \(strip landmarksNorth \/ north-corridor-houses, inside the band\) is claimed by no sub-group of north: the module that should own it is landmarksNorthFull \(the north copy of landmarksNorth\)/);
+  check('fixture: ... and it names only the missing id, not the ones the destination has', () => assert(!/wC1/.test(run(DST_ROWS.filter((r) => r.id !== 'wC2')).join('\n'))));
+  landmarkFails('a whole sub-group claimed by no one in the destination (the corridor houses and Podpisnye)', DST_ROWS.filter((r) => !/^north-/.test(r.group)), /wPod[\s\S]*claimed by no sub-group[\s\S]*landmarksNorthFull[\s\S]*wC1, wC2[\s\S]*claimed by no sub-group/);
+  landmarkFails('the owner module is not in the MODULES of the destination', DST_ROWS.map((r) => (r.module === 'landmarksNorthFull' ? { ...r, inModules: false, owned: false } : r)), /wPod \(landmarksNorthFull\)[\s\S]*wC1 \(landmarksNorthFull\), wC2 \(landmarksNorthFull\)[\s\S]*not in the MODULES of src\/areas\/north\/area\.js[\s\S]*should be landmarksNorthFull/);
+  landmarkFails('the module is in the list but does not own the sub-group', DST_ROWS.map((r) => (r.id === 'wHall' ? { ...r, owns: false, owned: false } : r)), /wHall \(landmarksOktyabrsky\)[\s\S]*does not own the sub-group "oktyabrsky-hall"/);
+  landmarkFails('the same id under another sub-group key', DST_ROWS.map((r) => (r.id === 'wLib' ? { ...r, group: 'national-library' } : r)), /wLib \(north: sub-group "national-library" of landmarksD\)[\s\S]*another sub-group key than "library"/);
+  landmarkFails('a part that the destination does not resolve through its parent', DST_ROWS.filter((r) => r.id !== 'wHallPart'), /wHallPart \(strip landmarksOktyabrsky \/ oktyabrsky-hall, inside the band\) is claimed by no sub-group/);
+  landmarkFails('a claimed id without a record in the data of the destination', DST_ROWS.map((r) => (r.id === 'wPod' ? { ...r, present: false } : r)), /wPod \(landmarksNorthFull\)[\s\S]*no record with that id in its data facade/);
+  landmarkFails('another id in the same sub-group does not stand in for the missing one (the SOURCE claim decides, id by id)', DST_ROWS.filter((r) => r.id !== 'wLib').concat([row('wLib2', 'landmarksD', 'library', -334, -311)]), /wLib \(strip landmarksD \/ library/);
+  landmarkFails('a pinned plan id that the strip no longer claims in the band (a drifted dump)', DST_ROWS, /wGone[\s\S]*update PLAN_BAND_IDS/, { expect: [...IDS, 'wGone'] });
+  check('fixture: nothing to compare is a failure, not a pass (no band; no owned claim of the strip inside it)', () => {
+    assert(/do not overlap/.test(landmarkBandProblems({ source: SRC, dest: dst(DST_ROWS), band: [], expect: IDS }).join()));
+    assert(/nothing to compare/.test(landmarkBandProblems({ source: { ...SRC, rows: SRC_ROWS.filter((r) => !inBandRow(r)) }, dest: dst(DST_ROWS), band: BAND, expect: IDS }).join()));
+    assert(/nothing to compare/.test(landmarkBandProblems({ source: { ...SRC, rows: SRC_ROWS.map((r) => ({ ...r, owned: false })) }, dest: dst(DST_ROWS), band: BAND, expect: IDS }).join()));
+  });
+  check('fixture: the band is the intersection of the play rectangles (strip x north = x -420 .. 835, z -405 .. -205; two disjoint areas have none; touching edges are no band)', () => {
+    assert.deepEqual(bandRects(REGISTRY.strip.play, REGISTRY.north.play), BAND);
+    assert.deepEqual(bandRects([R(0, 10, 0, 10)], [R(20, 30, 0, 10)]), []);
+    assert.deepEqual(bandRects([R(0, 10, 0, 10)], [R(10, 30, 0, 10)]), []);
+    assert.deepEqual(bandRects([R(0, 10, 0, 10), R(10, 20, 0, 10)], [R(5, 15, 5, 8)]), [R(5, 10, 5, 8), R(10, 15, 5, 8)]);
+  });
+  check(`fixture: the plan's ${PLAN_BAND_IDS.length} band landmark ids are all distinct and look like OSM ids`, () => { assert.equal(new Set(PLAN_BAND_IDS).size, PLAN_BAND_IDS.length); for (const id of PLAN_BAND_IDS) assert(/^[nwr]\d+$/.test(id), id); });
+  function inBandRow(r) { return BAND.some((b) => r.cx >= b.x0 && r.cx <= b.x1 && r.cz >= b.z0 && r.cz <= b.z1); }
+}
+
 // ---------------------------------------------------------------------------------------------- gate geometry of the real gates
 console.log('gates (non-dev; the dev gate g0 loops back to the same page and has no border):');
 const realGates = GATES.filter((g) => !g.dev && (!only || g.from === only || g.to === only));
@@ -295,6 +349,12 @@ for (const g of realGates) {
     let bp = null, bpError = null;
     try { const m = await import(pathToFileURL(bandFile).href); if (typeof m.bandParity === 'function') bp = (await m.bandParity({ gate: g, root, REGISTRY })) || []; } catch (e) { bpError = e; }
     if (bp || bpError) check(`gate ${g.id}: band parity (tools/band-parity.mjs)`, () => { if (bpError) throw bpError; assert.equal(bp.length, 0, bp.slice(0, 6).join('\n       ')); });
+  }
+  // the landmark parity of the band (M5): every landmark of the strip that stands in the band is built by a module of the other area (claims: tools/lib/claims-dump.mjs, in a child per area)
+  if (g.from === 'strip' || g.to === 'strip') {
+    let lp = null, lpError = null;
+    try { lp = await bandLandmarks({ gate: g, root, REGISTRY }); } catch (e) { lpError = e; }
+    check(`gate ${g.id}: band landmarks (every landmark claim of the strip inside the band is built by a module of ${g.from === 'strip' ? g.to : g.from}; tools/band-parity.mjs)`, () => { if (lpError) throw lpError; assert(lp.length === 0, lp.slice(0, 8).join('\n       ')); });
   }
 }
 
