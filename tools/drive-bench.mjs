@@ -10,10 +10,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
+import { resolveArea } from './lib/area-page.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; } }
+const AREA = resolveArea(args, root);      // --area <id> | --page <file>: benchmark another area's page (default: the strip, index.html)
 const walk = !!args.walk, mode = walk ? 'walk' : 'drive';
 const out = args.out || 'shots/drive/bench';
 fs.mkdirSync(path.dirname(path.resolve(root, out)), { recursive: true });
@@ -129,7 +131,7 @@ try {
   const heartbeat = setInterval(() => console.log(`[load ${Math.round((Date.now() - t0) / 1000)}s] ${progress}`), 30000);
   try {
     await Promise.race([(async () => {
-      const response = await page.goto(`http://127.0.0.1:${port}/index.html?${q}`, { waitUntil: 'load', timeout: 120000 });
+      const response = await page.goto(`http://127.0.0.1:${port}/${AREA.page}?${q}`, { waitUntil: 'load', timeout: 120000 });
       if(snapshotReady){const snapshot=await snapshotReady;console.log('Diagnostic heap saved:',snapshot);await browser.close();server.close();process.exit(0);}
       console.log(`Page loaded: HTTP ${response?.status()} after ${((Date.now() - t0) / 1000).toFixed(1)}s`);
       await page.waitForFunction("document.body.classList.contains('loaded')", { timeout: Number(args['load-timeout'] || 280000), polling: 250 });
@@ -168,7 +170,7 @@ try {
     }));
     R.stop = () => { R.on = false; R.endedAt = performance.now(); };
   });
-  const start = (args.start || 'view:Digit3');      // "x,z,yawDeg" or view:<key> (layout.VIEWS; default: the Nevsky view, down the avenue)
+  const start = (args.start || (AREA.id === 'strip' ? 'view:Digit3' : 'view:Digit1'));      // "x,z,yawDeg" or view:<key> (layout.VIEWS of the page's area; default: the Nevsky view, down the avenue; another area: its first view)
   // Island destinations can be kilometers from the spawn. Complete their
   // mandatory region loads before measuring acceleration and frame times.
   await page.evaluate(async ({ s, walk }) => {

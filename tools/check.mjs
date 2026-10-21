@@ -51,8 +51,12 @@ const { createKnock } = await import(pathToFileURL(path.join(root, 'src/core/kno
 const { batchStatic } = await import(pathToFileURL(path.join(root, 'src/core/batch2.js')).href);
 const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);
 
-const names = process.argv.slice(2).filter(a => !a.startsWith('--'));
-if (!names.length) { console.log('usage: node tools/check.mjs <module> [...]'); process.exit(1); }
+// --area-modules: check every module of the area's page (the MODULES list of AREA = the area tools/area.mjs runs as; default the strip), in build order, e.g.
+//   node tools/area.mjs north tools/check.mjs --area-modules          (npm run check:north)       --skip a,b leaves modules out
+const argvRest = process.argv.slice(2), skipFlag = argvRest.indexOf('--skip'), skip = new Set(skipFlag >= 0 ? String(argvRest[skipFlag + 1] || '').split(',') : []);
+let names = argvRest.filter((a, i) => !a.startsWith('--') && argvRest[i - 1] !== '--skip');
+if (argvRest.includes('--area-modules')) names = [...new Set([...(await import('./modules-list.mjs')).mainModules(), ...names])].filter((n) => !skip.has(n));
+if (!names.length) { console.log('usage: node tools/check.mjs <module> [...] | --area-modules [--skip a,b]   (other areas: node tools/area.mjs <id> tools/check.mjs ...)'); process.exit(1); }
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.1, 2500);
@@ -61,7 +65,7 @@ const sunDir = new THREE.Vector3(...L.SUN_DIR).normalize();
 let audio; try { audio = createAudio(); } catch (e) { console.log('audio createAudio() threw:', e.message); audio = null; }
 const quality = { name: 'medium', pixelRatio: 1, msaa: 4, shadowMap: 2048, shadowSize: 70, petals: 0.6 };
 const ctx = createContext({ scene, camera, renderer: null, audio, quality, sunDir });
-ctx.buildList = process.argv.slice(2).filter(a => !a.startsWith('--'));      // lib/claims.js: landmark groups only count as owned when their module is checked together with city
+ctx.buildList = names;      // lib/claims.js: landmark groups only count as owned when their module is checked together with city
 ctx.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight(), uniforms: {} };
 ctx.knock = createKnock(ctx);      // the knockable street furniture register during the module build, as in main.js
 

@@ -19,21 +19,29 @@ import { bakedRevision } from './baked-revision.mjs';
 //   --profile record startup CPU samples to <out>.cpuprofile (or the given path)
 //   --network use CDN Three.js instead of the offline local interception
 //   --out    output path prefix; files are <out>_0.png, <out>_1.png, ...
+//   --area <id> | --page <file>   shoot the page of another area (north.html; default: the strip, index.html); hero / v1.. / views are that area's poses
 // Prints page errors, module errors and render stats. Then view the PNGs with your image viewer / Read tool.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer-core';
+import { resolveArea, activateArea } from './lib/area-page.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { const k = a.slice(2); const v = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; args[k] = v; } }
 const W = Number(args.w || 1280), H = Number(args.h || 720);
 const BASE = args.base ? '/' + args.base.replace(/^\/+|\/+$/g, '') : '';
+// --area <id> / --page <file>: the page of another area (north.html); hero / v1.. / views then come from THAT area's layout (default: the strip, index.html)
+const AREA = resolveArea(args, root);
+await activateArea(AREA.row, root);
 const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);
 const pose = (p) => `${p.x},${p.z},${p.yaw},${p.pitch}`;
 const PRESETS = { hero: [pose(L.HERO)], views: L.VIEWS.map(pose), overview: ['-102,430,430,0,-42'], aerial: ['330,300,380,55,-38'], top: ['-102.9,452,83.7,0,-90'] };
+if (AREA.id !== 'strip') {      // the strip's three overview cameras are placed over Vosstaniya Square: the same shapes over the area's hero
+  const h = L.HERO; Object.assign(PRESETS, { overview: [`${h.x},430,${h.z + 430},0,-42`], aerial: [`${h.x + 430},300,${h.z + 380},55,-38`], top: [`${h.x},452,${h.z},0,-90`] });
+}
 L.VIEWS.forEach((v, i) => { PRESETS['v' + (i + 1)] = [pose(v)]; });
 const cams = (args.cams || 'hero').split(';').map(s => s.trim()).filter(Boolean).flatMap((c) => PRESETS[c] || [c]);
 const out = args.out || 'shots/shot';
@@ -84,7 +92,7 @@ try {
   if (args.batch) q.set('batch', args.batch);
   if (args.params) for (const [k, v] of new URLSearchParams(args.params)) q.set(k, v);   // e.g. --params "allcity=1&stats=1"
   q.set('cam', cams[0]);
-  await page.goto(`http://127.0.0.1:${port}${BASE}/index.html?${q}`, { waitUntil: 'load', timeout: 120000 });
+  await page.goto(`http://127.0.0.1:${port}${BASE}/${AREA.page}?${q}`, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction(args.load ? "document.body.classList.contains('loaded')" : 'window.__ready === true', { timeout: Number(args['load-timeout'] || 280000), polling: 250 });
   if (cdp) {
     const { profile } = await cdp.send('Profiler.stop');

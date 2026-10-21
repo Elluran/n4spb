@@ -8,10 +8,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 import { bakedRevision } from './baked-revision.mjs';
+import { resolveArea } from './lib/area-page.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; } }
+const AREA = resolveArea(args, root);      // --area <id> | --page <file>: test another area's page (default: the strip, index.html)
 const out = args.out || 'shots/drive/test';
 fs.mkdirSync(path.dirname(path.resolve(root, out)), { recursive: true });
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png' };
@@ -45,7 +47,7 @@ try {
   const q = new URLSearchParams({ q: args.q || 'medium', t: '30' }); if (args.only) q.set('only', args.only);
   if (args.tod) q.set('tod', args.tod);
   if (args.params) for (const [k, v] of new URLSearchParams(args.params)) q.set(k, v);   // e.g. --params "baked=force" (the bake is stale after any src edit)
-  await page.goto(`http://127.0.0.1:${port}/index.html?${q}`, { waitUntil: 'load', timeout: 120000 });
+  await page.goto(`http://127.0.0.1:${port}/${AREA.page}?${q}`, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction("document.body.classList.contains('loaded')", { timeout: Number(args['load-timeout'] || 280000), polling: 250 });
   for (const e of await page.evaluate(() => window.__errors || [])) problems.push(`[module ${e.module}] ${e.message.split('\n').slice(0, 4).join(' | ')}`);
   await page.click('#go'); await sleep(1500);
