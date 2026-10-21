@@ -6,7 +6,7 @@
 //   claimed:       [ { id: 'r2404499', by: 'landmarksA', group: 'station' }, 'w123' ... ],   // OSM ids that must be claimed: by (module), group (sub-group key); a bare string = claimed by anything
 //   viewKeys:      [ 'Digit1', ... 'Digit0', 'Place.oktyabrsky' ],    // the exact keys of VIEWS in order: the keyed views first, then Place.<id> views (a Place.<id> entry only has to EXIST)
 //   mustHaveAreas: [ { x, z, has: 'substring' } ... ],                 // L.areaAt(x, z) (lower case) must contain `has` (a tuple [x, z, has] is accepted too)
-//   kept:          [ 'landmarksA', ... ],                              // modules whose GROUPS entries are verified against the data (default: every key of GROUPS)
+//   kept:          [ 'landmarksA', ... ],                              // modules whose GROUPS entries are verified against the data (also accepted: a separate `export const KEPT`; default: every key of GROUPS)
 //   // optional, only when the area has such a thing (skipped when absent):
 //   nearestRoad:   { at: [x, z], names: [ 'road name', ... ] },        // L.nearestRoad(at, { drivable, named }) is one of these
 //   roadsNear:     { at: [x, z], r: 75, min: 3 },                      // at least `min` drivable roads within r metres
@@ -63,6 +63,6 @@ export function resolveTest(A, L) {
     ...t,
     claimed: t.claimed.map((c) => (typeof c === 'string' ? { id: c } : c)),
     mustHaveAreas: t.mustHaveAreas.map((a) => (Array.isArray(a) ? { x: a[0], z: a[1], has: a[2] } : a)),
-    kept: t.kept || Object.keys(L.GROUPS),
+    kept: t.kept || A.KEPT || Object.keys(L.GROUPS),      // TEST.kept, or a separate `export const KEPT = [...]` of the area module, or every owner in GROUPS
   };
 }

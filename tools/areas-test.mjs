@@ -17,7 +17,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { REGISTRY, GATES, SCHEMA } from '../src/areas/registry.js';
 import { mainModules } from './modules-list.mjs';
 import * as GG from './lib/gate-geometry.mjs';
-import { testShapeProblems } from './lib/area-test-data.mjs';
+import { testShapeProblems, stripTest, resolveTest } from './lib/area-test-data.mjs';
 import { generatePage, generateFor, validatePage, pageJsonFile } from './gen-area-html.mjs';
 import { resolveArea } from './lib/area-page.mjs';
 
@@ -192,6 +192,18 @@ check('page selection of the browser tools (--area / --page): strip by default, 
   assert.throws(() => resolveArea({ area: 'nope' }, root), /unknown area/);
   assert.throws(() => resolveArea({ page: '../index.html' }, root), /site root/);
   assert.throws(() => resolveArea({ page: 'missing.html' }, root), /does not exist/);
+});
+check('TEST contract fixtures (what layout-test / landmarks-groups-check read from an area module): the strip fallback validates, tuples and bare ids normalise, broken objects are refused', () => {
+  const fakeL = { OBELISK: { x: 1, z: 2 }, STATION: { x: 3, z: 4 }, SQUARE: { x: 5, z: 6 }, GROUPS: { landmarksA: [], landmarksB: [] } };
+  assert.deepEqual(testShapeProblems(stripTest(fakeL)), []);
+  const good = { claimed: ['r1', { id: 'r2', by: 'm', group: 'g' }], viewKeys: ['Digit1', 'Place.x'], mustHaveAreas: [[1, 2, 'abc'], { x: 3, z: 4, has: 'd' }] };
+  assert.deepEqual(testShapeProblems(good), []);
+  const r = resolveTest({ ID: 'fix', TEST: good }, fakeL);
+  assert.deepEqual(r.claimed, [{ id: 'r1' }, { id: 'r2', by: 'm', group: 'g' }]); assert.deepEqual(r.mustHaveAreas[0], { x: 1, z: 2, has: 'abc' }); assert.deepEqual(r.kept, ['landmarksA', 'landmarksB']);
+  assert.deepEqual(resolveTest({ ID: 'fix', TEST: { ...good, kept: ['k'] } }, fakeL).kept, ['k']); assert.deepEqual(resolveTest({ ID: 'fix', KEPT: ['kk'], TEST: good }, fakeL).kept, ['kk']);
+  assert(testShapeProblems({ ...good, viewKeys: [] }).length && testShapeProblems({ ...good, viewKeys: ['a', 'a'] }).length && testShapeProblems({ ...good, claimed: [5] }).length && testShapeProblems({ ...good, mustHaveAreas: [[1, 2]] }).length);
+  assert(testShapeProblems({ ...good, nearestRoad: { at: [1], names: [] } }).length && testShapeProblems({ ...good, roadsNear: { at: [1, 2], r: 0, min: 1 } }).length && testShapeProblems({ ...good, riverBed: [] }).length);
+  assert.throws(() => resolveTest({ ID: 'fix' }, fakeL), /exports no TEST/); assert.throws(() => resolveTest({ ID: 'fix', TEST: { claimed: [] } }, fakeL), /malformed/);
 });
 
 // ---------------------------------------------------------------------------------------------- gate geometry (tools/lib/gate-geometry.mjs)

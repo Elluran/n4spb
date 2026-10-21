@@ -55,6 +55,9 @@ export function resolveArea(args = {}, siteRoot = root) {
 export async function activateArea(row, siteRoot = root) {
   process.env.AREA = row.id;
   if (!row.remap || !Object.keys(row.remap).length) return;
+  for (const v of Object.values(row.remap)) {
+    if (!fs.existsSync(path.join(siteRoot, v))) throw new Error(`area "${row.id}": ${v} does not exist${row.status === 'planned' ? ' (the area is planned: its data and area module have not landed yet)' : ''}`);
+  }
   const { register } = await import('node:module');
   register('./area-hooks.mjs', { parentURL: import.meta.url, data: { root: siteRoot, remap: row.remap } });
 }
