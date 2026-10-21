@@ -7,6 +7,7 @@
 // Frame: yaw = rotY (0 faces +Z, positive turns toward +X); forward = (sin yaw, cos yaw), left = (cos yaw, -sin yaw). steer > 0 = left. Units: m, s.
 import { SPEC as COUPE_SPEC } from './model.js';
 import { createCarCollisions } from './collision.js';
+import { HOOKS } from '../lib/area-tables.js';
 
 const ACC = 15.5, BRAKE = 30, REV_ACC = 9, VMAX = 48, VREV = 9, NITRO_VMAX = 1.38, NITRO_ACC = 1.9;
 const GEAR_TOP = [13, 22, 31, 40, 49, 62];            // m/s at the redline of gears 1..6
@@ -36,7 +37,11 @@ export function createHandling(ctx, tuning = null) {
   const L = ctx.L, ph = ctx.physics;
   const T = tuning ? { ...COUPE_TUNING, ...tuning } : COUPE_TUNING, SPEC = T.spec || COUPE_SPEC, GEAR = T.gearTop;
   const collide = createCarCollisions(ph, SPEC);
-  const deckY = () => (x, z) => ctx.services.landmarksC?.bridge?.deckY?.(x, z) ?? ctx.services.bridges?.deckY(x, z) ?? null;
+  const DS = HOOKS.deckServices || [];      // the area's own deck services (a podium, stairs): their deckY comes before the bridge decks (docs/AREAS.md section 9)
+  const deckY = () => (x, z) => {
+    for (const n of DS) { const d = ctx.services[n]?.deckY?.(x, z); if (d != null) return d; }
+    return ctx.services.landmarksC?.bridge?.deckY?.(x, z) ?? ctx.services.bridges?.deckY(x, z) ?? null;
+  };
   const deck = deckY();
 
   /** road surface height at (x, z): the humped Anichkov deck, a low (<= 0.3 m) pavement / kerb slab, else the asphalt (0.03) */
