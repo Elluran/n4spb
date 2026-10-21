@@ -103,7 +103,7 @@ GROUPS.landmarksOktyabrsky = G_OKTYABRSKY;      // the concert hall w30324279 (7
  * shapes: { poly: [x,z,...], margin? (m around the polygon) } | { c: [x,z], r } | { x0, x1, z0, z1 } | { road: 'Невский проспект' } (nearest road of that name within 22 m)
  */
 export function makeAreas(h) {
-  const { _shoreOf, inRiver, shoreDist } = h;
+  const { SUBGROUPS, _groupPolys, _shoreOf, inRiver, shoreDist } = h;
   const S = NAMES.streets;
   return [
   // ---- the sights of the North (centres and radii from the source layout, docs/research/north-*.md) ----------------------------------------------------------------------------------------------------
@@ -120,7 +120,7 @@ export function makeAreas(h) {
   // ---- the strip's own sights inside the 200 m band (z -405 .. -205) -----------------------------------------------------------------------------------------------------------------------------
   { name: 'Подписные Издания · Bookshop', c: [-201, -222], r: 40 },
   { name: 'БКЗ «Октябрьский» · Oktyabrsky Concert Hall', c: [797, -347], r: 55 },
-  { name: 'Российская национальная библиотека · National Library', c: [-334, -311], r: 60 },
+  ..._groupPolys(SUBGROUPS.library, 6).map((r) => ({ name: 'Российская национальная библиотека · National Library', ...r })),      // the footprints of the claimed library + Mariinsky block, as in the strip (the old circle missed the hospital block 230 m east of it)
   // ---- the waterways: the Neva along the north edge (the play edge is partly in the water), the Fontanka along the west edge and through the band
   { name: 'Нева · Neva River', x0: -600, x1: 3100, z0: -2800, z1: -1750, test: (x, z) => _shoreOf(['neva'], x, z) < 8 || inRiver(x, z) },
   { name: 'Фонтанка · Fontanka River', x0: -900, x1: -330, z0: -2000, z1: -85, test: (x, z) => shoreDist(x, z) < 14 },

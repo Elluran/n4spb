@@ -1,5 +1,5 @@
 // Clinical Institute, Kirochnaya 41: OSM footprints, photographed garden campus.
-// SOURCE: D:/git2/agi-fun-tests/102_3d_piter src/world/landmarksKirochnaya.js (+ landmarksKirochnaya/groups.js, landscape.js), commit 0568f7af; copied verbatim (milestone M5, docs/AREAS.md), research: docs/research/north-kirochnaya.md of the source.
+// SOURCE: 102_3d_piter src/world/landmarksKirochnaya.js (+ landmarksKirochnaya/groups.js, landscape.js), commit 0568f7af; copied verbatim (milestone M5, docs/AREAS.md), research: docs/research/north-kirochnaya.md of the source.
 import * as THREE from 'three';
 import * as L from './layout.js';
 import { makeKit } from './landmarksD/common.js';

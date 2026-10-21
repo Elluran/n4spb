@@ -82,7 +82,9 @@ let failed = false;
 // A module that catches a failing sub-part logs '[module] part failed ...' and goes on: the page then shows a scene with a hole. The check must not print OK for that.
 const caught = [];
 for (const k of ['error', 'warn']) { const orig = console[k].bind(console); console[k] = (...args) => { const line = args.map((x) => (x && x.stack) || String(x)).join(' '); if (/failed|is not a function|is not defined|Cannot read/.test(line) && !line.startsWith('[textures]')) caught.push(line.split(String.fromCharCode(10))[0].slice(0, 220)); orig(...args); }; }
-const BUDGET = { environment: 500e3, streets: 500e3, city: 600e3, landmarksA: 400e3, landmarksB: 500e3, landmarksC: 500e3, landmarksD: 300e3, traffic: 400e3, props: 300e3, people: 200e3, wildlife: 100e3 };
+const BUDGET = { environment: 500e3, streets: 500e3, city: 600e3, landmarksA: 400e3, landmarksB: 500e3, landmarksC: 500e3, landmarksD: 300e3, traffic: 400e3, props: 300e3, people: 200e3, wildlife: 100e3,
+  // the North's landmark modules (M5, measured 2026-10-21: NorthFull 583 k incl. Dom Muruzi 241 k, Smolny 433 k, Kirochnaya 121 k, Suvorov 47 k, Oktyabrsky 27.5 k)
+  landmarksNorthFull: 600e3, landmarksSmolny: 450e3, landmarksKirochnaya: 130e3, landmarksSuvorov: 55e3, landmarksOktyabrsky: 30e3 };
 
 for (const name of names) {
   const before = snapshot();
