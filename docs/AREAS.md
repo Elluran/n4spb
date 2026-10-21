@@ -9,7 +9,7 @@ and the answer is a page navigation (`location.replace`). The old page dies with
 
 | Word | Meaning |
 |---|---|
-| **area** | a scene that is loaded on its own: `strip` (the Nevsky strip, `index.html`), `north` (`north.html`, from milestone M3). Identified by `ID` |
+| **area** | a scene that is loaded on its own: `strip` (the Nevsky strip, `index.html`), `north` (`north.html`, generic since milestone M3: section 7). Identified by `ID` |
 | **area module** | `src/world/area.js` (strip) or `src/areas/<id>/area.js`: the pure-data tables that say WHAT the world is (names, anchors, landmark groups, HUD location table, viewpoints, module list, water tables ...) |
 | **registry** | `src/areas/registry.js`: which areas exist, their page, bake directory, import-map remap and the gates between them. Runtime-only (not part of the bake revision) |
 | **gate** | a stretch of the border of an area where the player is offered the neighbour (milestone M2) |
@@ -66,7 +66,7 @@ boots, and a module does nothing for what the area does not list. The tables are
 | `ZONES.pigeons` | `[{ tag, kind: 'pigeon' \| 'sparrow', x, z, ...{ spread, n, r, w, name, min } }]`, in priority order; a row may have `at(ctx) -> { x, z } \| null` instead of `x, z` (a position from a landmark service; the row is skipped when it gives nothing) | `wildlife/zones.js` `zoneTable` | no zones |
 | `ZONES.crowHaunts`, `ZONES.crowds` | `[{ x, z, r }]`; `{ tag: [r, f, level] }` (a pigeon zone whose tag is listed gives one crowd to the ambience) | `wildlife/zones.js` | one haunt round `L.SQUARE` (crows need one); no crowds |
 | `ZONES.fountains` | `[[x, z, volume], ...]` positional fountain loops (played only inside the play area) | `wildlife.js` | none |
-| `ZONES.peopleDensity` | `{ station, west, mars }` sub-tables of `people.js DENSITY` (`DENSITY.global` stays in the engine) | `people.js` (`DENSITY`), `people/nav.js` | no station zone; `west { scale 1, platforms 1 }`; `mars { scale 1, zones [] }` |
+| `ZONES.peopleDensity` | `{ station, west, mars }` sub-tables of `people.js DENSITY` (`DENSITY.global` stays in the engine); `west.off` / `mars.off: true` switch the scripted places of the strip's west (`people/west.js`, fixed Kazan / Palace Square ... coordinates) and of the castle (`people/mars.js`) off: an area that does not contain them MUST set both (the North does) | `people.js` (`DENSITY`), `people/nav.js`, `people/vignettes.js` | no station zone; `west { scale 1, platforms 1 }` (the scripted places are built at the strip's coordinates!); `mars { scale 1, zones [] }` |
 | `ZONES.peopleCorridor`, `ZONES.peopleHot` | `[[u, weight], ...]` Nevsky corridor along the grid axis; `[x, z, amplitude, sigma] \| { u, d, a, s }` hot spots (`{ u, d }` = station frame) of the zone weight field | `people/zones.js` | no corridor; no hot spots (base weight only) |
 | `ZONES.tramLines` | `[{ refs, a: [x, z], b: [x, z], headway }]` (`TRAM_LINES`) terminals are track ends in the data; a line whose terminals are missing is skipped | `traffic/trams.js` | no trams |
 | `ZONES.clearDiscs` | `[{ x, z, r }]` discs kept free of trunks, hedges and beds | `environment/field.js` | none |
@@ -94,7 +94,7 @@ does not make a bake stale. Two bakes of the same source are byte-identical: no 
 ## 5. Checks (CPU unless noted)
 
 ```
-node tools/areas-test.mjs                 registry vs area modules, facades, pages, gates (geometry + arrival grid of every non-dev gate, synthetic gate fixtures), generator fixtures, page.json, TEST shape
+node tools/areas-test.mjs                 registry vs area modules, facades, pages, gates (geometry + arrival grid + band parity of every non-dev gate, synthetic gate fixtures), generator fixtures, page.json, TEST shape
 node tools/gen-area-html.mjs [--check]    generate <id>.html from index.html + src/areas/<id>/page.json (section 5.1); --check = the CI gate
 node tools/layout-golden.mjs --diff       every export of layout.js and the data facade equals tools/golden/layout-strip.json (the area seam must not change the strip)
 node tools/import-lint.mjs                relative imports exist with EXACTLY the spelling used (Windows develops, Linux hosts), module lists have files
@@ -106,7 +106,9 @@ node tools/gate-hold-test.mjs             the four cars held while a question is
 node tools/importmap-probe.mjs            go/no-go of the import-map mechanism (Edge, Firefox; GPU-free)
 node tools/area-boot-test.mjs             browser: the page boots as its area, refuses a mismatching one (fast harness)
 node tools/areas-flow-test.mjs            browser, GPU, fast harness: prompt, arming, decline, accept, arrival, required bake, driving, flying, failures
-node tools/nav-memory-probe.mjs           browser, GPU: does a navigation free a scene (post-GC heap, process-tree bytes, per hop)
+node tools/areas-hop-test.mjs             browser, GPU, REAL bake of both areas (no fast harness, no fakes): strip > north > strip walking, then the coupe through both gates (the car and its cockpit view survive)
+node tools/nav-memory-probe.mjs           browser, GPU: does a navigation free a scene (post-GC heap, process-tree bytes, per hop; --pages index.html,north.html alternates the areas)
+node tools/area-garage-check.mjs          CPU: the GARAGE of an area (four cars + spawn): no building / traffic lane / parked car, level ground, solid for walkers, 14 m of free way out (run it as `node tools/area.mjs north tools/area-garage-check.mjs [--map x0 z0 x1 z1 [step]]`)
 ```
 
 ### 5.1 The generated area page
@@ -154,8 +156,8 @@ The `help` lines list the keyed views of the area: they must follow `VIEWS` in t
   vector normal to the segment; a point at depth `zone` is inside; the arrive rectangle's corners lie 25 m inside the destination play union; the reverse gate leads back and names this gate, and no 25 m arrival-grid point is within `zone + 50 m`
   of the reverse border inside its lateral range; the arrival grid (25 m steps x walk / fly / car x both headings along the crossing axis) is resolved by `handoff.resolveArrival` with the DESTINATION layout and every result passes predicates
   written independently of the probe (25 m inset, not in a building or the river, a car on a drivable lane within 30 degrees); **a fall-back to the destination HERO counts as a failure**. A gate whose destination is another area runs the grid
-  in a child (`tools/area.mjs <to> tools/areas-test.mjs --arrival-only <gate>`). The band-parity hook is `tools/band-parity.mjs` exporting `bandParity({ gate, root, REGISTRY })` (a list of problem strings); absent = skipped.
-  Synthetic fixtures inside the test exercise every check and every way it must fail while no real gate exists.
+  in a child (`tools/area.mjs <to> tools/areas-test.mjs --arrival-only <gate>`). The band-parity hook is `tools/band-parity.mjs` exporting `bandParity({ gate, root, REGISTRY })` (a list of problem strings); it runs check 4 of `tools/area-data-test.mjs` for the area on the
+  other side of the gate (docs/AREAS-DATA.md section 5), once per area per process (~3 s). Synthetic fixtures inside the test exercise every check and every way it must fail.
 
 ## 6. Decisions in one place
 
@@ -177,3 +179,42 @@ accumulation, not the per-scene floor: every crossing is a cold start of ~25-30 
   owns-table --check, runtime-only-lint, import-lint, baked-revision-test, `strip-data-clip --check` on every `src/world/data` and `src/areas/*/data` that exists); `deploy` needs `verify` and does not run on pull requests. The site is
   `index.html`, every root page that names its area (`north.html` when it exists), `src`, `assets`, the manifest and the licences. The concurrency group is per ref, so a pull request never cancels a deployment of `main`.
   While the bake is stale (until the committed bake of milestone M8) `verify` is red on purpose.
+
+## 7. The generic North (milestone M3)
+
+The North is a real area since M3: `src/areas/north/area.js` (pure data, the export names of `src/world/area.js` plus `MODULES`, `LABELS`, `TEST`), the data facade and `known-data.js`
+([AREAS-DATA.md](AREAS-DATA.md)), `north.html` (generated, `src/areas/north/page.json`), the registry row (`status: 'planned'` is gone; the remap holds the facade, the area module and
+`src/world/city/known-data.js`, which `city/known.js` imports by that URL, so the page needs no code change) and the real gates g1 / g2. Landmark modules are M5: `GROUPS = {}`, so the generic `city`
+draws every building (the Chernyshevskaya vestibule, the Tauride Palace and Smolny are plain blocks for now).
+
+* **Modules** (build order): `environment, streets, city, props, traffic, people, wildlife, drive`. NOT built: `rail` (no railway in the data), `metro` (the door gate G3 of M7 replaces the ride) and `bridges`
+  (so `streets` keeps the roads that cross a waterway as plain ribbons: the Liteyny Bridge ways, cut at the extent edge z = -2120, run 130 m into the Neva as a road stub; the Anichkov and Belinsky bridge
+  ways end at the extent margin outside the play area. Known seams, fixed when a bridge module comes). `LABELS` overrides the loading words of `props / traffic / people / drive`.
+* **Anchors**: `SQUARE`, `OBELISK`, `STATION` are COPIES of the strip's (the area module cannot import the strip's: the import map would hand back itself). That is deliberate: the style of a block follows
+  its distance to `SQUARE` (`city/archetypes.js`, `streets/style.js`), so the 200 m band looks the same on both pages; the street grid origin and the far horizon are `SQUARE`-centred as well.
+* **Views**: HERO = Chernyshevskaya (444, -1351); keys 1..0 Chernyshevskaya, the Transfiguration Cathedral, Dom Muruzi, the Paradny Quarter, the Tauride Garden, the Tauride Palace, Smolny Cathedral, Smolny
+  Institute, the Suvorov Museum, Kirochnaya Street, then `Place.oktyabrsky`; `page.json` names the keys in this order. Every pose passes `node tools/area.mjs north tools/views-check.mjs` (3 were moved:
+  Dom Muruzi (-154 -> -165, it stood on the carriageway), the Smolny Institute and Kirochnaya by a few metres) and `layout-test`.
+* **Tables**: `WATER` has no plugs / bridge zones / shades / clip lines, `farSources ['neva-up']`, `farCenter [1100, -1100]`; `ZONES` has pigeon / sparrow sites at Chernyshevskaya (461, -1350), the Tauride gate
+  (1226, -1268), the Transfiguration Cathedral and Smolny, crow haunts, crowds and the four hot spots, **`peopleDensity.west.off` and `.mars.off`** (the scripted places of the strip's west and of the castle
+  stand at fixed strip coordinates: without the switch the North built 325 of its 962 people at Kazan, the Palace Square and the castle, 1.2-4 km outside its extent: 637 remain); `GARAGE`: the four cars stand in the courtyard north of the
+  Chernyshevskaya vestibule, facing west to the avenue (roadster (468, -1381), lada (470, -1377.8), truck (469, -1367.2), coupe and spawn (470.5, -1370.8)); `PRUNE_SERVICES ['city']`.
+  `node tools/area.mjs north tools/area-garage-check.mjs` proves them (the same tool passes on the strip's garage).
+* **Gates** (`src/areas/registry.js`): g1 strip > north, segment z = -405, x -420 .. 835, inward (0, 1), zone 30; g2 north > strip, z = -205, inward (0, -1); they name each other. The planned arrival
+  rectangles (g1 x -350 .. 805, z -520 .. -300; g2 x -350 .. 805, z -300 .. -220) were **trimmed** to what the 25 m arrival grid resolves 100 % (a car must land on a drivable lane within 30 degrees of its
+  heading and the ring search stays inside the rectangle): g1 `x -225 .. 755, z -460 .. -310`, g2 `x -225 .. 805, z -300 .. -230`. The grid points that failed were all cars: the library block west of x -250
+  has no north-south lane, the east edge x 775 .. 805 and a few single points have none; a walker or a car that crosses outside the rectangle lands at its nearest point (a crossing on the Fontanka quay at
+  x -370 lands 145 m east of it). The ping-pong margin is 105+ m (g1 arrives at z <= -310, g2's border is z = -205). **The dev gate g0** (18 of 648 resolutions fall back to the HERO: car arrivals at the corners
+  of its rectangle, x >= 640 and z 80 / 105 / 260) is left as it is: it is a fixture of `?devgates=1` and areas-flow-test, a car crosses it on the Nevsky lane at x = 470, and `areas-test` does not grade
+  dev gates. `tools/band-parity.mjs` wires the band check of `area-data-test` into `areas-test` (the band is identical in all 34 arrays).
+* **Water edges** (decision: no change of the rectangles). The play edge z = -2000 is 13 .. 116 m INSIDE the Neva for x -400 .. 900 (the south bank is at z -1884 .. -1994), on land for x 1000 .. 1300 and
+  beyond the data for x > 1400; the Fontanka water spans x -446 .. -379 in the band, i.e. the west edge x = -420 is in the water there. A walker never reaches the edge: the quay wall of `environment` stops
+  him 1 .. 3 m before the first water point (walk probes along x -200 .. 900 at the Neva and z -300 / -600 / -1000 at the Fontanka stop at the quay, never in the water, never at the play edge). The
+  invisible walls are therefore the quays, and the play rectangles stay the numbers the facade was cut with. East of x 1400 the edge z = -2000 is plain ground (the data ends at z -2120 / -2180 and the Neva bank
+  lies at z -2347 at x 1550): the far scenery takes over there.
+* **Running the tools as the North**: `node tools/area.mjs north tools/<tool>.mjs`: `layout-test`, `views-check [--fix]`, `owns-table --check`, `check --area-modules` (= `npm run check:north`) or with a module list,
+  `people-test [--at chernyshevskaya|tauride|smolny|preobrazhenskaya]`, `traffic-test`, `wildlife-test` (the area's own sights instead of Kazan and the Neva boats), `area-garage-check`; `each-area.mjs` runs
+  `layout-test` and `landmarks-groups-check` for both areas. Browser: `shot / smoke / baked-check --area north`, `area-boot-test --page north.html`, `areas-hop-test`.
+* **Known leftovers**: the people test counts ~100 samples per 5 minutes on a carriageway at one crossing (`cross=145` at (452, -1298), the junction of Chernyshevskogo and Kirochnaya; the threshold is 374,
+  the strip has 0); `streets` / `city` exceed their triangle budgets (590 k / 836 k against 500 k / 600 k, the strip's are 835 k / 969 k); the people test's jump counter is higher than the strip's (tour
+  groups that re-place themselves). Measurements: [AREAS-MEASUREMENTS.md](AREAS-MEASUREMENTS.md) section "M3: the generic North".

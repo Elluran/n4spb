@@ -39,13 +39,17 @@ export const REGISTRY = {
 };
 
 // The North (docs/AREAS.md section 4): Chernyshevskaya, Tauride Garden + Palace, Paradny, Smolny, Preobrazhenskaya, Muruzi, Suvorov, Kirochnaya, 3.947 km2. NA includes a one-sided 200 m band of
-// the strip's territory (z -405 .. -205, x -420 .. 835), so an arrival from the strip lands on real, identical streets. `status: 'planned'`: the tools skip the area's files until they exist.
+// the strip's territory (z -405 .. -205, x -420 .. 835), so an arrival from the strip lands on real, identical streets. (`status: 'planned'` marks a row whose files do not exist yet: the tools skip it;
+// the North was planned until milestone M3 and is a real area since.) The remap of city/known-data.js gives the page the dossiers of ITS houses (docs/AREAS-DATA.md section 6).
 REGISTRY.north = {
-  id: 'north', page: 'north.html', bake: 'baked/north/', requireBake: true, status: 'planned',
+  id: 'north', page: 'north.html', bake: 'baked/north/', requireBake: true,
   title: 'Север', titleEn: 'North',
   sights: ['Чернышевская', 'Таврический сад', 'Смольный', 'Спасо-Преображенский собор', 'Литейный проспект'],
   approxMB: 36, dev: false,
-  remap: { 'src/world/data/city.js': 'src/areas/north/data/city.js', 'src/world/area.js': 'src/areas/north/area.js' },
+  remap: {
+    'src/world/data/city.js': 'src/areas/north/data/city.js', 'src/world/area.js': 'src/areas/north/area.js',
+    'src/world/city/known-data.js': 'src/areas/north/known-data.js',
+  },
   play: [
     { name: 'NA', x0: -420, x1: 835, z0: -2000, z1: -205 },
     { name: 'NB', x0: 835, x1: 1550, z0: -2000, z1: -800 },
@@ -55,9 +59,18 @@ REGISTRY.north = {
 
 /**
  * Gates between areas: { id, from, to, seg: [[x,z],[x,z]] (the border segment in the FROM area), inward: [nx,nz] (unit vector pointing from the border into the FROM area), zone (m: depth of the
- * prompt zone, walking), arrive: { x0, x1, z0, z1 } (where the player may land in the TO area), reverse (id of the gate back) }. Empty until the second area exists (milestone M3).
+ * prompt zone, walking), arrive: { x0, x1, z0, z1 } (where the player may land in the TO area), reverse (id of the gate back) }.
  */
 export const GATES = [
+  // g1 / g2 - the strip and the North share one border, the line z = -405 .. -205 across Liteyny (x -420 .. 835). The strip ends at z = -405 (its OLD rectangle); the North holds the strip's 200 m band
+  // z -405 .. -205 as its own territory again (identical streets and buildings, tools/band-parity.mjs), so a crossing lands in the middle of a street that exists on both sides and the ping-pong margin
+  // is 100+ m: g1 arrives in the North between z -460 and -310 (the band and the first 55 m beyond it; 105+ m north of g2's border), g2 arrives in the strip at z -300 .. -230 (inside the strip, 175+ m south of g1's border).
+  // The arrival rectangles are the planned ones (x -350 .. 805) trimmed to what the 25 m arrival grid of tools/areas-test.mjs resolves 100 % (walk / fly / car x both headings): the Fontanka water spans x -434 .. -379 in the band
+  // and the library block x -350 .. -250 has no north-south lane for a car (a car must land on a lane within 30 degrees of its heading, and the ring search stays inside the rectangle), so x starts at -225; g1 stops at x 755 and
+  // z -310 (no lane at (775 .. 805, -345 .. -300), (-25, -300), (0, -345)) and starts at z -460 (no lane at (-100 .. 805, -520 .. -470)); g2 ends at z -230 (no lane at (375 .. 400, -220)). A walker or a car that leaves the
+  // strip at a spot outside the rectangle lands at the nearest point of it (the departure x is clamped, so a crossing on the Fontanka quay at x -370 lands 145 m east of it).
+  { id: 'g1', from: 'strip', to: 'north', seg: [[-420, -405], [835, -405]], inward: [0, 1], zone: 30, arrive: { x0: -225, x1: 755, z0: -460, z1: -310 }, reverse: 'g2' },
+  { id: 'g2', from: 'north', to: 'strip', seg: [[-420, -205], [835, -205]], inward: [0, -1], zone: 30, arrive: { x0: -225, x1: 805, z0: -300, z1: -230 }, reverse: 'g1' },
   // g0 - the dev loop (?devgates=1): a gate across the Nevsky approach to Vosstaniya Square (a vertical segment at x = 470, the strip east of it is the "own area") that leads back to the SAME page at
   // the same pose. It exercises the whole hand-off (prompt, preflight, veil, navigation, arrival, memory) before a second area exists, and stays as a test fixture afterwards.
   { id: 'g0', dev: true, from: 'strip', to: 'strip', seg: [[470, 100], [470, 240]], inward: [1, 0], zone: 30, arrive: { x0: 440, x1: 700, z0: 80, z1: 260 }, reverse: 'g0' },

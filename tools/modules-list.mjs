@@ -13,7 +13,7 @@ export function mainModules(area = process.env.AREA || 'strip') {
   const m = src.match(/export const MODULES = \[([\s\S]*?)\n\];/);
   if (!m) throw new Error(`modules-list: MODULES not found in ${file}`);
   const list = [...m[1].matchAll(/^\s*'([A-Za-z0-9_]+)'/gm)].map((x) => x[1]);
-  if (list.length < 10) throw new Error(`modules-list: MODULES of ${file} parsed to ${list.length} names`);
+  if (list.length < 5) throw new Error(`modules-list: MODULES of ${file} parsed to ${list.length} names`);
   return list;
 }
 /** The dynamic modules (no static street furniture / ground surfaces of their own). */

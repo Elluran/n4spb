@@ -2,7 +2,7 @@
 // every load: the post-GC JS heap (CDP HeapProfiler.collectGarbage x2 + Runtime.getHeapUsage), the private bytes of the whole browser process tree (renderers, GPU, network ...; Windows) at rest
 // and its PEAK while the next page loads, the ready time and the bfcache verdict. This is the M0 / M2 gate of docs/AREAS.md: the hand-off between areas is a navigation, so the memory of the
 // page we leave must be gone (no upward trend over the hops; each arrival within +-15 % of the first).
-//   node tools/nav-memory-probe.mjs [--hops 4] [--q medium] [--mode replace|assign] [--page index.html] [--params "k=v&k2=v2"] [--throttle 4] [--out shots/areas/nav-memory.json]
+//   node tools/nav-memory-probe.mjs [--hops 4] [--q medium] [--mode replace|assign] [--page index.html | --pages index.html,north.html] [--params "k=v&k2=v2"] [--throttle 4] [--out shots/areas/nav-memory.json]
 //   --params may contain {i}, replaced by the hop number, to give every hop its own URL (a hand-off arrival: "cam=...&ho=...")
 // GPU job: run it alone. Exit code 1 when the verdict fails (--verdict-only prints it without failing).
 import http from 'node:http';
@@ -16,7 +16,7 @@ import puppeteer from 'puppeteer-core';
 const execFileP = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = {}; for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; } }
-const HOPS = Number(args.hops || 4), MODE = args.mode || 'replace', TIER = args.q || 'medium', PAGE = args.page || 'index.html';
+const HOPS = Number(args.hops || 4), MODE = args.mode || 'replace', TIER = args.q || 'medium', PAGE = args.page || 'index.html', PAGES = args.pages ? String(args.pages).split(',') : [PAGE];      // --pages index.html,north.html: hop between the pages in turn (every arrival is compared with the first one of ITS page)
 const out = path.resolve(root, args.out || 'shots/areas/nav-memory.json');
 fs.mkdirSync(path.dirname(out), { recursive: true });
 const { bakedRevision } = await import('./baked-revision.mjs');
@@ -61,7 +61,7 @@ const url = (i) => {
   const q = new URLSearchParams({ q: TIER });
   if (args.params) for (const [k, v] of new URLSearchParams(args.params.replace(/\{i\}/g, String(i)))) q.set(k, v);
   q.set('hop', String(i));       // makes the URL unique; the engine ignores it
-  return `${origin}/${PAGE}?${q}`;
+  return `${origin}/${PAGES[i % PAGES.length]}?${q}`;
 };
 const threeRoot = path.join(root, 'node_modules', 'three');
 const hops = [];
@@ -109,7 +109,7 @@ try {
     await sleep(2500);       // let the GPU / the previous renderer settle before the 'at rest' measurement
     const tree = await procTree();
     await cdp.detach();
-    const row = { hop: i, wallMs, readyMs: info.readyMs, heapUsedMB: Math.round(heap.usedSize / MB), heapTotalMB: Math.round(heap.totalSize / MB), perfMemMB: info.perfMemMB,
+    const row = { hop: i, page: PAGES[i % PAGES.length], wallMs, readyMs: info.readyMs, heapUsedMB: Math.round(heap.usedSize / MB), heapTotalMB: Math.round(heap.totalSize / MB), perfMemMB: info.perfMemMB,
       treePrivMB: tree?.privMB ?? null, treeByType: tree?.byType ?? null, treePeakMB: peak || null, treePeakByType: peakTree?.byType ?? null,
       leftPageTreeMB: before?.tree?.privMB ?? null, errors: info.errors, calls: info.calls, triangles: info.triangles, historyLength: info.historyLength, nav: info.nav, area: info.area };
     hops.push(row);
@@ -120,17 +120,17 @@ try {
   if (MODE === 'assign') { try { await page.goBack({ waitUntil: 'load', timeout: 60000 }); back = await page.evaluate(() => { const n = performance.getEntriesByType('navigation')[0]; return n ? { type: n.type, restored: !!window.__ctx } : null; }); } catch (e) { back = { error: String(e.message).slice(0, 100) }; } }
 
   // ---- verdict (docs/AREAS.md section 10): every arrival within +-15 % of the first, no upward trend
-  const first = hops[0], later = hops.slice(1);
+  const first = hops[0], firstOf = (h) => hops.find((x) => x.page === h.page), later = hops.filter((h) => firstOf(h) !== h);
   const within = (a, b) => (a != null && b != null && b > 0 ? Math.abs(a - b) / b <= 0.15 : null);
   const check = {
-    heapWithin15: later.map((h) => within(h.heapUsedMB, first.heapUsedMB)),
-    treeWithin15: later.map((h) => within(h.treePrivMB, first.treePrivMB)),
-    readyWithin15: later.map((h) => within(h.readyMs, first.readyMs)),
+    heapWithin15: later.map((h) => within(h.heapUsedMB, firstOf(h).heapUsedMB)),
+    treeWithin15: later.map((h) => within(h.treePrivMB, firstOf(h).treePrivMB)),
+    readyWithin15: later.map((h) => within(h.readyMs, firstOf(h).readyMs)),
   };
   const trend = (key) => { const v = hops.map((h) => h[key]).filter((x) => x != null); if (v.length < 3) return null; const n = v.length, mx = (n - 1) / 2, my = v.reduce((a, b) => a + b, 0) / n; let sxy = 0, sxx = 0; v.forEach((y, x) => { sxy += (x - mx) * (y - my); sxx += (x - mx) ** 2; }); return Math.round(sxy / sxx * 10) / 10; };
   const verdict = { slopeHeapMBPerHop: trend('heapUsedMB'), slopeTreeMBPerHop: trend('treePrivMB'), ...check, errorsTotal: hops.reduce((a, h) => a + h.errors, 0) };
   verdict.ok = Object.values(check).every((a) => a.every((x) => x !== false)) && verdict.errorsTotal === 0 && !(verdict.slopeTreeMBPerHop > 0.1 * (first.treePrivMB || 1));
-  const report = { when: 'see file mtime', mode: MODE, tier: TIER, page: PAGE, params: args.params || null, throttle: args.throttle || null, edge: await browser.version(), baselineTree: baseline, hops, back, verdict, pageErrors: errors.slice(0, 10) };
+  const report = { when: 'see file mtime', mode: MODE, tier: TIER, page: PAGE, pages: PAGES, params: args.params || null, throttle: args.throttle || null, edge: await browser.version(), baselineTree: baseline, hops, back, verdict, pageErrors: errors.slice(0, 10) };
   fs.writeFileSync(out, JSON.stringify(report, null, 2));
   console.log('verdict:', JSON.stringify(verdict)); if (back) console.log('goBack after assign:', JSON.stringify(back));
   console.log(`wrote ${path.relative(root, out)}`);

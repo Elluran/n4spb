@@ -43,7 +43,9 @@ const sunDir = new THREE.Vector3(...L.SUN_DIR).normalize();
 const calls = [], loops = [];
 const audio = { play: (n, o) => calls.push([n, o]), loop: (n, o) => { loops.push([n, o]); return { setVolume() {}, stop() {} }; } };
 const ctx = createContext({ scene, camera, renderer: null, audio, quality: { name: process.env.Q || 'high', pixelRatio: 1, msaa: 4, shadowMap: 4096, shadowSize: 75, petals: 1 }, sunDir });
-ctx.buildList = ['environment', 'streets', 'city', 'landmarksA', 'landmarksC', 'landmarksD', 'landmarksE', 'landmarksF', 'landmarksG', 'landmarksH', 'landmarksI', 'landmarksJ', 'bridges', 'props', 'wildlife'];
+const STRIP = (process.env.AREA || 'strip') === 'strip';      // another area (node tools/area.mjs north tools/wildlife-test.mjs): ITS module list up to wildlife, and only the checks that name no place of the strip
+const AREA_MODS = STRIP ? null : await (async () => { const all = (await import('./modules-list.mjs')).mainModules(); return all.slice(0, all.indexOf('wildlife') + 1).filter((m) => !['rail', 'metro', 'traffic', 'people'].includes(m)); })();
+ctx.buildList = AREA_MODS || ['environment', 'streets', 'city', 'landmarksA', 'landmarksC', 'landmarksD', 'landmarksE', 'landmarksF', 'landmarksG', 'landmarksH', 'landmarksI', 'landmarksJ', 'bridges', 'props', 'wildlife'];
 ctx.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight(), uniforms: {} };
 ctx.player.position.set(L.HERO.x, 0, L.HERO.z);               // the animals start round the player
 
@@ -60,28 +62,29 @@ console.log(`built in ${buildMs.toFixed(0)} ms: ${svc.birds.length} birds ${JSON
 const hi = !process.env.Q || process.env.Q === 'high';
 console.log('build time per part (ms):', JSON.stringify(svc.debug.timing, (k, v) => (typeof v === 'number' ? Math.round(v) : v)));
 check(buildMs < 700, 'build time < 700 ms in the node harness with the other agents running (' + buildMs.toFixed(0) + ' ms; tools/check.mjs wildlife measures 0.1-0.2 s)');
-check(svc.birds.length >= (hi ? 100 : 20) && svc.birds.length <= 140, 'bird total within the budget of 140 (' + svc.birds.length + ')');
-check(svc.ducks.length >= (hi ? 8 : 5), 'ducks exist');
-check(svc.perches.length > 1000, 'perches found');
+check(svc.birds.length >= (hi ? (STRIP ? 100 : 60) : 20) && svc.birds.length <= 140, 'bird total within the budget of 140 (' + svc.birds.length + ')');
+if (STRIP) check(svc.ducks.length >= (hi ? 8 : 5), 'ducks exist');
+if (STRIP) check(svc.perches.length > 1000, 'perches found');
 check((cnt.gull || 0) >= (hi ? 10 : 4) && (cnt.pigeon || 0) >= (hi ? 30 : 12) && (cnt.crow || 0) >= (hi ? 5 : 3) && (cnt.sparrow || 0) >= (hi ? 8 : 3), 'every species is present');
-check(svc.spots.length >= 8, 'viewpoints published (' + svc.spots.length + ')');
+if (STRIP) check(svc.spots.length >= 8, 'viewpoints published (' + svc.spots.length + ')');
 const kinds = {}; for (const p of svc.perches) { const k = p.kind + (p.key ? ':' + p.key : ''); kinds[k] = (kinds[k] || 0) + 1; }
-check((kinds['post:neva'] || 0) >= 30 && (kinds['post:moika'] || 0) >= 50 && (kinds['post:griboedov'] || 0) >= 30 && (kinds['post:fontanka'] || 0) >= 30 && (kinds.lion || 0) === 2, 'gull perches on the Neva roll, the Moika, the Griboedov Canal, the Fontanka and the two lions ' + JSON.stringify({ n: kinds['post:neva'], m: kinds['post:moika'], g: kinds['post:griboedov'], f: kinds['post:fontanka'], lion: kinds.lion }));
+if (STRIP) check((kinds['post:neva'] || 0) >= 30 && (kinds['post:moika'] || 0) >= 50 && (kinds['post:griboedov'] || 0) >= 30 && (kinds['post:fontanka'] || 0) >= 30 && (kinds.lion || 0) === 2, 'gull perches on the Neva roll, the Moika, the Griboedov Canal, the Fontanka and the two lions ' + JSON.stringify({ n: kinds['post:neva'], m: kinds['post:moika'], g: kinds['post:griboedov'], f: kinds['post:fontanka'], lion: kinds.lion }));
 const LK = {}; for (const l of D.lanes) LK[l.key] = (LK[l.key] || 0) + 1;
-check(D.lanes.length >= 30 && LK.moika > 5 && LK.griboedov > 5 && LK.fontanka > 5, 'duck lanes on three waterways ' + JSON.stringify(LK));
+if (STRIP) check(D.lanes.length >= 30 && LK.moika > 5 && LK.griboedov > 5 && LK.fontanka > 5, 'duck lanes on three waterways ' + JSON.stringify(LK));
 // every site of the zone table is on free ground, inside the play area
 {
   let badSite = 0; for (const s of [...svc.sites.pigeon, ...svc.sites.sparrow]) if (!W.ok(s.x, s.z, { road: 0.3, pad: 0.2, tree: -0.2 }) || !L.inPlay(s.x, s.z)) { badSite++; console.log('  bad site', s.tag, s.x.toFixed(0), s.z.toFixed(0)); }
   check(badSite === 0, 'every flock site is free ground in the play area');
   const tags = new Set(svc.sites.pigeon.map((s) => s.tag));
-  check(['kazan', 'column', 'alexander', 'isaac', 'catherine', 'gostiny', 'obelisk'].every((k) => tags.has(k)), 'pigeon sites in every named zone (' + [...tags].join(',') + ')');
+  if (!STRIP) check(tags.size >= 1, 'pigeon sites of the area table (' + [...tags].join(',') + ')');
+  if (STRIP) check(['kazan', 'column', 'alexander', 'isaac', 'catherine', 'gostiny', 'obelisk'].every((k) => tags.has(k)), 'pigeon sites in every named zone (' + [...tags].join(',') + ')');
 }
 
 // the tourist crowds the 'crowd' ambience of core/audio.js listens to: Palace Square, Kazan, Gostiny Dvor ... inside the play area, sane numbers
 {
   const C = svc.crowds || [], tags = new Set(C.map((c) => c.name));
-  check(C.length >= 10 && C.every((c) => L.inPlay(c.x, c.z) && c.r > 0 && c.f > 0 && c.l > 0 && c.l <= 1), 'crowd zones published for the ambience (' + C.length + ')');
-  check(['column', 'kazan', 'gostiny', 'alexander', 'isaac', 'lions'].every((k) => tags.has(k)), 'crowd zones at Palace Square, Kazan, Gostiny Dvor, the Alexander Garden, St Isaac and the Palace Pier');
+  check(C.length >= (STRIP ? 10 : 1) && C.every((c) => L.inPlay(c.x, c.z) && c.r > 0 && c.f > 0 && c.l > 0 && c.l <= 1), 'crowd zones published for the ambience (' + C.length + ')');
+  if (STRIP) check(['column', 'kazan', 'gostiny', 'alexander', 'isaac', 'lions'].every((k) => tags.has(k)), 'crowd zones at Palace Square, Kazan, Gostiny Dvor, the Alexander Garden, St Isaac and the Palace Pier');
 }
 
 // ---------------------------------------------------------------- driver
@@ -99,7 +102,7 @@ function run(sec, fn) {
 /** put the player (and the camera, looking along yaw: 0 = north, pi/2 = west) at (x, z) */
 const player = (x, z, y = 0, yaw = 0) => { ctx.player.position.set(x, y, z); camera.position.set(x, y + 1.6, z); camera.lookAt(x - Math.sin(yaw) * 10, y + 1.6, z - Math.cos(yaw) * 10); camera.updateMatrixWorld(); };
 const bad = { bird: 0, nan: 0, samples: 0 };
-const bridge = ctx.services.landmarksC.bridge.deck;
+const bridge = ctx.services.landmarksC?.bridge?.deck;
 function audit() {
   bad.samples++;
   for (const g of [svc.debug.birds?.group, svc.debug.ducks?.group]) if (g) for (const m of g.children) { const a = m.instanceMatrix.array; for (let i = 0; i < m.count * 16; i++) if (!Number.isFinite(a[i])) { bad.nan++; console.log('  NaN in ' + m.name + ' instance ' + Math.floor(i / 16)); break; } }
@@ -121,7 +124,8 @@ check(svc.birds.filter((b) => b.sp === 'swift').every((b) => b.hid), 'swifts are
 // ---------------------------------------------------------------- 2. flocks
 function flockTest(f, label, away, settle) {
   const s = f.site; player(s.x + 40, s.z + 40);
-  run(2); check(f.state === 'rest', label + ': flock at rest before approach (' + f.state + ')');
+  run(2); if (!STRIP) for (let k = 0; k < 600 && f.state !== 'rest'; k++) run(0.1);      // another area: its start pose may stand beside the flock (it flew up for the 90 s audit): let it settle
+  check(f.state === 'rest', label + ': flock at rest before approach (' + f.state + ')');
   for (let k = 0; k <= 40; k++) { player(s.x + 40 - k, s.z + 40 - k); run(0.3); }
   player(s.x + 2, s.z + 2); run(2);
   check(f.state === 'away', label + ': lifts off when the player is 3 m away (state ' + f.state + ')');
@@ -162,16 +166,22 @@ function follow(label, x, z, yaw, o) {
   check(near(cr, 250) >= 2, label + ': crows about');
   if (o.ducks != null) check(near(dk, 260) >= o.ducks, label + ': ducks within 260 m (>= ' + o.ducks + ')');
 }
-follow('Kazan', -1469, -200, 0, { flocks: 4, tag: 'kazan', gulls: 4 });
-follow('Palace Square', -1990, -640, 0, { flocks: 2, tag: 'column', gulls: 4 });
-follow('Palace Embankment', -2392, -780, 1.57, { flocks: 0, gulls: 6 });
-follow('St Isaac Square', -2440, 20, 0, { flocks: 3, tag: 'isaac', gulls: 2 });
+if (STRIP) {
+  follow('Kazan', -1469, -200, 0, { flocks: 4, tag: 'kazan', gulls: 4 });
+  follow('Palace Square', -1990, -640, 0, { flocks: 2, tag: 'column', gulls: 4 });
+  follow('Palace Embankment', -2392, -780, 1.57, { flocks: 0, gulls: 6 });
+  follow('St Isaac Square', -2440, 20, 0, { flocks: 3, tag: 'isaac', gulls: 2 });
+} else {      // the sights of the area's own zone table (ZONES.pigeons): a flock in the zone's tag round the player, some pigeon flocks about
+  const seen = new Set();
+  for (const s of svc.sites.pigeon) { if (seen.has(s.tag)) continue; seen.add(s.tag); follow(s.tag, s.x + 15, s.z + 15, 0, { flocks: 1, tag: s.tag, gulls: 0 }); }
+}
 // nobody pops: while the player walks along Nevsky (3 m/s, 150 s) no bird appears within 60 m of him in the view cone
 {
-  player(-1000, -170, 0, Math.PI / 2); run(5);
+  const W0 = STRIP ? { x: -1000, z: -170 } : { x: L.HERO.x + 200, z: L.HERO.z };      // the strip: along Nevsky; another area: 200 m east of its start pose
+  player(W0.x, W0.z, 0, Math.PI / 2); run(5);
   let pops = 0, steps = 0; const prev = new Map(); const fwd = new THREE.Vector3();
   for (let k = 0; k < 150; k++) {
-    const x = -1000 - k * 3, z = -170 + k * 0.7;                                            // walks west
+    const x = W0.x - k * 3, z = W0.z + k * 0.7;                                            // walks west
     player(x, z, 0, Math.PI / 2); camera.getWorldDirection(fwd);
     run(1);
     for (const b of svc.birds) {
@@ -196,6 +206,7 @@ follow('St Isaac Square', -2440, 20, 0, { flocks: 3, tag: 'isaac', gulls: 2 });
     run(8); const d = Math.hypot(c.x - ctx.player.position.x, c.z - ctx.player.position.z);
     check(d > 10, 'crow is well away after 8 s (' + d.toFixed(0) + ' m)');
   } else console.log('(no crow on the ground to test)');
+  if (STRIP) {      // the quay posts of the Palace Embankment
   player(-2392, -780, 0, 1.57); run(30);
   const findPostGull = () => svc.birds.find((b) => b.sp === 'gull' && b.st === 'perch' && b.perch && (b.perch.kind === 'post' || b.perch.kind === 'lion') && Math.hypot(b.x + 2392, b.z + 780) < 260);
   for (let k = 0; k < 6 && !findPostGull(); k++) run(20);                                    // gulls come and go between posts, boats and the sky: wait for one to sit
@@ -208,10 +219,11 @@ follow('St Isaac Square', -2440, 20, 0, { flocks: 3, tag: 'isaac', gulls: 2 });
     run(40);
     check(g.st === 'perch' || g.st === 'boat' || g.st === 'fly' || g.st === 'soar', 'the gull sits on a post / boat again later (' + g.st + ')');
   } else { console.log('  gulls near the embankment: ' + svc.birds.filter((b) => b.sp === 'gull').map((b) => b.mode + ':' + b.st + ':' + Math.round(Math.hypot(b.x + 2392, b.z + 780))).join(' ')); check(false, 'a gull on a quay post exists near the Palace Embankment'); }
+  }
 }
 
-// ---------------------------------------------------------------- 5. boat gulls ride the boats and leave before the Anichkov arches
-{
+// ---------------------------------------------------------------- 5. boat gulls ride the boats and leave before the Anichkov arches (the strip's Fontanka boats)
+if (STRIP) {
   player(-300, 400);
   let onBoatNearBridge = 0, rode = 0, lands = 0; const prevOn = new Set();
   const bg = svc.birds.filter((b) => b.sp === 'gull');
@@ -242,7 +254,7 @@ follow('St Isaac Square', -2440, 20, 0, { flocks: 3, tag: 'isaac', gulls: 2 });
   for (let k = 0; k < 720; k += 3) for (const g of D.groups) { const gp = D.groupPose(g, T0 + k); s2++; if (g.lane.key !== 'pond' && !L.inRiver(gp.x, gp.z)) out2++; if (D.hullGap(gp.x, gp.z) < 2.6) hull2++; }
   check(out2 === 0 && hull2 === 0, 'duck groups stay in the water and 2.6 m off the hulls for 12 minutes (' + out2 + ' / ' + hull2 + ' of ' + s2 + ')');
   player(L.HERO.x, L.HERO.z); run(5);
-  const g0 = D.groups[0], gp0 = D.groupPose(g0, t); player(gp0.x, gp0.z); run(60);                   // beside a brood: it quacks now and then
+  const g0 = D.groups[0]; if (g0) { const gp0 = D.groupPose(g0, t); player(gp0.x, gp0.z); run(60); }                   // beside a brood: it quacks now and then
 }
 
 // ---------------------------------------------------------------- 7. swifts at golden hour
@@ -266,8 +278,8 @@ follow('St Isaac Square', -2440, 20, 0, { flocks: 3, tag: 'isaac', gulls: 2 });
 audit();
 check(calls.some((c) => c[0] === 'crow' || c[0] === 'gull'), 'crows / gulls call (audio.play crow / gull)');
 check(calls.some((c) => c[0] === 'wings'), 'pigeons clap their wings at take-off (audio.play wings)');
-check(calls.some((c) => c[0] === 'duck'), 'ducks quack (audio.play duck)');
-check(loops.filter((l) => l[0] === 'fountain').length === 2 && loops.filter((l) => l[0] === 'boatHum').length >= 8, 'two fountain loops and a hum per moving boat (' + loops.filter((l) => l[0] === 'fountain').length + ' / ' + loops.filter((l) => l[0] === 'boatHum').length + ')');
+if (STRIP) check(calls.some((c) => c[0] === 'duck'), 'ducks quack (audio.play duck)');
+if (STRIP) check(loops.filter((l) => l[0] === 'fountain').length === 2 && loops.filter((l) => l[0] === 'boatHum').length >= 8, 'two fountain loops and a hum per moving boat (' + loops.filter((l) => l[0] === 'fountain').length + ' / ' + loops.filter((l) => l[0] === 'boatHum').length + ')');
 console.log(`audio calls: ${calls.length} (${[...new Set(calls.map((c) => c[0]))].join(', ')})`);
 check(bad.nan === 0, 'no NaN at the end');
 const avg = updMs / updN;

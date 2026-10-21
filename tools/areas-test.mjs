@@ -73,7 +73,7 @@ for (const a of Object.values(REGISTRY)) {
     a.play.forEach((r, i) => { const f = C.PLAY_RECTS[i]; assert.deepEqual([r.x0, r.x1, r.z0, r.z1], [f.x0, f.x1, f.z0, f.z1], `rect ${i} ${r.name}`); assert.equal(r.name, C.RECT_NAMES[i], `name ${i}`); });
   });
   check('every module of the area exists', () => {
-    const list = a.id === 'strip' ? mainModules() : A.MODULES; assert(Array.isArray(list) && list.length > 10, 'module list');
+    const list = a.id === 'strip' ? mainModules() : A.MODULES; assert(Array.isArray(list) && list.length >= 5, 'module list');
     for (const m of list) assert(fs.existsSync(path.join(root, 'src/world', m + '.js')), 'src/world/' + m + '.js is missing');
     assert.equal(new Set(list).size, list.length, 'duplicate module');
     if (a.id === 'strip') assert(!A.MODULES, 'the strip keeps its module list in src/main.js MODULES');
@@ -155,25 +155,36 @@ check('generator fixture: a valid page.json validates, a short fact list / a "<"
     assert.throws(() => generatePage(indexHtml.replace('<h1 class="title" id="stname">', '<h1 class="title" id="stname2">'), FIX_ROW, FIX_PAGE), /anchor "intro title"/);
   });
 }
-check('generator CLI on a throw-away root: writes the page, --check passes, a changed or missing page fails it, strip / planned areas are refused', () => {
+check('generator CLI on a throw-away root: writes the page, --check passes, a changed or missing page fails it, strip / unknown areas and a planned row without --force-planned are refused', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gen-area-'));
   try {
     fs.mkdirSync(path.join(tmp, 'src/areas/north'), { recursive: true });
     fs.copyFileSync(path.join(root, 'index.html'), path.join(tmp, 'index.html'));
     fs.copyFileSync(pageJsonFile(root, 'north'), pageJsonFile(tmp, 'north'));
-    const run = (...a) => spawnSync(process.execPath, [path.join(root, 'tools/gen-area-html.mjs'), '--root', tmp, ...a], { encoding: 'utf8' });
-    assert.equal(run('--area', 'north').status, 2, 'a planned area needs --force-planned');
-    assert.equal(run('--area', 'strip').status, 2, 'the strip page is index.html');
-    assert.equal(run('--area', 'nope').status, 2);
-    assert.equal(run('--area', 'north', '--force-planned', '--check').status, 1, '--check without a page must fail');
-    assert.equal(run('--area', 'north', '--force-planned').status, 0);
+    const real = path.join(root, 'tools/gen-area-html.mjs');
+    const run = (tool, ...a) => spawnSync(process.execPath, [tool, '--root', tmp, ...a], { encoding: 'utf8' });
+    // the north row is a real area since M3: a copy of the tool whose registry still marks it `planned` exercises the --force-planned branch
+    const ptool = path.join(tmp, 'ptool'); fs.mkdirSync(path.join(ptool, 'tools'), { recursive: true }); fs.mkdirSync(path.join(ptool, 'src/areas'), { recursive: true });
+    fs.copyFileSync(real, path.join(ptool, 'tools/gen-area-html.mjs'));
+    const reg = fs.readFileSync(path.join(root, 'src/areas/registry.js'), 'utf8'), planned = reg.replace("bake: 'baked/north/', requireBake: true,", "bake: 'baked/north/', requireBake: true, status: 'planned',");
+    assert.notEqual(planned, reg, 'the north row of the registry changed shape: update this fixture'); fs.writeFileSync(path.join(ptool, 'src/areas/registry.js'), planned);
+    const pl = path.join(ptool, 'tools/gen-area-html.mjs');
+    assert.equal(run(pl, '--area', 'north').status, 2, 'a planned area needs --force-planned');
+    assert.equal(run(pl, '--area', 'north', '--force-planned', '--check').status, 1, '--check without a page must fail');
+    assert.equal(run(pl, '--area', 'north', '--force-planned').status, 0);
+    fs.rmSync(path.join(tmp, 'north.html'));
+    assert.equal(run(real, '--area', 'strip').status, 2, 'the strip page is index.html');
+    assert.equal(run(real, '--area', 'nope').status, 2);
+    assert.equal(run(real, '--area', 'north', '--check').status, 1, '--check without a page must fail');
+    assert.equal(run(real, '--area', 'north').status, 0, 'a real area needs no --force-planned');
     assert(fs.existsSync(path.join(tmp, 'north.html')));
-    assert.equal(run('--area', 'north', '--force-planned', '--check').status, 0);
+    assert.equal(run(real, '--area', 'north', '--check').status, 0);
+    assert.equal(run(real).status, 0, 'no --area: every real area except the strip');
     fs.appendFileSync(path.join(tmp, 'north.html'), '<!-- hand edit -->\n');
-    const stale = run('--area', 'north', '--force-planned', '--check');
+    const stale = run(real, '--area', 'north', '--check');
     assert.equal(stale.status, 1); assert(/STALE/.test(stale.stdout), stale.stdout);
     fs.writeFileSync(path.join(tmp, 'north.html'), fs.readFileSync(path.join(tmp, 'north.html'), 'utf8').replace(/<!-- hand edit -->\n/, '').replaceAll('\n', '\r\n'));
-    assert.equal(run('--area', 'north', '--force-planned', '--check').status, 0, 'CRLF checkouts (Windows autocrlf) compare equal');
+    assert.equal(run(real, '--area', 'north', '--check').status, 0, 'CRLF checkouts (Windows autocrlf) compare equal');
     assert.equal(fs.readFileSync(path.join(root, 'index.html'), 'utf8').replaceAll('\r\n', '\n'), indexHtml, 'index.html is never touched');
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
