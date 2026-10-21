@@ -1,18 +1,21 @@
 // End-to-end smoke test of the real user flow (headless Edge / Chrome with GPU):
 //   load -> intro ready -> click "Start" -> walk with W -> fly (F: take-off, climb, landing) -> report module / page errors, fps, draw calls, triangles, movement.
-//   node tools/smoke.mjs [--q high|medium|low] [--only a,b] [--seconds 3] [--out shots/smoke]
+//   node tools/smoke.mjs [--q high|medium|low] [--only a,b] [--seconds 3] [--out shots/smoke] [--area <id> | --page <file>]
 // Exit code 1 when a module failed to build, a page error occurred, or the player did not move.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer-core';
+import { resolveArea, activateArea } from './lib/area-page.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = {};
 for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { const k = a.slice(2); args[k] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; } }
+const AREA = resolveArea(args, root);      // --area <id> | --page <file>: smoke another area's page (default: the strip, index.html)
+await activateArea(AREA.row, root);
 const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);
-const HERO = L.HERO;                      // a free, walkable spot on Republic Square (tools/layout-test.mjs checks it)
+const HERO = L.HERO;                      // a free, walkable spot (the strip: Republic Square; tools/layout-test.mjs checks it)
 const out = args.out || 'shots/smoke';
 fs.mkdirSync(path.dirname(path.resolve(root, out)), { recursive: true });
 
@@ -45,7 +48,7 @@ try {
   const q = new URLSearchParams({ q: args.q || 'medium', stats: '1' }); if (args.only) q.set('only', args.only);
   if (args.params) for (const [k, v] of new URLSearchParams(args.params)) q.set(k, v);   // e.g. --params "baked=force" (engine work on a stale bake)
   const t0 = Date.now();
-  await page.goto(`http://127.0.0.1:${port}/index.html?${q}`, { waitUntil: 'load', timeout: 120000 });
+  await page.goto(`http://127.0.0.1:${port}/${AREA.page}?${q}`, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction("document.body.classList.contains('loaded')", { timeout: 280000, polling: 250 });
   console.log(`intro ready after ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   await page.screenshot({ path: path.resolve(root, `${out}_intro.png`) });

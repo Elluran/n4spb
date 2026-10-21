@@ -15,7 +15,7 @@ shots/
 
 # deploy copy (docs/STRIP.md section 7) and the unfinished chunks of an interrupted bake
 /dist/
-assets/baked/*.part
+assets/baked/**/*.part
 
 # Guard: the third-party map screenshot (Yandex Maps) the original data was registered to is a private layout reference and must never be committed or deployed.
 docs/reference/yandex-center.png

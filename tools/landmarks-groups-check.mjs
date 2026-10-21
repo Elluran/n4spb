@@ -2,14 +2,18 @@
 // kept module's sub-groups (layout.GROUPS) must exist in the strip data, and every claimed building must lie
 // inside the data extent (a building cut by the extent edge would be drawn half). It also tells how much of
 // each group is in the play rectangles. usage: node tools/landmarks-groups-check.mjs   (exit 1 on a problem)
+//   node tools/area.mjs north tools/landmarks-groups-check.mjs      another area: its data facade, its layout, and ITS list of kept modules (TEST.kept of the area module; default: every
+//   owner in its GROUPS). The strip's list is the fallback in tools/lib/area-test-data.mjs.
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveTest } from './lib/area-test-data.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CITY = await import(pathToFileURL(path.join(root, 'src/world/data/city.js')).href);
 const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);
-const KEPT = ['landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksE', 'landmarksF', 'landmarksG', 'landmarksH', 'landmarksI', 'landmarksJ', 'landmarksK',
-  'landmarksCastle', 'landmarksBelinsky', 'landmarksOktyabrsky', 'landmarksNorth'];
+const A = await import(pathToFileURL(path.join(root, 'src/world/area.js')).href);
+const KEPT = resolveTest(A, L).kept;
+console.log(`area ${A.ID}: ${KEPT.length} kept modules`);
 
 // every id of every data array (buildings, roads, monuments, POIs, water, green ...)
 const known = new Map();
