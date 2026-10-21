@@ -23,6 +23,7 @@ const PLAY_RECTS = CITY.PLAY_RECTS || [PLAY], EXTENT_RECTS = CITY.EXTENT_RECTS |
 import { SHAFTS, DOORWAYS } from './data/metro.js';
 import { WATERWAYS, waterwayAt as _waterwayAt, shoreDistance as _shoreDistance } from './environment/waterways.js';
 import * as A from './area.js';        // the strip's tables (the page of another area remaps this URL to its own area module: docs/AREAS.md)
+import { HEIGHT_PATCHES } from './lib/area-tables.js';        // the area's terrain patches (the strip's list is empty)
 export { ORIGIN, EXTENT, PLAY, PLAY_RECTS, EXTENT_RECTS };
 
 export const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -98,8 +99,11 @@ export const waterwayAt = _waterwayAt;
 export function waterLevelAt(x, z) { const k = _waterwayAt(x, z); return k ? WATERWAYS[k].water : null; }
 /** True when (x,z) lies on the water of a waterway (the trench between the granite quays). Bridges are decks above it (walk boxes), they do not change this. */
 export function inRiver(x, z) { return _waterwayAt(x, z) !== null; }
-/** Terrain height: 0 (street level) everywhere except the bed of the waterway inside the water polygons. */
-export function heightAt(x, z) { const k = _waterwayAt(x, z); return k ? WATERWAYS[k].bed : GROUND_Y; }
+/** Terrain height: 0 (street level) everywhere except the bed of the waterway inside the water polygons; the area's HEIGHT_PATCHES come first (array order, box reject, then at(x, z): the first non-null wins). */
+export function heightAt(x, z) {
+  for (let i = 0; i < HEIGHT_PATCHES.length; i++) { const p = HEIGHT_PATCHES[i], b = p.box; if (x < b[0] || x > b[1] || z < b[2] || z > b[3]) continue; const h = p.at(x, z); if (h != null) return h; }
+  const k = _waterwayAt(x, z); return k ? WATERWAYS[k].bed : GROUND_Y;
+}
 export const groundAt = heightAt;
 /** Distance (m) from (x,z) to the water of any waterway (0 on it; 1e4 when no bank within ~80 m). Used by core/audio.js for the water ambience. */
 export function shoreDist(x, z) { return _shoreDistance(x, z); }
