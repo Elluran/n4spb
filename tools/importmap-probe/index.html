@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>import-map probe</title>
+<style>body{font:14px/1.45 ui-monospace,Consolas,monospace;margin:0;padding:16px;background:#eee}body.pass{background:#d9f2d9}body.fail{background:#f6d4d4}pre{white-space:pre-wrap;word-break:break-word}h1{font:700 18px system-ui}</style>
+<!-- The same mechanism north.html will use (docs/AREAS.md): the static import map remaps two URL-like keys; every relative importer and import() that resolves to them follows. -->
+<script type="importmap">
+{ "imports": {
+  "./src/data/city.js": "./src/data/city-north.js",
+  "./src/area.js": "./src/area-north.js"
+} }
+</script>
+</head><body>
+<h1>import-map probe (URL-key remap)</h1>
+<pre id="out">running...</pre>
+<script type="module" src="./src/main.js"></script>
+</body></html>

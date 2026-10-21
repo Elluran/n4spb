@@ -1,0 +1,3431 @@
+{
+ "schema": 1,
+ "area": "strip",
+ "layout": {
+  "consts": {
+   "AREAS": {
+    "[hashed]": true,
+    "kind": "array",
+    "n": 134,
+    "bytes": 25098,
+    "hash": "c2eb369bec6bebb7"
+   },
+   "DEFAULT_H": {
+    "construction": 12,
+    "garage": 3,
+    "garages": 3,
+    "kiosk": 3,
+    "roof": 5,
+    "service": 4,
+    "shed": 3,
+    "transportation": 6,
+    "yes": 21
+   },
+   "DOORWAYS": [
+    {
+     "bldg": "r2404499",
+     "id": "vosstaniya2-in",
+     "kind": "entrance",
+     "osm": "n1109163066",
+     "rotY": -1.393806,
+     "station": "vosstaniya",
+     "w": 3.4,
+     "x": 597.5,
+     "z": 341
+    },
+    {
+     "bldg": "w38578114",
+     "id": "dostoevskaya-in",
+     "kind": "entrance",
+     "osm": "n7473625772",
+     "rotY": 2.804352,
+     "station": "dostoevskaya",
+     "w": 3.4,
+     "x": -277.1,
+     "z": 452.4
+    },
+    {
+     "bldg": "r15081488",
+     "id": "mayakovskaya-in",
+     "kind": "entrance",
+     "osm": "n4060185664",
+     "rotY": 3.141593,
+     "station": "mayakovskaya",
+     "w": 3.4,
+     "x": 196,
+     "z": 93.3
+    },
+    {
+     "bldg": "r15081488",
+     "id": "mayakovskaya-out",
+     "kind": "exit",
+     "osm": "n1109163128",
+     "rotY": 1.570796,
+     "station": "mayakovskaya",
+     "w": 3.4,
+     "x": 216,
+     "z": 115.3
+    },
+    {
+     "bldg": "w61738351",
+     "id": "vladimirskaya-in",
+     "kind": "entrance",
+     "osm": "n836617908",
+     "rotY": -2.489493,
+     "station": "vladimirskaya",
+     "w": 3.4,
+     "x": -187.4,
+     "z": 532
+    },
+    {
+     "bldg": "w28962850",
+     "id": "vosstaniya-in",
+     "kind": "entrance",
+     "osm": "n318455877",
+     "rotY": 1.570796,
+     "station": "vosstaniya",
+     "w": 3.4,
+     "x": 535.2,
+     "z": 91.2
+    },
+    {
+     "bldg": "w28962850",
+     "id": "vosstaniya-out",
+     "kind": "exit",
+     "osm": "n318455870",
+     "rotY": -1.570796,
+     "station": "vosstaniya",
+     "w": 3.4,
+     "x": 496.6,
+     "z": 92.7
+    },
+    {
+     "bldg": "w52153127",
+     "id": "admiralteyskaya-in",
+     "kind": "entrance",
+     "osm": "n5464314991",
+     "rotY": 2.177034,
+     "station": "admiralteyskaya",
+     "w": 2.4,
+     "x": -2028.747062,
+     "z": -411.704416
+    },
+    {
+     "bldg": "w52153127",
+     "id": "admiralteyskaya-in2",
+     "kind": "entrance",
+     "osm": "n5464314995",
+     "rotY": 2.177034,
+     "station": "admiralteyskaya",
+     "w": 2.4,
+     "x": -2026.638877,
+     "z": -408.663765
+    },
+    {
+     "bldg": "r1147588",
+     "id": "gostiny-in",
+     "kind": "entrance",
+     "osm": "n5628361759",
+     "rotY": 2.901392,
+     "station": "gostiny",
+     "w": 3.4,
+     "x": -976.4,
+     "z": -182.6
+    },
+    {
+     "bldg": "r1147588",
+     "id": "gostiny-out",
+     "kind": "exit",
+     "osm": "n5628361760",
+     "rotY": 2.901392,
+     "station": "gostiny",
+     "w": 3.4,
+     "x": -982.7,
+     "z": -184.1
+    },
+    {
+     "bldg": "r7034614",
+     "id": "nevsky-canal",
+     "kind": "entrance",
+     "osm": "n6190780853",
+     "rotY": -0.238988,
+     "station": "nevsky",
+     "w": 3.4,
+     "x": -1352.4,
+     "z": -339.2
+    },
+    {
+     "bldg": "r7034614",
+     "id": "gostiny-canal",
+     "kind": "exit",
+     "osm": "n5465360125",
+     "rotY": -1.773879,
+     "station": "nevsky",
+     "w": 3,
+     "x": -1364.2,
+     "z": -347
+    }
+   ],
+   "DRIVABLE": {
+    "[Set]": [
+     "living_street",
+     "primary",
+     "primary_link",
+     "residential",
+     "secondary",
+     "secondary_link",
+     "service",
+     "tertiary",
+     "tertiary_link",
+     "unclassified"
+    ]
+   },
+   "EXTENT": {
+    "x0": -3020,
+    "x1": 955,
+    "z0": -1420,
+    "z1": 1180
+   },
+   "EXTENT_RECTS": [
+    {
+     "x0": -715,
+     "x1": 955,
+     "z0": -525,
+     "z1": 1180
+    },
+    {
+     "x0": -1870,
+     "x1": -475,
+     "z0": -1120,
+     "z1": 280
+    },
+    {
+     "x0": -715,
+     "x1": -300,
+     "z0": -1120,
+     "z1": -285
+    },
+    {
+     "x0": -2070,
+     "x1": -1630,
+     "z0": -1420,
+     "z1": 290
+    },
+    {
+     "x0": -2320,
+     "x1": -1830,
+     "z0": -1300,
+     "z1": 290
+    },
+    {
+     "x0": -2570,
+     "x1": -2080,
+     "z0": -1130,
+     "z1": 290
+    },
+    {
+     "x0": -2820,
+     "x1": -2330,
+     "z0": -920,
+     "z1": 360
+    },
+    {
+     "x0": -3020,
+     "x1": -2580,
+     "z0": -740,
+     "z1": 360
+    },
+    {
+     "x0": -1120,
+     "x1": -480,
+     "z0": -1420,
+     "z1": -880
+    }
+   ],
+   "GRID_DEG": 103.9,
+   "GROUND_HOLES": [
+    {
+     "d": 13,
+     "id": "vosstaniya-shaft",
+     "kind": "escalator",
+     "rotY": -0.431584,
+     "station": "vosstaniya",
+     "w": 8.4,
+     "x": 510.093399,
+     "z": 103.167763
+    },
+    {
+     "d": 13,
+     "id": "mayakovskaya-shaft",
+     "kind": "escalator",
+     "rotY": 0,
+     "station": "mayakovskaya",
+     "w": 8.4,
+     "x": 196,
+     "z": 111.3
+    },
+    {
+     "d": 13,
+     "id": "vosstaniya2-shaft",
+     "kind": "escalator",
+     "rotY": -1.393806,
+     "station": "vosstaniya2",
+     "w": 8.4,
+     "x": 612.26,
+     "z": 338.36
+    },
+    {
+     "d": 13,
+     "id": "dostoevskaya-shaft",
+     "kind": "escalator",
+     "rotY": -0.337241,
+     "station": "dostoevskaya",
+     "w": 8.4,
+     "x": -283.058,
+     "z": 469.392
+    },
+    {
+     "d": 13,
+     "id": "vladimirskaya-shaft",
+     "kind": "escalator",
+     "rotY": 0.652099,
+     "station": "vladimirskaya",
+     "w": 8.4,
+     "x": -176.474,
+     "z": 546.31
+    },
+    {
+     "d": 13,
+     "id": "adm1-shaft",
+     "kind": "escalator",
+     "rotY": 1.369279,
+     "station": "admiralteyskaya",
+     "w": 10.4,
+     "x": -2040.131534,
+     "z": -405.698985
+    },
+    {
+     "d": 13,
+     "id": "gostiny-shaft",
+     "kind": "escalator",
+     "rotY": -1.789993,
+     "station": "gostiny",
+     "w": 10.4,
+     "x": -1020.247128,
+     "z": -168.403468
+    },
+    {
+     "d": 13,
+     "id": "canal-shaft",
+     "kind": "escalator",
+     "rotY": 0.238189,
+     "station": "nevsky",
+     "w": 8.4,
+     "x": -1353.166368,
+     "z": -349.383516
+    },
+    {
+     "d": 4.6,
+     "id": "nevsky-pit-1-hole",
+     "kind": "stairs",
+     "rotY": -1.800421,
+     "station": "nevsky",
+     "w": 4.6,
+     "x": -1153.43951,
+     "z": -241.62348
+    },
+    {
+     "d": 4.6,
+     "id": "nevsky-pit-2-hole",
+     "kind": "stairs",
+     "rotY": 1.341172,
+     "station": "nevsky",
+     "w": 4.6,
+     "x": -1194.56049,
+     "z": -251.77652
+    },
+    {
+     "d": 4.6,
+     "id": "nevsky-pit-3-hole",
+     "kind": "stairs",
+     "rotY": -1.800421,
+     "station": "nevsky",
+     "w": 4.6,
+     "x": -1137.93951,
+     "z": -278.32348
+    },
+    {
+     "d": 4.6,
+     "id": "nevsky-pit-4-hole",
+     "kind": "stairs",
+     "rotY": 1.341172,
+     "station": "nevsky",
+     "w": 4.6,
+     "x": -1183.96049,
+     "z": -289.47652
+    }
+   ],
+   "GROUND_Y": 0,
+   "GROUPS": {
+    "[hashed]": true,
+    "kind": "object",
+    "n": 17,
+    "bytes": 29948,
+    "hash": "c4ed80ac0b4c007e"
+   },
+   "HERO": {
+    "pitch": 8,
+    "x": 560,
+    "yaw": -138.532295,
+    "z": 192
+   },
+   "METRO_DEPTH": {
+    "dostoevskaya": -64,
+    "mayakovskaya": -51,
+    "vladimirskaya": -55,
+    "vosstaniya": -58
+   },
+   "MODULE_KEYS": [
+    "landmarksA",
+    "landmarksB",
+    "landmarksC",
+    "landmarksD",
+    "metro",
+    "landmarksBelinsky",
+    "landmarksE",
+    "landmarksF",
+    "landmarksG",
+    "landmarksH",
+    "landmarksI",
+    "landmarksJ",
+    "landmarksK",
+    "bridges",
+    "landmarksNorth",
+    "landmarksCastle",
+    "landmarksOktyabrsky"
+   ],
+   "NAMES": {
+    "place": "Санкт-Петербург",
+    "placeEn": "Saint Petersburg",
+    "square": "площадь Восстания",
+    "squareEn": "Vosstaniya Square",
+    "station": "Московский вокзал",
+    "stationEn": "Moscow Railway Station",
+    "streets": {
+     "admiralteyskayaNab": "Адмиралтейская набережная",
+     "admiralteysky": "Адмиралтейский проспект",
+     "angliyskayaNab": "Английская набережная",
+     "bankovsky": "Банковский переулок",
+     "birzhevayaSq": "Биржевая площадь",
+     "bolshayaKonyushennaya": "Большая Конюшенная улица",
+     "bolshayaMorskaya": "Большая Морская улица",
+     "bolshayaMoskovskaya": "Большая Московская улица",
+     "dvortsovayaNab": "Дворцовая набережная",
+     "dvortsovayaSq": "Дворцовая площадь",
+     "dvortsovyProezd": "Дворцовый проезд",
+     "fontanka": "набережная реки Фонтанки",
+     "galernaya": "Галерная улица",
+     "goncharnaya": "Гончарная улица",
+     "gorokhovaya": "Гороховая улица",
+     "griboedov": "набережная канала Грибоедова",
+     "inzhenernaya": "Инженерная улица",
+     "isaakievskayaSq": "Исаакиевская площадь",
+     "iskusstvSq": "площадь Искусств",
+     "italyanskaya": "Итальянская улица",
+     "kazanskaya": "Казанская улица",
+     "kazanskayaSq": "Казанская площадь",
+     "kolokolnaya": "Колокольная улица",
+     "konnogvardeysky": "Конногвардейский бульвар",
+     "konyushennayaSq": "Конюшенная площадь",
+     "kuznechny": "Кузнечный переулок",
+     "ligovsky": "Лиговский проспект",
+     "liteyny": "Литейный проспект",
+     "malayaKonyushennaya": "Малая Конюшенная улица",
+     "malayaMorskaya": "Малая Морская улица",
+     "malayaSadovaya": "Малая Садовая улица",
+     "marata": "улица Марата",
+     "mayakovskogo": "улица Маяковского",
+     "mikhailovskaya": "Михайловская улица",
+     "millionnaya": "Миллионная улица",
+     "moika": "набережная реки Мойки",
+     "nevsky": "Невский проспект",
+     "ostrovskogoSq": "площадь Островского",
+     "pochtamtskaya": "Почтамтская улица",
+     "pushkinskaya": "Пушкинская улица",
+     "razyezzhaya": "Разъезжая улица",
+     "rubinsteina": "улица Рубинштейна",
+     "sadovaya": "Садовая улица",
+     "senatskayaSq": "Сенатская площадь",
+     "stremyannaya": "Стремянная улица",
+     "suvorovsky": "Суворовский проспект",
+     "swanCanalNab": "набережная Лебяжьей канавки",
+     "tsaritsynsky": "Царицынский проезд",
+     "universitetskayaNab": "Университетская набережная",
+     "vladimirsky": "Владимирский проспект",
+     "vosstaniya": "улица Восстания",
+     "voznesensky": "Вознесенский проспект",
+     "winterCanalNab": "набережная Зимней канавки",
+     "yakubovicha": "улица Якубовича",
+     "zagorodny": "Загородный проспект",
+     "zhukovskogo": "улица Жуковского"
+    }
+   },
+   "OBELISK": {
+    "h": 36,
+    "x": 592.2,
+    "z": 164.9
+   },
+   "ORIGIN": {
+    "lat": 59.932421,
+    "lon": 30.351279
+   },
+   "PLAY": {
+    "x0": -2900,
+    "x1": 835,
+    "z0": -1300,
+    "z1": 1060
+   },
+   "PLAY_RECTS": [
+    {
+     "x0": -595,
+     "x1": 835,
+     "z0": -405,
+     "z1": 1060
+    },
+    {
+     "x0": -1750,
+     "x1": -595,
+     "z0": -1000,
+     "z1": 160
+    },
+    {
+     "x0": -595,
+     "x1": -420,
+     "z0": -1000,
+     "z1": -405
+    },
+    {
+     "x0": -1950,
+     "x1": -1750,
+     "z0": -1300,
+     "z1": 170
+    },
+    {
+     "x0": -2200,
+     "x1": -1950,
+     "z0": -1180,
+     "z1": 170
+    },
+    {
+     "x0": -2450,
+     "x1": -2200,
+     "z0": -1010,
+     "z1": 170
+    },
+    {
+     "x0": -2700,
+     "x1": -2450,
+     "z0": -800,
+     "z1": 240
+    },
+    {
+     "x0": -2900,
+     "x1": -2700,
+     "z0": -620,
+     "z1": 240
+    },
+    {
+     "x0": -1000,
+     "x1": -600,
+     "z0": -1300,
+     "z1": -1000
+    }
+   ],
+   "RIVER_Y": {
+    "bed": -4.6,
+    "water": -3.2
+   },
+   "SQUARE": {
+    "name": "площадь Восстания",
+    "nameEn": "Vosstaniya Square",
+    "x": 589,
+    "z": 173
+   },
+   "STATION": {
+    "facadeBearing": 348,
+    "tower": {
+     "x": 602.1,
+     "z": 246.4
+    },
+    "trackBearing": 167,
+    "x": 612,
+    "z": 300
+   },
+   "SUBGROUPS": {
+    "[hashed]": true,
+    "kind": "object",
+    "n": 81,
+    "bytes": 32568,
+    "hash": "84a122ad40233acb"
+   },
+   "SUN_DIR": [
+    -0.473,
+    0.707,
+    0.526
+   ],
+   "SURFACE": {
+    "ground": 0,
+    "kerb": 0.15,
+    "platform": 1.1,
+    "plinth": 1,
+    "road": 0.03,
+    "sidewalk": 0.12
+   },
+   "VIEWS": {
+    "[hashed]": true,
+    "kind": "array",
+    "n": 31,
+    "bytes": 3412,
+    "hash": "affcc44e20c4ef96"
+   },
+   "WALKWAYS": {
+    "[Set]": [
+     "cycleway",
+     "footway",
+     "path",
+     "pedestrian",
+     "steps"
+    ]
+   },
+   "WATERWAYS": {
+    "fontanka": {
+     "bay": 3.2,
+     "bed": -4.6,
+     "key": "fontanka",
+     "name": "Фонтанка",
+     "post": "pyramid",
+     "postH": 1,
+     "postW": 0.45,
+     "rail": [
+      "lattice",
+      "clover",
+      "bars"
+     ],
+     "shadeH": 3.4,
+     "wall": "fontanka",
+     "water": -3.2,
+     "width": 61
+    },
+    "griboedov": {
+     "bay": 2.7,
+     "bed": -4.3,
+     "key": "griboedov",
+     "name": "канал Грибоедова",
+     "post": "twostep",
+     "postH": 1.1,
+     "postW": 0.5,
+     "rail": [
+      "bars",
+      "loops"
+     ],
+     "shadeH": 3,
+     "wall": "pink",
+     "water": -2.9,
+     "width": 19
+    },
+    "moat": {
+     "bay": 2.4,
+     "bed": -2.4,
+     "key": "moat",
+     "name": "Воскресенский канал",
+     "post": "twostep",
+     "postH": 1,
+     "postW": 0.45,
+     "rail": [],
+     "shadeH": 1.3,
+     "wall": "moat",
+     "water": -1.2,
+     "width": 14
+    },
+    "moika": {
+     "bay": 2.4,
+     "bed": -4.5,
+     "key": "moika",
+     "name": "Мойка",
+     "post": "twostep",
+     "postH": 1,
+     "postW": 0.45,
+     "rail": [
+      "moika"
+     ],
+     "shadeH": 3.1,
+     "wall": "pink",
+     "water": -3,
+     "width": 26
+    },
+    "neva": {
+     "bay": 2.2,
+     "bed": -6,
+     "key": "neva",
+     "name": "Нева",
+     "post": "roll",
+     "postH": 1,
+     "postW": 0.88,
+     "rail": [],
+     "shadeH": 3.5,
+     "wall": "neva",
+     "water": -3.4,
+     "width": 400
+    },
+    "swan-canal": {
+     "bay": 2,
+     "bed": -4,
+     "key": "swan-canal",
+     "name": "Лебяжья канавка",
+     "post": "twostep",
+     "postH": 1,
+     "postW": 0.45,
+     "profile": "slope",
+     "rail": [
+      "ballpost",
+      "trellis"
+     ],
+     "shadeH": 1.2,
+     "wall": "swan-canal",
+     "water": -2.8,
+     "width": 10.6
+    },
+    "winter-canal": {
+     "bay": 2.3,
+     "bed": -4.3,
+     "key": "winter-canal",
+     "name": "Зимняя канавка",
+     "post": "pylon",
+     "postH": 0.95,
+     "postW": 0.45,
+     "rail": [
+      "lancet"
+     ],
+     "shadeH": 3.2,
+     "wall": "pink",
+     "water": -3.1,
+     "width": 12.8
+    }
+   },
+   "WORLD": {
+    "data": {
+     "x0": -3020,
+     "x1": 955,
+     "z0": -1420,
+     "z1": 1180
+    },
+    "dataRects": [
+     {
+      "x0": -715,
+      "x1": 955,
+      "z0": -525,
+      "z1": 1180
+     },
+     {
+      "x0": -1870,
+      "x1": -475,
+      "z0": -1120,
+      "z1": 280
+     },
+     {
+      "x0": -715,
+      "x1": -300,
+      "z0": -1120,
+      "z1": -285
+     },
+     {
+      "x0": -2070,
+      "x1": -1630,
+      "z0": -1420,
+      "z1": 290
+     },
+     {
+      "x0": -2320,
+      "x1": -1830,
+      "z0": -1300,
+      "z1": 290
+     },
+     {
+      "x0": -2570,
+      "x1": -2080,
+      "z0": -1130,
+      "z1": 290
+     },
+     {
+      "x0": -2820,
+      "x1": -2330,
+      "z0": -920,
+      "z1": 360
+     },
+     {
+      "x0": -3020,
+      "x1": -2580,
+      "z0": -740,
+      "z1": 360
+     },
+     {
+      "x0": -1120,
+      "x1": -480,
+      "z0": -1420,
+      "z1": -880
+     }
+    ],
+    "play": {
+     "x0": -2900,
+     "x1": 835,
+     "z0": -1300,
+     "z1": 1060
+    },
+    "rects": [
+     {
+      "x0": -595,
+      "x1": 835,
+      "z0": -405,
+      "z1": 1060
+     },
+     {
+      "x0": -1750,
+      "x1": -595,
+      "z0": -1000,
+      "z1": 160
+     },
+     {
+      "x0": -595,
+      "x1": -420,
+      "z0": -1000,
+      "z1": -405
+     },
+     {
+      "x0": -1950,
+      "x1": -1750,
+      "z0": -1300,
+      "z1": 170
+     },
+     {
+      "x0": -2200,
+      "x1": -1950,
+      "z0": -1180,
+      "z1": 170
+     },
+     {
+      "x0": -2450,
+      "x1": -2200,
+      "z0": -1010,
+      "z1": 170
+     },
+     {
+      "x0": -2700,
+      "x1": -2450,
+      "z0": -800,
+      "z1": 240
+     },
+     {
+      "x0": -2900,
+      "x1": -2700,
+      "z0": -620,
+      "z1": 240
+     },
+     {
+      "x0": -1000,
+      "x1": -600,
+      "z0": -1300,
+      "z1": -1000
+     }
+    ]
+   }
+  },
+  "fns": {
+   "areaAt": "arity 2",
+   "boundsOf": "arity 1",
+   "buildingAt": "arity 2",
+   "buildingById": "arity 1",
+   "claimedBy": "arity 1",
+   "clamp": "arity 3",
+   "clampToPlay": "arity 2",
+   "eraOf": "arity 1",
+   "fromGrid": "arity 2",
+   "groundAt": "arity 2",
+   "groundFootprints": "arity 0",
+   "groupBounds": "arity 1",
+   "groupMembers": "arity 1",
+   "groupOf": "arity 1",
+   "groupOsm": "arity 1",
+   "heightAt": "arity 2",
+   "heightOf": "arity 1",
+   "inExtent": "arity 2",
+   "inPlay": "arity 2",
+   "inRiver": "arity 2",
+   "insideBuilding": "arity 2",
+   "isClaimed": "arity 1",
+   "isDrivable": "arity 1",
+   "isOnRoad": "arity 2",
+   "lerp": "arity 3",
+   "nearestRoad": "arity 2",
+   "roadWidth": "arity 1",
+   "roadsNear": "arity 2",
+   "rotYBearing": "arity 1",
+   "rotYToward": "arity 2",
+   "shoreDist": "arity 2",
+   "smoothstep": "arity 3",
+   "toGrid": "arity 2",
+   "waterLevelAt": "arity 2",
+   "waterwayAt": "arity 2",
+   "yawToward": "arity 4"
+  }
+ },
+ "facade": {
+  "AREAS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 146,
+   "bytes": 70033,
+   "hash": "5855d6f6ece58006"
+  },
+  "BARRIERS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 1293,
+   "bytes": 139377,
+   "hash": "ec7b1fe980196d78"
+  },
+  "BARRIER_NODES": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 2154,
+   "bytes": 138354,
+   "hash": "a4627b802cafc1f8"
+  },
+  "BRIDGES": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 168,
+   "bytes": 29134,
+   "hash": "e828b10a0a5c3e8a"
+  },
+  "BUILDINGS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 3041,
+   "bytes": 2072151,
+   "hash": "4789c0f7a52d655c"
+  },
+  "BUS_ROUTES": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 45,
+   "bytes": 9984,
+   "hash": "6cdb8104b3cce4c1"
+  },
+  "BUS_STOPS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 246,
+   "bytes": 48269,
+   "hash": "9a903d9624ce54df"
+  },
+  "CALMING": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 60,
+   "bytes": 3379,
+   "hash": "4ad9c8312f0051df"
+  },
+  "CROSSINGS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 481,
+   "bytes": 39731,
+   "hash": "6bc15781a202feb4"
+  },
+  "CROSSING_NODES": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 646,
+   "bytes": 62411,
+   "hash": "450c1ad285b1339f"
+  },
+  "DOORS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 5760,
+   "bytes": 378143,
+   "hash": "bcf40645160335dd"
+  },
+  "EMBANKMENTS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 293,
+   "bytes": 31321,
+   "hash": "c415a0425c5696ee"
+  },
+  "ENTRANCES": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 24,
+   "bytes": 6037,
+   "hash": "636badc570bb74a9"
+  },
+  "EXTENT": {
+   "x0": -3020,
+   "x1": 955,
+   "z0": -1420,
+   "z1": 1180
+  },
+  "EXTENT_RECTS": [
+   {
+    "x0": -715,
+    "x1": 955,
+    "z0": -525,
+    "z1": 1180
+   },
+   {
+    "x0": -1870,
+    "x1": -475,
+    "z0": -1120,
+    "z1": 280
+   },
+   {
+    "x0": -715,
+    "x1": -300,
+    "z0": -1120,
+    "z1": -285
+   },
+   {
+    "x0": -2070,
+    "x1": -1630,
+    "z0": -1420,
+    "z1": 290
+   },
+   {
+    "x0": -2320,
+    "x1": -1830,
+    "z0": -1300,
+    "z1": 290
+   },
+   {
+    "x0": -2570,
+    "x1": -2080,
+    "z0": -1130,
+    "z1": 290
+   },
+   {
+    "x0": -2820,
+    "x1": -2330,
+    "z0": -920,
+    "z1": 360
+   },
+   {
+    "x0": -3020,
+    "x1": -2580,
+    "z0": -740,
+    "z1": 360
+   },
+   {
+    "x0": -1120,
+    "x1": -480,
+    "z0": -1420,
+    "z1": -880
+   }
+  ],
+  "FOUNTAINS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 20,
+   "bytes": 3764,
+   "hash": "604e8345719903c1"
+  },
+  "FURNITURE": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 3185,
+   "bytes": 317603,
+   "hash": "526b5d8f305ff1de"
+  },
+  "GREEN": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 1144,
+   "bytes": 220278,
+   "hash": "21225513f5f6cf67"
+  },
+  "LAMPS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 363,
+   "bytes": 21015,
+   "hash": "aead7aa56a309c8f"
+  },
+  "LANDUSE": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 244,
+   "bytes": 53151,
+   "hash": "677897b6653b1d58"
+  },
+  "MANMADE": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 435,
+   "bytes": 45471,
+   "hash": "de6a59093db0c088"
+  },
+  "MONUMENTS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 394,
+   "bytes": 72851,
+   "hash": "0f955a0c30be82f6"
+  },
+  "ORIGIN": {
+   "lat": 59.932421,
+   "lon": 30.351279
+  },
+  "OVERLAPS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 574,
+   "bytes": 56188,
+   "hash": "e078b9ed29fea33b"
+  },
+  "PARKING": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 363,
+   "bytes": 67313,
+   "hash": "32bca706bef0eb0e"
+  },
+  "PIERS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 23,
+   "bytes": 3847,
+   "hash": "9fe0f4ddf8b342fa"
+  },
+  "PIPES": [
+   {
+    "id": "w96332875",
+    "loc": "indoor",
+    "pts": [
+     566.6,
+     -164.3,
+     574.3,
+     -164,
+     571.3,
+     -133.2,
+     563.6,
+     -133,
+     564.3,
+     -142.5,
+     560.2,
+     -143.2,
+     560.6,
+     -158,
+     566,
+     -158.3,
+     566.6,
+     -164.3
+    ],
+    "substance": "heat"
+   },
+   {
+    "id": "w121704967",
+    "loc": "overground",
+    "pts": [
+     757.7,
+     858.7,
+     762.2,
+     858.4,
+     765,
+     895.6,
+     764.7,
+     917,
+     763.4,
+     945.5,
+     797.1,
+     949,
+     789.8,
+     1066.5,
+     794.7,
+     1124.7,
+     793.4,
+     1125.9,
+     785.8,
+     1127.9,
+     787.1,
+     1147.5,
+     716.1,
+     1154.2,
+     717.2,
+     1180
+    ],
+    "substance": "heat"
+   },
+   {
+    "id": "w806179401",
+    "loc": "overground",
+    "pts": [
+     838.8,
+     1180,
+     828.7,
+     1122,
+     795.2,
+     1127.6,
+     793.4,
+     1125.9
+    ]
+   }
+  ],
+  "PITCHES": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 104,
+   "bytes": 19713,
+   "hash": "3774b58d5b0b449a"
+  },
+  "PLATFORMS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 31,
+   "bytes": 6908,
+   "hash": "97b3bee004fc4504"
+  },
+  "PLAY": {
+   "x0": -2900,
+   "x1": 835,
+   "z0": -1300,
+   "z1": 1060
+  },
+  "PLAY_RECTS": [
+   {
+    "x0": -595,
+    "x1": 835,
+    "z0": -405,
+    "z1": 1060
+   },
+   {
+    "x0": -1750,
+    "x1": -595,
+    "z0": -1000,
+    "z1": 160
+   },
+   {
+    "x0": -595,
+    "x1": -420,
+    "z0": -1000,
+    "z1": -405
+   },
+   {
+    "x0": -1950,
+    "x1": -1750,
+    "z0": -1300,
+    "z1": 170
+   },
+   {
+    "x0": -2200,
+    "x1": -1950,
+    "z0": -1180,
+    "z1": 170
+   },
+   {
+    "x0": -2450,
+    "x1": -2200,
+    "z0": -1010,
+    "z1": 170
+   },
+   {
+    "x0": -2700,
+    "x1": -2450,
+    "z0": -800,
+    "z1": 240
+   },
+   {
+    "x0": -2900,
+    "x1": -2700,
+    "z0": -620,
+    "z1": 240
+   },
+   {
+    "x0": -1000,
+    "x1": -600,
+    "z0": -1300,
+    "z1": -1000
+   }
+  ],
+  "POIS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 6703,
+   "bytes": 1200526,
+   "hash": "e7b318cb188952e8"
+  },
+  "RAILS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 84,
+   "bytes": 15450,
+   "hash": "260755e362d6ac69"
+  },
+  "RAIL_NODES": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 179,
+   "bytes": 11979,
+   "hash": "33aa791d57d31b6c"
+  },
+  "RECT_NAMES": [
+   "OLD",
+   "W1",
+   "N1",
+   "W2a",
+   "W2b",
+   "W2c",
+   "W2d",
+   "W2e",
+   "SG"
+  ],
+  "REGIONS": [
+   {
+    "extentRect": {
+     "x0": -715,
+     "x1": 955,
+     "z0": -525,
+     "z1": 1180
+    },
+    "file": "city-east.js",
+    "name": "OLD",
+    "playRect": {
+     "x0": -595,
+     "x1": 835,
+     "z0": -405,
+     "z1": 1060
+    }
+   },
+   {
+    "extentRect": {
+     "x0": -1870,
+     "x1": -475,
+     "z0": -1120,
+     "z1": 280
+    },
+    "file": "city-w1.js",
+    "name": "W1",
+    "playRect": {
+     "x0": -1750,
+     "x1": -595,
+     "z0": -1000,
+     "z1": 160
+    }
+   },
+   {
+    "extentRect": {
+     "x0": -715,
+     "x1": -300,
+     "z0": -1120,
+     "z1": -285
+    },
+    "file": "city-n1.js",
+    "name": "N1",
+    "playRect": {
+     "x0": -595,
+     "x1": -420,
+     "z0": -1000,
+     "z1": -405
+    }
+   },
+   {
+    "extentRect": {
+     "x0": -2070,
+     "x1": -1630,
+     "z0": -1420,
+     "z1": 290
+    },
+    "file": "city-w2a.js",
+    "name": "W2a",
+    "playRect": {
+     "x0": -1950,
+     "x1": -1750,
+     "z0": -1300,
+     "z1": 170
+    }
+   },
+   {
+    "extentRect": {
+     "x0": -2320,
+     "x1": -1830,
+     "z0": -1300,
+     "z1": 290
+    },
+    "file": "city-w2b.js",
+    "name": "W2b",
+    "playRect": {
+     "x0": -2200,
+     "x1": -1950,
+     "z0": -1180,
+     "z1": 170
+    }
+   },
+   {
+    "extentRect": {
+     "x0": -2570,
+     "x1": -2080,
+     "z0": -1130,
+     "z1": 290
+    },
+    "file": "city-w2c.js",
+    "name": "W2c",
+    "playRect": {
+     "x0": -2450,
+     "x1": -2200,
+     "z0": -1010,
+     "z1": 170
+    }
+   },
+   {
+    "extentRect": {
+     "x0": -2820,
+     "x1": -2330,
+     "z0": -920,
+     "z1": 360
+    },
+    "file": "city-w2d.js",
+    "name": "W2d",
+    "playRect": {
+     "x0": -2700,
+     "x1": -2450,
+     "z0": -800,
+     "z1": 240
+    }
+   },
+   {
+    "extentRect": {
+     "x0": -3020,
+     "x1": -2580,
+     "z0": -740,
+     "z1": 360
+    },
+    "file": "city-w2e.js",
+    "name": "W2e",
+    "playRect": {
+     "x0": -2900,
+     "x1": -2700,
+     "z0": -620,
+     "z1": 240
+    }
+   },
+   {
+    "extentRect": {
+     "x0": -1120,
+     "x1": -480,
+     "z0": -1420,
+     "z1": -880
+    },
+    "file": "city-sg.js",
+    "name": "SG",
+    "playRect": {
+     "x0": -1000,
+     "x1": -600,
+     "z0": -1300,
+     "z1": -1000
+    }
+   }
+  ],
+  "RIVER": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 14,
+   "bytes": 19746,
+   "hash": "ca41be9b475232c2"
+  },
+  "ROADS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 9292,
+   "bytes": 1950687,
+   "hash": "b72ee1a3769cbb14"
+  },
+  "SIGNALS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 212,
+   "bytes": 15718,
+   "hash": "245135e0d12aa73b"
+  },
+  "STATIONS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 32,
+   "bytes": 4430,
+   "hash": "7c5677a6a570460d"
+  },
+  "STEPS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 303,
+   "bytes": 49435,
+   "hash": "a41dc90b5a91954e"
+  },
+  "STREAMS": [
+   {
+    "culvert": 0,
+    "id": "w24255525",
+    "kind": "river",
+    "name": "Фонтанка",
+    "pts": [
+     -728.8,
+     -1120,
+     -727.5,
+     -1104.3,
+     -723.4,
+     -1067.9,
+     -719.8,
+     -1057.6,
+     -713.7,
+     -1047.2,
+     -469.2,
+     -675,
+     -460.3,
+     -660.8,
+     -454.5,
+     -645.6,
+     -439.7,
+     -576.1,
+     -393.4,
+     -337.7,
+     -438.8,
+     -91.2
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w79570067",
+    "kind": "river",
+    "name": "Фонтанка",
+    "pts": [
+     -438.8,
+     -91.2,
+     -518.6,
+     103.1,
+     -521.1,
+     107.4,
+     -683.2,
+     297.2,
+     -715,
+     320.9
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w11396029",
+    "kind": "canal",
+    "name": "Зимняя канавка",
+    "pts": [
+     -1762.4,
+     -929,
+     -1899.4,
+     -1109.9
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w11395661",
+    "kind": "river",
+    "name": "Мойка",
+    "pts": [
+     -719.8,
+     -1057.6,
+     -740,
+     -1050.5,
+     -801.1,
+     -1005.7,
+     -866.8,
+     -968.8,
+     -903.3,
+     -955.9,
+     -932.6,
+     -957.5,
+     -1190.2,
+     -1011.6,
+     -1213.9,
+     -1022.9,
+     -1249.5,
+     -1038.6,
+     -1390.3,
+     -1106,
+     -1464.1,
+     -1105.4,
+     -1488.8,
+     -1101.4,
+     -1555.3,
+     -1079.8,
+     -1650.7,
+     -1038.9,
+     -1709.2,
+     -995.4,
+     -1726.8,
+     -979.1,
+     -1751,
+     -947.6,
+     -1762.4,
+     -929,
+     -1769.8,
+     -914.2,
+     -1776.7,
+     -891.5,
+     -1778.3,
+     -881,
+     -1781.6,
+     -843.7,
+     -1784.1,
+     -808.2,
+     -1786.8,
+     -784.8,
+     -1790.7,
+     -740.6,
+     -1766.3,
+     -614.6,
+     -1760.1,
+     -559,
+     -1763.2,
+     -437.9,
+     -1772.1,
+     -398.4,
+     -1786.4,
+     -353.4,
+     -1806.6,
+     -309.9,
+     -1858.3,
+     -212.7,
+     -1937.1,
+     -119,
+     -1980.4,
+     -82.3,
+     -2011.1,
+     -64
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w115310456",
+    "kind": "canal",
+    "name": "канал Грибоедова",
+    "pts": [
+     -1249.5,
+     -1038.6,
+     -1279.5,
+     -891.3,
+     -1283.1,
+     -881.7,
+     -1294.1,
+     -829.7,
+     -1295.3,
+     -813.3,
+     -1395.1,
+     -304.8,
+     -1461,
+     11.8,
+     -1462.8,
+     18.2,
+     -1466.5,
+     23.6,
+     -1471.6,
+     28.3,
+     -1690.7,
+     154.9,
+     -1799.7,
+     219.6,
+     -1921.1,
+     290
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w89645910",
+    "kind": "canal",
+    "name": "Воскресенский канал",
+    "pts": [
+     -602.3,
+     -877.6,
+     -640.8,
+     -862.8
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w10233246",
+    "kind": "canal",
+    "name": "Лебяжья канавка",
+    "pts": [
+     -898.2,
+     -1120,
+     -848.7,
+     -979
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w240132757",
+    "kind": "canal",
+    "name": "Зимняя канавка",
+    "pts": [
+     -1906.4,
+     -1119.1,
+     -1919.6,
+     -1136.6,
+     -1924.2,
+     -1142.7
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w240132758",
+    "kind": "canal",
+    "name": "Зимняя канавка",
+    "pts": [
+     -1899.4,
+     -1109.9,
+     -1906.4,
+     -1119.1
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w71959367",
+    "kind": "river",
+    "name": "Мойка",
+    "pts": [
+     -2011.1,
+     -64,
+     -2039.3,
+     -50.2,
+     -2334.5,
+     69.2
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w34348576",
+    "kind": "river",
+    "name": "Большая Нева",
+    "pts": [
+     -1972,
+     -1420,
+     -2070,
+     -1307.4
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w34348576",
+    "kind": "river",
+    "name": "Большая Нева",
+    "pts": [
+     -2076.5,
+     -1300,
+     -2314.2,
+     -1026.9,
+     -2404.6,
+     -962.1
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w362796529",
+    "kind": "river",
+    "name": "Большая Нева",
+    "pts": [
+     -2404.6,
+     -962.1,
+     -2957.2,
+     -565.2,
+     -3020,
+     -530.8
+    ],
+    "tunnel": 0
+   },
+   {
+    "culvert": 0,
+    "id": "w71959357",
+    "kind": "river",
+    "name": "Мойка",
+    "pts": [
+     -2334.5,
+     69.2,
+     -2420,
+     109,
+     -2545,
+     175.4,
+     -2548.8,
+     177,
+     -2629.9,
+     200.5,
+     -2786.2,
+     212.3,
+     -2829,
+     216.1,
+     -2874.7,
+     232.1,
+     -2942.2,
+     274.7,
+     -3020,
+     352.6
+    ],
+    "tunnel": 0
+   }
+  ],
+  "SUBWAY": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 34,
+   "bytes": 11284,
+   "hash": "813e8f8dc8dec615"
+  },
+  "SUBWAY_ROUTES": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 10,
+   "bytes": 39279,
+   "hash": "8a86889a3c53a06c"
+  },
+  "TRAMWAYS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 34,
+   "bytes": 8433,
+   "hash": "b201575cb11c7b68"
+  },
+  "TRAM_ROUTES": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 9,
+   "bytes": 9557,
+   "hash": "19cc9c47e0a75353"
+  },
+  "TREES": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 2506,
+   "bytes": 17419,
+   "hash": "1671551210d93d74"
+  },
+  "TREE_ROWS": [
+   [
+    274.4,
+    526.8,
+    261.4,
+    574.5
+   ],
+   [
+    285.6,
+    485.8,
+    276.7,
+    518.2
+   ],
+   [
+    297.4,
+    442.8,
+    288,
+    477.1
+   ],
+   [
+    252.7,
+    562.7,
+    242.7,
+    599.6
+   ],
+   [
+    261,
+    531.9,
+    255.6,
+    551.8
+   ],
+   [
+    274.3,
+    482.9,
+    263.4,
+    523.3
+   ],
+   [
+    284.6,
+    445.1,
+    276.6,
+    474.3
+   ],
+   [
+    289.1,
+    428.3,
+    286.9,
+    436.5
+   ],
+   [
+    608.6,
+    -465.1,
+    596.4,
+    -465.1
+   ],
+   [
+    568.5,
+    -465.9,
+    546.6,
+    -466.2
+   ],
+   [
+    539,
+    -466.4,
+    523.6,
+    -466.6
+   ],
+   [
+    -250,
+    -268.9,
+    -278,
+    -258.9
+   ],
+   [
+    -258.4,
+    -291.1,
+    -272,
+    -298.3
+   ],
+   [
+    376.5,
+    -240.9,
+    376,
+    -218.5
+   ],
+   [
+    -858.9,
+    -1038.7,
+    -889.4,
+    -1126.5
+   ],
+   [
+    -1448.8,
+    -542.5,
+    -1439.8,
+    -580.7
+   ],
+   [
+    -1433.6,
+    -608.4,
+    -1425.3,
+    -644.3
+   ],
+   [
+    -1422.8,
+    -657,
+    -1415,
+    -691.1
+   ],
+   [
+    -1410.9,
+    -690.7,
+    -1418.3,
+    -656
+   ],
+   [
+    -1420.5,
+    -643.8,
+    -1428.6,
+    -607.3
+   ],
+   [
+    -1435.2,
+    -579.1,
+    -1443.6,
+    -541.3
+   ],
+   [
+    -1470,
+    -452.6,
+    -1451.2,
+    -531.2
+   ],
+   [
+    -1446.5,
+    -530,
+    -1464.4,
+    -450.9
+   ],
+   [
+    -1693.1,
+    -38.5,
+    -1713.8,
+    0
+   ],
+   [
+    -1683.7,
+    -56.2,
+    -1689.9,
+    -44.5
+   ],
+   [
+    -897.2,
+    -1148.9,
+    -902.1,
+    -1162.9
+   ],
+   [
+    -940.2,
+    -1272.3,
+    -952.5,
+    -1307.5
+   ],
+   [
+    -920,
+    -1214.3,
+    -927.9,
+    -1236.9
+   ],
+   [
+    -981.2,
+    -1389.4,
+    -1025.1,
+    -1513.6
+   ]
+  ],
+  "TROLLEY": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 28,
+   "bytes": 66701,
+   "hash": "5e285db18996224f"
+  },
+  "TUNNELS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 148,
+   "bytes": 15651,
+   "hash": "bd14da59b5318102"
+  },
+  "WALLS": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 293,
+   "bytes": 28471,
+   "hash": "7e82cd599319b1da"
+  },
+  "WATER": {
+   "[hashed]": true,
+   "kind": "array",
+   "n": 19,
+   "bytes": 18582,
+   "hash": "0a44babc51d2c119"
+  }
+ },
+ "probes": {
+  "inPlay": {
+   "n": 588,
+   "hash": "2ed52bb0431390e6",
+   "head": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  "inPlay25": {
+   "n": 588,
+   "hash": "74b6dc50a7b62743",
+   "head": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  "inPlay-40": {
+   "n": 588,
+   "hash": "d33b9ea526e4c1d3",
+   "head": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  "inExtent": {
+   "n": 588,
+   "hash": "2a8e95d96a1d8587",
+   "head": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  "inExtent60": {
+   "n": 588,
+   "hash": "aa3d0c132f06ac99",
+   "head": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  "clampToPlay": {
+   "n": 588,
+   "hash": "5f1c096f1e101352",
+   "head": [
+    [
+     -2700,
+     -800
+    ],
+    [
+     -2700,
+     -800
+    ],
+    [
+     -2700,
+     -800
+    ],
+    [
+     -2700,
+     -800
+    ],
+    [
+     -2900,
+     -620
+    ],
+    [
+     -2900,
+     -620
+    ],
+    [
+     -2900,
+     -563.333333
+    ],
+    [
+     -2900,
+     -415.555556
+    ]
+   ]
+  },
+  "clampToPlay30": {
+   "n": 588,
+   "hash": "86bdf7a04dc3a85b",
+   "head": [
+    [
+     -2670,
+     -770
+    ],
+    [
+     -2670,
+     -770
+    ],
+    [
+     -2670,
+     -770
+    ],
+    [
+     -2670,
+     -770
+    ],
+    [
+     -2870,
+     -590
+    ],
+    [
+     -2870,
+     -590
+    ],
+    [
+     -2870,
+     -563.333333
+    ],
+    [
+     -2870,
+     -415.555556
+    ]
+   ]
+  },
+  "heightAt": {
+   "n": 588,
+   "hash": "5488b2b296a87a8b",
+   "head": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    -6,
+    -6
+   ]
+  },
+  "groundAt": {
+   "n": 588,
+   "hash": "5488b2b296a87a8b",
+   "head": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    -6,
+    -6
+   ]
+  },
+  "inRiver": {
+   "n": 588,
+   "hash": "9a2887c0cc69ceaf",
+   "head": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true
+   ]
+  },
+  "waterwayAt": {
+   "n": 588,
+   "hash": "1cc1a1249f22427d",
+   "head": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    "neva",
+    "neva"
+   ]
+  },
+  "waterLevelAt": {
+   "n": 588,
+   "hash": "2ac99b208d27a588",
+   "head": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    -3.4,
+    -3.4
+   ]
+  },
+  "shoreDist": {
+   "n": 588,
+   "hash": "e085d402e7a04fa3",
+   "head": [
+    10000,
+    10000,
+    10000,
+    282.923588,
+    156.31584,
+    27.657965,
+    0,
+    0
+   ]
+  },
+  "insideBuilding": {
+   "n": 588,
+   "hash": "cadacffe8e01e92b",
+   "head": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  "insideBuilding1.5": {
+   "n": 588,
+   "hash": "a8a3e3359b0cf00a",
+   "head": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  "buildingAt": {
+   "n": 588,
+   "hash": "21f95d8fa5162cb5",
+   "head": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  "areaAt": {
+   "n": 588,
+   "hash": "ed13dc77aac5c6d6",
+   "head": [
+    "Санкт-Петербург · Saint Petersburg",
+    "Санкт-Петербург · Saint Petersburg",
+    "Санкт-Петербург · Saint Petersburg",
+    "Санкт-Петербург · Saint Petersburg",
+    "Санкт-Петербург · Saint Petersburg",
+    "Санкт-Петербург · Saint Petersburg",
+    "Санкт-Петербург · Saint Petersburg",
+    "Санкт-Петербург · Saint Petersburg"
+   ]
+  },
+  "isOnRoad": {
+   "n": 588,
+   "hash": "d2d3df4ad93e3ed6",
+   "head": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  "isOnRoadAll": {
+   "n": 588,
+   "hash": "852ef470f7d21d3e",
+   "head": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ]
+  },
+  "nearestRoad": {
+   "n": 588,
+   "hash": "754245f2a6d1fffd",
+   "head": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    [
+     "w183489894",
+     30.08719
+    ],
+    null,
+    null
+   ]
+  },
+  "toGrid": {
+   "n": 588,
+   "hash": "19689d14e616f05c",
+   "head": [
+    {
+     "u": -3922.327389,
+     "v": 701.283003
+    },
+    {
+     "u": -3886.827023,
+     "v": 557.832678
+    },
+    {
+     "u": -3851.326657,
+     "v": 414.382354
+    },
+    {
+     "u": -3815.826291,
+     "v": 270.93203
+    },
+    {
+     "u": -3780.325924,
+     "v": 127.481705
+    },
+    {
+     "u": -3744.825558,
+     "v": -15.96862
+    },
+    {
+     "u": -3709.325192,
+     "v": -159.418944
+    },
+    {
+     "u": -3673.824826,
+     "v": -302.869268
+    }
+   ]
+  },
+  "fromGrid": {
+   "n": 588,
+   "hash": "7f71ee233a2580d1",
+   "head": [
+    {
+     "x": -2720.01593,
+     "z": 847.843369
+    },
+    {
+     "x": -2684.515564,
+     "z": 704.393044
+    },
+    {
+     "x": -2649.015198,
+     "z": 560.942719
+    },
+    {
+     "x": -2613.514832,
+     "z": 417.492396
+    },
+    {
+     "x": -2578.014465,
+     "z": 274.042071
+    },
+    {
+     "x": -2542.514099,
+     "z": 130.591746
+    },
+    {
+     "x": -2507.013733,
+     "z": -12.858579
+    },
+    {
+     "x": -2471.513367,
+     "z": -156.308902
+    }
+   ]
+  },
+  "yawToward": {
+   "n": 588,
+   "hash": "0b34e88d9ea96a45",
+   "head": [
+    -114.03695,
+    -112.06725,
+    -110.041097,
+    -107.96131,
+    -105.83142,
+    -103.655682,
+    -101.439063,
+    -99.187206
+   ]
+  },
+  "rotYToward": {
+   "n": 588,
+   "hash": "b510a174c3c8ff26",
+   "head": [
+    1.151272,
+    1.18565,
+    1.221013,
+    1.257312,
+    1.294486,
+    1.33246,
+    1.371147,
+    1.410449
+   ]
+  },
+  "groundHeight": {
+   "n": 588,
+   "hash": "61b7929d5fe03f4d",
+   "head": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  },
+  "groups": {
+   "n": 81,
+   "keys": [
+    "admiralty",
+    "alexander-column",
+    "alexandrinsky-theatre",
+    "angleterre",
+    "anichkov",
+    "anichkov-bridge",
+    "astoria",
+    "atrium",
+    "bankovsky",
+    "belinsky",
+    "beloselsky",
+    "blue",
+    "bolsh-konyushenny",
+    "castle-guardhouses",
+    "catherine-garden",
+    "ciniselli-circus",
+    "dostoevsky",
+    "eng1",
+    "engineering-castle",
+    "fonarny",
+    "fontanka-bank",
+    "galereya",
+    "garden1",
+    "garden2",
+    "gardens",
+    "general-staff",
+    "gostiny-dvor",
+    "green",
+    "guards-hq",
+    "hermitage",
+    "hermitage-museum",
+    "horseman",
+    "isaac-garden",
+    "italyansky",
+    "kamenny",
+    "kazan-cathedral",
+    "kazan-garden",
+    "kazansky",
+    "library",
+    "lobanov-rostovsky",
+    "malo-konyushenny",
+    "mariinsky",
+    "mikhailovsky-garden",
+    "mucny",
+    "national-library",
+    "nevsky-centre",
+    "nevsky-corner",
+    "nicholas-i",
+    "north-corridor-houses",
+    "north-podpisnye",
+    "novo",
+    "oktyabrskaya",
+    "oktyabrsky-hall",
+    "ostrovsky-houses",
+    "palace",
+    "palace-square",
+    "panteleymonovsky",
+    "peter-monument",
+    "pevchesky",
+    "pochtamtsky",
+    "pushkin-square",
+    "red",
+    "rossi-pavilion",
+    "russian-museum",
+    "saviour-church",
+    "senate-synod",
+    "singer-house",
+    "square",
+    "st-isaac",
+    "station",
+    "swan-lower",
+    "teatralny",
+    "three-part-bridge",
+    "tolstoy",
+    "vladimirsky",
+    "voronikhin",
+    "vosstaniya-rotunda",
+    "winter-palace",
+    "yusupova",
+    "zimny1",
+    "zimny2"
+   ],
+   "members": {
+    "admiralty": 7,
+    "alexander-column": 36,
+    "alexandrinsky-theatre": 1,
+    "angleterre": 1,
+    "anichkov": 5,
+    "anichkov-bridge": 0,
+    "astoria": 3,
+    "atrium": 3,
+    "bankovsky": 0,
+    "belinsky": 0,
+    "beloselsky": 1,
+    "blue": 0,
+    "bolsh-konyushenny": 0,
+    "castle-guardhouses": 2,
+    "catherine-garden": 0,
+    "ciniselli-circus": 1,
+    "dostoevsky": 2,
+    "eng1": 0,
+    "engineering-castle": 2,
+    "fonarny": 0,
+    "fontanka-bank": 2,
+    "galereya": 6,
+    "garden1": 0,
+    "garden2": 0,
+    "gardens": 0,
+    "general-staff": 6,
+    "gostiny-dvor": 32,
+    "green": 0,
+    "guards-hq": 1,
+    "hermitage": 0,
+    "hermitage-museum": 15,
+    "horseman": 0,
+    "isaac-garden": 0,
+    "italyansky": 0,
+    "kamenny": 0,
+    "kazan-cathedral": 4,
+    "kazan-garden": 0,
+    "kazansky": 0,
+    "library": 2,
+    "lobanov-rostovsky": 1,
+    "malo-konyushenny": 0,
+    "mariinsky": 4,
+    "mikhailovsky-garden": 0,
+    "mucny": 0,
+    "national-library": 2,
+    "nevsky-centre": 2,
+    "nevsky-corner": 9,
+    "nicholas-i": 0,
+    "north-corridor-houses": 5,
+    "north-podpisnye": 1,
+    "novo": 0,
+    "oktyabrskaya": 3,
+    "oktyabrsky-hall": 2,
+    "ostrovsky-houses": 6,
+    "palace": 0,
+    "palace-square": 0,
+    "panteleymonovsky": 0,
+    "peter-monument": 0,
+    "pevchesky": 0,
+    "pochtamtsky": 0,
+    "pushkin-square": 0,
+    "red": 0,
+    "rossi-pavilion": 66,
+    "russian-museum": 4,
+    "saviour-church": 5,
+    "senate-synod": 3,
+    "singer-house": 2,
+    "square": 8,
+    "st-isaac": 13,
+    "station": 13,
+    "swan-lower": 0,
+    "teatralny": 0,
+    "three-part-bridge": 0,
+    "tolstoy": 2,
+    "vladimirsky": 2,
+    "voronikhin": 0,
+    "vosstaniya-rotunda": 2,
+    "winter-palace": 5,
+    "yusupova": 8,
+    "zimny1": 0,
+    "zimny2": 0
+   },
+   "osm": {
+    "admiralty": "4f53cda18c2baa0c",
+    "alexander-column": "4f53cda18c2baa0c",
+    "alexandrinsky-theatre": "4f53cda18c2baa0c",
+    "angleterre": "4f53cda18c2baa0c",
+    "anichkov": "76f2908313c1874c",
+    "anichkov-bridge": "2cf3e9e6e7c5424f",
+    "astoria": "4f53cda18c2baa0c",
+    "atrium": "4f53cda18c2baa0c",
+    "bankovsky": "0f11dfe5ff9d850e",
+    "belinsky": "71886acdb5717bdf",
+    "beloselsky": "4f53cda18c2baa0c",
+    "blue": "e8aa10901a5ae316",
+    "bolsh-konyushenny": "b28a2ece7ccdc0fd",
+    "castle-guardhouses": "4f53cda18c2baa0c",
+    "catherine-garden": "67ab89a16d5153df",
+    "ciniselli-circus": "4f53cda18c2baa0c",
+    "dostoevsky": "4f53cda18c2baa0c",
+    "eng1": "472b03d6c9afab15",
+    "engineering-castle": "ec746c10a7b433d1",
+    "fonarny": "32486e54c886a4f4",
+    "fontanka-bank": "4f53cda18c2baa0c",
+    "galereya": "4f53cda18c2baa0c",
+    "garden1": "5f8e562885402d1e",
+    "garden2": "d60091e9bd68d4d6",
+    "gardens": "1b407a6b1de27ec6",
+    "general-staff": "4f53cda18c2baa0c",
+    "gostiny-dvor": "298c39fcb1bc1dd5",
+    "green": "a9d3aaac20524dee",
+    "guards-hq": "4f53cda18c2baa0c",
+    "hermitage": "1d9705ae3a3e7c6c",
+    "hermitage-museum": "b86bfcc660e2999c",
+    "horseman": "1de3a9c857769922",
+    "isaac-garden": "188f25c8906ff189",
+    "italyansky": "dfda6a578e8e51ca",
+    "kamenny": "f5bd21dae0ec1111",
+    "kazan-cathedral": "37049da1fe1fc8c5",
+    "kazan-garden": "edf42a3e8f4f5920",
+    "kazansky": "c7b7d29b1caf00f0",
+    "library": "4f53cda18c2baa0c",
+    "lobanov-rostovsky": "58af349f1724d623",
+    "malo-konyushenny": "8ab6b58fa60fc4dc",
+    "mariinsky": "4f53cda18c2baa0c",
+    "mikhailovsky-garden": "be5d6a12673ab40d",
+    "mucny": "6ace7b088d465241",
+    "national-library": "4f53cda18c2baa0c",
+    "nevsky-centre": "4f53cda18c2baa0c",
+    "nevsky-corner": "4f53cda18c2baa0c",
+    "nicholas-i": "72650c67d901bc80",
+    "north-corridor-houses": "4f53cda18c2baa0c",
+    "north-podpisnye": "4f53cda18c2baa0c",
+    "novo": "080860ca041a78a2",
+    "oktyabrskaya": "4f53cda18c2baa0c",
+    "oktyabrsky-hall": "a2d31d19bfa13670",
+    "ostrovsky-houses": "4f53cda18c2baa0c",
+    "palace": "95fc00bbc8bc2bdc",
+    "palace-square": "3f6a888ee39ac186",
+    "panteleymonovsky": "c2c0a8d4ba69359e",
+    "peter-monument": "9c4ff36f5350c46d",
+    "pevchesky": "ab413d35963e91f9",
+    "pochtamtsky": "b72184b4e1a8850d",
+    "pushkin-square": "bf21d89faa82f713",
+    "red": "3fbd0264015ea21a",
+    "rossi-pavilion": "59ad3e5f80e13621",
+    "russian-museum": "12e902bc54cc93a5",
+    "saviour-church": "5f1b6572e2c298f3",
+    "senate-synod": "4f53cda18c2baa0c",
+    "singer-house": "4f53cda18c2baa0c",
+    "square": "8f4997d871aa112a",
+    "st-isaac": "e29e03d2d185f124",
+    "station": "d98827082174c78b",
+    "swan-lower": "3702cc837443c8c3",
+    "teatralny": "93f031382e4dbb75",
+    "three-part-bridge": "3aa728da0b9b9c5d",
+    "tolstoy": "4f53cda18c2baa0c",
+    "vladimirsky": "4f53cda18c2baa0c",
+    "voronikhin": "9de362455d50f2f1",
+    "vosstaniya-rotunda": "4f53cda18c2baa0c",
+    "winter-palace": "4f53cda18c2baa0c",
+    "yusupova": "4f53cda18c2baa0c",
+    "zimny1": "6b1b2e991bd182f3",
+    "zimny2": "54ac462902d4a24a"
+   },
+   "bounds": {
+    "admiralty": {
+     "cx": -2432.75,
+     "cz": -621.5,
+     "x0": -2644.9,
+     "x1": -2220.6,
+     "z0": -811,
+     "z1": -432
+    },
+    "alexander-column": {
+     "cx": -1982.85,
+     "cz": -737.8,
+     "x0": -1989.9,
+     "x1": -1975.8,
+     "z0": -744.9,
+     "z1": -730.7
+    },
+    "alexandrinsky-theatre": {
+     "cx": -844.15,
+     "cz": 70,
+     "x0": -875.3,
+     "x1": -813,
+     "z0": 27.6,
+     "z1": 112.4
+    },
+    "angleterre": {
+     "cx": -2342.1,
+     "cz": -139.85,
+     "x0": -2384.8,
+     "x1": -2299.4,
+     "z0": -179.4,
+     "z1": -100.3
+    },
+    "anichkov": {
+     "cx": -625.6,
+     "cz": -58.75,
+     "x0": -756.8,
+     "x1": -494.4,
+     "z0": -141,
+     "z1": 23.5
+    },
+    "anichkov-bridge": null,
+    "astoria": {
+     "cx": -2354.35,
+     "cz": -67.5,
+     "x0": -2385.5,
+     "x1": -2323.2,
+     "z0": -104.6,
+     "z1": -30.4
+    },
+    "atrium": {
+     "cx": 190.85,
+     "cz": 121.75,
+     "x0": 159.2,
+     "x1": 222.5,
+     "z0": 86.1,
+     "z1": 157.4
+    },
+    "bankovsky": null,
+    "belinsky": null,
+    "beloselsky": {
+     "cx": -375.1,
+     "cz": -28.85,
+     "x0": -425,
+     "x1": -325.2,
+     "z0": -64.6,
+     "z1": 6.9
+    },
+    "blue": null,
+    "bolsh-konyushenny": null,
+    "castle-guardhouses": {
+     "cx": -674.1,
+     "cz": -646.65,
+     "x0": -724.2,
+     "x1": -624,
+     "z0": -674.8,
+     "z1": -618.5
+    },
+    "catherine-garden": null,
+    "ciniselli-circus": {
+     "cx": -573.2,
+     "cz": -692.65,
+     "x0": -614.6,
+     "x1": -531.8,
+     "z0": -738.1,
+     "z1": -647.2
+    },
+    "dostoevsky": {
+     "cx": -291.8,
+     "cz": 442.1,
+     "x0": -350.6,
+     "x1": -233,
+     "z0": 380.7,
+     "z1": 503.5
+    },
+    "eng1": null,
+    "engineering-castle": {
+     "cx": -758.35,
+     "cz": -886.95,
+     "x0": -825.4,
+     "x1": -691.3,
+     "z0": -952.6,
+     "z1": -821.3
+    },
+    "fonarny": null,
+    "fontanka-bank": {
+     "cx": -538.4,
+     "cz": 141.45,
+     "x0": -618.4,
+     "x1": -458.4,
+     "z0": 11,
+     "z1": 271.9
+    },
+    "galereya": {
+     "cx": 518.05,
+     "cz": 553.75,
+     "x0": 421.9,
+     "x1": 614.2,
+     "z0": 415.1,
+     "z1": 692.4
+    },
+    "garden1": null,
+    "garden2": null,
+    "gardens": null,
+    "general-staff": {
+     "cx": -1969.15,
+     "cz": -661.35,
+     "x0": -2153.4,
+     "x1": -1784.9,
+     "z0": -809.2,
+     "z1": -513.5
+    },
+    "gostiny-dvor": {
+     "cx": -1131.35,
+     "cz": -76.95,
+     "x0": -1319.9,
+     "x1": -942.8,
+     "z0": -231.8,
+     "z1": 77.9
+    },
+    "green": null,
+    "guards-hq": {
+     "cx": -1872.25,
+     "cz": -867.35,
+     "x0": -1933.6,
+     "x1": -1810.9,
+     "z0": -908.2,
+     "z1": -826.5
+    },
+    "hermitage": null,
+    "hermitage-museum": {
+     "cx": -1934.65,
+     "cz": -1044.6,
+     "x0": -2049.2,
+     "x1": -1820.1,
+     "z0": -1178.2,
+     "z1": -911
+    },
+    "horseman": null,
+    "isaac-garden": null,
+    "italyansky": null,
+    "kamenny": null,
+    "kazan-cathedral": {
+     "cx": -1482.05,
+     "cz": -227.6,
+     "x0": -1549,
+     "x1": -1415.1,
+     "z0": -292.7,
+     "z1": -162.5
+    },
+    "kazan-garden": null,
+    "kazansky": null,
+    "library": {
+     "cx": -217.55,
+     "cz": -299.2,
+     "x0": -375.2,
+     "x1": -59.9,
+     "z0": -395.7,
+     "z1": -202.7
+    },
+    "lobanov-rostovsky": {
+     "cx": -2443.95,
+     "cz": -276.75,
+     "x0": -2484.2,
+     "x1": -2403.7,
+     "z0": -350.8,
+     "z1": -202.7
+    },
+    "malo-konyushenny": null,
+    "mariinsky": {
+     "cx": -2326.15,
+     "cz": 192.45,
+     "x0": -2392.8,
+     "x1": -2259.5,
+     "z0": 127.8,
+     "z1": 257.1
+    },
+    "mikhailovsky-garden": null,
+    "mucny": null,
+    "national-library": {
+     "cx": -884.95,
+     "cz": -89.2,
+     "x0": -924,
+     "x1": -845.9,
+     "z0": -180,
+     "z1": 1.6
+    },
+    "nevsky-centre": {
+     "cx": 435.65,
+     "cz": 35.9,
+     "x0": 391,
+     "x1": 480.3,
+     "z0": -41.8,
+     "z1": 113.6
+    },
+    "nevsky-corner": {
+     "cx": 25.7,
+     "cz": 6.6,
+     "x0": -327.5,
+     "x1": 378.9,
+     "z0": -133.8,
+     "z1": 147
+    },
+    "nicholas-i": null,
+    "north-corridor-houses": {
+     "cx": 397.6,
+     "cz": -258.8,
+     "x0": 126.7,
+     "x1": 668.5,
+     "z0": -478.8,
+     "z1": -38.8
+    },
+    "north-podpisnye": {
+     "cx": -203.75,
+     "cz": -266.3,
+     "x0": -212,
+     "x1": -195.5,
+     "z0": -328,
+     "z1": -204.6
+    },
+    "novo": null,
+    "oktyabrskaya": {
+     "cx": 609.25,
+     "cz": 78.7,
+     "x0": 459.9,
+     "x1": 758.6,
+     "z0": -121.1,
+     "z1": 278.5
+    },
+    "oktyabrsky-hall": {
+     "cx": 803.15,
+     "cz": -343.85,
+     "x0": 764.2,
+     "x1": 842.1,
+     "z0": -379.5,
+     "z1": -308.2
+    },
+    "ostrovsky-houses": {
+     "cx": -826.1,
+     "cz": 103.6,
+     "x0": -957,
+     "x1": -695.2,
+     "z0": 8,
+     "z1": 199.2
+    },
+    "palace": null,
+    "palace-square": null,
+    "panteleymonovsky": null,
+    "peter-monument": null,
+    "pevchesky": null,
+    "pochtamtsky": null,
+    "pushkin-square": null,
+    "red": null,
+    "rossi-pavilion": {
+     "cx": -970.75,
+     "cz": -939.75,
+     "x0": -983.5,
+     "x1": -958,
+     "z0": -948.3,
+     "z1": -931.2
+    },
+    "russian-museum": {
+     "cx": -1083,
+     "cz": -656.7,
+     "x0": -1298.8,
+     "x1": -867.2,
+     "z0": -746,
+     "z1": -567.4
+    },
+    "saviour-church": {
+     "cx": -1243.4,
+     "cz": -880.55,
+     "x0": -1283.8,
+     "x1": -1203,
+     "z0": -956.1,
+     "z1": -805
+    },
+    "senate-synod": {
+     "cx": -2805.4,
+     "cz": -335.5,
+     "x0": -2895.6,
+     "x1": -2715.2,
+     "z0": -430.9,
+     "z1": -240.1
+    },
+    "singer-house": {
+     "cx": -1419.55,
+     "cz": -383.5,
+     "x0": -1439.3,
+     "x1": -1399.8,
+     "z0": -412.8,
+     "z1": -354.2
+    },
+    "square": {
+     "cx": 556.65,
+     "cz": 132.35,
+     "x0": 513.3,
+     "x1": 600,
+     "z0": 92.6,
+     "z1": 172.1
+    },
+    "st-isaac": {
+     "cx": -2522.95,
+     "cz": -185.25,
+     "x0": -2576,
+     "x1": -2469.9,
+     "z0": -234.1,
+     "z1": -136.4
+    },
+    "station": {
+     "cx": 598.45,
+     "cz": 345.75,
+     "x0": 524.6,
+     "x1": 672.3,
+     "z0": 236.8,
+     "z1": 454.7
+    },
+    "swan-lower": null,
+    "teatralny": null,
+    "three-part-bridge": null,
+    "tolstoy": {
+     "cx": -512.1,
+     "cz": 341.6,
+     "x0": -626.8,
+     "x1": -397.4,
+     "z0": 262.5,
+     "z1": 420.7
+    },
+    "vladimirsky": {
+     "cx": -166.9,
+     "cz": 450.7,
+     "x0": -190.8,
+     "x1": -143,
+     "z0": 403.9,
+     "z1": 497.5
+    },
+    "voronikhin": null,
+    "vosstaniya-rotunda": {
+     "cx": 515.85,
+     "cz": 92.3,
+     "x0": 496.4,
+     "x1": 535.3,
+     "z0": 65.4,
+     "z1": 119.2
+    },
+    "winter-palace": {
+     "cx": -2096.4,
+     "cz": -896.3,
+     "x0": -2236,
+     "x1": -1956.8,
+     "z0": -1028.9,
+     "z1": -763.7
+    },
+    "yusupova": {
+     "cx": 16.15,
+     "cz": -46.3,
+     "x0": -83.6,
+     "x1": 115.9,
+     "z0": -105,
+     "z1": 12.4
+    },
+    "zimny1": null,
+    "zimny2": null
+   },
+   "modules": [
+    "landmarksA",
+    "landmarksB",
+    "landmarksC",
+    "landmarksD",
+    "metro",
+    "landmarksBelinsky",
+    "landmarksE",
+    "landmarksF",
+    "landmarksG",
+    "landmarksH",
+    "landmarksI",
+    "landmarksJ",
+    "landmarksK",
+    "bridges",
+    "landmarksNorth",
+    "landmarksCastle",
+    "landmarksOktyabrsky"
+   ]
+  },
+  "claims": {
+   "n": 561,
+   "hash": "2a8f787984e2e404"
+  },
+  "buildings": {
+   "n": 3041,
+   "sample": "06712f2d35499e0f"
+  },
+  "groundFootprints": {
+   "n": 2779
+  },
+  "roadWidth": "d8718f78d629a127",
+  "views": [
+   [
+    "Digit1",
+    560,
+    192,
+    -138.532295,
+    8,
+    "Площадь Восстания · Московский вокзал",
+    "Площадь Восстания · Vosstaniya Square"
+   ],
+   [
+    "Digit2",
+    576,
+    209,
+    -19.983107,
+    22,
+    "Обелиск Городу-герою Ленинграду",
+    "Площадь Восстания · Vosstaniya Square"
+   ],
+   [
+    "Digit3",
+    502,
+    158,
+    77.074001,
+    4,
+    "Невский проспект",
+    "Гостиница «Октябрьская» · Hotel Oktyabrskaya"
+   ],
+   [
+    "Digit4",
+    644.8,
+    520,
+    -168.84756,
+    3,
+    "Платформы Московского вокзала",
+    "Платформы Московского вокзала · Station platforms"
+   ],
+   [
+    "Digit5",
+    -395,
+    -108,
+    102.042575,
+    6,
+    "Аничков мост",
+    "Фонтанка · Fontanka River"
+   ],
+   [
+    "Digit6",
+    -1308,
+    -798,
+    -40.525103,
+    14,
+    "Спас на Крови · канал Грибоедова",
+    "Канал Грибоедова · Griboedov Canal"
+   ],
+   [
+    "Digit7",
+    -1123,
+    -282,
+    -165.963757,
+    6,
+    "Гостиный Двор · Невский проспект",
+    "Невский проспект · Nevsky Prospekt"
+   ],
+   [
+    "Digit8",
+    -2143,
+    -1008,
+    -129.326978,
+    10,
+    "Зимний дворец · Дворцовая набережная",
+    "Нева · Neva River"
+   ],
+   [
+    "Digit9",
+    -1470,
+    -312,
+    171.142041,
+    8,
+    "Казанский собор",
+    "Казанская площадь · Kazan Square"
+   ],
+   [
+    "Digit0",
+    -1985,
+    -715,
+    31.51911,
+    6,
+    "Дворцовая площадь · Александровская колонна",
+    "Александровская колонна · Alexander Column"
+   ],
+   [
+    "ShiftDigit1",
+    -173,
+    -223,
+    90,
+    12,
+    "Подписные Издания",
+    "Подписные Издания · Bookshop"
+   ],
+   [
+    "ShiftDigit2",
+    -1075,
+    -620,
+    -10.304846,
+    8,
+    "Русский музей · площадь Искусств",
+    "Инженерная улица · Inzhenernaya ulitsa"
+   ],
+   [
+    "ShiftDigit3",
+    -2337,
+    -848,
+    34.839277,
+    4,
+    "Дворцовый мост · Дворцовая набережная",
+    "Нева · Neva River"
+   ],
+   [
+    "ShiftDigit4",
+    -1398,
+    -345,
+    30.068583,
+    12,
+    "Дом Зингера · Казанский мост",
+    "Канал Грибоедова · Griboedov Canal"
+   ],
+   [
+    "ShiftDigit5",
+    -598,
+    -22,
+    45.674037,
+    8,
+    "Аничков дворец · набережная Фонтанки",
+    "Аничков дворец · Anichkov Palace"
+   ],
+   [
+    "ShiftDigit6",
+    -971,
+    -900,
+    0,
+    8,
+    "Михайловский сад · павильон Росси",
+    "Михайловский сад · Mikhailovsky Garden"
+   ],
+   [
+    "ShiftDigit7",
+    -2380,
+    -470,
+    19.340735,
+    10,
+    "Адмиралтейство · Александровский сад",
+    "Александровский сад · Alexander Garden"
+   ],
+   [
+    "ShiftDigit8",
+    -2440,
+    -60,
+    33.58416,
+    12,
+    "Исаакиевский собор",
+    "Исаакиевская площадь · St Isaac's Square"
+   ],
+   [
+    "ShiftDigit9",
+    -2715,
+    -425,
+    57.652557,
+    6,
+    "Медный всадник · Сенатская площадь",
+    "Медный всадник · Bronze Horseman"
+   ],
+   [
+    "AltDigit1",
+    534,
+    125,
+    28.61046,
+    10,
+    "Метро «Площадь Восстания» · ротонда",
+    "Невский проспект · Nevsky Prospekt"
+   ],
+   [
+    "AltDigit2",
+    247,
+    109,
+    100.954063,
+    8,
+    "Метро «Маяковская» · Невский Атриум",
+    "Невский проспект · Nevsky Prospekt"
+   ],
+   [
+    "AltDigit3",
+    -985,
+    -210,
+    -161.565051,
+    6,
+    "Метро «Гостиный двор» · Невский проспект",
+    "Невский проспект · Nevsky Prospekt"
+   ],
+   [
+    "AltDigit4",
+    -1340,
+    -298,
+    16.313852,
+    6,
+    "Метро «Невский проспект» · канал Грибоедова",
+    "Невский проспект · Nevsky Prospekt"
+   ],
+   [
+    "AltDigit5",
+    -700,
+    -715,
+    19.798876,
+    10,
+    "Михайловский замок · памятник Петру I",
+    "Михайловский замок · Mikhailovsky (Engineers) Castle"
+   ],
+   [
+    "Place.oktyabrsky",
+    737.5,
+    -344.3,
+    -50.4,
+    8,
+    "БКЗ «Октябрьский» · Лиговский проспект",
+    "Лиговский проспект · Ligovsky Prospekt"
+   ],
+   [
+    "Place.vladimirskaya-metro",
+    -185,
+    500,
+    176.423666,
+    6,
+    "Метро «Владимирская» · Кузнечный переулок",
+    "Кузнечный переулок · Kuznechny pereulok"
+   ],
+   [
+    "Place.circus",
+    -560,
+    -620,
+    7.028396,
+    10,
+    "Цирк Чинизелли · Инженерная улица",
+    "Инженерная улица · Inzhenernaya ulitsa"
+   ],
+   [
+    "Place.library",
+    -372,
+    -300,
+    -73.855661,
+    8,
+    "Российская национальная библиотека · Фонтанка",
+    "Фонтанка · Fontanka River"
+   ],
+   [
+    "Place.alexandrinsky",
+    -800,
+    -95,
+    165.068583,
+    8,
+    "Александринский театр · Екатерининский сад",
+    "Площадь Островского · Ostrovsky Square"
+   ],
+   [
+    "Place.hermitage",
+    -2039,
+    -1084,
+    -122.195734,
+    10,
+    "Большой Эрмитаж · Дворцовая набережная",
+    "Нева · Neva River"
+   ],
+   [
+    "Place.admiralteyskaya-metro",
+    -2058,
+    -438,
+    -132.954592,
+    6,
+    "Метро «Адмиралтейская» · Малая Морская",
+    "Малая Морская улица · Malaya Morskaya ulitsa"
+   ]
+  ]
+ }
+}
