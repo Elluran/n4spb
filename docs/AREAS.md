@@ -9,7 +9,7 @@ and the answer is a page navigation (`location.replace`). The old page dies with
 
 | Word | Meaning |
 |---|---|
-| **area** | a scene that is loaded on its own: `strip` (the Nevsky strip, `index.html`), `north` (`north.html`, generic since milestone M3: section 7). Identified by `ID` |
+| **area** | a scene that is loaded on its own: `strip` (the Nevsky strip, `index.html`), `north` (`north.html`, generic since milestone M3: section 7; with its landmark modules since M5: section 8). Identified by `ID` |
 | **area module** | `src/world/area.js` (strip) or `src/areas/<id>/area.js`: the pure-data tables that say WHAT the world is (names, anchors, landmark groups, HUD location table, viewpoints, module list, water tables ...) |
 | **registry** | `src/areas/registry.js`: which areas exist, their page, bake directory, import-map remap and the gates between them. Runtime-only (not part of the bake revision) |
 | **gate** | a stretch of the border of an area where the player is offered the neighbour (milestone M2) |
@@ -184,10 +184,10 @@ accumulation, not the per-scene floor: every crossing is a cold start of ~25-30 
 
 The North is a real area since M3: `src/areas/north/area.js` (pure data, the export names of `src/world/area.js` plus `MODULES`, `LABELS`, `TEST`), the data facade and `known-data.js`
 ([AREAS-DATA.md](AREAS-DATA.md)), `north.html` (generated, `src/areas/north/page.json`), the registry row (`status: 'planned'` is gone; the remap holds the facade, the area module and
-`src/world/city/known-data.js`, which `city/known.js` imports by that URL, so the page needs no code change) and the real gates g1 / g2. Landmark modules are M5: `GROUPS = {}`, so the generic `city`
-draws every building (the Chernyshevskaya vestibule, the Tauride Palace and Smolny are plain blocks for now).
+`src/world/city/known-data.js`, which `city/known.js` imports by that URL, so the page needs no code change) and the real gates g1 / g2. This section is the North as milestone M3 left it (`GROUPS = {}`, the generic
+`city` drew every building); **milestone M5 added the landmark modules: section 8** (the module list, the claims and the numbers below that changed are given there).
 
-* **Modules** (build order): `environment, streets, city, props, traffic, people, wildlife, drive`. NOT built: `rail` (no railway in the data), `metro` (the door gate G3 of M7 replaces the ride) and `bridges`
+* **Modules** (build order in M3): `environment, streets, city, props, traffic, people, wildlife, drive`; M5 inserted the landmark modules (section 8.2). NOT built: `rail` (no railway in the data), `metro` (the door gate G3 of M7 replaces the ride) and `bridges`
   (so `streets` keeps the roads that cross a waterway as plain ribbons: the Liteyny Bridge ways, cut at the extent edge z = -2120, run 130 m into the Neva as a road stub; the Anichkov and Belinsky bridge
   ways end at the extent margin outside the play area. Known seams, fixed when a bridge module comes). `LABELS` overrides the loading words of `props / traffic / people / drive`.
 * **Anchors**: `SQUARE`, `OBELISK`, `STATION` are COPIES of the strip's (the area module cannot import the strip's: the import map would hand back itself). That is deliberate: the style of a block follows
@@ -198,8 +198,8 @@ draws every building (the Chernyshevskaya vestibule, the Tauride Palace and Smol
 * **Tables**: `WATER` has no plugs / bridge zones / shades / clip lines, `farSources ['neva-up']`, `farCenter [1100, -1100]`; `ZONES` has pigeon / sparrow sites at Chernyshevskaya (461, -1350), the Tauride gate
   (1226, -1268), the Transfiguration Cathedral and Smolny, crow haunts, crowds and the four hot spots, **`peopleDensity.west.off` and `.mars.off`** (the scripted places of the strip's west and of the castle
   stand at fixed strip coordinates: without the switch the North built 325 of its 962 people at Kazan, the Palace Square and the castle, 1.2-4 km outside its extent: 637 remain); `GARAGE`: the four cars stand in the courtyard north of the
-  Chernyshevskaya vestibule, facing west to the avenue (roadster (468, -1381), lada (470, -1377.8), truck (469, -1367.2), coupe and spawn (470.5, -1370.8)); `PRUNE_SERVICES ['city']`.
-  `node tools/area.mjs north tools/area-garage-check.mjs` proves them (the same tool passes on the strip's garage).
+  Chernyshevskaya vestibule, facing west to the avenue (roadster (468, -1381), lada (470, -1377.8), truck (469, -1367.2), coupe and spawn (470.5, -1370.8)); `PRUNE_SERVICES ['city']` (M5 added the landmark
+  services that publish entrances, section 8.2). `node tools/area.mjs north tools/area-garage-check.mjs` proves them (the same tool passes on the strip's garage; since M5 it also builds the landmark modules of the page).
 * **Gates** (`src/areas/registry.js`): g1 strip > north, segment z = -405, x -420 .. 835, inward (0, 1), zone 30; g2 north > strip, z = -205, inward (0, -1); they name each other. The planned arrival
   rectangles (g1 x -350 .. 805, z -520 .. -300; g2 x -350 .. 805, z -300 .. -220) were **trimmed** to what the 25 m arrival grid resolves 100 % (a car must land on a drivable lane within 30 degrees of its
   heading and the ring search stays inside the rectangle): g1 `x -225 .. 755, z -460 .. -310`, g2 `x -225 .. 805, z -300 .. -230`. The grid points that failed were all cars: the library block west of x -250
@@ -218,3 +218,128 @@ draws every building (the Chernyshevskaya vestibule, the Tauride Palace and Smol
 * **Known leftovers**: the people test counts ~100 samples per 5 minutes on a carriageway at one crossing (`cross=145` at (452, -1298), the junction of Chernyshevskogo and Kirochnaya; the threshold is 374,
   the strip has 0); `streets` / `city` exceed their triangle budgets (590 k / 836 k against 500 k / 600 k, the strip's are 835 k / 969 k); the people test's jump counter is higher than the strip's (tour
   groups that re-place themselves). Measurements: [AREAS-MEASUREMENTS.md](AREAS-MEASUREMENTS.md) section "M3: the generic North".
+  The jump counter is red on `feat/areas` itself once a run is long enough (M5 check, before any landmark module: `people-test --at chernyshevskaya --minutes 5` 218 jumps against the limit of 159, the default
+  `--minutes 10` 407 against 318; with the M5 modules 272 and 368 against 160 and 321): it is a property of the tour groups, not of a module. The M5 leftovers are in section 8.7.
+
+## 8. The landmarks of the North (milestone M5)
+
+The North page now builds the landmark modules of the source (the 102_3d_piter repository, pinned to commit `0568f7af`, the same commit the data of the North was cut from), so the generic `city` no longer draws
+the sights. Nothing was remodelled: the files are verbatim copies (only the provenance line, the three import paths and the names of `landmarksNorthFull` differ, see 8.1; the repository stores LF, the
+sources were CRLF, so a raw `cmp` differs and a compare with the CR removed is byte-identical). The strip is untouched except for the refactor of 8.4. The Tauride Palace / Garden and the Paradny quarter are NOT in this milestone (8.7).
+
+### 8.1 What was copied from where
+
+| North module | claims (sub-group keys) | files (source path at `0568f7af` = same path here) | difference from the source |
+|---|---|---|---|
+| `landmarksNorthFull` | `north-chernyshevskaya` (the metro vestibule w22999175, with the station sign), `north-preobrazhensky` (the Transfiguration Cathedral r5802451), `north-muruzi` (Dom Muruzi r946930), `north-podpisnye` (the bookstore w96123542, walk-in), `north-corridor-houses` (13 of the 14 addresses, 13 ids) | `src/world/landmarksNorth.js` -> `landmarksNorthFull.js`, `landmarksNorth/{bookstore,muruzi,groups}.js` -> `landmarksNorthFull/` | 7-line header, the 3 import paths, `root.name`, the services key; the strip keeps its own trimmed `landmarksNorth.js` (bookstore + the 5 corridor addresses of the strip data), and the functions `corridor()` and `bookstore()` are the same text in both |
+| `landmarksSmolny` | `north-smolny-cathedral` (r2864743 + 4 parts), `north-smolny-ensemble` (r2133719, the convent / Institute) | `landmarksSmolny.js`, `landmarksSmolny/{cathedral,groups}.js` | one provenance line |
+| `landmarksSuvorov` | `north-suvorov-museum` (7 ids: w30198549 and the six w2329187xx parts) | `landmarksSuvorov.js`, `landmarksSuvorov/groups.js` | one provenance line |
+| `landmarksKirochnaya` | `kirochnaya-clinical-institute` (20 building ids + 14 service / footway ways of the garden campus) | `landmarksKirochnaya.js`, `landmarksKirochnaya/{groups,landscape}.js` | one provenance line |
+| `landmarksD` (the strip's module) | `library` only (the National Library r3801087, the Mariinsky block w60353337), both in the 200 m band | `landmarksD/groups.js` is NEW: `LIBRARY_GROUP` moved out of `src/world/area.js` | the strip's GROUPS JSON is byte-identical before / after; `landmarksD.js` and `landmarksD/fences.js` skip a part whose sub-group the area does not claim (inert in the strip: per-part triangles identical) |
+| `landmarksOktyabrsky` (the strip's module) | `oktyabrsky-hall` (w30324279 + the part w929214560 + 4 OSM objects), in the band | unchanged | none; `environment/claims.js` reads its paved rings only when it is in the build list, hence it is in the North list |
+
+Shared libraries the copies import already existed here and are identical to the source: `landmarksD/{common,house,kit,parts}.js`, `landmarksK/geo.js`. The research dossiers (`docs/research/north-*.md`) live in the
+source repository, not here.
+
+### 8.2 The module list and its order
+
+```
+environment, landmarksNorthFull, landmarksSmolny, landmarksSuvorov, landmarksKirochnaya, streets, city, landmarksD, landmarksOktyabrsky, props, traffic, people, wildlife, drive
+```
+
+`landmarksKirochnaya` precedes `streets` because the campus claims 14 service ways that `streets` must skip, and `landmarksNorthFull` takes the strip's place (`landmarksNorth` is second in `src/main.js`, too). None of the new
+modules reads a service of an earlier one (only `landmarksOktyabrsky` needs `streets` and `labels`), so the order matters only for the claims. `landmarksD` and `landmarksOktyabrsky` stand after `city` as in the strip.
+`PRUNE_SERVICES` is now `city, landmarksSmolny, landmarksSuvorov, landmarksKirochnaya, landmarksD`: the services that publish an `entrances` array (Smolny (2425, -1833) clearance 12, Suvorov (1412.9, -1225.2) clearance 4,
+Kirochnaya (1230, -1244) and (1312, -1238) clearance 5; `landmarksD` publishes an empty array in the North, as in the strip's list). `landmarksNorthFull` and `landmarksOktyabrsky` publish none and are not listed (neither is in the strip's table).
+`LABELS` names the loading words of the six modules. **`TEST.kept` is gone on purpose**: an empty list means "verify nothing" (the default is every key of `GROUPS`), so `landmarks-groups-check` now verifies all six owners in the North.
+`src/world/lib/owns-table.js` (generated) has one new row per module: `landmarksNorthFull`, `landmarksSmolny`, `landmarksSuvorov`, `landmarksKirochnaya`; the table is keyed by module NAME, so the strip's `landmarksNorth` and the
+North's `landmarksNorthFull` coexist, and a module only counts in the area whose list names it (`lib/claims.js` reads the `GROUPS` of the running page). A double claim of one id inside the North is caught by `layout-test`.
+
+### 8.3 The claims
+
+| Module / sub-group | ids | `TEST.claimed` rows | records in the North data |
+|---|---|---|---|
+| `landmarksNorthFull` / `north-chernyshevskaya` | w22999175 | 1 | 1 |
+| `landmarksNorthFull` / `north-preobrazhensky` | r5802451 | 1 | 1 |
+| `landmarksNorthFull` / `north-muruzi` | r946930 | 1 | 1 |
+| `landmarksNorthFull` / `north-podpisnye` | w96123542 | 1 | 1 |
+| `landmarksNorthFull` / `north-corridor-houses` | 13 of 14 addresses (w60354394, Mayakovskogo 4, lies outside the North extent: the group filters on `BUILDINGS`, the missing one is tolerated) | 3 (the ones in the band: w60354379, w96364627, r1394323) | 13 |
+| `landmarksSmolny` / `north-smolny-cathedral`, `north-smolny-ensemble` | r2864743 (+ w751397803..06), r2133719 | 2 | 5 + 1 |
+| `landmarksSuvorov` / `north-suvorov-museum` | w30198549 (a `folly`, skipped), w232918746 / 49 / 66 / 67 / 70 / 86 | 2 | 7 |
+| `landmarksKirochnaya` / `kirochnaya-clinical-institute` | 20 ids, 14 OSM ways | 2 | 20 + 14 |
+| `landmarksD` / `library` | r3801087, w60353337 | 1 | 2 |
+| `landmarksOktyabrsky` / `oktyabrsky-hall` | w30324279 (+ part w929214560, 4 OSM ids) | 1 | 2 + 4 |
+
+`node tools/area.mjs north tools/layout-test.mjs` checks each row (`by`, `group`) and that every claimed id has a record; `node tools/area.mjs north tools/landmarks-groups-check.mjs` checks the ids, the OSM objects and that every
+footprint vertex lies inside the extent (`north-podpisnye` and the Oktyabrsky hall are 75 % inside the play rectangles: the rest is the band's far side, inside the extent). The Kirochnaya sub-group claims by bounding box,
+not by polygon: four of its 14 ways leave the campus polygon (the two 10 m gate stubs across Kirochnaya's pavement, w515895295 / w515895296, and two single vertices, w234083522 and w1253281492); no named street is claimed.
+
+### 8.4 The band-parity landmark assertion
+
+The 200 m band (x -420 .. 835, z -405 .. -205) is built by BOTH pages, so a landmark of the strip that stands in it must be built by the North too, with the same ids and the same sub-group keys. `tools/areas-test.mjs`
+checks it for every non-dev gate (`gate gN: band landmarks`, next to the data check `band parity`): `tools/lib/claims-dump.mjs` prints one `CLAIMS_DUMP {json}` line per area (module list, ownership, one row per claimed id with its module,
+sub-group, `via` id / osm / parent, whether a record exists and where), `tools/band-parity.mjs` (`bandLandmarks`, `landmarkBandProblems`, pure and fixture-tested) spawns the two dumps in parallel and requires, for every owned claim of the
+strip inside the band, a row of the other area with the same id and key that is present in its data, whose module is in its `MODULES` and owns the sub-group. `PLAN_BAND_IDS` pins the eight ids of the plan
+(r3801087, w60353337, w96123542, w60354379, w96364627, r1394323, w30324279 and the part w929214560) so that a drifted dump fails instead of passing vacuously; `MODULE_ALIASES` (`landmarksNorth` -> `landmarksNorthFull`) only
+words the failure message. After the merge the strip owns **12** claims in the band (8 buildings including the part, 4 OSM objects), every one is built by a North module: `landmarksD/library` (2), `landmarksNorthFull/north-podpisnye` (1),
+`landmarksNorthFull/north-corridor-houses` (3), `landmarksOktyabrsky/oktyabrsky-hall` (6). With the branch of `landmarksNorthFull` missing the test was red for exactly the four ids of `landmarksNorth` (checked on the branch of
+`landmarksD` / `landmarksOktyabrsky`). The look of the band is proved on the module level as well: `node tools/area.mjs <strip|north> tools/northfull-sign-probe.mjs --parity` prints the triangle count and a position hash of the bookstore
+and the corridor houses; both areas print the same numbers (bookstore w96123542 120096 triangles, hash 1174507441; w60354379 13732; w96364627 7390; r1394323 20112; w98394819 10167).
+The same probe proves the station sign (the vestibule's west edge carries the sign texture).
+
+### 8.5 Triangles
+
+`npm run check:north` (`check.mjs --area-modules`), the generic North of M3 (`feat/areas`, measured again for this table) against the North after M5. Figures of the docs: the plan (0.2-0.34 M for the North group, 0.43 M Smolny,
+0.05 M Suvorov, 0.12 M Kirochnaya), the dossiers of the source (`north-corridor.md` 335,942 without Dom Muruzi, `north-smolny.md` 430,984, `north-suvorov.md` 47,431, `north-kirochnaya.md` 115,011), the strip's own modules
+(`landmarksD` 298,926 with its other three sub-groups, `landmarksOktyabrsky` 27,542).
+
+| module | M3 triangles | M5 triangles | M5 meshes | M5 colliders | M5 instances | figure of the docs |
+|---|---:|---:|---:|---:|---:|---|
+| environment | 318,874 | 318,344 | 779 | 9,439 | 13,879 | 319 k (M3) |
+| landmarksNorthFull | | **583,153** | 110 | 366 | 0 | plan 0.2-0.34 M; dossier 335,942 without Muruzi (ours without it: 342,596, +2.0 %) |
+| landmarksSmolny | | **432,656** | 28 | 244 | 0 | 430,984 (+0.4 %), plan 0.43 M |
+| landmarksSuvorov | | **47,461** | 15 | 45 | 0 | 47,431 (+0.06 %), plan 0.05 M |
+| landmarksKirochnaya | | **121,061** | 176 (merged to 19) | 255 | 0 | 115,011 (+5.3 %), plan 0.12 M |
+| streets | 590,181 | 589,819 | 717 | 3,204 | 12,419 | budget 500 k (known) |
+| city | 835,960 | 803,387 | 401 | 21,975 | 0 | budget 600 k (known); -32.6 k: the claimed buildings are no longer drawn |
+| landmarksD | | 28,804 | 32 | 74 | 0 | strip: library 19,643 + hospital 8,705 + fences 456 of its 298,926 |
+| landmarksOktyabrsky | | 27,542 | 52 | 101 | 46 | strip: 27,542 (identical) |
+| props | 211,004 | 214,738 | 578 | 2,188 | 1,890 | 211 k (M3) |
+| traffic | 3,824 | 3,824 | 116 | 2,011 | 22 | |
+| people | 0 | 0 | 72 | 0 | 0 | |
+| wildlife | 48,176 | 46,864 | 23 | 0 | 507 | 48 k (M3) |
+| drive | 45,706 | 45,706 | 96 | 4 | 0 | 46 k (M3) |
+| **sum of the modules** | **2,053,725** | **3,263,359** | | | | |
+
+Parts of `landmarksNorthFull`: Transfiguration Cathedral 42,768; Podpisnye bookstore 120,096; Chernyshevskaya vestibule 1,768; 13 corridor houses 177,964; **Dom Muruzi 240,557** (one building, 41 % of the module). Against the source module at the same
+commit the North's is 3,861 triangles smaller (587,014 there): the missing corridor house w60354394. **The module is 71 % over the plan's 0.34 M, almost entirely Dom Muruzi (the plan evidently did not count it), the bookstore interior and the
+corridor houses; "do not improve the models" was respected, so nothing was thinned.** The M4 budget gate and the cold-start measurement of M8 should expect it. Parts of `landmarksKirochnaya`: houses 56,074, crowns 2,733, garden 62,254
+(fence 18.2 k, lawn 16.4 k, trees 15.5 k, verges 11.2 k). `landmarksSmolny` flushes two parts, `smolny-cathedral` and `smolny-ensemble` (16 materials, 244 colliders = the dossier's figures). The strip's `npm run check` is identical
+module by module (triangles, meshes, instances, materials, colliders, canvas pixels, wires; 25 modules) to the same run on the clean `feat/areas`.
+
+### 8.6 Views
+
+No VIEWS pose moved in M5: `node tools/area.mjs north tools/views-check.mjs` (the real colliders of the new buildings) passes all 12 poses as they were (M3 had moved three: Dom Muruzi, the Smolny Institute and Kirochnaya). Digit1 (444, -1351)
+stands 18 m from the vestibule (cover -4.9), Digit2 (22, -1186) 23 m from the Transfiguration Cathedral, Digit3 (-165, -1170) cover -1.5, Digit7 (2335, -1833) cover -10.3 and Digit8 (2461, -1471) cover -1.3 (Smolny), Digit9 (1395, -1180) 14 m
+SOUTH of the Suvorov Museum (cover -3.8: it looks at the plain rear and the tower; the mosaics and the fascia face north toward Kirochnaya, a pose decision for later), Digit0 (1225, -1243) in the 32 m fence gap of the campus (cover -1.3).
+
+### 8.7 Known gaps (not integration errors)
+
+* **The Tauride Palace, the Garden and the Paradny quarter are not built**: `landmarksTauride` (the remake) is a later step; `city` still draws them as generic blocks (the data check shows `tauride-palace` 1/1 and `paradny-quarter` 11/11 present). Digit4 / 5 / 6 look at those.
+* **The Kapodistrias monument** n1372027612 (796.6, -460.6, h 5.2) is in the North `MONUMENTS` and INSIDE the North play area (it is 56 m beyond the strip's), unclaimed by any group; the Oktyabrsky paved ring ends at z -434.7 and does not cover it. The comment in `landmarksOktyabrsky/groups.js`
+  is true for the strip only.
+* **Tree hooks of the source are not in `environment/trees.js`** (HOOKS is empty, M6): the ceremonial approaches of Smolny (rectangles x 2320..2440, z -1847..-1820 and x 2400..2520, z -1553..-1533, or two `ZONES.clearDiscs` of r 63 at (2380, -1833.5) and (2460, -1543)), the
+  Suvorov rectangle (x 1384..1442, z -1226..-1208: two trees stay inside it, one 2.6 m in front of the west mosaic) and the Kirochnaya campus (`inCampus` is exported from `landmarksKirochnaya/groups.js` for it; two procedural trees stand in the polygon). The door clearings of `PRUNE_SERVICES` work.
+* **Kirochnaya**: four of the claimed ways leave the campus polygon (8.3); the two gate stubs across the pavement of Kirochnaya need a look with the GPU (asphalt at y 0.051-0.055 against the pavement slab of `streets`). 24 closed pockets (30 % of the free campus area) are courtyards between the buildings, enclosed by wall colliders only.
+* **People and props around the copies**: `ctx.services.landmarksSmolny` is not merged into the shared `ctx.services.landmarks` (verbatim copy), so no pedestrian stops to photograph the cathedral and `props` keeps no area free at its door; the claimed buildings of Smolny, Suvorov and Kirochnaya
+  have no pedestrian doors any more (`city` publishes none for them), so no smokers stand at them.
+* **Corridor address** Mayakovskogo 4 (w60354394) is outside the North extent (section 8.3).
+* **Knock parity**: the landmark modules register 26 knockable records in total, all from `landmarksOktyabrsky` (4 lamps, 20 bollards, 2 city lights), identical in the strip and the North; `landmarksNorthFull`, `landmarksSmolny`, `landmarksSuvorov`, `landmarksKirochnaya`
+  and the North's `landmarksD` register none (they build no benches, lamps or fences of their own; their colliders are static walls). The knock census of the whole page went 4,745 -> 4,792 (the 26 plus the street furniture of `props` that moved round the claimed buildings).
+* **The bake is stale** (every `src` file changes the global revision; `npm run revtest` prints the tree against the manifest, `bakecheck` is red on purpose) until the committed bake of M8. The GPU checks of this milestone are still to do: the sign at HERO looking east, the Kirochnaya gate stubs, the look of each module in the browser, the cold start.
+* **Pedestrian test**: see "Known leftovers" of section 7 (the jump counter is red on `feat/areas` too).
+
+### 8.8 Tools changed or added in M5
+
+`tools/lib/claims-dump.mjs` and `tools/northfull-sign-probe.mjs` (new), `tools/band-parity.mjs` and `tools/areas-test.mjs` (the landmark assertion of 8.4), `tools/people-test.mjs` (another area builds the landmark modules of its page: the North's `landmarks*`)
+and `tools/area-garage-check.mjs` (same). `node tools/area.mjs north tools/wildlife-test.mjs` already built the whole list, `traffic-test` takes `TRAFFIC_BUILDLIST=environment,landmarksNorthFull,...,traffic` (the lanes are the same with and without the modules: 6,785 segments).
