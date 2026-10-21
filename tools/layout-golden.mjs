@@ -3,8 +3,10 @@
 // the strip literals out of layout.js and must not change one of them.
 //   node tools/layout-golden.mjs                       -> prints the summary (counts) of the current tree
 //   node tools/layout-golden.mjs --out <file>          -> writes the dump (deterministic JSON)
-//   node tools/layout-golden.mjs --diff [<file>]       -> compares the current tree with a dump (default tools/golden/layout-strip.json); exit 1 and the first differences when it changed
-//   --area <id>                                        -> dump another area (docs/AREAS.md; default 'strip'); the probe grid follows the area's play bounding box
+//   node tools/layout-golden.mjs --diff [<file>]       -> compares the current tree with a dump (default tools/golden/layout-<area>.json); exit 1 and the first differences when it changed
+//   --area <id>                                        -> dump another area (docs/AREAS.md; default: the area tools/area.mjs runs as, else 'strip'); the probe grid follows the area's play bounding box
+// Another area runs through the loader remap of its page: `node tools/area.mjs north tools/layout-golden.mjs --diff` (golden tools/golden/layout-north.json, M6 oracle: the hook set of the North must not move it),
+// `node tools/area.mjs north tools/layout-golden.mjs --out tools/golden/layout-north.json` writes it. `--area <id>` without the remap of that area would dump the strip's world under another name: refused.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -12,7 +14,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = {}; for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; } }
-const DEFAULT_GOLDEN = path.join(root, 'tools/golden/layout-strip.json');
 
 const sha = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
 const r6 = (n) => (Number.isFinite(n) ? Math.round(n * 1e6) / 1e6 : n === Infinity ? 'Infinity' : n === -Infinity ? '-Infinity' : String(n));
@@ -97,7 +98,10 @@ function diff(a, b, p = '', acc = []) {
   return acc;
 }
 
-const area = args.area && args.area !== '1' ? args.area : 'strip';
+const running = process.env.AREA || 'strip';                                // tools/area.mjs sets AREA and registers the loader remap of that area
+const area = args.area && args.area !== '1' ? args.area : running;
+if (area !== running) { console.error(`layout-golden: --area ${area} needs the remap of that area: run  node tools/area.mjs ${area} tools/layout-golden.mjs ...`); process.exit(2); }
+const goldenOf = (id) => path.join(root, `tools/golden/layout-${id}.json`);
 const cur = await dump(area);
 const summary = () => `layout-golden[${area}]: ${Object.keys(cur.layout.consts).length} consts, ${Object.keys(cur.layout.fns).length} functions, ${Object.keys(cur.facade).length} facade exports, ${Object.keys(cur.probes).length} probe sets`;
 if (args.out) {
@@ -105,7 +109,7 @@ if (args.out) {
   fs.writeFileSync(path.resolve(root, args.out), JSON.stringify(cur, null, 1) + '\n');
   console.log(summary()); console.log('wrote ' + args.out);
 } else if (args.diff) {
-  const file = args.diff === '1' ? DEFAULT_GOLDEN : path.resolve(root, args.diff);
+  const file = args.diff === '1' ? goldenOf(area) : path.resolve(root, args.diff);
   const gold = JSON.parse(fs.readFileSync(file, 'utf8'));
   const d = diff(gold, JSON.parse(JSON.stringify(cur)));
   console.log(summary());
