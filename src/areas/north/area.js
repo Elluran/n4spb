@@ -9,6 +9,8 @@
 //  Same export names as src/world/area.js; the engine tables at the end are read through src/world/lib/area-tables.js.
 // ============================================================================
 
+import { GROUPS_LIST as G_SMOLNY } from '../../world/landmarksSmolny/groups.js';
+
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'north';
 /** Where the baked products of this area live (relative to assets/). */
@@ -20,6 +22,7 @@ export const REQUIRE_BAKE = true;
  *  stays a closed generic terminus; the door gate G3 of M7 replaces the ride). tools/modules-list.mjs parses this list from the file: keep one quoted name per line. */
 export const MODULES = [
   'environment',  // ground, embankment granite, Fontanka / Neva water, trees, lawns, flowerbeds, far skyline
+  'landmarksSmolny', // Smolny Cathedral and the convent / Institute (docs/research/north-smolny.md)
   'streets',      // roads, markings, kerbs, granite pavements, crossings, road furniture, trolleybus overhead wires
   'city',         // every OSM building (no landmark module claims one yet): Petersburg facade grammar, roofs, courtyards, entrances
   'props',        // benches, bins, kiosks, bus shelters, billboards, flower baskets
@@ -30,6 +33,7 @@ export const MODULES = [
 ];
 /** Loading-screen words that differ from the strip's (main.js LABELS is the fallback for the rest). */
 export const LABELS = {
+  landmarksSmolny: 'Смольный собор и институт',
   props: 'скамейки, урны и киоски', traffic: 'машины и троллейбусы', people: 'прохожие', drive: 'машины у метро «Чернышевская»',
 };
 
@@ -71,6 +75,7 @@ export const STATION = { x: 612, z: 300, facadeBearing: 348, trackBearing: 167, 
 // ---------------------------------------------------------------- landmark groups
 /** None yet: M5 adds landmarksNorthFull, Smolny, Suvorov, Kirochnaya, Tauride (docs/AREAS.md). Until then `city` / `environment` / `streets` draw every claimed object of the strip band as plain buildings. */
 export const GROUPS = {};
+GROUPS.landmarksSmolny = G_SMOLNY;
 
 /**
  * The HUD location table (first match wins), built with the layout helpers `h` ({ NAMES, SUBGROUPS, _sqPolys, _groupPolys, _named, _areaPolys, _shoreOf, _deck, inRiver, shoreDist }).
@@ -161,7 +166,10 @@ export function makeViews({ yawToward }) {
 
 /** The expectations of the CPU tests (tools/layout-test.mjs, tools/areas-test.mjs; shape: tools/lib/area-test-data.mjs). */
 export const TEST = {
-  claimed: [],      // M5: the vestibule w22999175, the Transfiguration r5802451 ...
+  claimed: [
+    { id: 'r2864743', by: 'landmarksSmolny', group: 'north-smolny-cathedral' },
+    { id: 'r2133719', by: 'landmarksSmolny', group: 'north-smolny-ensemble' },
+  ],      // M5: the vestibule w22999175, the Transfiguration r5802451 ...
   viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Place.oktyabrsky'],
   mustHaveAreas: [
     { x: 467, z: -1351, has: 'чернышевская' }, { x: 66, z: -1182, has: 'преображенский' }, { x: 2469, z: -1833, has: 'смольный собор' },
