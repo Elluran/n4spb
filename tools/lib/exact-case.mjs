@@ -30,14 +30,17 @@ export function srcFiles(root) {
   walk(path.join(root, 'src'));
   return out;
 }
-/** the import specifiers of a source text: { spec, kind: 'static'|'dynamic'|'template', line } (comments and strings are not parsed: a quote-delimited specifier after from / import( is) */
+/**
+ * the import specifiers of a source text: { spec, kind: 'static'|'dynamic'|'template', line }. Comments are blanked first (line numbers stay), then ONE regex runs over the whole text, so a
+ * specifier on the line after `from` and a multi-line import list are seen too (a quote-delimited specifier after from / import( / import is; strings are not otherwise parsed).
+ */
 export function importsOf(text) {
-  const out = []; const lines = text.split(/\r?\n/);
-  const re = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"`])([^'"`\n]+)\1/g;
-  lines.forEach((ln, i) => {
-    if (/^\s*(\/\/|\*|\/\*)/.test(ln)) return;
-    let m; re.lastIndex = 0;
-    while ((m = re.exec(ln))) { if (m[1] === '`' && !m[2].includes('${')) out.push({ spec: m[2], kind: 'dynamic', line: i + 1 }); else out.push({ spec: m[2], kind: m[1] === '`' ? 'template' : /import\s*\(/.test(m[0]) ? 'dynamic' : 'static', line: i + 1 }); }
-  });
+  const blank = text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, ' '));
+  const out = [], re = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"`])([^'"`\n]+)\1/g; let m;
+  while ((m = re.exec(blank))) {
+    const line = blank.slice(0, m.index).split('\n').length;
+    if (m[1] === '`' && m[2].includes('${')) out.push({ spec: m[2], kind: 'template', line });
+    else out.push({ spec: m[2], kind: /import\s*\(/.test(m[0]) || m[1] === '`' ? 'dynamic' : 'static', line });
+  }
   return out;
 }

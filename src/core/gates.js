@@ -160,7 +160,8 @@ export function createGates(deps) {
   function setChip(c) {
     chipGate = c ? c.gate : null;
     if (!chipEl) return;
-    const txt = c ? promptTexts(c.gate.to).chip : '';
+    const touch = doc.documentElement.classList.contains('tc');
+    const txt = c ? promptTexts(c.gate.to).chip.replace(touch ? / · N$/ : /$^/, '') : '';      // (no key hint on a touch screen)
     if (chipEl.textContent !== txt) chipEl.textContent = txt;
     chipEl.classList.toggle('show', !!c);
   }
@@ -187,7 +188,7 @@ export function createGates(deps) {
     try {
       const head = await Promise.race([fetchImpl(new URL(row.page, win.location.href), { method: 'HEAD', cache: 'no-cache' }), timeout(4000)]);
       if (!head.ok) return { ok: false, why: 'page', status: head.status };
-      const { peekManifest } = await import('./baked-world.js'), { BAKED_REVISION } = await import('./baked-revision.js');
+      const peekManifest = deps.peekManifest || (await import('./baked-world.js')).peekManifest, BAKED_REVISION = deps.bakedRevision ?? (await import('./baked-revision.js')).BAKED_REVISION;      // (injectable for tests)
       const m = await Promise.race([peekManifest(row.bake), timeout(4000)]);
       if (!m) return { ok: false, why: 'manifest' };
       if (m.area && m.area !== to) return { ok: false, why: 'area' };
@@ -207,7 +208,9 @@ export function createGates(deps) {
   async function go(g, via = 'gate') {
     if (traveling) return false;
     traveling = true; ctx.travelPending = true; player.inputLock++;
+    const veilTimer = setTimeout(() => { if (traveling) showVeil(g.to); }, 300);      // feedback at once when the preflight is slow; an instant failure never flashes the veil
     const pf = await api.preflight(g.to);
+    clearTimeout(veilTimer);
     if (!pf.ok) {
       endTravel(g);
       { const T = promptTexts(g.to); toast(pf.why === 'stale' ? T.stalled : pf.why === 'offline' ? T.offline : T.unavailable); }
@@ -224,7 +227,8 @@ export function createGates(deps) {
       if (!traveling || !veil) return; veil.classList.add('stalled');
       const retry = veil.querySelector('.t-retry'), stay = veil.querySelector('.t-stay');
       if (retry) retry.onclick = () => { veil.classList.remove('stalled'); api.navigate(url); clearTimeout(watchdog); watchdog = setTimeout(() => veil.classList.add('stalled'), 25000); };
-      if (stay) stay.onclick = () => endTravel(g);
+      if (stay) stay.onclick = () => { try { win.stop(); } catch (e) { /* a fake window in tests */ } endTravel(g); };      // stop(): the pending location.replace must not complete behind the player's back
+      try { doc.exitPointerLock && doc.exitPointerLock(); } catch (e) { /* the buttons need the mouse */ }
     }, 25000);
     api.lastUrl = url;
     api.navigate(url);

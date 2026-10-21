@@ -60,8 +60,12 @@ node tools/layout-golden.mjs --diff       every export of layout.js and the data
 node tools/import-lint.mjs                relative imports exist with EXACTLY the spelling used (Windows develops, Linux hosts), module lists have files
 node tools/runtime-only-lint.mjs          only main.js imports the runtime-only files
 node tools/baked-revision-test.mjs        hash order and exclusions
+node tools/handoff-test.mjs               the hand-off codec, the URL, resolveArrival (also on the real strip layout)
+node tools/gates-test.mjs                 gate geometry, the state machine (zone, arming, decline, teleports) and the preflight logic with fakes
+node tools/gate-hold-test.mjs             the four cars held while a question is open: stop inside the zone, never reverse
 node tools/importmap-probe.mjs            go/no-go of the import-map mechanism (Edge, Firefox; GPU-free)
 node tools/area-boot-test.mjs             browser: the page boots as its area, refuses a mismatching one (fast harness)
+node tools/areas-flow-test.mjs            browser, GPU, fast harness: prompt, arming, decline, accept, arrival, required bake, driving, flying, failures
 node tools/nav-memory-probe.mjs           browser, GPU: does a navigation free a scene (post-GC heap, process-tree bytes, per hop)
 ```
 

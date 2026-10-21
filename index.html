@@ -117,6 +117,7 @@
     white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; display: none; }
   #gatechip.show { display: block; pointer-events: auto; cursor: pointer; }
   @media (pointer: coarse) { #gatechip.show { min-height: 48px; padding: 14px 22px; display: flex; align-items: center; } }
+  html.tc #gatechip.show { z-index: 5; }      /* above the touch layer (#tc, 4) so that the chip can be tapped; below the question (#panel, 6) and the veil (#travel, 8) */
   .confirm-body { font: 500 15px/1.55 var(--sans); color: var(--ink); }
   .confirm-body .sights { font-weight: 700; color: var(--navy); }
   .confirm-body .fine { color: var(--muted); font-size: 13px; margin-top: 8px; }

@@ -35,6 +35,7 @@ for (const a of Object.values(REGISTRY)) {
 for (const [id, list] of Object.entries(lists)) for (const m of list) if (!existsExact(root, `src/world/${m}.js`)) problems.push(`MODULES of ${id}: src/world/${m}.js ${realSpelling(root, `src/world/${m}.js`) ? 'differs in case' : 'does not exist'}`);
 // the pages: the import map targets and script sources
 for (const a of Object.values(REGISTRY)) {
+  if (a.status === 'planned') continue;
   const f = path.join(root, a.page); if (!fs.existsSync(f)) { problems.push(`${a.page}: page of area ${a.id} is missing`); continue; }
   if (!existsExact(root, a.page)) problems.push(`${a.page}: differs in case from the file on disk`);
   const html = fs.readFileSync(f, 'utf8');

@@ -38,6 +38,21 @@ export const REGISTRY = {
   },
 };
 
+// The North (docs/AREAS.md section 4): Chernyshevskaya, Tauride Garden + Palace, Paradny, Smolny, Preobrazhenskaya, Muruzi, Suvorov, Kirochnaya, 3.947 km2. NA includes a one-sided 200 m band of
+// the strip's territory (z -405 .. -205, x -420 .. 835), so an arrival from the strip lands on real, identical streets. `status: 'planned'`: the tools skip the area's files until they exist.
+REGISTRY.north = {
+  id: 'north', page: 'north.html', bake: 'baked/north/', requireBake: true, status: 'planned',
+  title: 'Север', titleEn: 'North',
+  sights: ['Чернышевская', 'Таврический сад', 'Смольный', 'Спасо-Преображенский собор', 'Литейный проспект'],
+  approxMB: 36, dev: false,
+  remap: { 'src/world/data/city.js': 'src/areas/north/data/city.js', 'src/world/area.js': 'src/areas/north/area.js' },
+  play: [
+    { name: 'NA', x0: -420, x1: 835, z0: -2000, z1: -205 },
+    { name: 'NB', x0: 835, x1: 1550, z0: -2000, z1: -800 },
+    { name: 'NC', x0: 1550, x1: 2650, z0: -2060, z1: -1300 },
+  ],
+};
+
 /**
  * Gates between areas: { id, from, to, seg: [[x,z],[x,z]] (the border segment in the FROM area), inward: [nx,nz] (unit vector pointing from the border into the FROM area), zone (m: depth of the
  * prompt zone, walking), arrive: { x0, x1, z0, z1 } (where the player may land in the TO area), reverse (id of the gate back) }. Empty until the second area exists (milestone M3).

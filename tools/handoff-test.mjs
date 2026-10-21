@@ -71,12 +71,16 @@ console.log('resolveArrival (the real strip layout):');
     for (const mode of ['walk', 'car']) {
       n++; const r = H.resolveArrival(probe, { x, z, yaw: 37 }, mode, null);
       if (r.how === 'direct') direct++; else if (r.how === 'ring') ring++; else hero++;
-      if (r.how !== 'hero' && (!probe.inside(r.x, r.z) || probe.blocked(r.x, r.z))) bad++;
-      if (mode === 'car' && r.how !== 'hero' && !probe.lane(r.x, r.z)) bad++;
+      // independent of makeProbe: the layout is asked directly, with the literal numbers of the contract (25 m inset, 1.5 m building clearance, a vehicle road, 30 degrees)
+      if (r.how !== 'hero') {
+        if (!L.inPlay(r.x, r.z, 25) || L.insideBuilding(r.x, r.z, 1.5) || L.inRiver(r.x, r.z)) bad++;
+        if (mode === 'car') { const h = L.roadsNear(r.x, r.z, 0, { drivable: true }).find((q) => q.gap <= 0); const [fx, fz] = H.forwardOf(37); if (!h || Math.abs(h.tx * fx + h.tz * fz) < Math.cos(30 * Math.PI / 180)) bad++; }
+      }
     }
   }
   console.log(`       ${n} probes over the strip lattice: ${direct} direct, ${ring} ring, ${hero} hero`);
-  check('every non-hero arrival is inside the play area, not in a building or the river, and a car sits on a lane', () => assert.equal(bad, 0));
+  check('every non-hero arrival is inside the play area (25 m inset), not in a building or the river, and a car sits on a lane within 30 degrees of its heading', () => assert.equal(bad, 0));
+  check('the lattice really exercises all three outcomes (a test that only ever sends the player to the HERO proves nothing)', () => { assert(direct >= 20, 'direct ' + direct); assert(ring >= 20, 'ring ' + ring); assert(hero >= 1, 'hero ' + hero); });
   check('the HERO fallback is itself a valid walking spot', () => assert(probe.inside(L.HERO.x, L.HERO.z) && !probe.blocked(L.HERO.x, L.HERO.z)));
 }
 console.log(`handoff-test: ${passes} passed, ${fails} failed`);

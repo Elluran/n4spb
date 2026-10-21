@@ -268,6 +268,7 @@ window.__setCam = (x, y, z, yaw, pitch, stand = false) => { if (y === null || y 
 const VIEWS = Object.fromEntries(L.VIEWS.map((v) => [v.key, v]));
 
 async function goToView(v) {
+  if (ctx.gates && ctx.gates.traveling) return;      // an area hop is under way (preflight / veil): no other travel may clear its freeze
   ctx.travelPending = true;
   try {
     if (ctx.regions) { showToast('Загрузка места…'); await ctx.regions.ensureAt(v.x, v.z); }
@@ -468,13 +469,13 @@ async function main() {
     if (h && h.invalid) console.warn('[handoff] ignored:', h.invalid);
     else if (h) {
       ctx.handoff = h;
-      const row = REGISTRY[h.ho.from];
+      const row = Object.hasOwn(REGISTRY, h.ho.from) ? REGISTRY[h.ho.from] : null;      // (ho is untrusted: 'constructor' must not find a row)
       if (row && h.ho.ret) guard.back = { text: `Вернуться: ${row.title} · Back to ${row.titleEn}`, url: new URL(`${row.page}?${new URLSearchParams({ cam: camParam(h.ho.ret), q: qName })}`, location.href).href };
     } }
   const initial = ctx.handoff ? null : params.get('cam')?.split(',').map(Number);
   ctx.initialPosition = ctx.handoff ? { x: ctx.handoff.pose.x, z: ctx.handoff.pose.z } : initial ? { x: initial[0], z: initial.length === 4 ? initial[1] : initial[2] } : L.HERO;
   if (params.has('bake')) installBaker(ctx);
-  ctx.baked = await openBakedWorld(ctx, params, { required: !!A.REQUIRE_BAKE || params.has('requirebake') });      // required: a missing or stale bake is an error card, never a minutes-long procedural build
+  ctx.baked = await openBakedWorld(ctx, params, { required: !!(ctx.handoff || A.REQUIRE_BAKE || params.has('requirebake')) });      // required: a missing or stale bake is an error card, never a minutes-long procedural build
   if (ctx.baked) ctx.regions = createRegionStreamer(ctx, ctx.baked);
   window.__regions = ctx.regions;
   await build();
@@ -530,7 +531,7 @@ async function main() {
   document.addEventListener('pointerlockchange', () => { document.body.classList.toggle('locked', document.pointerLockElement === canvas); });
   addEventListener('keydown', (e) => {
     if (e.code === 'Enter' && !started) start();
-    if (!started || ctx.ui.modalOpen || /^(SELECT|INPUT|TEXTAREA)$/.test(e.target?.tagName)) return;
+    if (!started || ctx.ui.modalOpen || (ctx.gates && ctx.gates.traveling) || /^(SELECT|INPUT|TEXTAREA)$/.test(e.target?.tagName)) return;
     if (e.code === 'KeyH') document.body.classList.toggle('noui');
     if (e.code === 'KeyL' && !e.repeat && !e.ctrlKey && !e.metaKey) copyPose();
     if (e.code === 'KeyT') showToast(tod.cycle());

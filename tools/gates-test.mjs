@@ -94,6 +94,36 @@ check('the nearest gate is the chip, each gate has its own state', () => {
   const g = firstOffer(run(m, { x: 100, z0: 100, z1: 0, speed: 1.5, settle: 0 })); assert.equal(g.offer.id, 'g');          // declining h says nothing about g
 });
 
+
+console.log('preflight (the real logic, fakes for the network):');
+{
+  const { createGates } = await import('../src/core/gates.js');
+  const { REGISTRY } = await import('../src/areas/registry.js');
+  const mk = (over = {}, params = new URLSearchParams('devgates=1')) => {
+    const doc = { getElementById: () => null, documentElement: { classList: { contains: () => false } }, body: { classList: { contains: () => false } } };
+    const win = { location: { href: 'http://h/index.html', search: '' }, addEventListener() {} };
+    const ctx = { onUpdate() {}, drive: null };
+    return createGates({ ctx, player: { inputLock: 0, riding: false, isUnderground: () => false }, camera: { position: {} }, ui: { open: false }, tod: { k: 0, variant: null }, audio: { muted: false }, guard: null, params, A: { ID: 'strip' }, isStarted: () => true, toast() {}, win, doc, ...over });
+  };
+  const head = (ok) => async () => ({ ok, status: ok ? 200 : 404 });
+  const fresh = { revision: 'r1', area: 'strip' };
+  const cases = [
+    ['a reachable page and a fresh manifest pass', { fetchImpl: head(true), peekManifest: async () => fresh, bakedRevision: 'r1' }, { ok: true }],
+    ['a missing page fails as "page"', { fetchImpl: head(false), peekManifest: async () => fresh, bakedRevision: 'r1' }, { ok: false, why: 'page' }],
+    ['an unreadable manifest fails as "manifest"', { fetchImpl: head(true), peekManifest: async () => null, bakedRevision: 'r1' }, { ok: false, why: 'manifest' }],
+    ['a manifest of another area fails as "area"', { fetchImpl: head(true), peekManifest: async () => ({ revision: 'r1', area: 'north' }), bakedRevision: 'r1' }, { ok: false, why: 'area' }],
+    ['a stale manifest fails as "stale"', { fetchImpl: head(true), peekManifest: async () => ({ revision: 'old', area: 'strip' }), bakedRevision: 'r1' }, { ok: false, why: 'stale' }],
+    ['a network error fails as "offline"', { fetchImpl: async () => { throw new TypeError('Failed to fetch'); }, peekManifest: async () => fresh, bakedRevision: 'r1' }, { ok: false, why: 'offline' }],
+  ];
+  for (const [name, deps, want] of cases) {
+    const g = mk(deps); const got = await g.preflight('strip');
+    check('preflight: ' + name, () => { assert.equal(got.ok, want.ok); if (want.why) assert.equal(got.why, want.why); });
+  }
+  { const g = mk({}); const got = await g.preflight('nowhere'); check('preflight: an unknown area is refused (no throw)', () => assert.equal(got.ok, false)); }
+  { const g = mk({ fetchImpl: head(false) }, new URLSearchParams('devgates=1&baked=0')); const got = await g.preflight('strip'); check('preflight: development flags (baked=0) skip the manifest check', () => assert(got.ok && got.dev)); }
+  check('the registry has the area the dev gate leads to', () => assert(REGISTRY.strip));
+}
+
 console.log(`gates-test: ${passes} passed, ${fails} failed`);
 console.log(fails ? 'RESULT: FAIL' : 'RESULT: OK');
 process.exit(fails ? 1 : 0);

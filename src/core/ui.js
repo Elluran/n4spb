@@ -36,7 +36,7 @@ export function createUI({ player, toast, doc = typeof document !== 'undefined' 
     body.replaceChildren();
     if (typeof content === 'string') body.innerHTML = content; else if (content) body.append(content);
     const title = root.querySelector('.panel-title'); if (title) title.textContent = opts.title || '';
-    const x = root.querySelector('.panel-x'); if (x) x.textContent = opts.closeLabel || 'Закрыть · Close';
+    const x = root.querySelector('.panel-x'); if (x) { x.textContent = opts.closeLabel || 'Закрыть · Close'; x.disabled = false; }      // (a question disables the shared button while it arms: every panel starts with it enabled)
     root.hidden = false; root.classList.add('open');
     player.inputLock++;
     open = { el: body, onClose: opts.onClose, wasLocked, backdropClose: opts.backdropClose !== false };
@@ -74,10 +74,15 @@ export function createUI({ player, toast, doc = typeof document !== 'undefined' 
       root.addEventListener('pointerdown', (e) => { if (e.target === root && (!open || open.backdropClose)) close(); });      // the dark backdrop (not for a question: confirm)
     }
     addEventListener('keydown', (e) => { if (open && e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }, true);
-    // a question is open: Enter answers yes (once armed), Space is swallowed everywhere so that no held jump / fly key presses the focused button
-    const swallow = (e) => { if (confirmKeys.open && e.code === 'Space') { e.preventDefault(); e.stopPropagation(); } };
-    addEventListener('keydown', (e) => { if (confirmKeys.open && e.code === 'Enter' && !e.repeat) { e.preventDefault(); e.stopPropagation(); confirmKeys.accept && confirmKeys.accept(); } else swallow(e); }, true);
-    addEventListener('keyup', swallow, true);
+    // a question is open: Enter answers yes (once armed; not when "Not now" has the focus: Enter then presses that button), a Space press never reaches the game or a focused button.
+    // The Space KEYUP is only default-prevented, not stopped: a key that was held before the question opened (fly up, handbrake) must still be seen going up, or it would stay "down".
+    const onNo = (e) => e.target && e.target.closest && e.target.closest('.panel-x');
+    addEventListener('keydown', (e) => {
+      if (!confirmKeys.open) return;
+      if (e.code === 'Space') { e.preventDefault(); e.stopPropagation(); return; }
+      if (e.code === 'Enter' && !e.repeat && !onNo(e)) { e.preventDefault(); e.stopPropagation(); confirmKeys.accept && confirmKeys.accept(); }
+    }, true);
+    addEventListener('keyup', (e) => { if (confirmKeys.open && e.code === 'Space') e.preventDefault(); }, true);
   }
   return { panel, confirm, close, toast, get open() { return !!open; }, get modalOpen() { return !!open; } };
 }

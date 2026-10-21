@@ -21,7 +21,10 @@ for (const name of Object.keys(manifests[0].files)) {
   if (digest(buffers[0]) === digest(buffers[1])) { byteIdentical.push(name); continue; }
   assert(['city-base', 'roof'].includes(name), `World product changed: ${name}`);
   const decoded = buffers.map(b => { const raw = gunzipSync(b); return decodeBaked(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)); });
-  for (const value of decoded) {
+  // the timings are removed from the BASELINE side only; the CURRENT bake must not record any (otherwise the determinism fix would not be tested at all)
+  if (name === 'roof') assert(!('ms' in decoded[1]), 'the current roof product still records its capture time');
+  else assert(!('buildMs' in decoded[1].service) && !decoded[1].service.buildPhases, 'the current city-base product still records build timings');
+  { const value = decoded[0];
     if (name === 'roof') { if ('ms' in value) { assert.equal(typeof value.ms, 'number'); delete value.ms; } }
     else {
       if ('buildMs' in value.service) { assert.equal(typeof value.service.buildMs, 'number'); delete value.service.buildMs; }
@@ -32,8 +35,7 @@ for (const name of Object.keys(manifests[0].files)) {
         }
         delete value.service.buildPhases;
       }
-    }
-  }
+    } }
   assert.deepEqual(decoded[1], decoded[0], `Only explicitly listed build timings may differ: ${name}`);
   ignoredTiming.push(name);
 }

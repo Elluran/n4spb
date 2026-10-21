@@ -20,7 +20,16 @@ check('registry schema is 1 and ids are unique and match their keys', () => {
 });
 for (const a of Object.values(REGISTRY)) {
   if (only && a.id !== only) continue;
-  console.log(`area ${a.id}:`);
+  console.log(`area ${a.id}${a.status === 'planned' ? ' (planned: its files do not exist yet)' : ''}:`);
+  if (a.status === 'planned') {
+    check('planned area: well-formed play rectangles that do not overlap each other, in a sensible total area', () => {
+      assert(a.play.length >= 1);
+      for (const r of a.play) { assert(r.x1 > r.x0 && r.z1 > r.z0, 'rect ' + r.name); assert(Math.abs(r.x0) < 20000 && Math.abs(r.z0) < 20000); }
+      for (let i = 0; i < a.play.length; i++) for (let j = i + 1; j < a.play.length; j++) { const p = a.play[i], q = a.play[j]; assert(!(p.x0 < q.x1 && q.x0 < p.x1 && p.z0 < q.z1 && q.z0 < p.z1), `${p.name} overlaps ${q.name}`); }
+      const km2 = a.play.reduce((s, r) => s + (r.x1 - r.x0) * (r.z1 - r.z0), 0) / 1e6; assert(km2 > 0.5 && km2 < 5.5, km2.toFixed(3) + ' km2');
+    });
+    continue;
+  }
   check('page exists and names its area (<html data-area>)', () => {
     const f = path.join(root, a.page); assert(fs.existsSync(f), a.page + ' is missing');
     const html = fs.readFileSync(f, 'utf8'); const m = /<html[^>]*\sdata-area="([^"]+)"/.exec(html);

@@ -10,11 +10,15 @@ import puppeteer from 'puppeteer-core';
 
 const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = {}; for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; } }
+const SECTIONS = ['prompt', 'arming', 'decline', 'accept', 'arrival', 'required', 'car', 'fly', 'fail', 'pingpong'];
 const root = path.resolve(args.root || here), ONLY = args.only ? new Set(args.only.split(',')) : null, OUT = path.resolve(root, args.out || 'shots/areas');
+if (ONLY) for (const k of ONLY) if (!SECTIONS.includes(k)) { console.error(`unknown section "${k}" (known: ${SECTIONS.join(', ')})`); process.exit(2); }
 fs.mkdirSync(OUT, { recursive: true });
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
+let blockManifest = false;      // the 'required' section: the bake manifest answers 404
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (p.endsWith('/')) p += 'index.html';
+  if (blockManifest && p.endsWith('/manifest.json')) { res.writeHead(404); return res.end(); }
   const f = path.join(root, p);
   fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(d); });
 });
@@ -83,7 +87,10 @@ try {
     console.log('arming of the buttons:');
     const page = await open(`index.html?${FAST}`);
     await page.evaluate(() => { window.__gates.machine.grace(0); }); await hookNav(page);
-    await placeWalker(page, 545, 167.7); await sleep(400); await walkUntilOpen(page);
+    await placeWalker(page, 545, 167.7); await sleep(400); await page.evaluate(() => window.__ctx.playerObj.keys.add('Space'));      // a key that was down before the question opened
+    await walkUntilOpen(page);
+    await page.keyboard.down('Space'); await page.keyboard.up('Space'); await sleep(100);
+    check('a Space that was held before the question and released during it is not left "down" in the game', await page.evaluate(() => !window.__ctx.playerObj.keys.has('Space')));
     await page.keyboard.press('Enter'); await sleep(150); let s = await S(page);
     check('Enter at once does nothing (not armed)', s.open && (await page.evaluate(() => window.__navUrls.length)) === 0, s);
     await page.keyboard.press('Space'); await sleep(100); s = await S(page);
@@ -94,8 +101,11 @@ try {
     check('a click on the dark backdrop does not close the question', s.open, s);
     await sleep(800); s = await S(page);
     check('after 700 ms the Load button is armed and focused', s.yesDisabled === false && (await page.evaluate(() => document.activeElement && document.activeElement.className)) === 'confirm-yes', s);
+    await page.keyboard.press('Space'); await sleep(200); s = await S(page);
+    check('Space on the ARMED, focused Load button does not press it (no navigation, still open)', s.open && (await page.evaluate(() => window.__navUrls.length)) === 0, s);
     await page.keyboard.press('Escape'); await sleep(200); s = await S(page);
     check('Esc declines', !s.open);
+    check('the shared panel button is enabled again for the next ordinary panel', await page.evaluate(() => { window.__ctx.ui.panel('x', { title: 't' }); const ok = !document.querySelector('.panel-x').disabled; window.__ctx.ui.close(); return ok; }));
     await page.close();
   }
   if (want('decline')) {
@@ -161,6 +171,16 @@ try {
     check('ho.mute is applied at Start', await inside.evaluate(() => window.__ctx.audio ? window.__ctx.audio.muted : document.getElementById('mute').getAttribute('aria-pressed') === 'true'));
     await inside.close();
   }
+  if (want('required')) {
+    console.log('a hand-off arrival REQUIRES its bake:');
+    blockManifest = true;
+    const ho = Buffer.from(JSON.stringify({ v: 1, from: 'strip', to: 'strip', via: 'gate', gate: 'g0', car: null, mute: false, noui: false, ret: { x: 536, z: 155, yaw: 77, pitch: 0 }, n: 1 })).toString('base64url');
+    const page = await open(`index.html?noroof=1&gate=0&guard=0&devgates=1&q=performance&cam=536,155,77,0&ho=${ho}`, { start: false });
+    const r = await page.evaluate(() => ({ fatal: !!document.getElementById('fatal'), text: (document.getElementById('fatal') || {}).textContent || '', loaded: document.body.classList.contains('loaded') }));
+    check('a missing manifest on a hand-off arrival is an error card, not a procedural build', r.fatal && !r.loaded, r);
+    check('the card offers the way back to the area the player came from', /Вернуться|Back to/.test(r.text), r.text.slice(0, 200));
+    blockManifest = false; await page.close();
+  }
   if (want('car')) {
     console.log('driving:');
     const page = await open(`index.html?${FAST}`);
@@ -213,7 +233,10 @@ try {
     await placeWalker(page, 545, 167.7); await sleep(400); await walkUntilOpen(page); await sleep(900); await page.keyboard.press('Enter'); await sleep(700);
     const r = await page.evaluate(() => ({ urls: window.__navUrls.length, traveling: window.__gates.traveling, pending: window.__ctx.travelPending, veil: !document.getElementById('travel').hidden, toast: document.querySelector('#toast .t-name').textContent, lock: window.__ctx.playerObj.inputLock }));
     check('an unreachable destination: no navigation, no veil, the game is playable again, a toast says why', r.urls === 0 && !r.traveling && !r.pending && !r.veil && /Нет связи|Cannot reach/.test(r.toast) && r.lock === 0, r);
-    await page.evaluate(() => { window.__gates.preflight = async () => ({ ok: false, why: 'stale' }); });
+    await page.evaluate(() => { window.__gates.preflight = async () => ({ ok: false, why: 'stale' }); window.__gates.machine.cooldown(window.__gates.gates[0], 0.5); });      // (the first failure set the 30 s cooldown: shorten it)
+    await sleep(1500); await placeWalker(page, 575, 174.5); await sleep(600); await placeWalker(page, 545, 167.7); await sleep(600); await walkUntilOpen(page); await sleep(900); await page.keyboard.press('Enter'); await sleep(700);
+    const r2 = await page.evaluate(() => ({ urls: window.__navUrls.length, traveling: window.__gates.traveling, toast: document.querySelector('#toast .t-name').textContent, lock: window.__ctx.playerObj.inputLock, open: !!document.querySelector('#panel:not([hidden]) .confirm'), pf: window.__gates.preflight.toString().slice(0, 60) }));
+    check('a stale destination: no navigation, a toast says the area is out of date, input is free', r2.urls === 0 && !r2.traveling && /устарела|out of date/.test(r2.toast) && r2.lock === 0, r2);
     await page.close();
   }
   if (want('pingpong')) {
@@ -227,5 +250,5 @@ try {
 } catch (e) { fails++; console.log('TEST ERROR:', e.stack || e.message); }
 finally { await browser.close(); server.close(); }
 console.log(`areas-flow-test: ${passes} passed, ${fails} failed`);
-console.log(fails ? 'RESULT: FAIL' : 'RESULT: OK');
-process.exit(fails ? 1 : 0);
+console.log(fails || !passes ? 'RESULT: FAIL' : 'RESULT: OK');
+process.exit(fails || !passes ? 1 : 0);

@@ -379,7 +379,7 @@ export async function build(ctx) {
   /** Arrival of a hand-off (docs/AREAS.md): get into car `spec.id`, put it at (x, z) facing the camera yaw (degrees), restore its view and its four damage scalars. false (and the walker stays) when the car cannot be placed there. */
   function arrive(spec, x, z, yawDeg) {
     if (state.active || !spec || !enter(spec.id)) return false;
-    if (!place(x, z, yawDeg)) { exit(true); return false; }
+    if (!place(x, z, yawDeg)) { exit(true); if (player) player.setPose(x, z, yawDeg, 0); return false; }      // (exit puts the walker beside the garage car: back to the resolved arrival pose)
     if (spec.view !== undefined && spec.view !== null) api.setView(Number(spec.view) || 0);
     const d = Array.isArray(spec.d) ? spec.d : [0, 0, 0, 0];
     if (d.some((v) => v > 0)) {
