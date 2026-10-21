@@ -8,6 +8,7 @@
 //  strip's, which keeps the 200 m band identical on both pages (the style of a block follows its distance to SQUARE: city/archetypes.js, streets/style.js).
 //  Same export names as src/world/area.js; the engine tables at the end are read through src/world/lib/area-tables.js.
 // ============================================================================
+import { GROUPS_LIST as G_NORTHFULL } from '../../world/landmarksNorthFull/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'north';
@@ -20,6 +21,7 @@ export const REQUIRE_BAKE = true;
  *  stays a closed generic terminus; the door gate G3 of M7 replaces the ride). tools/modules-list.mjs parses this list from the file: keep one quoted name per line. */
 export const MODULES = [
   'environment',  // ground, embankment granite, Fontanka / Neva water, trees, lawns, flowerbeds, far skyline
+  'landmarksNorthFull', // the Chernyshevskaya vestibule, the Transfiguration Cathedral, Dom Muruzi, the Podpisnye Izdaniya bookstore and the corridor houses (14 addresses, 13 in the North data)
   'streets',      // roads, markings, kerbs, granite pavements, crossings, road furniture, trolleybus overhead wires
   'city',         // every OSM building (no landmark module claims one yet): Petersburg facade grammar, roofs, courtyards, entrances
   'props',        // benches, bins, kiosks, bus shelters, billboards, flower baskets
@@ -31,6 +33,7 @@ export const MODULES = [
 /** Loading-screen words that differ from the strip's (main.js LABELS is the fallback for the rest). */
 export const LABELS = {
   props: 'скамейки, урны и киоски', traffic: 'машины и троллейбусы', people: 'прохожие', drive: 'машины у метро «Чернышевская»',
+  landmarksNorthFull: 'Чернышевская, Спасо-Преображенский собор, дом Мурузи',
 };
 
 export const NAMES = {
@@ -71,6 +74,7 @@ export const STATION = { x: 612, z: 300, facadeBearing: 348, trackBearing: 167, 
 // ---------------------------------------------------------------- landmark groups
 /** None yet: M5 adds landmarksNorthFull, Smolny, Suvorov, Kirochnaya, Tauride (docs/AREAS.md). Until then `city` / `environment` / `streets` draw every claimed object of the strip band as plain buildings. */
 export const GROUPS = {};
+GROUPS.landmarksNorthFull = G_NORTHFULL;
 
 /**
  * The HUD location table (first match wins), built with the layout helpers `h` ({ NAMES, SUBGROUPS, _sqPolys, _groupPolys, _named, _areaPolys, _shoreOf, _deck, inRiver, shoreDist }).
@@ -161,7 +165,15 @@ export function makeViews({ yawToward }) {
 
 /** The expectations of the CPU tests (tools/layout-test.mjs, tools/areas-test.mjs; shape: tools/lib/area-test-data.mjs). */
 export const TEST = {
-  claimed: [],      // M5: the vestibule w22999175, the Transfiguration r5802451 ...
+  claimed: [
+    { id: 'w22999175', by: 'landmarksNorthFull', group: 'north-chernyshevskaya' },      // the Chernyshevskaya vestibule
+    { id: 'r5802451', by: 'landmarksNorthFull', group: 'north-preobrazhensky' },        // the Transfiguration Cathedral
+    { id: 'r946930', by: 'landmarksNorthFull', group: 'north-muruzi' },                 // Dom Muruzi
+    { id: 'w96123542', by: 'landmarksNorthFull', group: 'north-podpisnye' },            // the Podpisnye Izdaniya bookstore (strip band)
+    { id: 'w60354379', by: 'landmarksNorthFull', group: 'north-corridor-houses' },      // Mayakovskogo 14, Vosstaniya 17 and 19: corridor houses of the strip band (the strip's landmarksNorth builds them too)
+    { id: 'w96364627', by: 'landmarksNorthFull', group: 'north-corridor-houses' },
+    { id: 'r1394323', by: 'landmarksNorthFull', group: 'north-corridor-houses' },
+  ],      // M5: the vestibule w22999175, the Transfiguration r5802451 ...
   viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Place.oktyabrsky'],
   mustHaveAreas: [
     { x: 467, z: -1351, has: 'чернышевская' }, { x: 66, z: -1182, has: 'преображенский' }, { x: 2469, z: -1833, has: 'смольный собор' },
