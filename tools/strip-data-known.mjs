@@ -1,18 +1,25 @@
-// tools/strip-data-known.mjs - cut src/world/city/known-data.js down to the houses of the strip.
+// tools/strip-data-known.mjs - cut a known-data.js down to the houses of ONE data facade (the strip's, or another area's).
 // KNOWN_DATA (the research dossiers of the houses, keyed by OSM building id, city/known.js looks an entry up by b._fillOf || b.id, then by b.parent) holds the houses of the whole
-// city; only the ids that exist in BUILDINGS of src/world/data/city.js can ever be looked up, so every other entry is removed (the west entry line is re-serialised, the generated
+// city; only the ids that exist in BUILDINGS of the facade can ever be looked up, so every other entry is removed (the west entry line is re-serialised, the generated
 // Object.assign blocks lose their lines; a block with no entry left is removed with its markers, a block that keeps some gets its count comment updated).
 // known-extra.js (33 hand corrections) was cut by hand the same way: it is small and its comments are per group.
-// Usage: node tools/strip-data-known.mjs [--check]   (idempotent; --check writes nothing and exits 1 when the file would change)
+// Usage: node tools/strip-data-known.mjs [--check]                       the strip: src/world/city/known-data.js cut in place to src/world/data/city.js
+//        node tools/strip-data-known.mjs --src <full-city known-data.js> --facade <area city.js> --out <area known-data.js> [--check]     another area (docs/AREAS-DATA.md)
+// Idempotent: --check writes nothing and exits 1 when the output file would change. With --out different from --src an `// AREA:` line (what was cut from what) is added before the table.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const file = path.join(root, 'src', 'world', 'city', 'known-data.js');
-const CHECK = process.argv.includes('--check');
-const { BUILDINGS } = await import(pathToFileURL(path.join(root, 'src', 'world', 'data', 'city.js')).href);
+const argv = process.argv.slice(2);
+const arg = (n, d = null) => { const i = argv.indexOf(n); return i < 0 ? d : argv[i + 1]; };
+const file = path.resolve(arg('--src', path.join(root, 'src', 'world', 'city', 'known-data.js')));
+const facadeFile = path.resolve(arg('--facade', path.join(root, 'src', 'world', 'data', 'city.js')));
+const outFile = path.resolve(arg('--out', file));
+const CHECK = argv.includes('--check');
+const { BUILDINGS } = await import(pathToFileURL(facadeFile).href);
 const ids = new Set(BUILDINGS.map((b) => b.id));
+for (const b of BUILDINGS) if (b.parent) ids.add(b.parent);          // a part inherits the entry of its parent outline (known.js), also when the outline lies outside the facade
 
 const lines = fs.readFileSync(file, 'utf8').split('\n');
 const out = [];
@@ -28,6 +35,7 @@ const flush = () => {
   }
   block = null;
 };
+let tableAt = -1;
 for (const ln of lines) {
   const begin = /^\/\/ ---- BEGIN (\w+) /.test(ln);
   if (begin) { block = { lines: [ln], entries: 0 }; continue; }
@@ -38,16 +46,22 @@ for (const ln of lines) {
     if (/^\/\/ ---- END /.test(ln)) flush();
     continue;
   }
+  if (/^\/\/ (AREA|STRIP):/.test(ln) && outFile !== file) continue;     // a line of an earlier cut of this output (rewritten below)
   const w = /^export const KNOWN_DATA = (\{.*\});$/.exec(ln);
   if (w) {
     const all = JSON.parse(w[1]), keep = {};
     for (const [k, v] of Object.entries(all)) if (ids.has(k)) { keep[k] = v; kept++; } else removed++;
+    tableAt = out.length;
     out.push('export const KNOWN_DATA = ' + JSON.stringify(keep) + ';');
     continue;
   }
   out.push(ln);
 }
 if (block) throw new Error('unterminated block in known-data.js');
-const text = out.join('\n'), old = lines.join('\n');
-console.log('known-data.js entries kept', kept, 'removed', removed, '| bytes', Buffer.byteLength(old), '->', Buffer.byteLength(text));
-if (CHECK) { if (text !== old) { console.error('--check: known-data.js would change'); process.exit(1); } } else fs.writeFileSync(file, text);
+if (outFile !== file && tableAt >= 0) {
+  const rel = (p) => path.relative(root, p).split(path.sep).join('/');
+  out.splice(tableAt, 0, `// AREA: cut by tools/strip-data-known.mjs from the whole-city table to the ids that exist in BUILDINGS of ${rel(facadeFile)} (${kept} of ${kept + removed} entries, the Object.assign blocks below keep only theirs); to regenerate see docs/AREAS-DATA.md.`);
+}
+const text = out.join('\n'), old = fs.existsSync(outFile) ? fs.readFileSync(outFile, 'utf8') : null;
+console.log('known-data.js entries kept', kept, 'removed', removed, '| bytes', Buffer.byteLength(lines.join('\n')), '->', Buffer.byteLength(text));
+if (CHECK) { if (text !== old) { console.error('--check: ' + path.relative(root, outFile) + ' would change'); process.exit(1); } } else { fs.mkdirSync(path.dirname(outFile), { recursive: true }); fs.writeFileSync(outFile, text); }
