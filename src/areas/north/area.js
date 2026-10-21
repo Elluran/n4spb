@@ -8,6 +8,8 @@
 //  strip's, which keeps the 200 m band identical on both pages (the style of a block follows its distance to SQUARE: city/archetypes.js, streets/style.js).
 //  Same export names as src/world/area.js; the engine tables at the end are read through src/world/lib/area-tables.js.
 // ============================================================================
+import { LIBRARY_GROUP } from '../../world/landmarksD/groups.js';
+import { GROUPS_LIST as G_OKTYABRSKY } from '../../world/landmarksOktyabrsky/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'north';
@@ -22,6 +24,8 @@ export const MODULES = [
   'environment',  // ground, embankment granite, Fontanka / Neva water, trees, lawns, flowerbeds, far skyline
   'streets',      // roads, markings, kerbs, granite pavements, crossings, road furniture, trolleybus overhead wires
   'city',         // every OSM building (no landmark module claims one yet): Petersburg facade grammar, roofs, courtyards, entrances
+  'landmarksD',   // the National Library (Fontanka 36) and the Mariinsky hospital block, the strip's band at (-334, -311): only the 'library' sub-group is claimed here
+  'landmarksOktyabrsky', // Bolshoy Concert Hall Oktyabrsky on Ligovsky Prospekt, the strip's band at (797, -347)
   'props',        // benches, bins, kiosks, bus shelters, billboards, flower baskets
   'traffic',      // moving cars, buses, trolleybuses + parked cars
   'people',       // pedestrians, groups, cyclists, scooters
@@ -31,6 +35,7 @@ export const MODULES = [
 /** Loading-screen words that differ from the strip's (main.js LABELS is the fallback for the rest). */
 export const LABELS = {
   props: 'скамейки, урны и киоски', traffic: 'машины и троллейбусы', people: 'прохожие', drive: 'машины у метро «Чернышевская»',
+  landmarksD: 'Национальная библиотека', landmarksOktyabrsky: 'БКЗ «Октябрьский»',
 };
 
 export const NAMES = {
@@ -71,6 +76,8 @@ export const STATION = { x: 612, z: 300, facadeBearing: 348, trackBearing: 167, 
 // ---------------------------------------------------------------- landmark groups
 /** None yet: M5 adds landmarksNorthFull, Smolny, Suvorov, Kirochnaya, Tauride (docs/AREAS.md). Until then `city` / `environment` / `streets` draw every claimed object of the strip band as plain buildings. */
 export const GROUPS = {};
+GROUPS.landmarksD = [LIBRARY_GROUP];      // the strip's landmarksD claims four sub-groups; only the National Library / Mariinsky block lies in the band (landmarksD/groups.js)
+GROUPS.landmarksOktyabrsky = G_OKTYABRSKY;      // the concert hall w30324279 (797, -347), shared with the strip
 
 /**
  * The HUD location table (first match wins), built with the layout helpers `h` ({ NAMES, SUBGROUPS, _sqPolys, _groupPolys, _named, _areaPolys, _shoreOf, _deck, inRiver, shoreDist }).
@@ -161,7 +168,9 @@ export function makeViews({ yawToward }) {
 
 /** The expectations of the CPU tests (tools/layout-test.mjs, tools/areas-test.mjs; shape: tools/lib/area-test-data.mjs). */
 export const TEST = {
-  claimed: [],      // M5: the vestibule w22999175, the Transfiguration r5802451 ...
+  claimed: [
+    { id: 'r3801087', by: 'landmarksD', group: 'library' }, { id: 'w30324279', by: 'landmarksOktyabrsky', group: 'oktyabrsky-hall' },
+  ],      // M5: the vestibule w22999175, the Transfiguration r5802451 ...
   viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Place.oktyabrsky'],
   mustHaveAreas: [
     { x: 467, z: -1351, has: 'чернышевская' }, { x: 66, z: -1182, has: 'преображенский' }, { x: 2469, z: -1833, has: 'смольный собор' },
