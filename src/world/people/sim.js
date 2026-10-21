@@ -176,6 +176,8 @@ export function createSim(ctx, nav, crowd, opts = {}) {
   // the quiet zone of the castle (people.js DENSITY.mars.zones: a head count cap per zone, nav.marsZone(x, z) = zone index or -1): while a zone is full nobody picks / is re-placed at a target in it
   const mZones = (nav.marsCfg && nav.marsCfg.zones) || [], marsCount = new Int32Array(Math.max(1, mZones.length)), marsFull = (x, z, m = 0) => { if (!mZones.length) return false; const k = nav.marsZone(x, z, m); return k >= 0 && k < mZones.length && (marsCount[k] >= mZones[k].maxPeople || (mZones[k].shut && night() > 0.55)); };   // (the Summer Garden is shut at night: 22:00 - 10:00)
   let zoneCount = 0; const zoneMax = (nav.stationCfg && nav.stationCfg.maxPeople) || 1e9;
+  // the garden of the area (nav.inGarden, people.js DENSITY.garden): at most nav.gardenCfg.maxPeople people inside it, counted like the station zone (a recount every MICRO steps, a re-placement reserves at once)
+  let gardenCount = 0;
   // a FULL zone is a soft barrier for the routes of the people who do not live there: every edge inside it costs 2.5 x its length more (they walk round it when the detour is shorter than ~2.5 x the way through)
   const shutHere = (x, z) => { const k = nav.marsZone(x, z); return k >= 0 && k < mZones.length && !!mZones[k].shut; };          // zones that are shut at night (none in the strip)
   const nodeMZ = new Int8Array(mZones.length ? N.x.length : 0).fill(-2), mzOf = (i) => { if (i >= nodeMZ.length) return -1; let k = nodeMZ[i]; if (k === -2) k = nodeMZ[i] = nav.marsZone(N.x[i], N.z[i]); return k; };
@@ -184,7 +186,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
   if (zoneNoise) FAR_OPTS_N.noise = zoneNoise;
   const zoneFullFor = (x, z, m, own) => { if (!mZones.length) return false; const k = nav.marsZone(x, z, m); if (k < 0 || k >= mZones.length) return false; if (mZones[k].shut && night() > 0.55) return true; return !(k === own && mZones[k].stay) && marsCount[k] >= mZones[k].maxPeople; };
   const ownZone = (a) => (a.zHome > -2 ? a.zHome : mZones.length && !a.hidden ? nav.marsZone(a.x, a.z) : -1);       // (zHome: set at the start, by a re-placement and by every goal)
-  const crowdedAt = (x, z, m = 0, own = -2) => { const f = nav.densityFactor(x, z); return (own > -2 ? zoneFullFor(x, z, m, own) : marsFull(x, z, m)) || (f < 0.99 && (localCount(x, z) >= 12 * f || (nav.stationFactor(x, z) < 0.5 && zoneCount >= zoneMax))); };
+  const crowdedAt = (x, z, m = 0, own = -2) => { const f = nav.densityFactor(x, z); return (own > -2 ? zoneFullFor(x, z, m, own) : marsFull(x, z, m)) || (nav.inGarden(x, z) && gardenCount >= nav.gardenCfg.maxPeople) || (f < 0.99 && (localCount(x, z) >= 12 * f || (nav.stationFactor(x, z) < 0.5 && zoneCount >= zoneMax))); };
   const pickNode = (a) => {
     const arr = compNodes.get(a.comp); if (!arr || !arr.length) return -1;
     let best = -1, bw = -1, bestOut = -1, bwOut = -1;
@@ -419,6 +421,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
   /** mass: place anywhere 6-250 m around the camera (start / teleport); otherwise 60-290 m and never in view */
   const recycle = (a, t, mass = false) => {
     const party = [a, ...a.followers.filter(f => f.kind !== 'inside')];
+    const gardenBefore = party.filter(p => !p.hidden && nav.inGarden(p.x, p.z)).length;
     let best = -1, tot = 0; const lo = mass ? 6 : 60, hi = mass ? 250 : 290, ids = [], ws = [], zOwn = ownZone(a);
     for (let k = 0, kn = mass ? 26 : 14; k < kn; k++) {              // candidate points on the annulus around the camera, snapped to the nearest pavement node (more tries at a teleport: an avenue between quiet side streets fills only a few per cent of the disc)
       const r = lo + (hi - lo) * Math.pow(R(), mass ? 0.85 : 1), ang = R() * TAU, px = camPos.x + Math.sin(ang) * r, pz = camPos.z + Math.cos(ang) * r;
@@ -426,6 +429,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
       const dx = N.x[id] - camPos.x, dz = N.z[id] - camPos.z, d = hyp(dx, dz);
       if (mass ? (d < 6 || d > 250) : (d < 60 || d > 290 || (d < 110 && visible(N.x[id], N.z[id])))) continue;
       if (localCount(N.x[id], N.z[id]) >= 5 || crowdedAt(N.x[id], N.z[id], 0, zOwn)) continue;      // never pile people up: at most 5 within 2.5 m (a move inside the walker's own zone does not fill it)
+      if (nav.inGarden(N.x[id], N.z[id]) && gardenCount - gardenBefore + party.length > nav.gardenCfg.maxPeople) continue;
       const zw = nav.zoneW(N.x[id], N.z[id]), w = Math.pow(zw, 0.8) * (1 + 4.5 * Math.exp(-(d * d) / (120 * 120)));
       ids.push(id); ws.push(w); tot += w;
     }
@@ -435,6 +439,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     for (const f of a.followers) { if (f.kind === 'inside') continue; leaveQueue(f); sim.placeAtNode(f, best, 2.2); f.speed = f.vpref * 0.8; f.kind = 'walk'; f.crossIdx = -1; f.stuck = 0; f.comp = a.comp; }
     // Reserve immediately: a camera teleport can place hundreds of agents in
     // one micro-step, before the periodic population recount runs again.
+    gardenCount += party.filter(p => !p.hidden && nav.inGarden(p.x, p.z)).length - gardenBefore;
     if (mZones.length) { const k = nav.marsZone(N.x[best], N.z[best]); if (k >= 0 && k < mZones.length && k !== zOwn) marsCount[k] += party.length; for (const q of party) q.zHome = k; }
     placed.set(cellHash(Math.floor(a.x / HC), Math.floor(a.z / HC)), (placed.get(cellHash(Math.floor(a.x / HC), Math.floor(a.z / HC))) || 0) + 1 + a.followers.length);
     newGoal(a, t); a.recycled = (a.recycled || 0) + 1; sim.recycled++; return true;
@@ -579,7 +584,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     updateCamera(); slowR2 = (sim.renderR + 90) * (sim.renderR + 90); sleepR2 = (sim.renderR + 290) * (sim.renderR + 290); far2R2 = sleepR2;
     nav.activeFrac = 1 - 0.78 * clamp((night() - 0.15) / 0.7, 0, 1);
     rebuildHash();
-    if (sim.steps % MICRO === 0 || sim.steps === 1) { let zc = 0; marsCount.fill(0); for (let i = 0; i < agents.length; i++) { const a = agents[i]; if (!a.hidden) { if (a.inZone) zc++; if (mZones.length) { const k = zoneOf(a, a.x, a.z); if (k >= 0 && k < mZones.length) marsCount[k]++; } } else if (mZones.length && a.kind === 'inside' && a.emerge && !a.ug) { const k = zoneOf(a, a.emerge.x, a.emerge.z); if (k >= 0 && k < mZones.length && mZones[k].stay) marsCount[k]++; } } zoneCount = zc; }
+    if (sim.steps % MICRO === 0 || sim.steps === 1) { let zc = 0, gc = 0; marsCount.fill(0); for (let i = 0; i < agents.length; i++) { const a = agents[i]; if (!a.hidden) { if (a.inZone) zc++; if (nav.inGarden(a.x, a.z)) gc++; if (mZones.length) { const k = zoneOf(a, a.x, a.z); if (k >= 0 && k < mZones.length) marsCount[k]++; } } else if (mZones.length && a.kind === 'inside' && a.emerge && !a.ug) { const k = zoneOf(a, a.emerge.x, a.emerge.z); if (k >= 0 && k < mZones.length && mZones[k].stay) marsCount[k]++; } } zoneCount = zc; gardenCount = gc; }
     placed.clear(); const phase = sim.steps % MICRO; routeBudget = sim.steps < 2 ? 1e9 : 3; farBudget = sim.steps < 2 ? 1e9 : FAR_ROUTES; farR2 = sim.steps < 2 ? -1 : slowR2;
     if (sim.steps > 1 && hyp(camPos.x - sim.lastCam.x, camPos.z - sim.lastCam.z) > 90) sim.mass = MICRO;
     sim.lastCam.x = camPos.x; sim.lastCam.z = camPos.z;

@@ -258,7 +258,8 @@ export const ZONES = {
   crowds: CROWDS,
   fountains: [],
   // no station zone; the scripted places of the strip's west (Kazan, Palace Square, ... people/west.js) and of the castle (people/mars.js) stand at fixed coordinates of the strip, so the North switches them off
-  peopleDensity: { west: { scale: 1, platforms: 1, off: true }, mars: { scale: 1, zones: [], off: true } },
+  // + garden: the crowd cap of the Tauride Garden (hooks/people.js inGarden: factor x the density, at most maxPeople people in it; the numbers of the source). It exists with the Tauride remake only, as the garden does: the generic North's crowd is the one it had
+  peopleDensity: { west: { scale: 1, platforms: 1, off: true }, mars: { scale: 1, zones: [], off: true }, garden: MODULES.includes('landmarksTauride') ? { factor: 0.22, maxPeople: 60 } : undefined },
   peopleCorridor: [],
   peopleHot: PEOPLE_HOT,
   tramLines: [],

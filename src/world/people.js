@@ -30,14 +30,17 @@ import { ZONES } from './lib/area-tables.js';
 //            is `factor` x the plan (hall seats, taxi queues, passengers, photographers, smokers, goals and the player-following re-placement are thinned), fading to 1 over `fade` m.
 //            maxPeople: a hard head count for the zone (nobody picks a target / is re-placed there while it is full).
 //            The Nevsky pavement crowd between Mayakovskaya and the Fontanka is not touched.
-// The area-bound sub-tables (station, west, mars: the numbers and their meaning are in src/world/area.js ZONES.peopleDensity, where the strip's values are) come from the area module; an area that leaves
-// one out gets the neutral one (no station zone, scale 1, no quiet zone of the castle). global is the engine's.
+// garden     the garden of the area (HOOKS.inGarden: the Tauride Garden of the North): inside it the people density is `factor` x the plan (nav.densityFactor) and at most `maxPeople` people are in it
+//            (people/sim.js crowdedAt / recycle: nobody picks a target / is re-placed there while it is full). The neutral row (factor 1, no cap) is the strip's and the generic North's.
+// The area-bound sub-tables (station, west, mars, garden: the numbers and their meaning are in src/world/area.js ZONES.peopleDensity, where the strip's values are) come from the area module; an area that leaves
+// one out gets the neutral one (no station zone, scale 1, no quiet zone of the castle, no garden cap). global is the engine's.
 const PD = ZONES.peopleDensity;
 export const DENSITY = {
   global: 0.72,
   station: PD.station,
   west: PD.west || { scale: 1, platforms: 1 },
   mars: PD.mars || { scale: 1, zones: [] },
+  garden: PD.garden || { factor: 1, maxPeople: Infinity },
 };
 const URLQ = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams('');
 
