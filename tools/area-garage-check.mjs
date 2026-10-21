@@ -61,7 +61,7 @@ const ctx = createContext({ scene, camera, renderer: null, audio: null, quality,
 ctx.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight(), uniforms: {} };
 const { mainModules } = await import(pathToFileURL(path.join(root, 'tools/modules-list.mjs')).href);
 const WANT = ['environment', 'streets', 'city', 'props', 'traffic', 'drive'];      // what stands round a parked car: ground, streets, buildings, furniture, the parked traffic, the garage itself
-const list = mainModules().filter((m) => WANT.includes(m));
+const list = mainModules().filter((m) => WANT.includes(m) || (A.ID !== 'strip' && m.startsWith('landmarks')));      // another area: its landmark modules too (M5: the North's Chernyshevskaya vestibule stands beside the garage; the strip's list is unchanged)
 ctx.buildList = mainModules();
 for (const m of list) { const mod = await import(pathToFileURL(path.join(root, 'src/world/' + m + '.js')).href); await mod.build(ctx); }
 const st = ctx.services.streets, net = st && st.net, ph = ctx.physics, drive = ctx.drive;

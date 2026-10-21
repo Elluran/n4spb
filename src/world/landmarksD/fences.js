@@ -4,15 +4,17 @@ import { BARRIERS } from '../data/city.js';
 import { fence } from './parts.js';
 
 const REGIONS = [
-  { name: 'church yard', box: [-206, -108, 388, 526], iron: '#1d1f22', h: 1.8, post: '#b9b4a6' },
-  { name: 'hospital', box: [-140, -52, -372, -236], iron: '#2f5a42', h: 2.0, post: '#a9a79f' },
-  { name: 'library', box: [-382, -282, -400, -196], iron: '#1d1f22', h: 1.6, post: '#a9a79f' },
+  { name: 'church yard', group: 'vladimirsky', box: [-206, -108, 388, 526], iron: '#1d1f22', h: 1.8, post: '#b9b4a6' },
+  { name: 'hospital', group: 'library', box: [-140, -52, -372, -236], iron: '#2f5a42', h: 2.0, post: '#a9a79f' },
+  { name: 'library', group: 'library', box: [-382, -282, -400, -196], iron: '#1d1f22', h: 1.6, post: '#a9a79f' },
 ];
 
 export function build(K) {
   const ctx = K.ctx;
   let n = 0;
+  const claimed = new Set((K.L.GROUPS.landmarksD || []).map((g) => g.key));      // the sub-groups of THIS area (the North claims only 'library'): no fences for a sight the area does not draw
   for (const rg of REGIONS) {
+    if (!claimed.has(rg.group)) continue;
     const [x0, x1, z0, z1] = rg.box;
     const inb = (x, z) => x >= x0 && x <= x1 && z >= z0 && z <= z1;
     for (const b of BARRIERS) {

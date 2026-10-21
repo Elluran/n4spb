@@ -70,7 +70,7 @@ const ctx = createContext({ scene, camera, renderer: null, audio: null, quality,
 ctx.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight(), uniforms: {} };
 const wanted = ['environment', 'streets', 'city', 'rail', 'landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksE', 'landmarksF', 'landmarksG', 'landmarksH', 'landmarksI', 'landmarksJ', 'landmarksK', 'landmarksBelinsky', 'landmarksCastle', 'landmarksOktyabrsky',
   'bridges', 'metro', 'props', 'traffic', 'people'];
-if ((process.env.AREA || 'strip') !== 'strip') { const keep = new Set(wanted), list = (await import('./modules-list.mjs')).mainModules().filter((m) => keep.has(m)); wanted.length = 0; wanted.push(...list); }      // another area (tools/area.mjs): the modules of ITS page that this test knows (docs/AREAS.md)
+if ((process.env.AREA || 'strip') !== 'strip') { const keep = new Set(wanted), list = (await import('./modules-list.mjs')).mainModules().filter((m) => keep.has(m) || m.startsWith('landmarks')); wanted.length = 0; wanted.push(...list); }      // another area (tools/area.mjs): the modules of ITS page that this test knows, and every landmark module of the page (M5: the North's landmarksNorthFull, Smolny ... carry colliders and claim buildings) (docs/AREAS.md)
 { const mods = flag('mods', null); if (typeof mods === 'string') { const keep = new Set(mods.split(',')); for (let i = wanted.length - 1; i >= 0; i--) if (!keep.has(wanted[i])) wanted.splice(i, 1); } }       // --mods a,b,c: build only these (in the page order): quick probes
 ctx.buildList = wanted;
 const built = [], times = {};

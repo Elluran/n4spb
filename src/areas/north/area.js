@@ -1,13 +1,21 @@
 // ============================================================================
 //  AREA DEFINITION - the North (docs/AREAS.md, docs/AREAS-DATA.md): Chernyshevskaya, the Spaso-Preobrazhensky Cathedral, Dom Muruzi, the Paradny Quarter, the Tauride Garden and Palace, Smolny, the
 //  Suvorov Museum and Kirochnaya Street, 3.947 km2, plus a one-sided 200 m band of the strip's territory (z -405 .. -205, x -420 .. 835) so that an arrival from the strip lands on real, identical streets.
-//  This is the GENERIC North (milestone M3): the modules that need no landmark specialist (environment, streets, city, props, traffic, people, wildlife, drive); the landmark groups and their modules
-//  (landmarksNorthFull, Smolny, Suvorov, Kirochnaya, the Tauride remake ...) come with M5, so GROUPS is empty and the generic `city` module draws every building.
+//  Milestone M3 was the GENERIC North (environment, streets, city, props, traffic, people, wildlife, drive); milestone M5 adds the landmark modules copied from the source: landmarksNorthFull (Chernyshevskaya,
+//  the Transfiguration Cathedral, Dom Muruzi, the Podpisnye Izdaniya bookstore, the corridor houses), landmarksSmolny, landmarksSuvorov, landmarksKirochnaya, and the strip's own landmarksD (library only) and
+//  landmarksOktyabrsky for the 200 m band. GROUPS below holds their claims; the generic `city` draws every building they do not claim. The Tauride remake and the Paradny quarter are still to come (docs/AREAS.md section 8).
 //  north.html remaps ./src/world/area.js to this file with an import map (tools/area.mjs does the same for the headless tools). PURE DATA: no three.js, no import of layout.js (layout.js imports this
 //  file) and NO import of the strip's area module (the remap would hand back this very file): the values that the engine reads from every area (NAMES, SQUARE, OBELISK, STATION) are COPIES of the
 //  strip's, which keeps the 200 m band identical on both pages (the style of a block follows its distance to SQUARE: city/archetypes.js, streets/style.js).
 //  Same export names as src/world/area.js; the engine tables at the end are read through src/world/lib/area-tables.js.
 // ============================================================================
+// The claims of the landmark modules (M5): each groups.js is PURE DATA (ids and names) and is read by the module, by layout.js and by the tools.
+import { GROUPS_LIST as G_NORTHFULL } from '../../world/landmarksNorthFull/groups.js';
+import { GROUPS_LIST as G_SMOLNY } from '../../world/landmarksSmolny/groups.js';
+import { GROUPS_LIST as G_SUVOROV } from '../../world/landmarksSuvorov/groups.js';
+import { GROUPS_LIST as G_KIROCHNAYA } from '../../world/landmarksKirochnaya/groups.js';
+import { LIBRARY_GROUP } from '../../world/landmarksD/groups.js';
+import { GROUPS_LIST as G_OKTYABRSKY } from '../../world/landmarksOktyabrsky/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'north';
@@ -20,8 +28,14 @@ export const REQUIRE_BAKE = true;
  *  stays a closed generic terminus; the door gate G3 of M7 replaces the ride). tools/modules-list.mjs parses this list from the file: keep one quoted name per line. */
 export const MODULES = [
   'environment',  // ground, embankment granite, Fontanka / Neva water, trees, lawns, flowerbeds, far skyline
+  'landmarksNorthFull', // the Chernyshevskaya vestibule, the Transfiguration Cathedral, Dom Muruzi, the Podpisnye Izdaniya bookstore and the corridor houses (14 addresses, 13 in the North data)
+  'landmarksSmolny', // Smolny Cathedral and the convent / Institute (docs/research/north-smolny.md)
+  'landmarksSuvorov', // the Suvorov Memorial Museum on Kirochnaya (7 OSM footprints, mosaics, tower)
+  'landmarksKirochnaya', // the Elena Pavlovna Clinical Institute, Kirochnaya 41: 20 OSM footprints, garden campus (lawn, service lanes, trees, fence); before streets, it claims 14 service ways
   'streets',      // roads, markings, kerbs, granite pavements, crossings, road furniture, trolleybus overhead wires
-  'city',         // every OSM building (no landmark module claims one yet): Petersburg facade grammar, roofs, courtyards, entrances
+  'city',         // every OSM building that no landmark module claims: Petersburg facade grammar, roofs, courtyards, entrances
+  'landmarksD',   // the National Library (Fontanka 36) and the Mariinsky hospital block, the strip's band at (-334, -311): only the 'library' sub-group is claimed here
+  'landmarksOktyabrsky', // Bolshoy Concert Hall Oktyabrsky on Ligovsky Prospekt, the strip's band at (797, -347)
   'props',        // benches, bins, kiosks, bus shelters, billboards, flower baskets
   'traffic',      // moving cars, buses, trolleybuses + parked cars
   'people',       // pedestrians, groups, cyclists, scooters
@@ -30,7 +44,12 @@ export const MODULES = [
 ];
 /** Loading-screen words that differ from the strip's (main.js LABELS is the fallback for the rest). */
 export const LABELS = {
+  landmarksSmolny: 'Смольный собор и институт',
   props: 'скамейки, урны и киоски', traffic: 'машины и троллейбусы', people: 'прохожие', drive: 'машины у метро «Чернышевская»',
+  landmarksNorthFull: 'Чернышевская, Спасо-Преображенский собор, дом Мурузи',
+  landmarksSuvorov: 'Музей Суворова',
+  landmarksKirochnaya: 'Клинический институт на Кирочной',
+  landmarksD: 'Национальная библиотека', landmarksOktyabrsky: 'БКЗ «Октябрьский»',
 };
 
 export const NAMES = {
@@ -69,8 +88,15 @@ export const OBELISK = { x: 592.2, z: 164.9, h: 36 };
 export const STATION = { x: 612, z: 300, facadeBearing: 348, trackBearing: 167, tower: { x: 602.1, z: 246.4 } };
 
 // ---------------------------------------------------------------- landmark groups
-/** None yet: M5 adds landmarksNorthFull, Smolny, Suvorov, Kirochnaya, Tauride (docs/AREAS.md). Until then `city` / `environment` / `streets` draw every claimed object of the strip band as plain buildings. */
+/** The landmark claims of the North (M5, docs/AREAS.md section 8): module name -> sub-groups { key, name, nameEn, ids, osm, at }. `city` / `environment` / `streets` skip what a group claims (src/world/lib/claims.js).
+ *  The Tauride remake and the Paradny quarter are not here yet, so the generic `city` still draws them. */
 export const GROUPS = {};
+GROUPS.landmarksNorthFull = G_NORTHFULL;
+GROUPS.landmarksSmolny = G_SMOLNY;
+GROUPS.landmarksSuvorov = G_SUVOROV;
+GROUPS.landmarksKirochnaya = G_KIROCHNAYA;
+GROUPS.landmarksD = [LIBRARY_GROUP];      // the strip's landmarksD claims four sub-groups; only the National Library / Mariinsky block lies in the band (landmarksD/groups.js)
+GROUPS.landmarksOktyabrsky = G_OKTYABRSKY;      // the concert hall w30324279 (797, -347), shared with the strip
 
 /**
  * The HUD location table (first match wins), built with the layout helpers `h` ({ NAMES, SUBGROUPS, _sqPolys, _groupPolys, _named, _areaPolys, _shoreOf, _deck, inRiver, shoreDist }).
@@ -161,13 +187,28 @@ export function makeViews({ yawToward }) {
 
 /** The expectations of the CPU tests (tools/layout-test.mjs, tools/areas-test.mjs; shape: tools/lib/area-test-data.mjs). */
 export const TEST = {
-  claimed: [],      // M5: the vestibule w22999175, the Transfiguration r5802451 ...
+  claimed: [
+    { id: 'w22999175', by: 'landmarksNorthFull', group: 'north-chernyshevskaya' },      // the Chernyshevskaya vestibule
+    { id: 'r5802451', by: 'landmarksNorthFull', group: 'north-preobrazhensky' },        // the Transfiguration Cathedral
+    { id: 'r946930', by: 'landmarksNorthFull', group: 'north-muruzi' },                 // Dom Muruzi
+    { id: 'w96123542', by: 'landmarksNorthFull', group: 'north-podpisnye' },            // the Podpisnye Izdaniya bookstore (strip band)
+    { id: 'w60354379', by: 'landmarksNorthFull', group: 'north-corridor-houses' },      // Mayakovskogo 14, Vosstaniya 17 and 19: corridor houses of the strip band (the strip's landmarksNorth builds them too)
+    { id: 'w96364627', by: 'landmarksNorthFull', group: 'north-corridor-houses' },
+    { id: 'r1394323', by: 'landmarksNorthFull', group: 'north-corridor-houses' },
+    { id: 'r2864743', by: 'landmarksSmolny', group: 'north-smolny-cathedral' },
+    { id: 'r2133719', by: 'landmarksSmolny', group: 'north-smolny-ensemble' },
+    { id: 'w30198549', by: 'landmarksSuvorov', group: 'north-suvorov-museum' },          // the Suvorov Museum (the museum record)
+    { id: 'w232918746', by: 'landmarksSuvorov', group: 'north-suvorov-museum' },         // the Suvorov Museum (the main block, Digit9 looks at it)
+    { id: 'r3127704', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
+    { id: 'w30324355', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
+    { id: 'r3801087', by: 'landmarksD', group: 'library' }, { id: 'w30324279', by: 'landmarksOktyabrsky', group: 'oktyabrsky-hall' },
+  ],      // M5: one row per landmark module and sub-group (the vestibule, the cathedrals, Dom Muruzi, the bookstore, the band houses, the Suvorov Museum, the clinical institute, the library, the Oktyabrsky hall)
   viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Place.oktyabrsky'],
   mustHaveAreas: [
     { x: 467, z: -1351, has: 'чернышевская' }, { x: 66, z: -1182, has: 'преображенский' }, { x: 2469, z: -1833, has: 'смольный собор' },
     { x: 1379, z: -1734, has: 'таврический дворец' }, { x: 1000, z: -1000, has: 'парадный' }, { x: -201, z: -222, has: 'подписные' },
   ],
-  kept: [],
+  // `kept` is left out on purpose: the default is every key of GROUPS, so tools/landmarks-groups-check.mjs verifies all six landmark modules against the North data (an empty list would verify none)
   roadsNear: { at: [461, -1350], r: 75, min: 3 },
 };
 
@@ -239,8 +280,10 @@ export const GARAGE = {
 };
 
 // ---------------------------------------------------------------- the rest
-/** environment.js: the services whose `entrances` clear the trees from the doors of the buildings they list (the generic `city` is the only one in the North until M5) */
-export const PRUNE_SERVICES = ['city'];
+/** environment.js: the services whose `entrances` clear the trees from the doors of the buildings they list: the generic `city` and the M5 landmark services that publish an `entrances` array
+ *  (landmarksSmolny, landmarksSuvorov, landmarksKirochnaya; landmarksD publishes an array that is empty in the North, as in the strip's list). landmarksNorthFull and landmarksOktyabrsky publish none
+ *  (the strip's table does not list them either). */
+export const PRUNE_SERVICES = ['city', 'landmarksSmolny', 'landmarksSuvorov', 'landmarksKirochnaya', 'landmarksD'];
 /** the hand-merged hooks of the engine modules (milestone M6 of docs/AREAS.md): none yet */
 export const HOOKS = {};
 /** the height patches of layout.heightAt (milestone M6: the Paradny podium): none yet */
