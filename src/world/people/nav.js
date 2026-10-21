@@ -23,6 +23,7 @@ import { FR as OKT_FR, W as OKT_W, FOYER_OPEN as OKT_OPEN } from '../landmarksOk
 import { SITES, toUV as siteUV } from '../bridges/sites.js';       // pure data: the deck frames and the pavement bands of the west bridges
 import { PackedEdges, PackedAdjacency } from './packed-graph.js';
 import { PackedCellIndex } from './packed-cell-index.js';
+import { HOOKS } from '../lib/area-tables.js';       // the hooks of the area module (docs/AREAS.md section 9): inGarden, deckServices
 const hyp = (a, b) => Math.sqrt(a * a + b * b);      // (round 4, 2026-10-16: Math.hypot allocates in V8 (117 MB per 20 s of driving); every use in this file has two arguments)
 
 const PAVE = L.SURFACE.sidewalk, ROAD_Y = L.SURFACE.road;
@@ -52,7 +53,10 @@ export function buildNav(ctx, cfg = {}) {
     const k = Math.max(0, Math.min(1, (d - SC.radius) / SC.fade)); return SC.factor + (1 - SC.factor) * k * k * (3 - 2 * k);
   };
   nav.stationFactor = stationFactor;
-  nav.densityFactor = stationFactor;
+  // the garden of the area (people.js DENSITY.garden, HOOKS.inGarden: the Tauride Garden of the North): its density factor multiplies the station one, its head count cap is people/sim.js crowdedAt
+  nav.gardenCfg = cfg.garden || { factor: 1, maxPeople: Infinity };
+  nav.inGarden = HOOKS.inGarden || (() => false);
+  nav.densityFactor = (x, z) => stationFactor(x, z) * (nav.inGarden(x, z) ? nav.gardenCfg.factor : 1);
   nav.inPlay = inPlay; nav.zoneW = (x, z) => zoneW(x, z) * nav.densityFactor(x, z); nav.PAVE = PAVE; nav.ROAD_Y = ROAD_Y; nav.frame = FR; nav.zones = Z; nav.area = area; nav.marsCfg = cfg.mars || { zones: [], scale: 1 }; nav.marsZone = area.zone;
 
   // ------------------------------------------------------------------ buildings (footprints, grid); interiors (the station hall) are walkable
@@ -639,9 +643,12 @@ export function buildNav(ctx, cfg = {}) {
   /** the standing height at (x, z): the pavement 0.12 / the given y, or the humped deck of the Anichkov Bridge + 0.12 */
   // feet height from the REAL walkable surface: the humped Anichkov deck (landmarksC.bridge.deckY, + the 0.12 m granite pavement) first, then physics.groundHeight (walk boxes / ramps /
   // steps, roofs excluded) when it is raised above the terrain; otherwise the given y (pavement 0.12, hall 0.03 ...)
+  // The decks of the services that the area names (HOOKS.deckServices: the Paradny podium and the garden bridges of the North's landmarksTauride) are asked before that, as the source does; a service that is not built is skipped
+  const DECKS = HOOKS.deckServices || [];
+  const serviceDeck = (x, z) => { for (let i = 0; i < DECKS.length; i++) { const d = svc[DECKS[i]]?.deckY?.(x, z); if (d != null) return d; } return null; };
   nav.surfaceY = (x, z, y) => {
     if (longs.length && x < WEST_X) { const wd = westDeck(x, z); if (wd && wd.long) return wd.y + (wd.foot ? 0.02 : WLIFT[wd.kind] || 0); }       // the long Neva bridge: the deck itself
-    const dy = bridge && bridge.deckY ? bridge.deckY(x, z) : null;
+    const dy = serviceDeck(x, z) ?? (bridge && bridge.deckY ? bridge.deckY(x, z) : null);
     if (dy != null && Number.isFinite(dy)) { if (x < WEST_X) { const wd = westDeck(x, z); if (wd) return wd.y + (wd.foot ? 0 : WLIFT[wd.kind] || 0); } return dy + 0.12; }
     if (onDeck(x, z, 0.3)) { const h = ctx.physics.groundHeight(x, z, 2.0, false); return Number.isFinite(h) ? h + 0.12 : y; }
     const h = ctx.physics.groundHeight(x, z, 2.0, false);
