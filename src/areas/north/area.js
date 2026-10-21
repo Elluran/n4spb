@@ -12,6 +12,7 @@ import { GROUPS_LIST as G_NORTHFULL } from '../../world/landmarksNorthFull/group
 
 import { GROUPS_LIST as G_SMOLNY } from '../../world/landmarksSmolny/groups.js';
 import { GROUPS_LIST as G_SUVOROV } from '../../world/landmarksSuvorov/groups.js';
+import { GROUPS_LIST as G_KIROCHNAYA } from '../../world/landmarksKirochnaya/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'north';
@@ -27,6 +28,7 @@ export const MODULES = [
   'landmarksNorthFull', // the Chernyshevskaya vestibule, the Transfiguration Cathedral, Dom Muruzi, the Podpisnye Izdaniya bookstore and the corridor houses (14 addresses, 13 in the North data)
   'landmarksSmolny', // Smolny Cathedral and the convent / Institute (docs/research/north-smolny.md)
   'landmarksSuvorov',
+  'landmarksKirochnaya', // the Elena Pavlovna Clinical Institute, Kirochnaya 41: 20 OSM footprints, garden campus (lawn, service lanes, trees, fence)
   'streets',      // roads, markings, kerbs, granite pavements, crossings, road furniture, trolleybus overhead wires
   'city',         // every OSM building (no landmark module claims one yet): Petersburg facade grammar, roofs, courtyards, entrances
   'props',        // benches, bins, kiosks, bus shelters, billboards, flower baskets
@@ -41,6 +43,7 @@ export const LABELS = {
   props: 'скамейки, урны и киоски', traffic: 'машины и троллейбусы', people: 'прохожие', drive: 'машины у метро «Чернышевская»',
   landmarksNorthFull: 'Чернышевская, Спасо-Преображенский собор, дом Мурузи',
   landmarksSuvorov: 'Музей Суворова',
+  landmarksKirochnaya: 'Клинический институт на Кирочной',
 };
 
 export const NAMES = {
@@ -84,6 +87,7 @@ export const GROUPS = {};
 GROUPS.landmarksNorthFull = G_NORTHFULL;
 GROUPS.landmarksSmolny = G_SMOLNY;
 GROUPS.landmarksSuvorov = G_SUVOROV;
+GROUPS.landmarksKirochnaya = G_KIROCHNAYA;
 
 /**
  * The HUD location table (first match wins), built with the layout helpers `h` ({ NAMES, SUBGROUPS, _sqPolys, _groupPolys, _named, _areaPolys, _shoreOf, _deck, inRiver, shoreDist }).
@@ -186,6 +190,8 @@ export const TEST = {
     { id: 'r2133719', by: 'landmarksSmolny', group: 'north-smolny-ensemble' },
     { id: 'w30198549', by: 'landmarksSuvorov', group: 'north-suvorov-museum' },          // the Suvorov Museum (the museum record)
     { id: 'w232918746', by: 'landmarksSuvorov', group: 'north-suvorov-museum' },         // the Suvorov Museum (the main block, Digit9 looks at it)
+    { id: 'r3127704', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
+    { id: 'w30324355', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
   ],      // M5: the vestibule w22999175, the Transfiguration r5802451 ...
   viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Place.oktyabrsky'],
   mustHaveAreas: [
