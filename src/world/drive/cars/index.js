@@ -16,15 +16,12 @@ import * as THREE from 'three';
 import { createCarModel, SPEC as COUPE_SPEC } from '../model.js';
 import { EYE as COUPE_EYE } from '../cockpit.js';
 import { MASS, DURABILITY, SOUND, HUD, tuningFor } from './tuning.js';
+import { GARAGE } from '../../lib/area-tables.js';
 
 const DEG = Math.PI / 180;
-/** where the cars wait: the coupe at its old spot on the asphalt strip beside the taxi rank, the new ones in line with it (verified free of lanes / buildings by tools/drive-garage-test.mjs) */
-export const PARKING = {
-  coupe: { x: 579, z: 219, yaw: 99 * DEG },
-  truck: { x: 590.0, z: 224.0, yaw: 99 * DEG },            // on the free forecourt pavement just south of the aisle, 5.5 m from the coupe: its way east along the pavement is clear
-  lada: { x: 582.0, z: 228.0, yaw: 99 * DEG },             // a row further south, 4 m beside the pickup's line (its way east passes 2.7 m south of the pickup's centre): no car is boxed in
-  roadster: { x: 596.0, z: 232.0, yaw: 99 * DEG },         // the south-east corner of the forecourt, 8 m beyond the pickup: 25 m of open pavement ahead of the nose (room for a hop and a thrust run), nobody's way out passes it
-};
+/** where the cars wait: GARAGE.poses of the area module (src/world/area.js; the strip: the coupe at its old spot on the asphalt strip beside the taxi rank, the new ones in line with it, verified free of lanes / buildings by
+ *  tools/drive-garage-test.mjs). { coupe, truck, lada, roadster: { x, z, yaw } }: a car without a pose is not built (loadGarage), an area without poses has no garage */
+export const PARKING = GARAGE.poses;
 
 const PRESENTATION = {
   coupe: { name: 'Красная «Б»', nameEn: 'Bibliott GT', label: 'Сесть в машину', labelEn: 'Get in the car · Bibliott GT', toast: 'Красная «Б» · Bibliott GT', reach: 4.6 },
@@ -95,5 +92,5 @@ export async function loadGarage(ctx, { placeholders = false, paths = {} } = {})
   const r = await optional(paths.roadster || './roadster.js', 'roadster', ['SPEC_ROADSTER', 'createRoadsterModel'], placeholders);
   if (r && !r.placeholder) garage.push(entry('roadster', r.SPEC_ROADSTER, (c) => r.createRoadsterModel(c), { exhaust: r.SPEC_ROADSTER.exhaust.slice(), jetFx: JET_FX }));          // the four rear nozzles drive the thrust particles
   else if (r) { const s = { W: 2.0, R: 0.355, tw: 0.31, track: 1.61, wb: 2.96, front: 2.36, rear: -2.26, hgt: 1.22, len: 4.62, centerZ: 0.05, eye: { x: 0.36, y: 0.93, z: 0.2 }, fovRest: 74 }; garage.push(entry('roadster', s, (c) => createPlaceholderModel(c, s, '#e4e6ea'), { exhaust: [0.4, 0.13, -0.13, -0.4].map((x) => ({ x, y: 0.5, z: -2.27 })), jetFx: JET_FX })); }
-  return garage;
+  return garage.filter((g) => Number.isFinite(g.parked.x) && Number.isFinite(g.parked.z));          // a car without a pose in the GARAGE of the area is not built
 }

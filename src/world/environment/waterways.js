@@ -18,8 +18,11 @@
 // The dead-end walls make the two banks of a canal ONE chain: bank.caps lists the arclengths of those walls, so that quay.js can still tell the banks apart (one descent per site and bank). The seam x = -2670 of the removed
 // southern rectangles is a clip line too (_clipLines), since the clipped data still holds the Griboedov Canal pieces that meet there.
 // Water levels (street = 0): docs/research/west-canals-bridges.md section 2.5 (Fontanka -3.2, Griboedov -2.9, Moika -3.0, Winter Canal -3.1, Neva -3.4).
+// THE AREA TABLES (docs/AREAS.md section 3, src/world/area.js WATER): the plugs, the bridge zones and shades, the extra clip lines, the scenery sources an area draws, the centre and the radius of the far
+// window, the forced banks, the open mouths, the data records that form a waterway and the grass-slope reaches are the area's, not this file's. An area that leaves one out gets an empty / inert value.
 import { RIVER, WATER, EXTENT_RECTS } from '../data/city.js';
 import { EAST_WATER, EAST_WATER_BOUNDS } from '../data/east-water.js';
+import { WATER as AREA_WATER } from '../lib/area-tables.js';
 
 import { NEVA_DOWNSTREAM } from './neva-downstream.js';
 import { NEVA_MALAYA } from './neva-malaya.js';
@@ -29,15 +32,18 @@ import { NEVA_MALAYA } from './neva-malaya.js';
 // that holds the horizon ring of far.js (radius 4.7 .. 5.9 km): what lies beyond it is hidden by the ring and the fog.
 export const DATA_MARGIN = 600;
 export const DATA_RECTS = EXTENT_RECTS.map((r) => ({ x0: r.x0 - DATA_MARGIN, x1: r.x1 + DATA_MARGIN, z0: r.z0 - DATA_MARGIN, z1: r.z1 + DATA_MARGIN }));
-const FAR_C = [589, 173], FAR_R = 6000;                      // Vosstaniya Square (layout.SQUARE), the radius of the far scenery
+// the centre of the far window: WATER.farCenter of the area (the strip: Vosstaniya Square, layout.SQUARE), else the centre of its EXTENT rectangles; FAR_R: the radius of the far scenery
+const _ext = (f, k) => f(...EXTENT_RECTS.map((r) => r[k]));
+const FAR_C = AREA_WATER.farCenter || [(_ext(Math.min, 'x0') + _ext(Math.max, 'x1')) / 2, (_ext(Math.min, 'z0') + _ext(Math.max, 'z1')) / 2], FAR_R = AREA_WATER.farRadius;
 export const FAR_WIN = { x0: FAR_C[0] - FAR_R, x1: FAR_C[0] + FAR_R, z0: FAR_C[1] - FAR_R, z1: FAR_C[1] + FAR_R };
+// the scenery rings that exist; an area draws the ones it names in WATER.farSources (kept in this order)
 const FAR_SOURCES = [
   { name: 'neva-up', rings: EAST_WATER.filter((p) => p.name === 'Нева').map((p) => p.o), box: EAST_WATER_BOUNDS },      // box: the clip box of the bake: its edges are no banks
   { name: 'neva-down', rings: [NEVA_DOWNSTREAM], box: null },
   // the Malaya Neva (neva-malaya.js) joins the Neva INSIDE the data region (the mouth edge is the closing edge of the data polygon of the Neva), where no data polygon holds it: `inData` = it is drawn there too (water and
   // shore walls; only clipped to FAR_WIN), and the mouth edge, which both rings share, is an open join (no wall on either side)
   { name: 'neva-malaya', rings: [NEVA_MALAYA], box: null, inData: true },
-];
+].filter((s) => AREA_WATER.farSources.includes(s.name));
 const keyOf = (r) => r.key || null;
 
 /** Cross-section / look parameters per waterway key. water / bed: y of the surface and of the bed (street level = 0). */
@@ -55,52 +61,23 @@ export const WATERWAYS = {
 };
 const SEAM_TOL = 0.8;
 
-/** the strip under the Palace Bridge that OSM leaves out of both Neva polygons (between the west polygon edge and the east polygon edge) */
-const PLUGS = [{ key: 'neva', o: [-2315.3, -885.3, -2320, -892.2, -2330, -906.8, -2471.7, -1114.1, -2460.8, -1097.5] }];
+/** strips that OSM leaves out of the water polygons: the WATER.plugs of the area (the strip: under the Palace Bridge, between the west polygon edge and the east polygon edge of the Neva) */
+const PLUGS = AREA_WATER.plugs;
 
 /** Bridge crossings of the quay. c: centre, axis: bearing (deg) of the deck axis (direction of travel across the water), w: width of the deck measured ALONG the water (= the gap in the
  *  parapet / collider), len: length of the span (the abutments reach 8 m beyond it). Dimensions: docs/research/west-canals-bridges.md section 4 + the OSM bridge ways. `own`: a bridge
  *  the bridges module draws (the quay leaves the parapet / collider open and publishes the zone); the others get an invisible fallback deck (walk box + parapet boxes). */
-export const BRIDGE_ZONES = [
-  { id: 'belinsky', name: 'Мост Белинского', key: 'fontanka', c: [-452, -628.35], axis: 78.3, w: 19.06, len: 56.6, own: true },
-  { id: 'kazansky', name: 'Казанский мост', key: 'griboedov', c: [-1393, -302], axis: 104, w: 101, len: 25, own: true },
-  { id: 'bankovsky', name: 'Банковский мост', key: 'griboedov', c: [-1473, 27], axis: 139, w: 6.5, len: 25.4, own: true },
-  { id: 'muchnoy', name: 'Мучной мост', key: 'griboedov', c: [-1691, 154], axis: 150, w: 4.5, len: 22, own: true },
-  { id: 'italyansky', name: 'Итальянский мост', key: 'griboedov', c: [-1350, -540], axis: 102, w: 5, len: 19.7, own: true },
-  { id: 'novo-konyushenny', name: 'Ново-Конюшенный мост', key: 'griboedov', c: [-1273, -921], axis: 101, w: 36, len: 21.1, own: true },
-  { id: 'teatralny', name: 'Театральный мост', key: 'griboedov', c: [-1253.3, -1018.1], axis: 115.5, w: 15.6, len: 18, own: true },   // Triple Bridge, west part (dossier mars-bridges-canals.md 4.10)
-  { id: 'green', name: 'Зелёный мост', key: 'moika', c: [-1768, -419], axis: 104, w: 39, len: 29.3, own: true },
-  { id: 'pevchesky', name: 'Певческий мост', key: 'moika', c: [-1781, -845], axis: 94, w: 73, len: 30, own: true },
-  { id: 'red', name: 'Красный мост', key: 'moika', c: [-2011, -63], axis: 143, w: 17, len: 22, own: true },
-  { id: 'blue', name: 'Синий мост', key: 'moika', c: [-2368, 84], axis: 156, w: 98, len: 29.4, own: true },
-  { id: 'bolshoy-konyushenny', name: 'Большой Конюшенный мост', key: 'moika', c: [-1574.9, -1072.4], axis: 146, w: 11.6, len: 17.6, own: true },   // 11.6 m wide (OSM footways +-4.5), 17.6 m long (28.8 with the wings)
-  { id: 'hermitage', name: 'Эрмитажный мост', key: 'winter-canal', c: [-1920, -1137], axis: 51, w: 16.5, len: 12.2, own: true },
-  { id: 'zimny-1', name: '1-й Зимний мост', key: 'winter-canal', c: [-1822, -1008], axis: 49, w: 21.5, len: 15.6, own: true },
-  { id: 'zimny-2', name: '2-й Зимний мост', key: 'winter-canal', c: [-1775, -945], axis: 26, w: 10.5, len: 20.5, own: true },
-  { id: 'palace', name: 'Дворцовый мост', key: 'neva', c: [-2322, -884], axis: 143, w: 30, len: 255, own: true },
-  { id: 'anichkov', name: 'Аничков мост', key: 'fontanka', c: [-442, -92], axis: 100, w: 38, len: 55, own: true },
-  { id: 'swan-lower', name: 'Нижний Лебяжий мост', key: 'swan-canal', c: [-857.7, -1004.3], axis: 67, w: 21, len: 11.5, own: true },
-  { id: 'panteleymonovsky', name: 'Пантелеймоновский мост', key: 'fontanka', c: [-725.2, -1082.8], axis: 76.5, w: 23.4, len: 43, own: true },
-  { id: 'eng1', name: '1-й Инженерный мост', key: 'moika', c: [-754.7, -1042.0], axis: 326, w: 10, len: 24, own: true },
-  { id: 'garden1', name: '1-й Садовый мост', key: 'moika', c: [-886.4, -962.9], axis: 342, w: 21, len: 22.4, own: true },
-  { id: 'garden2', name: '2-й Садовый мост', key: 'moika', c: [-1178.9, -1010.1], axis: 192, w: 20.6, len: 29.7, own: true },
-  { id: 'malo-konyushenny', name: 'Мало-Конюшенный мост', key: 'moika', c: [-1249.8, -1036.4], axis: 11, w: 15.6, len: 24.6, own: true },
-  { id: 'kamenny', name: 'Каменный мост', key: 'griboedov', c: [-1800.4, 218.5], axis: 143, w: 13.9, len: 19.7, own: true },
-  { id: 'pochtamtsky', name: 'Почтамтский мост', key: 'moika', c: [-2821.7, 214.3], axis: 166.3, w: 6, len: 41.9, own: true },
-  { id: 'fonarny', name: 'Фонарный мост', key: 'moika', c: [-2651.5, 200.3], axis: 142.6, w: 20, len: 40, own: true },
-];
+export const BRIDGE_ZONES = AREA_WATER.bridgeZones;      // the area's WATER.bridgeZones (src/world/area.js)
 
 /** The decks of the big bridges as the water shader darkens the water under them (deck rectangle centre, axis, width between the railings, length bank to bank). Shade only: the quay openings come from the BRIDGE_ZONES rows above. */
-export const BRIDGE_SHADES = [
-  { id: 'palace-deck', key: 'neva', c: [-2415.2, -977.3], axis: 323.5, w: 27.7, len: 254.5 },
-];
+export const BRIDGE_SHADES = AREA_WATER.bridgeShades;      // the area's WATER.bridgeShades
 
 // ---------------------------------------------------------------- geometry helpers
 const ringArea = (o) => { let a = 0; for (let i = 0; i < o.length; i += 2) { const j = (i + 2) % o.length; a += o[i] * o[j + 1] - o[j] * o[i + 1]; } return a / 2; };
 const _clipLines = (() => {                                  // axis-parallel lines of the EXTENT rectangle borders
   const set = new Map();
   for (const r of EXTENT_RECTS) { set.set('x' + r.x0, ['x', r.x0]); set.set('x' + r.x1, ['x', r.x1]); set.set('z' + r.z0, ['z', r.z0]); set.set('z' + r.z1, ['z', r.z1]); }
-  set.set('x-2670', ['x', -2670]);                           // the seam of the removed S rectangles of the whole-city project: the clipped data still holds the Griboedov Canal polygon pieces 5:1 / 5:2 that meet at it (a clip line of the full city, not of the strip's EXTENT_RECTS)
+  for (const [axis, v] of AREA_WATER.clipLines) set.set(axis + v, [axis, v]);      // the area's extra clip lines (WATER.clipLines; the strip: the seam x = -2670 of the removed S rectangles of the whole-city project, where the clipped data still holds the Griboedov Canal polygon pieces 5:1 / 5:2 that meet)
   return [...set.values()];
 })();
 const _dataLines = (() => {                                  // axis-parallel lines of the DATA_RECTS borders
@@ -189,7 +166,7 @@ function build() {
     if (!key || !WATERWAYS[key]) return;
     r.polys.forEach((p, pi) => rings.push({ key, o: p.o, id: ri + ':' + pi, kind: 'data' }));
   });
-  WATER.forEach((w) => { if (w.id === 'r15750440') w.polys.forEach((p, i) => rings.push({ key: 'moat', o: p.o, id: 'moat' + i, kind: 'data' })); });      // the castle moat (the data keeps it as a plain pond)
+  for (const dw of AREA_WATER.dataWater) WATER.forEach((w) => { if (w.id === dw.id) w.polys.forEach((p, i) => rings.push({ key: dw.key, o: p.o, id: dw.key + i, kind: 'data' })); });      // WATER.dataWater of the area (the strip: the castle moat r15750440, which the data keeps as a plain pond; ids 'moat0', 'moat1' ...)
   PLUGS.forEach((p, i) => rings.push({ key: p.key, o: p.o, id: 'plug' + i, kind: 'plug' }));
   for (const g of rings) { g.area = ringArea(g.o); g.waterLeft = g.area > 0; g.n = g.o.length / 2; g.box = boxOf(g.o); }
   const CELL = 64, grid = new Map(), cellsOf = (ax, az, bx, bz, f) => { for (let i = Math.floor(Math.min(ax, bx) / CELL); i <= Math.floor(Math.max(ax, bx) / CELL); i++) for (let j = Math.floor(Math.min(az, bz) / CELL); j <= Math.floor(Math.max(az, bz) / CELL); j++) f(i * 8192 + j); };
@@ -214,10 +191,10 @@ function build() {
   };
   // FORCED BANK: the 1.2 m corner edge of the Neva polygon at the same spot touches the Bolshaya Neva polygon in one vertex, which the 1.8 m slack rule of same-waterway pieces reads as a join: it is shore
   // (land to the west), and without it the two chains end 1.204 m apart (the stitch limit is 1.2 m)
-  const FORCED_BANK = [[-2460.8, -1097.5, -2460.7, -1098.7]];
+  const FORCED_BANK = AREA_WATER.forcedBanks;                // WATER.forcedBanks of the area (the strip: [[-2460.8, -1097.5, -2460.7, -1098.7]])
   // OPEN MOUTH: the Moika leaves the Fontanka under the 1st Engineer Bridge, but the Moika polygon ends 1-3 m off the Fontanka edge across its mouth, so the join test above misses it and the Fontanka quay wall
   // closed the arch from the Fontanka side. An edge that lies along one of these segments is water on both sides, no bank.
-  const OPEN_MOUTHS = [[-744, -1034.5, -757.4, -1054.4]];
+  const OPEN_MOUTHS = AREA_WATER.openMouths;                 // WATER.openMouths of the area (the strip: [[-744, -1034.5, -757.4, -1054.4]])
   const isOpenMouth = (ax, az, bx, bz) => OPEN_MOUTHS.some((e) => segDist(ax, az, e[0], e[1], e[2], e[3]) < 1.5 && segDist(bx, bz, e[0], e[1], e[2], e[3]) < 1.5);
   function isForcedBank(ax, az, bx, bz) { return FORCED_BANK.some((e) => (Math.hypot(e[0] - ax, e[1] - az) < 0.3 && Math.hypot(e[2] - bx, e[3] - bz) < 0.3) || (Math.hypot(e[0] - bx, e[1] - bz) < 0.3 && Math.hypot(e[2] - ax, e[3] - az) < 0.3)); }
   // A PLUG is a hand-made strip (under the Palace Bridge) whose short end edge lies ON the shore of the Spit: there a data edge that runs along it is a real bank (land on one side), not an open join. Until the
@@ -350,11 +327,7 @@ export const farBanks = () => waterGeo().farBanks;
 // of the bank chains (arclength s0..s1) for the quay builder (quay.js sweeps the profile along them), slopeAt() is the point test (shoreDistance counts a slope as water: nothing stands on it).
 // A run stops at every bridge zone (the abutments / wings of the bridge module take over: its rectangle |u| <= len / 2 + 14 across the water, |v| <= w / 2 + 1.5 along it).
 /** reaches: key of the waterway, test(x, z, nx, nz) on a bank point (landward normal n), run = horizontal length of the slope, kerb = banquette top above the water, lip = step from the banquette to the slope */
-export const SLOPE_REACHES = [
-  { id: 'swan', key: 'swan-canal', run: 4.7, kerb: 0.45, lip: 0.10, test: () => true, rail: (nx) => (nx < 0 ? 'ballpost' : 'trellis') },   // west (Mars Field) side ball posts + tubes, east (garden) side green trellis
-  // the Moika along the Mikhailovsky Garden (south bank, between the 1st Sadovy Bridge and the Rossi Pavilion landing): dossier section 2.2 "slope reach x -1000..-880"
-  { id: 'moika-mikhailovsky', key: 'moika', run: 4.2, kerb: 0.45, lip: 0.10, test: (x, z, nx, nz) => nz > 0.5 && x >= -1010 && x <= -882, rail: () => null },
-];
+export const SLOPE_REACHES = AREA_WATER.slopeReaches;      // the area's WATER.slopeReaches (the strip: the Swan Canal everywhere, the Moika along the Mikhailovsky Garden)
 const inZoneGap = (key, x, z, m = 0.06) => {          // the slope stops flush with the deck edge (the abutment face), its cut face rests against it
   for (const zn of BRIDGE_ZONES) {
     if (zn.key !== key) continue;

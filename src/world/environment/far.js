@@ -18,6 +18,7 @@ import { Acc, hash2, mix, sstep, lonLatToXZ, pointInRing, distToRing, coneCulled
 import { canopyGeometry } from './treegeo.js';
 import { waterRings } from './river.js';
 import { coverageDistance, horizonRadii, HORIZON_JITTER } from './far-coverage.js';
+import { ZONES } from '../lib/area-tables.js';
 
 const SQ = L.SQUARE;
 // Continue the distant city around the complete coverage union. A fixed 4.7 km
@@ -151,7 +152,7 @@ function genBlocks(ctx) {
     const d = Math.hypot(c.x - SQ.x, c.z - SQ.z), pd = d > RMAX ? distanceToCoverage(c.x, c.z) : 1e9, belt = d > RMAX; if (belt && pd > FAR_BELT) continue;
     if (inE(c.x, c.z, 60)) continue;
     if (nearRiver(c.x, c.z) || nearNeva(c.x, c.z) || rail(c.x, c.z) || lm.some((p) => Math.hypot(p[0] - c.x, p[1] - c.z) < 130)) continue;
-    const d2 = Math.hypot(c.x + 2430, c.z + 800), dm = Math.min(d, d2 + 700);                // the historic centre reaches the Admiralty and over the Neva (Vasilievsky, Petrograd side): dense stone blocks there too
+    let dm = d; for (const q of ZONES.farCentres) dm = Math.min(dm, Math.hypot(c.x - q.x, c.z - q.z) + q.bias);      // the area's ZONES.farCentres (the strip: the historic centre reaches the Admiralty and over the Neva (Vasilievsky, Petrograd side): dense stone blocks there too)
     const dens = belt ? 0.92 * (1 - 0.55 * sstep(FAR_BELT * 0.5, FAR_BELT, pd)) : dm < 2600 ? 0.95 : dm < 3400 ? 0.82 : 0.82 * (1 - 0.85 * sstep(3400, RMAX, dm));
     if (hash2(i, j, 901) > dens * thin) continue;
     const t = hash2(i, j, 902), outer = belt ? pd > FAR_BELT * 0.6 : dm > 2600;      // the belt: perimeter blocks of the old districts near the play edge, panel slabs further out
