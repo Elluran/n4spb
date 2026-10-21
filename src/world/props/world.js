@@ -12,6 +12,7 @@ import * as L from '../layout.js';
 import { BUILDINGS, GREEN, AREAS, WATER, BRIDGES, PLATFORMS, RAILS, ROADS, TREES } from '../data/city.js';
 import { SITES, inDeck } from '../bridges/sites.js';
 import { ringHas } from './kit.js';
+import { HOOKS } from '../lib/area-tables.js';
 
 export const F = { BLD: 1, ROAD: 2, PAVED: 4, TREE: 8, WATER: 16, PLAZA: 32, LAWN: 128, BED: 256, SQUARE: 512, MISC: 2048, PATH: 4096, DECK: 8192, STEPS: 16384, DOOR: 32768 };   // SQUARE = the Palace Square stone field (stays an open plaza)
 const BLOCK = F.BLD | F.ROAD | F.PAVED | F.TREE | F.WATER | F.PLAZA | F.BED | F.SQUARE | F.MISC | F.DECK | F.STEPS | F.DOOR;
@@ -22,6 +23,7 @@ const X0 = Math.floor(PL.x0 - M), X1 = Math.ceil(PL.x1 + M), Z0 = Math.floor(PL.
 const WD = Math.ceil((X1 - X0) / CELL), HT = Math.ceil((Z1 - Z0) / CELL);
 
 export function buildWorld(ctx) {
+  const propReject = HOOKS.propReject?.(ctx);                      // the area's no-furniture places (the North: the Paradny podium; hooks/keep-out.js), once per build
   const flags = new Uint16Array(WD * HT);
   const idx = (x, z) => { const i = Math.floor((x - X0) / CELL), j = Math.floor((z - Z0) / CELL); return i < 0 || j < 0 || i >= WD || j >= HT ? -1 : j * WD + i; };
 
@@ -182,6 +184,7 @@ export function buildWorld(ctx) {
     /** footprint test for an oriented box (local x = w, local z = d, rotY as three.js). Samples the corners, the edge midpoints and the centre (+ a margin).
      *  o: { allow (flags that may be hit), road (min carriageway distance), bld (min wall distance), margin, noLawn, water (min distance to the Fontanka water) } */
     fits(cx, cz, w, d, rotY, o = {}) {
+      if (propReject && propReject(cx, cz)) return false;
       const c = Math.cos(rotY), s = Math.sin(rotY), m = o.margin ?? 0.1, hw = w / 2 + m, hd = d / 2 + m, mask = BLOCK & ~(o.allow || 0);
       const nx = Math.max(2, Math.ceil(w / 1.0)), nz = Math.max(2, Math.ceil(d / 1.0));
       for (let a = 0; a <= nx; a++) for (let b = 0; b <= nz; b++) {

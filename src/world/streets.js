@@ -55,6 +55,7 @@ import { makeSigns } from './streets/signs.js';
 import { makeLabels } from './streets/labels.js';
 import { MeshBuilder } from './lib/massing.js';
 import { ownedGroups, isOwned } from './lib/claims.js';
+import { HOOKS } from './lib/area-tables.js';
 import { AREAS, ENTRANCES, TRAMWAYS, LAMPS } from './data/city.js';
 import { SHAFTS } from './data/metro.js';
 import { debugScene } from './streets/debug.js';
@@ -78,8 +79,9 @@ export async function build(ctx) {
   if (ctx.recordBake && !ctx.bakeNavOnly) ctx.recordBake('street-textures', Object.fromEntries(Object.entries(T).map(([key, value]) => [key, packTexture(value)])));
   const net = await roadPlan(ctx);
   if (ctx.recordBake && !ctx.bakeNavOnly) ctx.recordBake('street-kerbs', packKerbRuns(net));
+  const pedHook = HOOKS.pedestrianOnly?.(ctx);          // the area's pedestrian ways (the North: the Paradny quarter, which landmarksTauride draws; hooks/keep-out.js), once per build
   for (const w of net.ways) {
-    w.pedestrianOnly = false;
+    w.pedestrianOnly = !!(pedHook && pedHook(w));
     // the Anichkov deck, its asphalt and kerbs belong to landmarksC once it draws them; the OSM living-street trace round the Palace Square stone field (w217399816 + spurs) belongs to landmarksG's paving (no raised kerb / dashes in the square)
     // service ways / living streets claimed by a landmark module (New Holland's park lanes, a courtyard a landmark paves): the landmark draws them, they carry no cars, lanes or furniture of ours
     // (a claimed bridge keeps its lanes: the bridges module draws the deck, the cars drive over it)

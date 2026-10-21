@@ -13,6 +13,7 @@ import { GREEN } from '../data/city.js';
 import * as L from '../layout.js';
 import { MeshBuilder, addCap, addWalls, ringFromFlat } from '../lib/massing.js';
 import { isOwned } from '../lib/claims.js';
+import { HOOKS } from '../lib/area-tables.js';
 import { Acc, hash2, clamp, mix, sstep, polyArea, ringCentroid, longestEdge, pointInPoly, distToRing, polyBox } from './util.js';
 import { canopyMaterial, tuftMaterial } from './leafmat.js';
 
@@ -258,7 +259,8 @@ export function buildTufts(ctx, root, field) {
   }
   const one = new Float64Array(6);
   // the live part of put(): claims and courtyards can change; ANDed with the cached verdict, so the order is free
-  const live = (x, z) => !(field.claimed(x, z) || inCourt(x, z));
+  const keepOut = HOOKS.tuftReject?.(ctx);                                         // the area's no-grass places (the North: the Paradny podium, the Kirochnaya campus; hooks/keep-out.js), once per build
+  const live = (x, z) => !(field.claimed(x, z) || inCourt(x, z) || (keepOut && keepOut(x, z)));
   function emit(x, z, out, o) {
     const h = out[o], w = out[o + 1];
     col.setRGB(out[o + 3], out[o + 4], out[o + 5]);

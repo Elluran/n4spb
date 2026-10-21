@@ -19,6 +19,7 @@ import { createTreeInstanceWriter } from './tree-instances.js';
 import { BUILDINGS, GREEN, EXTENT, TREES, TREE_ROWS } from '../data/city.js';
 import * as L from '../layout.js';
 import { isOwned } from '../lib/claims.js';
+import { HOOKS } from '../lib/area-tables.js';
 import { SPECIES, FAMILIES, canopyGeometry, trunkGeometry } from './treegeo.js';
 import { canopyMaterial, coniferMaterial, trunkMaterial } from './leafmat.js';
 import { riverBanks, waterBanks } from './river.js';
@@ -111,7 +112,9 @@ export function placeTrees(ctx, field, owned, extraAvoid = []) {
   // keep the hero view and the numbered viewpoints open: a disc around each and a corridor along the look direction
   const CLEAR = [];
   for (const [i, v] of [L.HERO, ...L.VIEWS].entries()) { const yaw = (v.yaw * Math.PI) / 180; CLEAR.push({ x: v.x, z: v.z, r: 7, dx: -Math.sin(yaw), dz: -Math.cos(yaw), len: i === 0 ? 100 : 40, hw: i === 0 ? 10 : 6 }); }
+  const areaCleared = HOOKS.treeCleared?.(ctx), areaReject = HOOKS.treeReject?.(ctx);      // the area's keep-outs (hooks/keep-out.js, once per build): soft = not for mapped trees, hard = for all
   const cleared = (x, z) => {
+    if (areaCleared && areaCleared(x, z)) return true;                            // (the North: Smolny's mapped ceremonial approaches stay open, not procedural woodland)
     for (const c of CLEAR) {
       const px = x - c.x, pz = z - c.z; if (px * px + pz * pz < c.r * c.r) return true;
       const t = px * c.dx + pz * c.dz; if (t > 0 && t < c.len && Math.abs(px * c.dz - pz * c.dx) < c.hw * (1 - 0.5 * t / c.len)) return true;
@@ -165,6 +168,7 @@ export function placeTrees(ctx, field, owned, extraAvoid = []) {
     const trunk = F.trunk * Math.min(1.1, .7 + .35*s);
     if (ctx._roadPlan?.cover(x,z,{}) >= -(trunk+.5)) return no('asphalt');
     if (mergedMedianAt(ctx,x,z)) return no('merged-median');
+    if (areaReject) { const why = areaReject(x, z); if (why) return no(why); }          // a landmark module draws the place (the North: the Paradny podium, the Kirochnaya campus, the Suvorov strip): mapped OSM trees too
     if (!o.force) {
       if (cleared(x, z)) return no('cleared');
       if (fam !== 'ball' && onNevsky(x, z)) return no('nevsky');                                                     // no trees on Nevsky itself
