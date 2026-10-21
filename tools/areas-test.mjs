@@ -83,6 +83,11 @@ for (const a of Object.values(REGISTRY)) {
     assert(A.TEST, `src/areas/${a.id}/area.js must export TEST`);
     const pr = testShapeProblems(A.TEST); assert.equal(pr.length, 0, pr.join('; '));
   });
+  check('page.json help line names every digit view of TEST.viewKeys (the keyboard help follows VIEWS)', () => {
+    const pj = pageJsonFile(root, a.id); if (a.id === 'strip' || !fs.existsSync(pj)) return;
+    const help = JSON.parse(fs.readFileSync(pj, 'utf8')).help.walk;
+    for (const k of A.TEST?.viewKeys || []) { const m = /^Digit(\d)$/.exec(k); if (m) assert(help.includes(`<kbd>${m[1]}</kbd>`), `help.walk of src/areas/${a.id}/page.json has no <kbd>${m[1]}</kbd> for the view ${k}`); }
+  });
   check('area tables have the shape the engine reads', () => {
     for (const k of ['NAMES', 'SQUARE', 'OBELISK', 'STATION', 'GROUPS']) assert(A[k] && typeof A[k] === 'object', k);
     for (const k of ['makeAreas', 'makeViews']) assert.equal(typeof A[k], 'function', k);
