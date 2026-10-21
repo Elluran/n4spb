@@ -5,6 +5,7 @@
 import { PARKING } from '../data/city.js';
 import { wayAt } from './net.js';
 import * as L from '../layout.js';
+import { HOOKS } from '../lib/area-tables.js';
 
 const ringHas = (o, x, z) => { let ins = false; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const xi = o[i], zi = o[i + 1], xj = o[j], zj = o[j + 1]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) ins = !ins; } return ins; };
 
@@ -71,7 +72,8 @@ export function planParking(net) {
       }
     }
   }
-  const result = slots.filter((s) => L.inExtent(s.x, s.z));
-  result.lines = lines.filter((p) => L.inExtent((p[0] + p[2]) / 2, (p[1] + p[3]) / 2));
+  const reject = HOOKS.parkingReject;                  // the area's no-parking places (the North: the Paradny podium, once landmarksTauride is in its module list; hooks/keep-out.js)
+  const result = slots.filter((s) => L.inExtent(s.x, s.z) && !(reject && reject(s.x, s.z)));
+  result.lines = lines.filter((p) => { const mx = (p[0] + p[2]) / 2, mz = (p[1] + p[3]) / 2; return L.inExtent(mx, mz) && !(reject && reject(mx, mz)); });
   return result;
 }
