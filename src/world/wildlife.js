@@ -46,6 +46,7 @@ import { makeWorld } from './wildlife/world.js';
 import { buildBirds } from './wildlife/birds.js';
 import { buildDucks } from './wildlife/ducks.js';
 import { crowdTable } from './wildlife/zones.js';
+import { ZONES } from './lib/area-tables.js';
 
 export async function build(ctx) {
   const svc = (ctx.services.wildlife = { birds: [], dogs: [], spots: [], ducks: [], perches: [], flocks: [], debug: {} });
@@ -85,10 +86,10 @@ export async function build(ctx) {
       for (const b of ctx.services.environment?.boats || []) if (b && b.moving && b.state) ctx.audio.loop('boatHum', { position: () => { const st = b.state(ctx.time || 0); return { x: st.x, y: (L.WATERWAYS[b.key]?.water ?? L.RIVER_Y.water) + 0.8, z: st.z }; }, volume: 0.6 });
     }
   } catch (e) { /* audio is optional */ }
-  // the two big fountains of the west: the Kazan garden fountain (-1469, -279) and the Alexander Garden fountain (-2334.8, -494.8; landmarksH garden.js): a positional 'fountain' loop each
+  // the big fountains of the area (ZONES.fountains of the area module; the strip: the Kazan garden fountain (-1469, -279) and the Alexander Garden fountain (-2334.8, -494.8; landmarksH garden.js)): a positional 'fountain' loop each
   try {
     if (ctx.audio && ctx.audio.loop && !flags.has('nofountain')) {
-      for (const [x, z, v] of [[-1469, -279, 0.8], [-2334.8, -494.8, 1.0]]) if (L.inPlay(x, z)) ctx.audio.loop('fountain', { position: { x, y: 1.2, z }, volume: v });
+      for (const [x, z, v] of ZONES.fountains) if (L.inPlay(x, z)) ctx.audio.loop('fountain', { position: { x, y: 1.2, z }, volume: v });
     }
   } catch (e) { /* audio is optional */ }
 

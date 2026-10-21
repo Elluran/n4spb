@@ -16,6 +16,7 @@
 // TEST HOOKS  window.__drive = ctx.drive;  ?cam=... shots show the parked car; node tools/shot.mjs --eval "__ctx.drive.enter(); __ctx.drive.sim(3, { thr: 1 })" drives it headlessly.
 import * as THREE from 'three';
 import { loadGarage } from './drive/cars/index.js';
+import { GARAGE } from './lib/area-tables.js';
 import { createHandling, holdInput } from './drive/handling.js';
 import { createCarDamage, crushedSpec } from './drive/damage.js';
 import { getCarWrecks } from './drive/wrecks.js';
@@ -24,7 +25,7 @@ import { createFx } from './drive/fx.js';
 import { createDriveHud } from './drive/hud.js';
 
 const DEG = Math.PI / 180, TAU = Math.PI * 2;
-export const SPAWN = { x: 579, z: 219, yaw: 99 * DEG };      // on the asphalt strip beside the station's taxi rank, facing east, toward Vosstaniya Square
+export const SPAWN = GARAGE.spawn || GARAGE.poses.coupe || null;      // GARAGE.spawn of the area module (the strip: on the asphalt strip beside the station's taxi rank, facing east, toward Vosstaniya Square)
 const EXIT_MAX_KMH = 25;
 const angDiff = (a, b) => { let d = a - b; d -= TAU * Math.round(d / TAU); return d; };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -33,6 +34,7 @@ export async function build(ctx) {
   const { camera, physics: ph, L } = ctx, THREE_ = THREE;
   const player = ctx.playerObj || null;                       // set by main.js before the modules are built
   const garage = await loadGarage(ctx);                       // drive/cars/index.js: the coupe + whichever of the truck / Lada load
+  if (!garage.length) { console.warn('[drive] the area has no garage (GARAGE.poses): no cars'); return; }      // an area without cars: no drive service (the callers test ctx.drive)
   const wrecks = await getCarWrecks(ctx);
   // ONE VEHICLE PER CAR: its own model, handling state (parked pose included), damage state, parked physics box. V is the car the player drives or last drove; the closure
   // names below (car, model, damage, parked, SPEC, EYE) always point at V, the others stand parked as solid obstacles with their own dents.

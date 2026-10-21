@@ -21,16 +21,15 @@
 //     hold the tram for minutes).
 // Sources: docs/research/transport.md section 6 (red-white-grey one-section cars), the tram route 3 of 2026 (the stretch Sadovaya - Gostiny Dvor - Italyanskaya - Mikhailovsky Castle - Letny Sad).
 import { ARCH, ROUTE_BY_REF } from './fleetdata.js';
+import { ZONES } from '../lib/area-tables.js';
 
 // terminals in map metres: the track ends of the strip data, which are clipped at the data extent (tools/strip-data-clip.mjs). The strip holds two tram networks:
 // route 3 (Sadovaya - Apraksin Dvor - Gostiny Dvor - Italyanskaya - Mikhailovsky Castle - Letny Sad, both directions, from the Letny Sad end at the north edge to the Sadovaya end at the west edge of W1) and
 // the Marata / Ligovsky pair of routes 43 and 49, run from the north edge to the south edge. In the OSM data the northbound track of the second network merges into the southbound pair at (76, 597)
 // with no turn-compatible link onwards (the northward continuation is ~180 degrees away from the arriving heading), so no northbound route exists: the builder prints '43/49a: ... 1137 m short'
 // and that line runs southbound only (expected; the trams are born at the north end, drive south and leave at the south edge). The ways are not clipped there.
-export const TRAM_LINES = [
-  { refs: ['3'], a: [-924, -1118], b: [-1456, 280], headway: 190 },
-  { refs: ['43', '49'], a: [-175, -523], b: [197, 1178], headway: 300 },
-];
+// THE AREA TABLE (docs/AREAS.md section 3): the lines are ZONES.tramLines of the area module (src/world/area.js); an area without the table has no tram routes (the numbers above describe the strip's).
+export const TRAM_LINES = ZONES.tramLines;
 const V_MAX = 11, V_MIN = 3.2, A_MAX = 0.95, B_SERVICE = 1.15, B_EMERGENCY = 4.2, LAT = 0.9;
 const hyp = Math.hypot;
 

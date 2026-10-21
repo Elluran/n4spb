@@ -19,6 +19,7 @@ import { BUILDINGS, ROADS, AREAS, GREEN, LANDUSE, PARKING, CROSSINGS, CROSSING_N
 import { isOwned } from '../lib/claims.js';
 import { waterPolys } from './river.js';
 import { slopeQuads } from './waterways.js';
+import { ZONES } from '../lib/area-tables.js';
 import { extraClaimRings } from './claims.js';
 import { clamp, hash2 } from './util.js';
 import { classLayer } from './class-palette.js';
@@ -317,9 +318,7 @@ export function buildField(ctx, owned, baked = null) {
   for (const m of MONUMENTS) disc(dg, pts, m.x, m.z, 4.5, 1);
   for (const b of BARRIERS) if (b.kind === 'fence' || b.kind === 'wall' || b.kind === 'chain') stamp(dg, hard, b.closed ? b.pts.concat(b.pts.slice(0, 2)) : b.pts, 0.9, 1);
   for (const h of L.GROUND_HOLES) stampRect(dg, pts, h.x, h.z, h.w, h.d, h.rotY || 0, 1, 6);                      // metro shafts + 6 m around them
-  { // the station forecourt (Vosstaniya Square paving is an AREA already): keep trunks off the facade apron
-    const S = L.STATION; if (S) disc(dg, pts, S.tower.x, S.tower.z + 20, 28, 1);
-  }
+  for (const c of ZONES.clearDiscs) disc(dg, pts, c.x, c.z, c.r, 1);      // the area's ZONES.clearDiscs (the strip: the station forecourt, Vosstaniya Square paving is an AREA already): keep trunks off the facade apron
 
   lap('raster');
   // each distance field is quantised to a byte right after its transform and the float array dropped (8 float fields at once were ~320 MB of peak memory)

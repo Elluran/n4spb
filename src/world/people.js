@@ -1,4 +1,5 @@
 import { bakedData } from '../core/baked-world.js';
+import { ZONES } from './lib/area-tables.js';
 // people - the pedestrians of the centre of Saint Petersburg, a July afternoon around 16:30: ~1450 anime people (docs/research/people.md) walking the real pavements, zebras, the paving of
 // Vosstaniya Square, the Anichkov Bridge, the Moscow Station forecourt / hall / platforms, going in and out of the metro doors, photographing the Klodt horses and the obelisk, following
 // tour guides (a plain coloured UMBRELLA - no flags), queueing at kerbs and taxis, sitting on benches, riding bikes / e-scooters, pushing prams, walking dogs, busking, painting portraits,
@@ -29,15 +30,14 @@ import { bakedData } from '../core/baked-world.js';
 //            is `factor` x the plan (hall seats, taxi queues, passengers, photographers, smokers, goals and the player-following re-placement are thinned), fading to 1 over `fade` m.
 //            maxPeople: a hard head count for the zone (nobody picks a target / is re-placed there while it is full).
 //            The Nevsky pavement crowd between Mayakovskaya and the Fontanka is not touched.
+// The area-bound sub-tables (station, west, mars: the numbers and their meaning are in src/world/area.js ZONES.peopleDensity, where the strip's values are) come from the area module; an area that leaves
+// one out gets the neutral one (no station zone, scale 1, no quiet zone of the castle). global is the engine's.
+const PD = ZONES.peopleDensity;
 export const DENSITY = {
   global: 0.72,
-  station: { factor: 0.35, maxPeople: 330, radius: 220, fade: 80, rectRadius: 40, segments: [[592, 165, 612, 330]], rects: [[560, 400, 790, 1100]] },
-  // the WEST (Gostiny Dvor - the Admiralty; people/west.js): `scale` multiplies the counts of the scripted places (Kazan, Palace Square, the gardens, the bridges ...); `platforms` the passengers on the
-  // platforms of the three west metro stations (people/metrolife.js, ~70 at 1). The population total targets 1000-1400 (the walkers follow the player: the crowd around the camera comes from them).
-  west: { scale: 0.55, platforms: 0.75 },
-  // the ENGINEERING CASTLE reach (people/mars.js, people/area.js): `scale` multiplies the counts of the scripted places; `zones` are head-count caps of the quiet zones (nav.marsZone: 0 the castle precinct): while a zone holds
-  // `maxPeople` visible people (scripted ones included) nobody is re-placed / picks a target there. The summer afternoon is busy, but this is not Nevsky.
-  mars: { scale: 0.55, zones: [{ name: 'castle', maxPeople: 70 }] },
+  station: PD.station,
+  west: PD.west || { scale: 1, platforms: 1 },
+  mars: PD.mars || { scale: 1, zones: [] },
 };
 const URLQ = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams('');
 

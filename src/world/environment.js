@@ -43,6 +43,7 @@ import { ownedGroups, isOwned } from './lib/claims.js';
 import { roadPlan } from './lib/road-plan.js';
 import { buildField, loadFieldBake, recordFieldBake } from './environment/field.js';
 import { slopeAt } from './environment/waterways.js';
+import { PRUNE_SERVICES } from './lib/area-tables.js';
 import { buildGround } from './environment/ground.js';
 import { buildQuay } from './environment/quay.js';
 import { buildWater } from './environment/water.js';
@@ -103,7 +104,7 @@ export async function build(ctx) {
       }
       if (S.props && S.props.lamps && !done.has('props')) { done.add('props'); for (const l of S.props.lamps) pts.push([l.x, l.z, 2.6]); }
       if (S.metro && Array.isArray(S.metro.entrances) && !done.has('metro')) { done.add('metro'); for (const e of S.metro.entrances) if (Number.isFinite(e.x)) pts.push([e.x, e.z, 6]); }
-      for (const k of ['city', 'landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksNorth']) {
+      for (const k of PRUNE_SERVICES) {                // the services of the area module that list entrances (src/world/area.js PRUNE_SERVICES; the strip: city, landmarksA ... landmarksD, landmarksNorth)
         if (done.has(k) || !S[k] || !Array.isArray(S[k].entrances)) continue;
         done.add(k);
         for (const d of S[k].entrances) if (Number.isFinite(d.x)) pts.push([d.x, d.z, d.clearance || 4.5]);
