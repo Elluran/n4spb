@@ -13,6 +13,8 @@ import { GROUPS_LIST as G_NORTHFULL } from '../../world/landmarksNorthFull/group
 import { GROUPS_LIST as G_SMOLNY } from '../../world/landmarksSmolny/groups.js';
 import { GROUPS_LIST as G_SUVOROV } from '../../world/landmarksSuvorov/groups.js';
 import { GROUPS_LIST as G_KIROCHNAYA } from '../../world/landmarksKirochnaya/groups.js';
+import { LIBRARY_GROUP } from '../../world/landmarksD/groups.js';
+import { GROUPS_LIST as G_OKTYABRSKY } from '../../world/landmarksOktyabrsky/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'north';
@@ -31,6 +33,8 @@ export const MODULES = [
   'landmarksKirochnaya', // the Elena Pavlovna Clinical Institute, Kirochnaya 41: 20 OSM footprints, garden campus (lawn, service lanes, trees, fence)
   'streets',      // roads, markings, kerbs, granite pavements, crossings, road furniture, trolleybus overhead wires
   'city',         // every OSM building (no landmark module claims one yet): Petersburg facade grammar, roofs, courtyards, entrances
+  'landmarksD',   // the National Library (Fontanka 36) and the Mariinsky hospital block, the strip's band at (-334, -311): only the 'library' sub-group is claimed here
+  'landmarksOktyabrsky', // Bolshoy Concert Hall Oktyabrsky on Ligovsky Prospekt, the strip's band at (797, -347)
   'props',        // benches, bins, kiosks, bus shelters, billboards, flower baskets
   'traffic',      // moving cars, buses, trolleybuses + parked cars
   'people',       // pedestrians, groups, cyclists, scooters
@@ -44,6 +48,7 @@ export const LABELS = {
   landmarksNorthFull: 'Чернышевская, Спасо-Преображенский собор, дом Мурузи',
   landmarksSuvorov: 'Музей Суворова',
   landmarksKirochnaya: 'Клинический институт на Кирочной',
+  landmarksD: 'Национальная библиотека', landmarksOktyabrsky: 'БКЗ «Октябрьский»',
 };
 
 export const NAMES = {
@@ -88,6 +93,8 @@ GROUPS.landmarksNorthFull = G_NORTHFULL;
 GROUPS.landmarksSmolny = G_SMOLNY;
 GROUPS.landmarksSuvorov = G_SUVOROV;
 GROUPS.landmarksKirochnaya = G_KIROCHNAYA;
+GROUPS.landmarksD = [LIBRARY_GROUP];      // the strip's landmarksD claims four sub-groups; only the National Library / Mariinsky block lies in the band (landmarksD/groups.js)
+GROUPS.landmarksOktyabrsky = G_OKTYABRSKY;      // the concert hall w30324279 (797, -347), shared with the strip
 
 /**
  * The HUD location table (first match wins), built with the layout helpers `h` ({ NAMES, SUBGROUPS, _sqPolys, _groupPolys, _named, _areaPolys, _shoreOf, _deck, inRiver, shoreDist }).
@@ -192,6 +199,7 @@ export const TEST = {
     { id: 'w232918746', by: 'landmarksSuvorov', group: 'north-suvorov-museum' },         // the Suvorov Museum (the main block, Digit9 looks at it)
     { id: 'r3127704', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
     { id: 'w30324355', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
+    { id: 'r3801087', by: 'landmarksD', group: 'library' }, { id: 'w30324279', by: 'landmarksOktyabrsky', group: 'oktyabrsky-hall' },
   ],      // M5: the vestibule w22999175, the Transfiguration r5802451 ...
   viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Place.oktyabrsky'],
   mustHaveAreas: [
