@@ -269,7 +269,7 @@ export function addVignettes(ctx, nav, sim, S) {
     }
   }
   // =================================================================== the WEST (west.js) and the platforms of the west metro stations (metrolife.js)
-  try { S.westInfo = addWest(ctx, nav, sim, S, { mk, fixed, free, lookAt, dist, openSpot, arcPlan, standNear, nodeAt }); } catch (e) { console.error('[people] west vignettes failed:', e); }
+  if (!(S.west && S.west.off)) try { S.westInfo = addWest(ctx, nav, sim, S, { mk, fixed, free, lookAt, dist, openSpot, arcPlan, standNear, nodeAt }); } catch (e) { console.error('[people] west vignettes failed:', e); }      // ZONES.peopleDensity.west.off: an area without the west of the strip (the North) has none of its scripted places
   if (!(nav.marsCfg && nav.marsCfg.off)) try { S.marsInfo = addMars(ctx, nav, sim, S, { mk, fixed, free, lookAt, dist, openSpot, arcPlan, standNear, nodeAt }); } catch (e) { console.error('[people] castle vignettes failed:', e); }
   try { S.metroInfo = addMetroLife(ctx, nav, sim, S); } catch (e) { console.error('[people] metro platforms failed:', e); }
 

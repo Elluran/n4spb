@@ -54,7 +54,8 @@ const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).hre
 const args = process.argv.slice(2);
 const flag = (k, d) => { const i = args.indexOf('--' + k); return i < 0 ? d : (args[i + 1] && !args[i + 1].startsWith('--') ? Number(args[i + 1]) || args[i + 1] : true); };
 const AT = { kazan: [-1469, -300], palace: [-2010, -770], gostiny: [-1100, -240], admiralty: [-2440, -740], isaac: [-2449, -90], catherine: [-805, -86], alexander: [-2335, -500], hermitage: [-2097, -893], kazanbridge: [-1391, -331], square: [-2000, -690], nevsky: [-1650, -400], station: [592, 165], moika: [-1768, -420], gdarcade: [-1060, -215], horseman: [-2745, -420], admmetro: [-2030, -420], gdmetro: [-985, -192], nevskymetro: [-1360, -340],
-  peter: [-712, -757], castle: [-740, -830] };
+  peter: [-712, -757], castle: [-740, -830],
+  chernyshevskaya: [461, -1350], tauride: [1226, -1268], smolny: [2425, -1833], preobrazhenskaya: [68, -1182] };      // the last four: the North (node tools/area.mjs north tools/people-test.mjs --at tauride)
 const atName = flag('at', null);
 const PL = atName && AT[atName] ? AT[atName].join(',') : flag('player', null); let PLX = PL ? String(PL).split(',').map(Number) : null;
 const TOUR = typeof flag('tour', null) === 'string' ? String(flag('tour', '')).split(',').filter((k) => AT[k]) : null;        // --tour a,b,c: the player visits the places one after the other (equal shares of --minutes)
@@ -69,6 +70,7 @@ const ctx = createContext({ scene, camera, renderer: null, audio: null, quality,
 ctx.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight(), uniforms: {} };
 const wanted = ['environment', 'streets', 'city', 'rail', 'landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksE', 'landmarksF', 'landmarksG', 'landmarksH', 'landmarksI', 'landmarksJ', 'landmarksK', 'landmarksBelinsky', 'landmarksCastle', 'landmarksOktyabrsky',
   'bridges', 'metro', 'props', 'traffic', 'people'];
+if ((process.env.AREA || 'strip') !== 'strip') { const keep = new Set(wanted), list = (await import('./modules-list.mjs')).mainModules().filter((m) => keep.has(m)); wanted.length = 0; wanted.push(...list); }      // another area (tools/area.mjs): the modules of ITS page that this test knows (docs/AREAS.md)
 { const mods = flag('mods', null); if (typeof mods === 'string') { const keep = new Set(mods.split(',')); for (let i = wanted.length - 1; i >= 0; i--) if (!keep.has(wanted[i])) wanted.splice(i, 1); } }       // --mods a,b,c: build only these (in the page order): quick probes
 ctx.buildList = wanted;
 const built = [], times = {};
@@ -192,7 +194,7 @@ console.log('mean people: visible in play area', (densAcc.play / densAcc.n).toFi
 console.log('people inside the Gostiny arcade (mean)', (galN / Math.max(1, regN)).toFixed(1), '| under the Kazan colonnade (mean)', (colN / Math.max(1, regN)).toFixed(1));
 console.log('metro door flows (people entering / leaving, whole run):', JSON.stringify(Object.fromEntries(Object.entries(metroFlow).sort((p2, q) => p2[0] < q[0] ? -1 : 1))));
 console.log('crossings started', stats.crossStart, 'bad starts', stats.crossStartBad, 'waits', stats.waits, 'mean wait', stats.waits ? (stats.waitTime / stats.waits).toFixed(1) + ' s' : '-', 'sit-downs', stats.sits, 'building / bus entries', stats.doors);
-if (sim.marsCount) { const mz = sim.nav.marsCfg.zones.map((z, k) => z.name + ' ' + sim.marsCount[k] + '/' + z.maxPeople); console.log('mars zones (visible at the end / cap):', mz.join(' | ')); const byScene = {}; for (const a of sim.agents) { if (a.hidden) continue; const k = sim.nav.marsZone(a.x, a.z); if (k >= 0) { const key = sim.nav.marsCfg.zones[k].name + ':' + (a.noMass ? 'script' : 'walker'); byScene[key] = (byScene[key] || 0) + 1; } } console.log('  by kind', JSON.stringify(byScene)); }
+if (sim.marsCount && sim.nav.marsCfg.zones.length) { const mz = sim.nav.marsCfg.zones.map((z, k) => z.name + ' ' + sim.marsCount[k] + '/' + z.maxPeople); console.log('mars zones (visible at the end / cap):', mz.join(' | ')); const byScene = {}; for (const a of sim.agents) { if (a.hidden) continue; const k = sim.nav.marsZone(a.x, a.z); if (k >= 0) { const key = sim.nav.marsCfg.zones[k].name + ':' + (a.noMass ? 'script' : 'walker'); byScene[key] = (byScene[key] || 0) + 1; } } console.log('  by kind', JSON.stringify(byScene)); }
 for (const lg of legs) console.log(`leg ${lg.name}: update callbacks ${((lg.wall || 0) / Math.max(1, lg.ns || 1)).toFixed(2)} ms per 0.1 s step over ${lg.ns || 0} steps; mean people within 100 m of the player ${(lg.near / Math.max(1, lg.n)).toFixed(0)}; regions within 400 m: ` + REGIONS.map((r, q) => [r, lg.acc[q] / Math.max(1, lg.n)]).filter(([r]) => Math.hypot(r[1] - AT[lg.name][0], r[2] - AT[lg.name][1]) < 400).map(([r, v]) => r[0] + ' ' + v.toFixed(0)).join(' | '));
 console.log('people per region (mean visible):', REGIONS.map((r, q) => r[0] + ' ' + (regAcc[q] / Math.max(1, regN)).toFixed(0)).join(' | '));
 if (viol.nan) fail('NaN');

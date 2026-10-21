@@ -52,7 +52,7 @@ export async function build(ctx) {
   const tm = { t0 }, tick = (k) => { tm[k] = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - tm.t0); };
   ctx.navBake = await bakedData(ctx, `nav-${ctx.quality.level || ctx.quality.name}`);
   const qLevel = ctx.quality && (ctx.quality.level || ctx.quality.name), qf = qLevel === 'low' ? 0.45 : qLevel === 'medium' ? 0.7 : 1;        // the quality tiers scale the head-count cap of the castle zone too
-  const marsOff = URLQ.get('mars') === 'off' || !!globalThis.__marsOff;                  // ?mars=off: without the castle population (A / B comparisons)
+  const marsOff = URLQ.get('mars') === 'off' || !!globalThis.__marsOff || !!DENSITY.mars.off;                 // ?mars=off: without the castle population (A / B comparisons)
   const zoneCaps = DENSITY.mars.zones.map((z) => ({ ...z, maxPeople: Math.round(z.maxPeople * qf) }));
   const nav = buildNav(ctx, { ...DENSITY, mars: marsOff ? { off: true, zones: [], scale: 1 } : { ...DENSITY.mars, zones: zoneCaps } }); tick('nav');
   ctx.navBake = null; ctx.baked?.release?.(`nav-${ctx.quality.level || ctx.quality.name}`);
