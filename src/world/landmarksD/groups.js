@@ -1,0 +1,6 @@
+// landmarksD/groups.js - the sub-group of module landmarksD that the NORTH claims too (pure data, no imports; docs/AREAS.md section 3, docs/AREAS-DATA.md).
+// The National Library (r3801087) and the Mariinsky hospital block (w60353337) lie at the strip's north-west corner, inside the 200 m band of the strip's territory that the North holds as its own
+// (x -420 .. 835, z -405 .. -205), so both pages draw them with the same module. ONE source of truth for both area modules: src/world/area.js (the strip) puts LIBRARY_GROUP first in
+// GROUPS.landmarksD, src/areas/north/area.js claims only this group (GROUPS.landmarksD = [LIBRARY_GROUP]). Fields as in layout.js GROUPS: { key, name, nameEn, ids, osm, at, note }.
+// The 'library' sub-group is built by TWO parts of landmarksD.js: 'library' (r3801087) and 'hospital' (w60353337: both read layout.groupMembers('library')), plus the library / hospital regions of 'fences'.
+export const LIBRARY_GROUP = { key: 'library', name: 'Российская национальная библиотека · Мариинская больница', nameEn: 'National Library (Fontanka 36) and the Mariinsky hospital block', ids: ['r3801087', 'w60353337'], osm: [], at: [-334, -311], note: 'north-west corner of the map (the "Главный корпус" block of the screenshot)' };

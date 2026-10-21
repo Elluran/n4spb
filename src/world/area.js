@@ -18,6 +18,7 @@ import { GROUPS_LIST as G_BR } from './bridges/groups.js';
 import { GROUPS_LIST as G_NORTH } from './landmarksNorth/groups.js';
 import { GROUPS_LIST as G_CASTLE } from './landmarksCastle/groups.js';
 import { GROUPS_LIST as G_OKTYABRSKY } from './landmarksOktyabrsky/groups.js';
+import { LIBRARY_GROUP } from './landmarksD/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'strip';
@@ -89,7 +90,7 @@ export const GROUPS = {
   ],
   // ---- landmarksD: sights in the north and the south of the map -----------------------------------------------------------------------
   landmarksD: [
-    { key: 'library', name: 'Российская национальная библиотека · Мариинская больница', nameEn: 'National Library (Fontanka 36) and the Mariinsky hospital block', ids: ['r3801087', 'w60353337'], osm: [], at: [-334, -311], note: 'north-west corner of the map (the "Главный корпус" block of the screenshot)' },
+    LIBRARY_GROUP,      // landmarksD/groups.js: the one sub-group the North claims too (src/areas/north/area.js)
     { key: 'vladimirsky', name: 'Владимирский собор и колокольня', nameEn: 'Vladimirsky Cathedral and bell tower', ids: ['w38611014', 'w38611013'], osm: [], at: [-160, 440], note: 'Vladimirsky pr. 20: ~40 m domes, ~60 m bell tower (OSM heights are the base only)' },
     { key: 'tolstoy', name: 'Толстовский дом · дом Рубинштейна', nameEn: 'Tolstoy House (Rubinshteyna 15-17) and Rubinshteyna 13', ids: ['r1588827', 'r368263'], osm: [], at: [-480, 330], note: 'corner tower; Zagorodny / Rubinshteyna corner' },
     { key: 'dostoevsky', name: 'Достоевская · Владимирская (улицы метро)', nameEn: 'Vladimirskaya square surroundings (Dostoevsky statue, Passage, Renaissance Hall)', ids: ['w70216607', 'w38578114'], osm: [], at: [-250, 470], note: 'Vladimirsky pr. 19 and 23' },
