@@ -130,7 +130,7 @@ table line and the `Object.assign` blocks `MARS`, `SW`, `VO`... with their count
 houses the strip also has. The "111 N2/N3 rows" of the planning research are the dossiers of the buildings stored in the source's region `N2` (x -800..1100; `N3` has none): 65 of them are in
 the North facade, the other 46 lie west of x = -540 (strip territory). `KNOWN_EXTRA` has no entry for a North building (its 33 corrections are strip houses).
 
-Merging: `known.js` imports `./known-data.js`, which is a URL-like key of the import map, so the **North page needs no code change**: its remap gets one more key,
+Merging: `known.js` imports `./known-data.js`, which is a URL-like key of the import map, so the **North page needs no code change**: its remap has one more key (since M3),
 `'src/world/city/known-data.js': 'src/areas/north/known-data.js'` (the file exports `KNOWN_DATA` with the same shape). The North's table replaces the strip's on that page (the strip rows for strip
 houses would never be looked up there; the 46 shared rows are in both). `KNOWN_EXTRA` stays shared (corrections of band houses apply on both pages). The Node loader hooks (`tools/lib/area-hooks.mjs`)
 read the same registry remap, so the headless tools see the same table.

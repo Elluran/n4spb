@@ -3,12 +3,15 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer-core';
 
 const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = {}; for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; } }
 const root = path.resolve(args.root || here), PAGE = args.page || 'index.html';
+const { REGISTRY } = await import(pathToFileURL(path.join(here, 'src/areas/registry.js')).href);
+const ROW = Object.values(REGISTRY).find((a) => a.page === PAGE) || REGISTRY.strip;      // the area whose page is tested (--page north.html)
+const OTHER = Object.keys(REGISTRY).find((k) => k !== ROW.id);                           // an area module that is NOT this page's: the mismatch test serves the page with its id
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
 let rewriteArea = null;      // when set, the page is served with another data-area
 const server = http.createServer((req, res) => {
@@ -44,19 +47,21 @@ try {
   console.log('the page boots as its area:');
   { const { page, errors } = await open(`${base}?${FAST}`);
     await page.waitForFunction("document.body.classList.contains('loaded')", { timeout: 120000, polling: 250 });
-    const r = await page.evaluate(() => ({ id: window.__ctx.area.ID, bake: window.__ctx.area.BAKE_DIR, attr: document.documentElement.dataset.area, errs: (window.__errors || []).length, hero: window.__ctx.area.makeViews ? true : false, mods: Object.keys(window.__stats.modules) }));
+    const r = await page.evaluate(() => ({ id: window.__ctx.area.ID, bake: window.__ctx.area.BAKE_DIR, attr: document.documentElement.dataset.area, errs: (window.__errors || []).length, hero: window.__ctx.area.makeViews ? true : false, mods: Object.keys(window.__stats.modules),
+      garage: (window.__ctx.drive ? window.__ctx.drive.fleet.map((v) => ({ id: v.id, x: v.parked.x, z: v.parked.z })) : null), poses: window.__ctx.area.GARAGE ? window.__ctx.area.GARAGE.poses : null }));
     check('__ctx.area.ID equals <html data-area>', r.id === r.attr, r);
-    check('area id is the strip and its bake dir is the original one', r.id === 'strip' && r.bake === 'baked/', r);
+    check(`area id is ${ROW.id} and its bake dir is ${ROW.bake}`, r.id === ROW.id && r.bake === ROW.bake, r);
     check('the fast harness built its module', r.mods.includes('drive'), r.mods);
+    check('the garage holds the four cars at the poses of the area module', !!r.garage && r.garage.map((c) => c.id).join() === 'coupe,truck,lada,roadster' && r.garage.every((c) => Math.abs(c.x - r.poses[c.id].x) < 1e-6 && Math.abs(c.z - r.poses[c.id].z) < 1e-6), r);
     check('no module errors, no page errors', r.errs === 0 && errors.length === 0, { errs: r.errs, errors });
     await page.close(); }
   console.log('a page whose data-area disagrees with its area module is refused:');
-  { rewriteArea = 'north';
+  { rewriteArea = OTHER;
     const { page } = await open(`${base}?${FAST}`);
     await page.waitForFunction("document.getElementById('fatal') && getComputedStyle(document.getElementById('fatal')).display !== 'none'", { timeout: 60000, polling: 250 }).catch(() => {});
     const r = await page.evaluate(() => ({ fatal: !!document.getElementById('fatal'), text: (document.getElementById('fatal') || {}).textContent || '', loaded: document.body.classList.contains('loaded') }));
     check('the fatal card is shown and the scene is not "loaded"', r.fatal && !r.loaded, r);
-    check('the card names the disagreement', /area|область/i.test(r.text) || /north/.test(r.text), r.text.slice(0, 200));
+    check('the card names the disagreement', /area|область/i.test(r.text) || r.text.includes(OTHER), r.text.slice(0, 200));
     rewriteArea = null; await page.close(); }
 } catch (e) { fails++; console.log('TEST ERROR:', e.stack || e.message); }
 finally { await browser.close(); server.close(); }

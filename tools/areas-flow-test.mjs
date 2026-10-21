@@ -140,7 +140,7 @@ try {
     check('the camera pose is the walker\'s pose (4 numbers, west-facing)', cam.length === 4 && Math.abs(cam[0] - 500) < 8 && Math.abs(cam[2] - 77.07) < 5, cam);
     const ho = JSON.parse(Buffer.from(q.get('ho').replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
     check('ho: v1, from/to the strip, via gate g0, no car, one hop', ho.v === 1 && ho.from === 'strip' && ho.to === 'strip' && ho.gate === 'g0' && ho.via === 'gate' && ho.car === null && ho.n === 1, ho);
-    await page.evaluate(() => window.__gates.go(window.__gates.gates[0])); await sleep(200);
+    await page.evaluate(() => window.__gates.go(window.__gates.gates.find((g) => g.id === 'g0'))); await sleep(200);
     check('a second accept while travelling does nothing', (await page.evaluate(() => window.__navUrls.length)) === 1);
     await page.screenshot({ path: path.join(OUT, 'travel-veil.png') });
     // ---- the arrival page
@@ -233,7 +233,7 @@ try {
     await placeWalker(page, 545, 167.7); await sleep(400); await walkUntilOpen(page); await sleep(900); await page.keyboard.press('Enter'); await sleep(700);
     const r = await page.evaluate(() => ({ urls: window.__navUrls.length, traveling: window.__gates.traveling, pending: window.__ctx.travelPending, veil: !document.getElementById('travel').hidden, toast: document.querySelector('#toast .t-name').textContent, lock: window.__ctx.playerObj.inputLock }));
     check('an unreachable destination: no navigation, no veil, the game is playable again, a toast says why', r.urls === 0 && !r.traveling && !r.pending && !r.veil && /Нет связи|Cannot reach/.test(r.toast) && r.lock === 0, r);
-    await page.evaluate(() => { window.__gates.preflight = async () => ({ ok: false, why: 'stale' }); window.__gates.machine.cooldown(window.__gates.gates[0], 0.5); });      // (the first failure set the 30 s cooldown: shorten it)
+    await page.evaluate(() => { window.__gates.preflight = async () => ({ ok: false, why: 'stale' }); window.__gates.machine.cooldown(window.__gates.gates.find((g) => g.id === 'g0'), 0.5); });      // (the first failure set the 30 s cooldown: shorten it)
     await sleep(1500); await placeWalker(page, 575, 174.5); await sleep(600); await placeWalker(page, 545, 167.7); await sleep(600); await walkUntilOpen(page); await sleep(900); await page.keyboard.press('Enter'); await sleep(700);
     const r2 = await page.evaluate(() => ({ urls: window.__navUrls.length, traveling: window.__gates.traveling, toast: document.querySelector('#toast .t-name').textContent, lock: window.__ctx.playerObj.inputLock, open: !!document.querySelector('#panel:not([hidden]) .confirm'), pf: window.__gates.preflight.toString().slice(0, 60) }));
     check('a stale destination: no navigation, a toast says the area is out of date, input is free', r2.urls === 0 && !r2.traveling && /устарела|out of date/.test(r2.toast) && r2.lock === 0, r2);
