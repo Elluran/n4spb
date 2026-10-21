@@ -73,7 +73,7 @@ boots, and a module does nothing for what the area does not list. The tables are
 | `ZONES.farCentres` | `[{ x, z, bias }]` old dense stone city beyond the area: far blocks within `distance + bias` of one are as dense as near the area's centre | `environment/far.js` | the area's `SQUARE` only |
 | `GARAGE.poses`, `GARAGE.spawn` | `{ coupe, truck, lada, roadster: { x, z, yaw (rad) } }`; `{ x, z, yaw }` | `drive/cars/index.js` (`PARKING`), `drive.js` (`SPAWN`) | a car without a pose is not built; no pose at all: `drive.js` returns early (no `ctx.drive`; its callers test it) |
 | `PRUNE_SERVICES` | `['city', 'landmarksA', ...]` services whose `entrances` clear the trees from the doors | `environment.js` | no door clearings |
-| `HOOKS`, `HEIGHT_PATCHES` | `{}` and `[]`, reserved for the hand-merged hooks and the height patches of M6 | nothing yet | empty |
+| `HOOKS`, `HEIGHT_PATCHES` | `{ key: factory, function or list }` and `[{ id, box, at }]`: the hook set of M6, contract in section 9 (the North builds them in `src/areas/north/hooks.js`; the strip exports `{}` and `[]`) | the engine modules of section 9.1 (nothing reads them before the clusters of M6 land) | empty: every call site is a no-op |
 
 Not tables, by design (the street frame is shared by all areas, so these are right in every area, or they follow the area's own `SQUARE` / `STATION` / `HERO` anchors): the horizon silhouettes of `far.js`
 (real lon / lat positions, drawn only while no module owns the sight), `GRID_DEG`, `toGrid` / `fromGrid` (origin = the area's `SQUARE`), the `x < -595` "west look" seams (the North lies at x > -540), the
@@ -348,3 +348,84 @@ SOUTH of the Suvorov Museum (cover -3.8: it looks at the plain rear and the towe
 
 `tools/lib/claims-dump.mjs` and `tools/northfull-sign-probe.mjs` (new), `tools/band-parity.mjs` and `tools/areas-test.mjs` (the landmark assertion of 8.4), `tools/people-test.mjs` (another area builds the landmark modules of its page: the North's `landmarks*`)
 and `tools/area-garage-check.mjs` (same). `node tools/area.mjs north tools/wildlife-test.mjs` already built the whole list, `traffic-test` takes `TRAFFIC_BUILDLIST=environment,landmarksNorthFull,...,traffic` (the lanes are the same with and without the modules: 6,785 segments).
+
+## 9. The hook set (milestone M6)
+
+The source repository (102_3d_piter, commit `0568f7af`) hard-codes a handful of behaviours for its north into the engine modules: trees and grass tufts are kept out of the places that a landmark module draws, the Paradny
+podium is a 3.3 m deck that `layout.heightAt` knows, the Tauride Garden has its own crowd cap, cars and pedestrians stand on the deck of a landmark service. M6 gives the North these behaviours as a **small set of hooks**:
+the engine reads a table of the area module through `src/world/lib/area-tables.js` (section 3.1, rows `HOOKS` and `HEIGHT_PATCHES`) and does exactly what it did before when the key is absent, so **the strip is unchanged**
+(`HOOKS = {}`, `HEIGHT_PATCHES = []`; proved by the strip oracles of 9.6). The North builds both in **one place**, `src/areas/north/hooks.js`; `area.js` only calls `makeHooks(MODULES)` and `makeHeightPatches(MODULES)` at its tail.
+The inventory of the engine edits (items H01 .. H17, with the source lines) is the scout's report of M6; the ids below refer to it. This section is a skeleton written by the foundation commit (cluster F: 9.1 .. 9.4); the clusters and the
+integration step fill in 9.5 .. 9.7 and correct the rest.
+
+### 9.1 The contract (frozen by the foundation commit)
+
+`ctx.buildList` is the list of the modules this build really draws (`main.js`, `tools/check.mjs`); a missing list counts as "not built", as in the source (`ctx.buildList?.includes(name)`). `MODULES` is the page's list in `area.js`.
+
+| Key | Signature | Gating | Read by (item) | Body in | Strip default |
+|---|---|---|---|---|---|
+| `HEIGHT_PATCHES` | `[{ id: string, box: [x0, x1, z0, z1], at: (x, z) => number \| null }]`: per patch in array order a box reject, then `at()`; the first non-null wins; then the old waterway-bed / `GROUND_Y` line | `MODULES` (layout has no ctx): `[]` unless `landmarksTauride` is listed | `layout.js heightAt` (H01, A) | `hooks/height.js`, geometry `hooks/paradny.js` | `[]`: the old line |
+| `HOOKS.treeCleared` | `(ctx) => ((x, z) => boolean) \| null`: soft tree clearing, not applied to forced / mapped OSM trees | `landmarksSmolny` | `environment/trees.js cleared()` (H02, B) | `hooks/keep-out.js` | absent: no extra clearing |
+| `HOOKS.treeReject` | `(ctx) => ((x, z) => 'paradny' \| 'campus' \| 'suvorov' \| null) \| null`: hard reject, mapped trees included; the string is the debug reason | `landmarksTauride`, `landmarksKirochnaya`, `landmarksSuvorov` | `environment/trees.js plant()` (H03, B) | `hooks/keep-out.js` | absent |
+| `HOOKS.tuftReject` | `(ctx) => ((x, z) => boolean) \| null`: no grass tufts | `landmarksTauride`, `landmarksKirochnaya` | `environment/lawns.js buildTufts()` (H04, B) | `hooks/keep-out.js` | absent |
+| `HOOKS.propReject` | `(ctx) => ((cx, cz) => boolean) \| null`: no bench / bin / kiosk stamped | `landmarksTauride` | `props/world.js fits()` (H05, B) | `hooks/keep-out.js` | absent |
+| `HOOKS.pedestrianOnly` | `(ctx) => ((way) => boolean) \| null`; `way.rank`, `way.x[]`, `way.z[]` | `landmarksTauride` | `streets.js build()` (H06, B) | `hooks/keep-out.js` | absent: `false` |
+| `HOOKS.parkingReject` | `((x, z) => boolean) \| undefined`: a plain function, because `planParking(net)` has no ctx | `MODULES`, when `makeHooks(MODULES)` runs | `streets/parking.js` (H07, B) | `hooks/keep-out.js` (`makeParkingReject`) | absent |
+| `HOOKS.inGarden` | `((x, z) => boolean) \| undefined`: the Tauride Garden polygon, for the people crowd cap (the North always gives a function, the foundation stub answers `false`) | none (active in the generic North) | `people.js`, `people/nav.js`, `people/sim.js` (H08, C) | `hooks/people.js` | absent: no cap |
+| `HOOKS.deckServices` | `['landmarksTauride']`: names of `ctx.services` whose `deckY(x, z)` is consulted FIRST (cars and pedestrians); a service that is not built is skipped | none (inert while the service is absent) | `drive/handling.js` (H09, A), `people/nav.js surfaceY` (H09, C) | `hooks.js` | absent: the old chain |
+
+Rules of the contract:
+
+* The engine reads the hooks ONLY through `src/world/lib/area-tables.js`, never from `area.js`; `layout.js` gains no export (`tools/layout-golden.mjs` lists every export). The shape of the call site is `const f = HOOKS.key?.(ctx);` once per build,
+  then `if (f && f(x, z))` per candidate (the tuft / prop / tree paths are hot), about 3 lines per site plus one import.
+* Every `(ctx)` factory is evaluated ONCE per build and returns `null` when none of the modules it serves is in `ctx.buildList`.
+* A key that is absent means the engine does exactly what it does today. The files under `src/areas/north/hooks/` are PURE DATA and pure functions: no three.js, no import of `layout.js`, **no import of a data facade** (`tools/areas-test.mjs`
+  loads the area module without the import-map remap and would get the strip's facade); the coordinates are static (`environment` is built first, so it cannot read the service of a landmark module).
+* The hooks that serve a landmark module are **dormant until the module is in `MODULES`**: after M5 the North builds `landmarksSmolny`, `landmarksSuvorov` and `landmarksKirochnaya`, so the Smolny, Suvorov and campus keep-outs are active
+  (they may change trees and tufts only inside their declared regions); the Paradny hooks (`landmarksTauride`) stay dormant until the Tauride remake adds the module.
+
+### 9.2 Files
+
+| File | Owner | Content |
+|---|---|---|
+| `src/areas/north/hooks.js` | F | `makeHooks(MODULES)`, `makeHeightPatches(MODULES)`; the contract text; `deckServices` |
+| `src/areas/north/hooks/paradny.js` | F | the Paradny podium and its nine stair flights: `paradnyDeckY`, `inParadny`, `PARADNY_BOX`, `PARADNY_Y`, `PARADNY_PODIUM` and `PARADNY_STEPS` (literals), `PARADNY_STAIRS / FLIGHTS / LANDINGS` |
+| `src/areas/north/hooks/height.js` | A | `makeHeightPatches(MODULES)` (stub in the foundation commit: `[]`) |
+| `src/areas/north/hooks/keep-out.js` | B | `treeCleared`, `treeReject`, `tuftReject`, `propReject`, `pedestrianOnly`, `makeParkingReject` (stubs: `null` / `undefined`); the Smolny and Suvorov rectangles, the campus polygon |
+| `src/areas/north/hooks/people.js` | C | `inGarden` (stub: `false`) |
+| `src/areas/north/area.js` | F | the tail only: `import { makeHooks, makeHeightPatches } from './hooks.js'` and the two exports |
+
+`hooks/paradny.js` is a port of `src/world/landmarksTauride/paradny-surface.js` of the source (commit `0568f7af`): the same expressions and values (the deck answered identically on 641,504 probe points, the flights, landings and box are
+equal to the source module's), with the podium ring (14 vertices, bbox x 741 .. 1055, z -1205 .. -873, 74,115 m2) and the STEPS polylines (ways w1266791536, w1266791538, w1303266326 spliced into w1266791538, w1266791542, w1266791545,
+w1266791548, w1266791551, w1266791557, w1266791560) embedded as literals; `PARADNY_BOX` is `[741, 1058.51, -1205, -873]`. The literals equal the STEPS records of the North facade, in the order of the data.
+
+### 9.3 Decisions taken
+
+* The Paradny set is delivered DORMANT (the Tauride remake adds `landmarksTauride` to the North `MODULES`).
+* The Paradny geometry lives in `src/areas/north/hooks/paradny.js` (a port, not a second copy of `landmarksTauride/paradny-surface.js` in `src/world`, which the remake owns).
+* The Kirochnaya `CAMPUS` polygon (8 points) is EMBEDDED in `hooks/keep-out.js` with an equality test against `src/world/landmarksKirochnaya/groups.js`; the area module does not import that file.
+* The polygon of `inGarden` is the OSM park r1582734 ring, embedded, with an equality test against the North facade `GREEN` record.
+* Cars climb the Paradny podium only through a deck service (the source behaviour: `handling.js` `deckServices`).
+* The pond machinery (pond cuts, pond water mask, pond bed, removal of the thinning hack of `environment/trees.js`, garden bridges) belongs to the Tauride remake, not to M6; the pond bed will be a second entry of `HEIGHT_PATCHES`.
+* The Liteyny Bridge road stub (section 7) is a known gap, not an M6 hook.
+
+### 9.4 Clusters
+
+* **F, foundation (the first commit, serial)**: the contract, `hooks.js`, `hooks/paradny.js`, the three stubs, the tail of `area.js`, this skeleton.
+* **A, terrain and decks**: `layout.js heightAt` (H01), `drive/handling.js` (H09, cars), `hooks/height.js`.
+* **B, keep-outs**: `environment/trees.js` (H02, H03), `environment/lawns.js` (H04), `props/world.js` (H05), `streets.js` (H06), `streets/parking.js` (H07), `hooks/keep-out.js`.
+* **C, people**: `people.js`, `people/nav.js`, `people/sim.js` (H08, and H09 for pedestrians), `hooks/people.js`, one data line in `area.js` (`ZONES.peopleDensity.garden`).
+* **E, oracles and baselines**: `tools/north-hooks-test.mjs`, the golden dumps and signatures of the North before / after.
+
+### 9.5 Per-hook results
+
+To be filled by the clusters and the integration step (call sites, numbers, probes).
+
+### 9.6 Verification
+
+The strip oracles after every engine edit: `node tools/layout-golden.mjs --diff` (identical), `npm run check` (per-module counts identical to the same run on the clean `feat/areas`), `node tools/streets-signature.mjs --diff`
+and `node tools/city-signature.mjs --diff` (+0), plus the oracle named by the cluster. The North: `node tools/area.mjs north tools/<tool>.mjs`, `npm run check:north`. To be filled by the integration step.
+
+### 9.7 Known gaps
+
+To be filled by the integration step.

@@ -284,7 +284,9 @@ export const GARAGE = {
  *  (landmarksSmolny, landmarksSuvorov, landmarksKirochnaya; landmarksD publishes an array that is empty in the North, as in the strip's list). landmarksNorthFull and landmarksOktyabrsky publish none
  *  (the strip's table does not list them either). */
 export const PRUNE_SERVICES = ['city', 'landmarksSmolny', 'landmarksSuvorov', 'landmarksKirochnaya', 'landmarksD'];
-/** the hand-merged hooks of the engine modules (milestone M6 of docs/AREAS.md): none yet */
-export const HOOKS = {};
-/** the height patches of layout.heightAt (milestone M6: the Paradny podium): none yet */
-export const HEIGHT_PATCHES = [];
+// The hook set (milestone M6, docs/AREAS.md section 9): hooks.js builds it from the module list above (a hook that serves a landmark module is dormant until the module is in MODULES).
+import { makeHooks, makeHeightPatches } from './hooks.js';
+/** the hooks of the engine modules (keep-outs of trees / tufts / props / ways / parking, the garden of the crowd cap, the deck services): src/areas/north/hooks.js documents the contract */
+export const HOOKS = makeHooks(MODULES);
+/** the height patches of layout.heightAt (the Paradny podium and the like, the first patch that answers wins): none while the Tauride remake is not built */
+export const HEIGHT_PATCHES = makeHeightPatches(MODULES);
