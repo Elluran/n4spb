@@ -1,5 +1,7 @@
 // Memory/runtime-only changes should leave shipping world data identical.
-// Usage: node tools/bake-product-compare.mjs <baseline assets/baked directory>
+// Usage: node tools/bake-product-compare.mjs <baseline assets/baked directory> [<current assets/baked directory>]
+// Two bakes of the SAME source must be byte-identical (no wall-clock field is recorded any more, docs/AREAS.md); a baseline made before that still carries the build timings of
+// city-base (service.buildMs / buildPhases) and the roof capture time (ms): those fields are the only differences that are ignored.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { decodeBaked } from '../src/core/baked-codec.js';
-const current = fileURLToPath(new URL('../assets/baked/', import.meta.url));
+const current = process.argv[3] ? path.resolve(process.argv[3]) : fileURLToPath(new URL('../assets/baked/', import.meta.url));
 assert(process.argv[2], 'Pass the frozen baseline assets/baked directory');
 const baseline = path.resolve(process.argv[2]);
 const manifests = [baseline, current].map(dir => JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'))));
@@ -20,12 +22,15 @@ for (const name of Object.keys(manifests[0].files)) {
   assert(['city-base', 'roof'].includes(name), `World product changed: ${name}`);
   const decoded = buffers.map(b => { const raw = gunzipSync(b); return decodeBaked(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)); });
   for (const value of decoded) {
-    if (name === 'roof') { assert.equal(typeof value.ms, 'number'); value.ms = 0; }
+    if (name === 'roof') { if ('ms' in value) { assert.equal(typeof value.ms, 'number'); delete value.ms; } }
     else {
-      assert.equal(typeof value.service.buildMs, 'number'); value.service.buildMs = 0;
-      for (const key of Object.keys(value.service.buildPhases)) {
-        assert(['classify', 'edges', 'passages', 'walls', 'details', 'flush'].includes(key), `Unexpected phase ${key}`);
-        assert.equal(typeof value.service.buildPhases[key], 'number'); value.service.buildPhases[key] = 0;
+      if ('buildMs' in value.service) { assert.equal(typeof value.service.buildMs, 'number'); delete value.service.buildMs; }
+      if (value.service.buildPhases) {
+        for (const key of Object.keys(value.service.buildPhases)) {
+          assert(['classify', 'edges', 'passages', 'walls', 'details', 'flush'].includes(key), `Unexpected phase ${key}`);
+          assert.equal(typeof value.service.buildPhases[key], 'number');
+        }
+        delete value.service.buildPhases;
       }
     }
   }

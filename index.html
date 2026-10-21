@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-area="strip">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -111,6 +111,33 @@
   .panel-title { font: 900 20px/1.2 var(--round); color: var(--navy); }
   .panel-x { font: 700 13px/1 var(--round); color: #fff; background: var(--navy); border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; }
   .panel-body { padding: 0 16px 16px; overflow: auto; font: 500 14px/1.5 var(--sans); color: var(--ink); }
+  /* area gates (core/gates.js, docs/AREAS.md): the passive chip near a border, the yes / no question on the panel, and the travel veil while the next page loads */
+  #gatechip { bottom: calc(132px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); font: 700 15px/1.2 var(--round); color: var(--navy);
+    background: var(--glass); backdrop-filter: blur(6px); border-radius: 999px; padding: 10px 18px; box-shadow: 0 6px 20px rgba(28,42,90,.18); border-left: 6px solid var(--line-deep);
+    white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; display: none; }
+  #gatechip.show { display: block; pointer-events: auto; cursor: pointer; }
+  @media (pointer: coarse) { #gatechip.show { min-height: 48px; padding: 14px 22px; display: flex; align-items: center; } }
+  .confirm-body { font: 500 15px/1.55 var(--sans); color: var(--ink); }
+  .confirm-body .sights { font-weight: 700; color: var(--navy); }
+  .confirm-body .fine { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .confirm-row { display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; }
+  .confirm-yes { min-height: 46px; padding: 0 22px; border: 0; border-radius: 4px; background: #f2c14e; color: #0f1a44; font: 600 16px/1 "Golos Text", "Segoe UI", sans-serif; cursor: pointer; }
+  .confirm-yes:disabled, .panel-x:disabled { opacity: .45; cursor: default; }
+  .confirm-yes:focus-visible { outline: 3px solid var(--line-deep); outline-offset: 2px; }
+  html.tc .confirm-yes { min-height: 48px; }
+  @media (max-width: 520px) { .confirm-row { flex-direction: column-reverse; } .confirm-yes { width: 100%; } }
+  #travel { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; padding: 16px; background: rgba(11,18,48,.88); backdrop-filter: blur(4px); color: var(--paper); text-align: center; }
+  #travel[hidden] { display: none; }
+  #travel .t-card { max-width: 520px; }
+  #travel .t-kicker { font: 600 13px/1.2 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: #f2c14e; }
+  #travel .t-title { font: 900 28px/1.2 var(--round); margin: 8px 0; }
+  #travel .t-sights { font: 500 15px/1.5 var(--sans); opacity: .9; }
+  #travel .t-spin { width: 34px; height: 34px; margin: 22px auto 0; border-radius: 50%; border: 4px solid rgba(247,240,225,.25); border-top-color: #f2c14e; animation: t-spin 1s linear infinite; }
+  @keyframes t-spin { to { transform: rotate(360deg); } }
+  #travel .t-stall { margin-top: 18px; display: none; }
+  #travel.stalled .t-stall { display: block; }
+  #travel .t-stall button { margin: 0 6px; min-height: 44px; padding: 0 18px; border: 0; border-radius: 4px; background: #f2c14e; color: #0f1a44; font: 600 15px/1 "Golos Text", "Segoe UI", sans-serif; cursor: pointer; }
+  @media (prefers-reduced-motion: reduce) { #travel .t-spin { animation-duration: 3s; } }
   #coords { right: 6px; bottom: 3px; font: 500 10px/1 var(--sans); color: rgba(255,255,255,.92); text-shadow: 0 0 2px rgba(0,0,0,.85), 0 0 4px rgba(0,0,0,.55); font-variant-numeric: tabular-nums; letter-spacing: .02em; }   /* debug readout: same numbers as ?cam= */
   #stats { position: fixed; bottom: 22px; right: 12px; z-index: 4; font: 500 11px/1 var(--sans); background: rgba(28,42,90,.72); color: #fff; padding: 6px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; }
   @media (pointer: coarse) { #help .desk, body.flying #help .air { display: none; } }
@@ -305,6 +332,8 @@
 </div>
 <div class="hud" id="cross"></div>
 <div class="hud" id="interact" role="button" aria-live="polite"></div>
+<div class="hud" id="gatechip" role="button" aria-live="polite"></div>
+<div id="travel" hidden role="status" aria-live="polite"><div class="t-card"><div class="t-kicker"></div><div class="t-title"></div><div class="t-sights"></div><div class="t-spin" aria-hidden="true"></div><div class="t-stall"><button type="button" class="t-retry">Ещё раз · Retry</button><button type="button" class="t-stay">Остаться · Stay</button></div></div></div>
 <div id="panel" hidden role="dialog" aria-modal="true"><div class="panel-card"><div class="panel-head"><span class="panel-title"></span><button class="panel-x" type="button">Закрыть · Close</button></div><div class="panel-body"></div></div></div>
 <div class="hud" id="coords">x 0 · z 0</div>
 <div id="stats" hidden></div>

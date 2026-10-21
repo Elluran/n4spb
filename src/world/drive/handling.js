@@ -17,6 +17,16 @@ export const COUPE_TUNING = { acc: ACC, brake: BRAKE, revAcc: REV_ACC, vmax: VMA
   impactDecay: 4.5, hf: 2.1, hr: 2.1, hw: 0.95, smokeZ: 1.2, smokeY: 0.82, spec: null };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const TAU = Math.PI * 2;
+/**
+ * The input of a car that is HELD while a panel or the area prompt is open (drive.js): nothing is steered, boosted or hopped, and the speed is taken away without ever reversing the car.
+ * brk > 0 at a standstill (or below 0.8 m/s) accelerates BACKWARDS in step() and a throttle brakes a car that rolls backwards, so the hold follows the sign of the longitudinal speed vF:
+ * rolling forward = full brake, rolling backwards = throttle, at rest = handbrake. Writes into `inp` and returns it.
+ */
+export function holdInput(inp, vF) {
+  inp.thr = 0; inp.brk = 0; inp.steer = 0; inp.nitro = false; inp.hand = false; inp.jump = false; inp.flip = false;
+  if (vF > 0.8) inp.brk = 1; else if (vF < -0.3) inp.thr = 1; else inp.hand = true;
+  return inp;
+}
 /** the take-off speed and the tank cost of the simple hop (X) and of the barrel hop (C), tuning.hop: the APEX is v0^2 / 2g, 7.6 m/s = 1.86 m and 10.74 m/s = 3.72 m (twice) */
 export const hopV0 = (H, flip) => (flip ? H.v0flip ?? H.v0 : H.v0);
 export const hopCost = (H, flip) => (flip ? H.costFlip ?? H.cost : H.cost);

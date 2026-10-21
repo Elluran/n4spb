@@ -39,19 +39,47 @@ export function createUI({ player, toast, doc = typeof document !== 'undefined' 
     const x = root.querySelector('.panel-x'); if (x) x.textContent = opts.closeLabel || 'Закрыть · Close';
     root.hidden = false; root.classList.add('open');
     player.inputLock++;
-    open = { el: body, onClose: opts.onClose, wasLocked };
+    open = { el: body, onClose: opts.onClose, wasLocked, backdropClose: opts.backdropClose !== false };
     if (x) x.focus({ preventScroll: true });
     return { close, el: body };
   }
+  /**
+   * A yes / no question on the panel (the prompt of the area gates, core/gates.js): confirm({ title, body (html string or element), yes, no, onYes, onNo, armMs = 700 }).
+   * Esc and the "no" button decline; Enter or the "yes" button accept, but only after armMs: every button is disabled until then, so a key held down or a double tap that was meant for the
+   * game cannot answer it, and Space is swallowed while the question is open (a jump or a fly-up key must never press the focused button). A click on the dark backdrop does not close it.
+   * Returns { close(), el, armed } or the plain panel handle when the DOM has no #panel.
+   */
+  function confirm({ title, body, yes = 'OK', no = 'Cancel', onYes, onNo, armMs = 700 } = {}) {
+    if (!doc) return null;
+    const el = doc.createElement('div'); el.className = 'confirm';
+    const text = doc.createElement('div'); text.className = 'confirm-body'; if (typeof body === 'string') text.innerHTML = body; else if (body) text.append(body);
+    const row = doc.createElement('div'); row.className = 'confirm-row';
+    const yesB = doc.createElement('button'); yesB.type = 'button'; yesB.className = 'confirm-yes'; yesB.textContent = yes; yesB.disabled = true;
+    row.append(yesB); el.append(text, row);
+    let decided = false, armed = false;
+    const x = () => { const r = $('panel'); return r && r.querySelector('.panel-x'); };
+    const decide = (accepted) => { if (decided) return; decided = true; clearTimeout(timer); confirmKeys.open = false; const cb = accepted ? onYes : onNo; h.close(); try { cb && cb(); } catch (e) { console.error('confirm callback', e); } };
+    const h = panel(el, { title, closeLabel: no, backdropClose: false, onClose: () => { if (!decided) { decided = true; clearTimeout(timer); confirmKeys.open = false; try { onNo && onNo(); } catch (e) { console.error('confirm onNo', e); } } } });
+    const xb = x(); if (xb) xb.disabled = true;      // the "no" button is armed together with "yes" (Esc declines at any time)
+    confirmKeys.open = true; confirmKeys.accept = () => { if (armed) decide(true); };
+    yesB.addEventListener('click', () => decide(true));
+    const timer = setTimeout(() => { armed = true; yesB.disabled = false; if (xb) xb.disabled = false; try { yesB.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }, armMs);
+    return { close: () => decide(false), el, get armed() { return armed; } };
+  }
+  const confirmKeys = { open: false, accept: null };
   if (doc) {
     const root = $('panel');
     if (root) {
       const x = root.querySelector('.panel-x'); if (x) x.addEventListener('click', close);
-      root.addEventListener('pointerdown', (e) => { if (e.target === root) close(); });      // the dark backdrop
+      root.addEventListener('pointerdown', (e) => { if (e.target === root && (!open || open.backdropClose)) close(); });      // the dark backdrop (not for a question: confirm)
     }
     addEventListener('keydown', (e) => { if (open && e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }, true);
+    // a question is open: Enter answers yes (once armed), Space is swallowed everywhere so that no held jump / fly key presses the focused button
+    const swallow = (e) => { if (confirmKeys.open && e.code === 'Space') { e.preventDefault(); e.stopPropagation(); } };
+    addEventListener('keydown', (e) => { if (confirmKeys.open && e.code === 'Enter' && !e.repeat) { e.preventDefault(); e.stopPropagation(); confirmKeys.accept && confirmKeys.accept(); } else swallow(e); }, true);
+    addEventListener('keyup', swallow, true);
   }
-  return { panel, close, toast, get open() { return !!open; }, get modalOpen() { return !!open; } };
+  return { panel, confirm, close, toast, get open() { return !!open; }, get modalOpen() { return !!open; } };
 }
 
 export function createInteract({ camera, player, ui, doc = typeof document !== 'undefined' ? document : null }) {

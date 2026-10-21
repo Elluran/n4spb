@@ -149,7 +149,7 @@ export async function build(ctx) {
   ctx.services.city = { buildings: info.length, triangles: Math.round(tris), entrances: details.entrances || [], walls: info.flatMap((r) => r.walls), styles, report: { ...details.report, colliders: colliderCount, gates: gates.length, dossierGates: ctx._cityDossierGates || 0, fills: prep.fills, towers: towers.towers, canopies }, buildMs: Math.round(performance.now() - t0) };
   ctx.services.city.buildPhases = buildPhases;
   if (ctx.recordBake && !ctx.bakeNavOnly) {
-    const { styles, ...service } = ctx.services.city;
+    const { styles, buildMs, buildPhases, ...service } = ctx.services.city;      // (no wall-clock field in a product: two bakes of one source must be byte-identical)
     // Keep public wall measurements; build-time edge/record graphs are not runtime services.
     const fields = ['id','bi','a','b','dx','dz','nx','nz','s0','s1','len','N','bw','shop','base','plinth','G','PN','floors','H','hole','street','gate','midX','midZ','flags'];
     service.walls = service.walls.map(w => Object.fromEntries(fields.map(k=>[k,w[k]])));

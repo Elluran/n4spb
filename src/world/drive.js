@@ -16,7 +16,7 @@
 // TEST HOOKS  window.__drive = ctx.drive;  ?cam=... shots show the parked car; node tools/shot.mjs --eval "__ctx.drive.enter(); __ctx.drive.sim(3, { thr: 1 })" drives it headlessly.
 import * as THREE from 'three';
 import { loadGarage } from './drive/cars/index.js';
-import { createHandling } from './drive/handling.js';
+import { createHandling, holdInput } from './drive/handling.js';
 import { createCarDamage, crushedSpec } from './drive/damage.js';
 import { getCarWrecks } from './drive/wrecks.js';
 import { createCarSound } from './drive/sound.js';
@@ -317,7 +317,7 @@ export async function build(ctx) {
     if (!state.active) return;
     const locked = ctx.ui && ctx.ui.modalOpen;
     readInput(input);
-    if (locked) { input.thr = 0; input.brk = 0.4; input.steer = 0; input.nitro = false; input.hand = false; input.jump = false; input.flip = false; }
+    if (locked) holdInput(input, car.vF);      // a panel / the area prompt is open: the car holds (a fixed brake input would make a stopped car reverse: handling.js holdInput)
     if (dt > 0) {
       car.step(dt, input); hopTap = flipTap = false;
       hopEvents();
@@ -376,9 +376,23 @@ export async function build(ctx) {
     });
   }
 
+  /** Arrival of a hand-off (docs/AREAS.md): get into car `spec.id`, put it at (x, z) facing the camera yaw (degrees), restore its view and its four damage scalars. false (and the walker stays) when the car cannot be placed there. */
+  function arrive(spec, x, z, yawDeg) {
+    if (state.active || !spec || !enter(spec.id)) return false;
+    if (!place(x, z, yawDeg)) { exit(true); return false; }
+    if (spec.view !== undefined && spec.view !== null) api.setView(Number(spec.view) || 0);
+    const d = Array.isArray(spec.d) ? spec.d : [0, 0, 0, 0];
+    if (d.some((v) => v > 0)) {
+      [damage.state.front, damage.state.rear, damage.state.left, damage.state.right] = d.map((v) => Math.max(0, Math.min(1, Number(v) || 0)));
+      damage.state.revision++; damage.sync();
+      car.damage = damage.amount; car.damageStage = damage.stage; car.damageSmoke = damage.smoke; car.collisionSpec = crushedSpec(SPEC, damage.state); collisionRevision = damage.revision;
+      model.setView(view.mode === 2); damage.hideDetached(); hud.update(car, 0);
+    }
+    return true;
+  }
   const api = {
     get active() { return state.active; }, get car() { return car; }, get parked() { return parked; }, get model() { return model; }, get damage() { return damage; }, hud, fx, sound, view,
-    enter, exit, place,
+    enter, exit, place, arrive,
     /** the garage: one vehicle per car { id, def, model, car (handling state), parked, damage, spec, box }; `vehicle` is the current / last driven one; enter('truck') gets into a car by id */
     fleet, get vehicle() { return V; }, vehicleById: (id) => fleet.find((f) => f.id === id),
     repair() {

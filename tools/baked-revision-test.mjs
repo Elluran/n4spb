@@ -28,6 +28,17 @@ try {
   assert.equal(bakedRevision(tmp), before);
   put('src/world/landmarksNorthFull.js', 'full\r\n'); const crlf = bakedRevision(tmp); put('src/world/landmarksNorthFull.js', 'full\n'); assert.equal(bakedRevision(tmp), crlf, 'CRLF == LF');
   console.log('ok   fixture order and normalisation');
+  // runtime-only files and the pages of other areas
+  const base = bakedRevision(tmp);
+  put('src/areas/registry.js', 'export const A = 1;'); put('src/core/gates.js', 'g'); put('src/core/handoff.js', 'h');
+  assert.equal(bakedRevision(tmp), base, 'runtime-only files are not hashed');
+  put('src/core/gates.js', 'g2'); assert.equal(bakedRevision(tmp), base, 'editing a runtime-only file keeps the revision');
+  put('src/core/other.js', 'o'); assert.notEqual(bakedRevision(tmp), base, 'other source files are hashed');
+  fs.rmSync(path.join(tmp, 'src/core/other.js'));
+  put('other.html', '<html lang="en">'); assert.equal(bakedRevision(tmp), base, 'a page without data-area is not hashed');
+  put('north.html', '<html lang="ru" data-area="north">'); assert.notEqual(bakedRevision(tmp), base, 'a page with data-area is hashed');
+  assert(bakedRevisionFiles(tmp).map(x => x.rel).includes('north.html'));
+  console.log('ok   runtime-only exclusion and area pages');
 } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'assets/baked/manifest.json'), 'utf8'));

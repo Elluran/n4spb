@@ -1,10 +1,11 @@
-import { openBakedWorld, installBaker, bakedData } from './core/baked-world.js';
+import { openBakedWorld, installBaker, bakedData, setBakeDir } from './core/baked-world.js';
 import { createRegionStreamer } from './core/region-streamer.js';
 // Bootstrap: renderer, sky, context, module build, batching, main loop, HUD. (adapted from the Sakuragaoka Station engine)
 // Underground engine (docs/UNDERGROUND.md): indoor zones (core/zones.js) are blended over the time-of-day look each frame, ctx.interact / ctx.ui (core/ui.js) give the
 // metro module its prompts and panels, the player can ride a moving frame (player.board / alight), and the frame order is player -> updates -> zones -> time of day -> sky -> render.
 import * as THREE from 'three';
 import * as L from './world/layout.js';
+import * as A from './world/area.js';      // the area module of this page (docs/AREAS.md): the page of another area remaps this URL with an import map
 import { createContext } from './core/ctx.js';
 import { createRenderPipeline, assignShadowMaterials, unifyInstanceColor } from './core/renderer.js';
 import { createSky } from './core/sky.js';
@@ -25,6 +26,9 @@ import { createUI, createInteract } from './core/ui.js';
 import { createMinimap } from './core/minimap.js';
 import { createTouchControls } from './core/touch.js';      // phones / tablets: the touch UI (does nothing on desktop)
 import { installBootGuard } from './core/boot-guard.js';      // fatal card, lost-context handler, phone warning + crash-loop guard
+import { REGISTRY } from './areas/registry.js';      // runtime-only (tools/baked-revision.mjs): only this file may import it and core/gates.js / core/handoff.js
+import { createGates, planArrival } from './core/gates.js';      // the area gates: the question near a border, the navigation to the neighbour's page (docs/AREAS.md)
+import { camParam } from './core/handoff.js';
 
 export const MODULES = [
   // order matters: later modules read services of earlier ones (see docs/DESIGN.md)
@@ -55,6 +59,8 @@ export const MODULES = [
   'wildlife',     // pigeons, gulls, crows, sparrows, ducks + ambience triggers
   'drive',        // the red sports car at the Moscow station (E to get in) + the driving interface
 ];
+// The modules this page builds: the strip's list above, or the list of another area (src/areas/<id>/area.js exports MODULES; docs/AREAS.md). tools/modules-list.mjs reads the strip's list from here.
+const MODULE_LIST = A.MODULES || MODULES;
 
 const params = new URLSearchParams(location.search);
 const SHOT = params.has('shot');
@@ -104,6 +110,7 @@ pipeline.ndFar = quality.ndFar;
 if (params.has('ndfar')) pipeline.ndFar = Number(params.get('ndfar')) || 1e9;      // debug / A-B: distance of the normal / depth pass (default 200 m)
 const audio = createAudio();
 const ctx = createContext({ scene, camera, renderer, audio, quality, sunDir });
+ctx.area = A;      // the area module of this page: ctx.area.ID, BAKE_DIR, MODULES ... (a test hook: __ctx.area.ID)
 ctx.sky = sky;
 ctx.knock = createKnock(ctx);      // the knockable street furniture (core/knock.js): modules register their instances during the build (guard: if (ctx.knock))
 const zones = createZones({ scene, camera, sky, pipeline, shared: ctx.shared, staticRoot: ctx.staticRoot, dynamicRoot: ctx.dynamicRoot, indoor: ctx.indoor, heightAt: L.heightAt });
@@ -155,7 +162,7 @@ async function build() {
   const T0 = performance.now(); stats.timing = { startMs: Math.round(T0) };      // ms since navigation start where the build began (page load + scripts), then per phase
   await loadFonts();
   stats.timing.fontsMs = Math.round(performance.now() - T0);
-  const list = ONLY ? MODULES.filter(m => ONLY.includes(m)).concat(ONLY.filter(m => !MODULES.includes(m))) : MODULES;
+  const list = ONLY ? MODULE_LIST.filter(m => ONLY.includes(m)).concat(ONLY.filter(m => !MODULE_LIST.includes(m))) : MODULE_LIST;
   ctx.buildList = list;      // lib/claims.js: a landmark group only counts as owned when its module is really built
   // every module file (and its imports) is fetched and parsed in the background while the earlier modules build
   const imports = new Map(list.map((n) => { const p = import(`./world/${n}.js`); p.catch(() => {}); return [n, p]; }));
@@ -173,7 +180,7 @@ async function build() {
   };
   let i = 0;
   for (const name of list) {
-    setProgress(i / (list.length + 1), `${LABELS[name] || name}…`);
+    setProgress(i / (list.length + 1), `${(A.LABELS && A.LABELS[name]) || LABELS[name] || name}…`);
     await new Promise(r => setTimeout(r, 0));
     const t0 = performance.now();
     try {
@@ -265,6 +272,7 @@ async function goToView(v) {
   try {
     if (ctx.regions) { showToast('Загрузка места…'); await ctx.regions.ensureAt(v.x, v.z); }
     if (ctx.drive?.active) ctx.drive.place(v.x, v.z, v.yaw); else player.setPose(v.x, v.z, v.yaw, v.pitch);
+    if (ctx.gates) ctx.gates.teleported();      // (a jump is no speed: the gate's velocity estimate starts over)
     showToast(v.label); areaName = areaAt(v.x, v.z);      // the place label keeps its 3.8 s: the area toast fires only when the player walks into a different area
   } catch (e) { console.error('[travel]', e); showToast('Не удалось загрузить место. Попробуйте ещё раз.'); }
   finally { ctx.travelPending = false; }
@@ -421,7 +429,20 @@ function start() {
   document.body.classList.add('playing');
   player.requestLock();
   try { audio.start(); } catch (e) { console.warn(e); }
+  applyHandoffAtStart();
+  if (ctx.gates) ctx.gates.machine.grace(6);      // no question in the first seconds
   showToast(areaAt(player.pos.x, player.pos.z) || L.NAMES.place);
+}
+/** What the standard parameters cannot say, applied when the player presses Start on a page reached by a hand-off: mute, the HUD toggle, the car (docs/AREAS.md), then the URL is cleaned. */
+function applyHandoffAtStart() {
+  const h = ctx.handoff; if (!h || h.applied) return; h.applied = true;
+  if (h.ho.mute) { audio.muted = true; const b = $('mute'); if (b) b.setAttribute('aria-pressed', 'true'); }
+  if (h.ho.noui) document.body.classList.add('noui');
+  if (h.mode === 'car') {
+    const ok = ctx.drive && ctx.drive.arrive(h.ho.car, h.pose.x, h.pose.z, h.pose.yaw);
+    if (!ok) showToast('Машину сюда не поставить: вы пешком · The car could not come along: you are on foot');
+  }
+  try { const u = new URL(location.href); u.searchParams.delete('ho'); u.searchParams.delete('cam'); u.searchParams.delete('fly'); u.searchParams.delete('tod'); history.replaceState(null, '', u.pathname + (u.search || '') + u.hash); } catch (e) { /* ignore */ }      // F5 now goes to the area's own start
 }
 
 /** Roofs become a walkable surface: one top-down depth capture of the drawn scene (see core/roofmap.js). Not needed for screenshots (?shot), ?noroof skips it. */
@@ -437,21 +458,35 @@ async function buildRoofMap() {
 }
 
 async function main() {
-  const initial = params.get('cam')?.split(',').map(Number);
-  ctx.initialPosition = initial ? { x: initial[0], z: initial.length === 4 ? initial[1] : initial[2] } : L.HERO;
+  // a page and its area module must agree (a stale cached HTML with another page's modules, or a wrong import map, would otherwise build the wrong world): <html data-area> names the area
+  const pageArea = document.documentElement.dataset.area || 'strip';
+  if (pageArea !== A.ID) throw new Error(`This page is the area "${pageArea}" but its area module is "${A.ID}" (reload the page; docs/AREAS.md)`);
+  setBakeDir(A.BAKE_DIR);
+  // a page reached by a hand-off (docs/AREAS.md): ?cam= plus a valid ?ho= for THIS area. The arrival pose is resolved on this area's own map (never inside a building or the river), and the
+  // streamer pre-waits for the regions around it. A bad ho is ignored: the page boots from ?cam alone, as before.
+  { const h = planArrival({ L, A, params });
+    if (h && h.invalid) console.warn('[handoff] ignored:', h.invalid);
+    else if (h) {
+      ctx.handoff = h;
+      const row = REGISTRY[h.ho.from];
+      if (row && h.ho.ret) guard.back = { text: `Вернуться: ${row.title} · Back to ${row.titleEn}`, url: new URL(`${row.page}?${new URLSearchParams({ cam: camParam(h.ho.ret), q: qName })}`, location.href).href };
+    } }
+  const initial = ctx.handoff ? null : params.get('cam')?.split(',').map(Number);
+  ctx.initialPosition = ctx.handoff ? { x: ctx.handoff.pose.x, z: ctx.handoff.pose.z } : initial ? { x: initial[0], z: initial.length === 4 ? initial[1] : initial[2] } : L.HERO;
   if (params.has('bake')) installBaker(ctx);
-  ctx.baked = await openBakedWorld(ctx, params);
+  ctx.baked = await openBakedWorld(ctx, params, { required: !!A.REQUIRE_BAKE || params.has('requirebake') });      // required: a missing or stale bake is an error card, never a minutes-long procedural build
   if (ctx.baked) ctx.regions = createRegionStreamer(ctx, ctx.baked);
   window.__regions = ctx.regions;
   await build();
   if (ctx.bakeNavOnly) { await Promise.all(ctx.bakeUploads); window.__bakeReady = true; return; }
   const TR = performance.now();
   await buildRoofMap();
-  if (ctx.recordBake && ctx.physics.roof) ctx.recordBake('roof', ctx.physics.roof);
+  if (ctx.recordBake && ctx.physics.roof) { const { ms, ...roof } = ctx.physics.roof; ctx.recordBake('roof', roof); }      // (no wall-clock field in a product: two bakes of one source must be byte-identical)
   stats.timing.roofMs = Math.round(performance.now() - TR);
   if (ctx.recordBake) { await Promise.all(ctx.bakeUploads); window.__bakeReady = true; return; }
-  if (params.get('cam')) parseCam(params.get('cam')); else player.setPose(L.HERO.x, L.HERO.z, L.HERO.yaw, L.HERO.pitch);
-  if (params.has('fly')) player.fly = true;
+  if (ctx.handoff) { const p = ctx.handoff.pose; if (p.y !== null) player.setPose(p.x, p.z, p.yaw, p.pitch, p.y); else player.setPose(p.x, p.z, p.yaw, p.pitch); }
+  else if (params.get('cam')) parseCam(params.get('cam')); else player.setPose(L.HERO.x, L.HERO.z, L.HERO.yaw, L.HERO.pitch);
+  if (params.has('fly') && !(ctx.handoff && ctx.handoff.pose.y === null)) player.fly = true;
   player.time = simT;
   const TS = performance.now();
   if (simT > 0) window.__sim(simT, SHOT ? 1 / 30 : 0.1); else stepUpdates(0, 0);      // the start state is simulated in 0.1 s steps (the longest frame step of the loop)
@@ -489,7 +524,8 @@ async function main() {
   stats.timing.readyMs = Math.round(performance.now());      // since navigation start: the intro is ready
   document.body.classList.add('loaded');
   if (ctx.regions) { stats.regions = ctx.regions.stats; ctx.regions.start(); }
-  const go = $('go'); if (go) { go.disabled = false; go.focus(); go.addEventListener('click', start); }
+  ctx.gates = createGates({ ctx, player, camera, ui: ctx.ui, tod, audio, guard, params, A, isStarted: () => started, toast: showToast }); window.__gates = ctx.gates;      // null when this area has no gate (or ?gates=0)
+  const go = $('go'); if (go) { go.disabled = false; if (ctx.handoff) go.textContent = 'Продолжить · Continue'; go.focus(); go.addEventListener('click', start); }
   canvas.addEventListener('click', () => { if (started) player.requestLock(); });
   document.addEventListener('pointerlockchange', () => { document.body.classList.toggle('locked', document.pointerLockElement === canvas); });
   addEventListener('keydown', (e) => {
@@ -500,7 +536,7 @@ async function main() {
     if (e.code === 'KeyT') showToast(tod.cycle());
     if (e.code === 'KeyM') { audio.muted = !audio.muted; const b = $('mute'); if (b) b.setAttribute('aria-pressed', String(audio.muted)); }
     const drv = ctx.drive && ctx.drive.active;      // while driving the places / R move the car instead of the walker
-    if (e.code === 'KeyR') { if (drv) ctx.drive.place(L.HERO.x, L.HERO.z, L.HERO.yaw); else player.setPose(L.HERO.x, L.HERO.z, L.HERO.yaw, L.HERO.pitch); }
+    if (e.code === 'KeyR') { if (drv) ctx.drive.place(L.HERO.x, L.HERO.z, L.HERO.yaw); else player.setPose(L.HERO.x, L.HERO.z, L.HERO.yaw, L.HERO.pitch); if (ctx.gates) ctx.gates.teleported(); }
     if (e.code === 'Backquote' && !e.altKey && !e.shiftKey) { const s = $('stats'); if (s) s.hidden = !s.hidden; }
     const v = VIEWS[(e.altKey && e.shiftKey ? 'AltShift' : e.altKey ? 'Alt' : e.shiftKey ? 'Shift' : '') + e.code]; if (v && !e.repeat) goToView(v);     // standing on the ground there (setPose without y ends a flight); with the baked scene the regions around the destination stream in first (the Admiralty end is 2.6 km from the start pose)
   });

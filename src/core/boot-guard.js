@@ -21,7 +21,7 @@ const LOOP_KEY = 'piter.boots', GATE_KEY = 'piter.gate';
 export function installBootGuard({ canvas, params = new URLSearchParams(), isTouch = false, qName = 'medium', win = window, doc = document } = {}) {
   win.__mainStarted = true;      // index.html's loading watchdog tells "the scripts did not start" from "the build is slow" by this flag
   const body = doc.body;
-  const guard = { dead: false, crashLoop: false, fatal: null, gate: null, markLoaded: null };
+  const guard = { dead: false, crashLoop: false, fatal: null, gate: null, markLoaded: null, back: null };      // back: { text, url } set by main.js on a page reached by a hand-off: the way back to the area the player came from (docs/AREAS.md)
   const session = (fn) => { try { return fn(win.sessionStorage); } catch (e) { return undefined; } };
   const local = (fn) => { try { return fn(win.localStorage); } catch (e) { return undefined; } };
 
@@ -60,7 +60,7 @@ export function installBootGuard({ canvas, params = new URLSearchParams(), isTou
     } else {
       card('Не удалось запустить сцену · The scene could not start', [
         ['Что-то пошло не так при загрузке. Проверьте сеть и попробуйте ещё раз; на телефоне может помочь лёгкий режим.', 'Something went wrong while loading. Check the connection and try again; on a phone the Performance tier can help.'],
-      ], [['Перезагрузить · Reload', reload], ...(qName !== 'performance' ? [['Лёгкий режим · Performance tier', () => { local((s) => s.setItem('piter.q', 'performance')); reload(); }, true]] : [])], msg);
+      ], [['Перезагрузить · Reload', reload], ...(guard.back ? [[guard.back.text, () => { try { win.location.replace(guard.back.url); } catch (e) { win.location.href = guard.back.url; } }, true]] : []), ...(qName !== 'performance' ? [['Лёгкий режим · Performance tier', () => { local((s) => s.setItem('piter.q', 'performance')); reload(); }, true]] : [])], msg);
     }
     try { win.dispatchEvent(new win.CustomEvent('piter-fatal', { detail: { kind: kind || 'error', message: msg } })); } catch (e) { /* ignore */ }
   };

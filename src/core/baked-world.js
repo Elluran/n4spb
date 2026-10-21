@@ -1,6 +1,16 @@
 import { decodeBaked, encodeBaked, readBakedBuffer } from './baked-codec.js';
 import { BAKED_REVISION } from './baked-revision.js';
-const assetBase = new URL('../../assets/baked/', import.meta.url);
+let assetBase = new URL('../../assets/baked/', import.meta.url);
+/** Where the products of THIS page's area live: a path under assets/ with a trailing slash ('baked/' for the strip, 'baked/north/' for the north: docs/AREAS.md). Call before openBakedWorld. */
+export function setBakeDir(dir) { assetBase = new URL('../../assets/' + String(dir).replace(/^\/+/, '').replace(/\/*$/, '/'), import.meta.url); }
+/** The manifest of an area's bake (dir like setBakeDir; default: this page's), fetched fresh; null when it cannot be read. The gate preflight (core/gates.js) compares area and revision before it navigates. */
+export async function peekManifest(dir) {
+  try {
+    const base = dir ? new URL('../../assets/' + String(dir).replace(/^\/+/, '').replace(/\/*$/, '/'), import.meta.url) : assetBase;
+    const r = await fetch(new URL('manifest.json', base), { cache: 'no-cache' });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
+}
 async function loadBakedFile(file, rawBytes) {
   const r = await fetch(new URL(file, assetBase)); if (!r.ok) throw new Error(`${file}: HTTP ${r.status}`);
   return decodeBaked(await readBakedBuffer(r, rawBytes));
@@ -93,15 +103,16 @@ export function installBaker(ctx) {
     pending.push(upload); upload.catch(() => {});
   };
 }
-export async function openBakedWorld(ctx, params) {
+/** `required` (a page reached by a hand-off, or ?requirebake): a missing or stale bake THROWS (the boot guard shows its error card) instead of returning null, because null means a procedural rebuild of minutes and gigabytes. Development flags still bypass. */
+export async function openBakedWorld(ctx, params, { required = false } = {}) {
   if (params.has('bake') || params.get('baked') === '0' || params.has('only') || params.has('allcity') || params.has('st') || params.has('ccell') || params.has('icell') || params.has('pdens')) return null;
   try {
     const [m, v] = await Promise.all([fetch(new URL('manifest.json', assetBase)), fetch(new URL('../../__baked_revision', import.meta.url))]);
-    if (!m.ok) return null;
+    if (!m.ok) { if (required) throw new Error(`The scene data of this area is not available (manifest: HTTP ${m.status})`); return null; }
     const manifest = await m.json();
     const revision = v.ok && v.headers.get('Content-Type')?.includes('application/json') ? (await v.json()).revision : BAKED_REVISION;
     // ?baked=force (development only): use the products of a stale bake, for performance work on code that does not change what the bake contains (engine, loaders, simulation)
-    if (params.get('baked') !== 'force' && (manifest.revision !== revision || manifest.revision !== BAKED_REVISION)) throw new Error('Baked assets are stale; using procedural scene');
+    if (params.get('baked') !== 'force' && (manifest.revision !== revision || manifest.revision !== BAKED_REVISION)) throw new Error(required ? 'The scene data of this area does not match this version of the page (reload the page)' : 'Baked assets are stale; using procedural scene');
     const requests = new Map(), diagnostics = { revision, loaded: [], failures: [], released: 0 };
     const loader = createBakedLoader({ worker: params.get('bakedworker') !== '0', diagnostics });
     globalThis.addEventListener?.('pagehide', event => { if (!event.persisted) loader.dispose(); }, { once: true });
@@ -122,7 +133,7 @@ export async function openBakedWorld(ctx, params) {
       baked.data[name] = p;
     }
     return baked;
-  } catch (e) { console.warn('[baked]', e.message); return null; }
+  } catch (e) { console.warn('[baked]', e.message); if (required) throw e; return null; }
 }
 export async function bakedData(ctx, name) {
   // A bake must fail if its required staged input is unavailable; silently
