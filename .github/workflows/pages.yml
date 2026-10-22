@@ -44,7 +44,10 @@ jobs:
         run: |
           node tools/layout-golden.mjs --diff
           node tools/area.mjs north tools/layout-golden.mjs --diff
-      - name: Hook set contract of the North (M6)
+      # `node --check` only (no 'npm ci' here): the engine files edited by M6 parse. Their call sites are NOT run in this job; that is `npm run hooks:all` (docs/AREAS.md 9.6)
+      - name: Engine files edited by M6 parse (node --check)
+        run: node tools/hooks-syntax-check.mjs
+      - name: Hook set contract of the North (M6 - tables, Paradny golden, text checks of the engine files)
         run: node tools/area.mjs north tools/north-hooks-test.mjs
       - name: Keep-out regions of the North (M6, factories and regions only)
         run: node tools/area.mjs north tools/north-keepout-test.mjs --only pure

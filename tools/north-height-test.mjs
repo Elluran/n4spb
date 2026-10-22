@@ -280,6 +280,10 @@ const tauride = { deckY: (x, z) => P.paradnyDeckY(x, z) };
   near(g(mkWorld({ landmarksTauride: {} }), 900, -1000), 0.03, 1e-9, 'a service without deckY is skipped');
   near(g(mkWorld({ landmarksTauride: { deckY: () => undefined } }), 900, -1000), 0.03, 1e-9, 'a service that answers undefined is skipped');
   near(g(mkWorld({ landmarksTauride: { deckY: () => 0 }, bridges: chain.bridges }), 900, -1000), 0.03, 1e-9, 'a deck at 0 is a deck (0 is not "no answer": the bridge behind it is not asked)');
+  for (const [what, v] of [['NaN', NaN], ['Infinity', Infinity], ['-Infinity', -Infinity]]) {          // a non-finite answer must not reach the car physics, nor shadow the old chain
+    near(g(mkWorld({ landmarksTauride: { deckY: () => v } }), 900, -1000), 0.03, 1e-9, `a service that answers ${what} is skipped: the asphalt, not NaN`);
+    near(g(mkWorld({ landmarksTauride: { deckY: () => v }, bridges: chain.bridges }), 900, -1000), 7.03, 1e-9, `a service that answers ${what} does not shadow the bridge chain`);
+  }
   const late = mkWorld({}), car = createHandling(late); late.services.landmarksTauride = tauride;
   near(car.groundAt(pod[0], pod[1]), 3.33, 1e-9, 'a service built after the handling is found (looked up at call time)');
   // river: a deck of the service makes the river bed no obstacle, as a bridge deck does
@@ -331,8 +335,19 @@ section('9. the cost of heightAt');
   restore();
   say(`  82,500 calls on a 2 m grid over the podium box (best of 9, warm): the old line ${tOld.toFixed(1)} ms, heightAt with an empty list ${tEmpty.toFixed(1)} ms, with the Paradny patch ${tOn.toFixed(1)} ms`);
   ok(sOld === sEmpty, 'the same sum');
-  ok(tEmpty <= tOld * 1.6 + 3, `an empty list costs next to nothing (${tEmpty.toFixed(1)} ms vs ${tOld.toFixed(1)} ms)`);
-  ok(tOn <= tOld * 40 + 50 && sOn !== sOld, `the patch keeps the whole-map start-up cheap (${tOn.toFixed(1)} ms: every call outside the box is rejected before the polygon work)`);
+  ok(sOn !== sOld, 'the patch changes the heights on the grid over the podium box');
+  // The cost is graded by COUNTING work, not by the clock (a wall-clock ratio flakes under load; the timings above are information only): an empty list runs no patch at all, and with patches the box reject
+  // comes first, so at() is called exactly for the grid points inside the box (edges inclusive) and for none of the others.
+  let calls = 0, inBox = 0, outBox = 0;
+  const probe = terrainPatches(['landmarksTauride'])[0], B = probe.box;
+  setPatches([{ id: 'counting', box: probe.box, at: (x, z) => { calls++; return probe.at(x, z); } }]);
+  for (let i = 0; i < 275; i++) for (let j = 0; j < 300; j++) { const x = 741 + i * 2, z = -1205 + j * 2; if (x >= B[0] && x <= B[1] && z >= B[2] && z <= B[3]) inBox++; else outBox++; L.heightAt(x, z); }
+  restore();
+  ok(calls === inBox && outBox > 0 && inBox > 0, `at() is called for the ${inBox} grid points inside the box and for none of the ${outBox} outside it (${calls} calls): the box reject comes first`);
+  setPatches([{ id: 'counting', box: [1e8, 1e8 + 1, 1e8, 1e8 + 1], at: () => { calls++; return 0; } }]);
+  calls = 0; for (let i = 0; i < 275; i++) for (let j = 0; j < 300; j++) L.heightAt(741 + i * 2, -1205 + j * 2);
+  restore();
+  ok(calls === 0, `a patch whose box is far away is never asked (${calls} calls in 82,500)`);
 }
 
 restore();

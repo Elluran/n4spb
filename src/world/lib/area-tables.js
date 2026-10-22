@@ -7,12 +7,45 @@
 //   ZONES            wildlife, people, trams, field, far  pigeons, crowHaunts, crowds, fountains, peopleDensity, peopleCorridor, peopleHot, tramLines, clearDiscs, farCentres
 //   GARAGE           drive/cars/index.js, drive.js        poses { coupe, truck, lada, roadster }, spawn
 //   PRUNE_SERVICES   environment.js                       the services whose door entrances clear the trees
-//   HOOKS, HEIGHT_PATCHES  layout.js, drive/handling.js, environment/trees.js + lawns.js, props/world.js, streets.js + streets/parking.js, people.js + people/nav.js + people/sim.js
-//                                                        the hooks and the height patches of milestone M6 (docs/AREAS.md section 9; the strip's are {} and []: every call site is a no-op without its key)
+//   HOOKS, HEIGHT_PATCHES  layout.js, drive/handling.js, environment/trees.js + lawns.js, props/world.js, streets.js + streets/parking.js, people/nav.js
+//                                                        the hooks and the height patches of milestone M6 (docs/AREAS.md section 9; the strip's are {} and []: every call site is a no-op without its key).
+//                                                        Only people/nav.js imports HOOKS of the people files (people.js reads the row ZONES.peopleDensity.garden, people/sim.js reads nav.inGarden / nav.gardenCfg).
+//                                                        Both are VALIDATED here (checkHooks, checkPatches): a value of the wrong kind is dropped with one console.warn that names it, so that the table of a
+//                                                        hand-written area cannot crash the build in an unnamed place. A well-formed table is handed out as it is (the same object / array as the area module's).
 import * as A from '../area.js';
 
 const arr = (v) => (Array.isArray(v) ? v : []);
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+const kind = (v) => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v === 'object' ? 'an object' : typeof v === 'number' ? `the number ${v}` : `a ${typeof v}`);
+
+/** the HOOKS keys that must be functions (the factories of (ctx) and the plain functions); `deckServices` must be an array of strings */
+const HOOK_FUNCTIONS = ['treeCleared', 'treeReject', 'tuftReject', 'propReject', 'pedestrianOnly', 'parkingReject', 'inGarden'];
+/** HOOKS of an area module, checked: every known key is a function (undefined / null = absent), `deckServices` an array of strings; anything else is dropped with one warning naming the key. Unknown keys pass. */
+export function checkHooks(raw, warn = console.warn) {
+  if (raw != null && obj(raw) !== raw) warn(`[area-tables] HOOKS is ${kind(raw)}, not an object: ignored`);
+  const H = obj(raw);
+  let out = H;
+  const drop = (k, why) => { if (out === H) out = { ...H }; delete out[k]; warn(`[area-tables] HOOKS.${k} ${why}: ignored`); };
+  for (const k of HOOK_FUNCTIONS) if (H[k] != null && typeof H[k] !== 'function') drop(k, `is ${kind(H[k])}, not a function`);        // undefined and null mean "none": every call site is null-safe
+  if (H.deckServices != null && !(Array.isArray(H.deckServices) && H.deckServices.every((s) => typeof s === 'string'))) drop('deckServices', `is ${kind(H.deckServices)}, not an array of service names`);
+  return out;
+}
+
+/** why a HEIGHT_PATCHES entry is unusable, or null: { id: string, box: [x0, x1, z0, z1] (4 finite numbers), at: function } */
+const patchProblem = (p) => {
+  if (!p || typeof p !== 'object') return `is ${kind(p)}, not an object`;
+  if (typeof p.id !== 'string' || !p.id) return 'has no string id';
+  if (!Array.isArray(p.box) || p.box.length !== 4 || !p.box.every(Number.isFinite)) return 'has no box of 4 finite numbers';
+  if (typeof p.at !== 'function') return 'has no at() function';
+  return null;
+};
+/** HEIGHT_PATCHES of an area module, checked: an entry that is not { id, box[4], at } is skipped with one warning that names its id (or its index). A well-formed list is returned as it is. */
+export function checkPatches(raw, warn = console.warn) {
+  if (raw != null && !Array.isArray(raw)) warn(`[area-tables] HEIGHT_PATCHES is ${kind(raw)}, not an array: ignored`);
+  const list = arr(raw), good = [];
+  list.forEach((p, i) => { const why = patchProblem(p); if (why) warn(`[area-tables] HEIGHT_PATCHES[${i}]${p && typeof p.id === 'string' && p.id ? ` "${p.id}"` : ''} ${why}: skipped`); else good.push(p); });
+  return good.length === list.length ? list : good;
+}
 const W = obj(A.WATER), Z = obj(A.ZONES), G = obj(A.GARAGE);
 
 export const WATER = {
@@ -50,5 +83,5 @@ export const GARAGE = {
 };
 
 export const PRUNE_SERVICES = arr(A.PRUNE_SERVICES);
-export const HOOKS = obj(A.HOOKS);
-export const HEIGHT_PATCHES = arr(A.HEIGHT_PATCHES);
+export const HOOKS = checkHooks(A.HOOKS);
+export const HEIGHT_PATCHES = checkPatches(A.HEIGHT_PATCHES);

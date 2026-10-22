@@ -14,7 +14,8 @@
 //     factor alone; nav.densityFactor is 0.22 inside the garden and 1 outside, 1 everywhere with the neutral row; with the camera in the middle of the garden all four simulations are stepped for N minutes
 //     (the camera jump makes every walker re-placed around it) and the number of visible people inside the garden is counted every second: the neutral one fills it (~400), the row holds it near the cap
 //     (soft: walkers who come in along a route and the scripted ones are not refused, ~75 against 60) and each half works alone; nav.surfaceY asks the services of HOOKS.deckServices first (+0.12), skips a
-//     service that is not built, has no deckY or answers null / NaN.
+//     service that is not built, has no deckY or answers null / NaN; a fifth build WITHOUT HOOKS.inGarden (as the strip is) has nav.gardenActive false, nav.densityFactor === nav.stationFactor and never calls
+//     nav.inGarden during the run (the strip runs none of the garden code).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -84,7 +85,7 @@ async function fast() {
     let n = 0, differ = 0; for (let x = 900; x <= 1510; x += 0.5) for (let z = -1800; z <= -1250; z += 0.5) { n++; if (windingHas(a, x, z) !== windingHas(b, x, z)) differ++; }
     assert.ok(Math.abs(areaA - areaB) / areaB < 2e-4, 'areas ' + areaA.toFixed(1) + ' / ' + areaB.toFixed(1));
     assert.ok(differ / n < 2e-4, differ + ' of ' + n + ' probes differ');
-    return `${dropped} source vertices are not in the facade ring (all within ${far.toFixed(2)} m of it), areas ${areaA.toFixed(0)} / ${areaB.toFixed(0)} m2, ${differ} of ${n} probes of a 0.5 m grid differ`;
+    return `${dropped} source vertices are not in the facade ring (all within ${(Math.ceil(far * 100) / 100).toFixed(2)} m of it, the farthest ${far.toFixed(4)} m), areas ${areaA.toFixed(0)} / ${areaB.toFixed(0)} m2, ${differ} of ${n} probes of a 0.5 m grid differ`;
   });
   await check('inGarden on the fixed probes (inside, in the bbox but outside, outside the bbox, NaN)', () => {
     for (const [x, z, want] of PROBES) assert.equal(inGarden(x, z), want, `inGarden(${x}, ${z})`);
@@ -167,6 +168,12 @@ export default async function scene(ctx, L, THREE) {
     const ROWS = { neutral: { factor: 1, maxPeople: Infinity }, capOnly: { factor: 1, maxPeople: CAP.maxPeople }, factorOnly: { factor: CAP.factor, maxPeople: Infinity } }, pops = { row: A };
     for (const [name, row] of Object.entries(ROWS)) { people.DENSITY.garden = row; await people.build(ctx); pops[name] = ctx.services.people; }
     people.DENSITY.garden = today; ctx.services.people = A;
+    // and one built like the STRIP is: no HOOKS.inGarden (the live table of lib/area-tables.js, restored at once) and no row. None of the garden code may run in it (gardenActive false).
+    const { HOOKS } = await import(url('src/world/lib/area-tables.js')), keepHook = HOOKS.inGarden;
+    let G = null; delete HOOKS.inGarden; delete people.DENSITY.garden;
+    try { await people.build(ctx); G = ctx.services.people; } finally { HOOKS.inGarden = keepHook; people.DENSITY.garden = today; ctx.services.people = A; }
+    const calls = { row: 0, gardenless: 0 }, countCalls = (nav, key) => { const real = nav.inGarden; nav.inGarden = (x, z) => { calls[key]++; return real(x, z); }; };
+    countCalls(A.sim.nav, 'row'); countCalls(G.sim.nav, 'gardenless');
     const B = A, NEU = pops.neutral;
     run('the other builds got their rows', () => {
       assert.equal(new Set(Object.values(pops)).size, 4);
@@ -228,6 +235,16 @@ export default async function scene(ctx, L, THREE) {
       assert.ok(m.capOnly < 0.6 * m.neutral, 'the head cap alone: ' + m.capOnly.toFixed(1) + ' vs ' + m.neutral.toFixed(1));
       assert.ok(m.factorOnly < 0.6 * m.neutral, 'the density factor alone: ' + m.factorOnly.toFixed(1) + ' vs ' + m.neutral.toFixed(1));
       assert.ok(m.row <= 1.25 * Math.min(m.capOnly, m.factorOnly), 'the row ' + m.row.toFixed(1) + ' vs ' + m.capOnly.toFixed(1) + ' / ' + m.factorOnly.toFixed(1));
+    });
+    run('an area without a garden hook (the strip) runs no garden code: gardenActive false, nav.densityFactor IS nav.stationFactor, nav.inGarden is never called during the run', () => {
+      const nav = G.sim.nav;
+      assert.equal(nav.gardenActive, false); assert.equal(A.sim.nav.gardenActive, true);
+      assert.equal(nav.densityFactor, nav.stationFactor, 'the strip keeps the function of before M6');
+      assert.notEqual(A.sim.nav.densityFactor, A.sim.nav.stationFactor);
+      assert.ok(calls.row > 1000, 'vacuous: the garden build called nav.inGarden only ' + calls.row + ' times');
+      assert.equal(calls.gardenless, 0, 'nav.inGarden was called ' + calls.gardenless + ' times');
+      assert.ok(vis(G) > 0.9 * vis(A) && vis(G) < 1.1 * vis(A), 'the population is alive: ' + vis(G) + ' visible against ' + vis(A));
+      return `${calls.row} calls with the garden, ${calls.gardenless} without`;
     });
     run('the people outside the garden are not thinned by the row (visible people in the whole scene within 10 %)', () => { for (const k of names) assert.ok(vis(pops[k]) > 0.9 * vis(A) && vis(pops[k]) < 1.1 * vis(A), k + ' ' + vis(pops[k]) + ' vs ' + vis(A)); });
   } catch (e) { note('the scene run', false, String(e && e.stack || e).split('\n').slice(0, 6).join(' | ')); }

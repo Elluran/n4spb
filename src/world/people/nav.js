@@ -54,9 +54,12 @@ export function buildNav(ctx, cfg = {}) {
   };
   nav.stationFactor = stationFactor;
   // the garden of the area (people.js DENSITY.garden, HOOKS.inGarden: the Tauride Garden of the North): its density factor multiplies the station one, its head count cap is people/sim.js crowdedAt
+  // gardenActive is false in an area without a garden (the strip): NONE of the garden code runs then. densityFactor IS stationFactor (the function of before M6) and people/sim.js skips its garden counts and tests,
+  // so the strip pays nothing per candidate; nav.inGarden stays callable (never true) for tools.
   nav.gardenCfg = cfg.garden || { factor: 1, maxPeople: Infinity };
-  nav.inGarden = HOOKS.inGarden || (() => false);
-  nav.densityFactor = (x, z) => stationFactor(x, z) * (nav.inGarden(x, z) ? nav.gardenCfg.factor : 1);
+  nav.gardenActive = typeof HOOKS.inGarden === 'function';
+  nav.inGarden = nav.gardenActive ? HOOKS.inGarden : () => false;
+  nav.densityFactor = nav.gardenActive ? (x, z) => stationFactor(x, z) * (nav.inGarden(x, z) ? nav.gardenCfg.factor : 1) : stationFactor;
   nav.inPlay = inPlay; nav.zoneW = (x, z) => zoneW(x, z) * nav.densityFactor(x, z); nav.PAVE = PAVE; nav.ROAD_Y = ROAD_Y; nav.frame = FR; nav.zones = Z; nav.area = area; nav.marsCfg = cfg.mars || { zones: [], scale: 1 }; nav.marsZone = area.zone;
 
   // ------------------------------------------------------------------ buildings (footprints, grid); interiors (the station hall) are walkable

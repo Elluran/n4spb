@@ -112,7 +112,7 @@ export function placeTrees(ctx, field, owned, extraAvoid = []) {
   // keep the hero view and the numbered viewpoints open: a disc around each and a corridor along the look direction
   const CLEAR = [];
   for (const [i, v] of [L.HERO, ...L.VIEWS].entries()) { const yaw = (v.yaw * Math.PI) / 180; CLEAR.push({ x: v.x, z: v.z, r: 7, dx: -Math.sin(yaw), dz: -Math.cos(yaw), len: i === 0 ? 100 : 40, hw: i === 0 ? 10 : 6 }); }
-  const areaCleared = HOOKS.treeCleared?.(ctx), areaReject = HOOKS.treeReject?.(ctx);      // the area's keep-outs (hooks/keep-out.js, once per build): soft = not for mapped trees, hard = for all
+  const areaCleared = HOOKS.treeCleared?.(ctx), areaReject = HOOKS.treeReject?.(ctx);      // the area's keep-outs (hooks/keep-out.js, once per build): soft = skipped under o.force (no caller forces, so mapped trees are cleared too), hard = always
   const cleared = (x, z) => {
     if (areaCleared && areaCleared(x, z)) return true;                            // (the North: Smolny's mapped ceremonial approaches stay open, not procedural woodland)
     for (const c of CLEAR) {

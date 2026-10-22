@@ -30,8 +30,8 @@ const inBox = (b, x, z) => x > b[0] && x < b[1] && z > b[2] && z < b[3];
 export const SMOLNY_APPROACHES = [[2320, 2440, -1847, -1820], [2400, 2520, -1553, -1533]];
 /** The north frontage of the Suvorov Museum, [x0, x1, z0, z1]: its width (the footprint is x 1384.3 .. 1441.2) and the 17 m from the doorstep (wall z -1224.9) to the middle of the building (it reaches z -1194.2). */
 export const SUVOROV_STRIP = [1384, 1442, -1226, -1208];
-/** The garden campus of the Elena Pavlovna Clinical Institute, 8 vertices [x, z]. A COPY of CAMPUS in src/world/landmarksKirochnaya/groups.js (that file imports the data facade, so this area module cannot import it;
- *  tools/north-keepout-test.mjs asserts the two are equal). */
+/** The garden campus of the Elena Pavlovna Clinical Institute, 8 vertices [x, z]. A COPY of CAMPUS in src/world/landmarksKirochnaya/groups.js (that file imports the data facade, and the hooks files import none;
+ *  tools/north-hooks-test.mjs and tools/north-keepout-test.mjs assert the two are equal). */
 export const CAMPUS = [[1118, -1237.6], [1150.5, -1242.2], [1241.6, -1239.8], [1343.1, -1237], [1336.5, -1068.8], [1244, -1047], [1134.4, -1048.8], [1110.1, -1100.5]];
 
 /** True when (x, z) is inside the campus polygon (even-odd; the expression of landmarksKirochnaya/groups.js inCampus). */
