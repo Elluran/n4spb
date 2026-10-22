@@ -39,7 +39,7 @@ export function createHandling(ctx, tuning = null) {
   const collide = createCarCollisions(ph, SPEC);
   const DS = HOOKS.deckServices || [];      // the area's own deck services (a podium, stairs): their deckY comes before the bridge decks (docs/AREAS.md section 9)
   const deckY = () => (x, z) => {
-    for (const n of DS) { const d = ctx.services[n]?.deckY?.(x, z); if (d != null) return d; }
+    for (const n of DS) { const d = ctx.services[n]?.deckY?.(x, z); if (Number.isFinite(d)) return d; }      // null / undefined / NaN / Infinity = no deck here (the old chain answers); 0 is a deck
     return ctx.services.landmarksC?.bridge?.deckY?.(x, z) ?? ctx.services.bridges?.deckY(x, z) ?? null;
   };
   const deck = deckY();
