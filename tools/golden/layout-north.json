@@ -334,8 +334,8 @@
     "[hashed]": true,
     "kind": "object",
     "n": 7,
-    "bytes": 3780,
-    "hash": "325e81791e2504f0"
+    "bytes": 9970,
+    "hash": "a59bf734a6c22d9d"
    },
    "HERO": {
     "pitch": 10,
@@ -423,9 +423,9 @@
    "SUBGROUPS": {
     "[hashed]": true,
     "kind": "object",
-    "n": 13,
-    "bytes": 4275,
-    "hash": "918a2d81772d7256"
+    "n": 14,
+    "bytes": 10510,
+    "hash": "c3cc0de3dc61de84"
    },
    "SUN_DIR": [
     -0.473,
@@ -2453,8 +2453,8 @@
  },
  "probes": {
   "inPlay": {
-   "n": 500,
-   "hash": "c588c0bd6f8db543",
+   "n": 501,
+   "hash": "3c663fb8de959677",
    "head": [
     false,
     false,
@@ -2467,8 +2467,8 @@
    ]
   },
   "inPlay25": {
-   "n": 500,
-   "hash": "6e78a943525f009b",
+   "n": 501,
+   "hash": "b1b40ba09b5c942f",
    "head": [
     false,
     false,
@@ -2481,8 +2481,8 @@
    ]
   },
   "inPlay-40": {
-   "n": 500,
-   "hash": "3188353c7382b413",
+   "n": 501,
+   "hash": "bb7b134a2ba1893b",
    "head": [
     false,
     false,
@@ -2495,8 +2495,8 @@
    ]
   },
   "inExtent": {
-   "n": 500,
-   "hash": "8626b1754cf2a84d",
+   "n": 501,
+   "hash": "e11525eb6b171e21",
    "head": [
     false,
     false,
@@ -2509,8 +2509,8 @@
    ]
   },
   "inExtent60": {
-   "n": 500,
-   "hash": "eacf4f9ad89a371a",
+   "n": 501,
+   "hash": "78ac974a7562fd48",
    "head": [
     false,
     false,
@@ -2523,8 +2523,8 @@
    ]
   },
   "clampToPlay": {
-   "n": 500,
-   "hash": "2d30a4a7624554ef",
+   "n": 501,
+   "hash": "e18698d5f7d60f25",
    "head": [
     [
      -420,
@@ -2561,8 +2561,8 @@
    ]
   },
   "clampToPlay30": {
-   "n": 500,
-   "hash": "cd13fbc55a7b2588",
+   "n": 501,
+   "hash": "5798a41392510103",
    "head": [
     [
      -390,
@@ -2599,8 +2599,8 @@
    ]
   },
   "heightAt": {
-   "n": 500,
-   "hash": "9a2160db239bbd1e",
+   "n": 501,
+   "hash": "345f247147764314",
    "head": [
     -6,
     -6,
@@ -2613,8 +2613,8 @@
    ]
   },
   "groundAt": {
-   "n": 500,
-   "hash": "9a2160db239bbd1e",
+   "n": 501,
+   "hash": "345f247147764314",
    "head": [
     -6,
     -6,
@@ -2627,8 +2627,8 @@
    ]
   },
   "inRiver": {
-   "n": 500,
-   "hash": "849cb6659702076c",
+   "n": 501,
+   "hash": "5d51cdf7cbde848f",
    "head": [
     true,
     true,
@@ -2641,8 +2641,8 @@
    ]
   },
   "waterwayAt": {
-   "n": 500,
-   "hash": "dfb3b5c4e3e3d952",
+   "n": 501,
+   "hash": "ba40bd61a011c5b7",
    "head": [
     "neva",
     "neva",
@@ -2655,8 +2655,8 @@
    ]
   },
   "waterLevelAt": {
-   "n": 500,
-   "hash": "5df1030b8b6decb1",
+   "n": 501,
+   "hash": "ccfc4e08544527e5",
    "head": [
     -3.4,
     -3.4,
@@ -2669,8 +2669,8 @@
    ]
   },
   "shoreDist": {
-   "n": 500,
-   "hash": "9d0451a7a7c1f920",
+   "n": 501,
+   "hash": "e72c185cea3f7451",
    "head": [
     0,
     0,
@@ -2683,8 +2683,8 @@
    ]
   },
   "insideBuilding": {
-   "n": 500,
-   "hash": "d84f27ecf4dc811e",
+   "n": 501,
+   "hash": "c3d0fe2fbcb4e476",
    "head": [
     false,
     false,
@@ -2697,8 +2697,8 @@
    ]
   },
   "insideBuilding1.5": {
-   "n": 500,
-   "hash": "e2a8e20415cc5223",
+   "n": 501,
+   "hash": "513b2b4042b815e2",
    "head": [
     false,
     false,
@@ -2711,8 +2711,8 @@
    ]
   },
   "buildingAt": {
-   "n": 500,
-   "hash": "f3e11174fc1bfc2d",
+   "n": 501,
+   "hash": "8347a7e876100968",
    "head": [
     null,
     null,
@@ -2725,8 +2725,8 @@
    ]
   },
   "areaAt": {
-   "n": 500,
-   "hash": "bcad3e74d2e466e6",
+   "n": 501,
+   "hash": "cf7fe9abd5a935c5",
    "head": [
     "Нева · Neva River",
     "Нева · Neva River",
@@ -2739,8 +2739,8 @@
    ]
   },
   "isOnRoad": {
-   "n": 500,
-   "hash": "34dfd6414635d54b",
+   "n": 501,
+   "hash": "82196129d852cc1c",
    "head": [
     false,
     false,
@@ -2753,8 +2753,8 @@
    ]
   },
   "isOnRoadAll": {
-   "n": 500,
-   "hash": "49206235846528a4",
+   "n": 501,
+   "hash": "e9e203b806b32ffc",
    "head": [
     false,
     false,
@@ -2767,8 +2767,8 @@
    ]
   },
   "nearestRoad": {
-   "n": 500,
-   "hash": "f4b8df67789bd437",
+   "n": 501,
+   "hash": "9e88f208a5775dde",
    "head": [
     null,
     null,
@@ -2790,8 +2790,8 @@
    ]
   },
   "toGrid": {
-   "n": 500,
-   "hash": "57ea13e65e2467ac",
+   "n": 501,
+   "hash": "a37138673936b11f",
    "head": [
     {
      "u": -1697.523827,
@@ -2828,8 +2828,8 @@
    ]
   },
   "fromGrid": {
-   "n": 500,
-   "hash": "874cc431e650e109",
+   "n": 501,
+   "hash": "842cbd47736b73b0",
    "head": [
     {
      "x": -495.212368,
@@ -2866,8 +2866,8 @@
    ]
   },
   "yawToward": {
-   "n": 500,
-   "hash": "bdef78824e7e6ec6",
+   "n": 501,
+   "hash": "163a272d8ee89cd9",
    "head": [
     -154.063485,
     -152.883507,
@@ -2880,8 +2880,8 @@
    ]
   },
   "rotYToward": {
-   "n": 500,
-   "hash": "6bcc6f00db5b1402",
+   "n": 501,
+   "hash": "8fb378203420e3b7",
    "head": [
     0.452678,
     0.473272,
@@ -2894,8 +2894,8 @@
    ]
   },
   "groundHeight": {
-   "n": 500,
-   "hash": "19a9803cd903f5f7",
+   "n": 501,
+   "hash": "26d748cd24df6103",
    "head": [
     null,
     null,
@@ -2908,7 +2908,7 @@
    ]
   },
   "groups": {
-   "n": 13,
+   "n": 14,
    "keys": [
     "kirochnaya-clinical-institute",
     "library",
@@ -2922,6 +2922,7 @@
     "north-suvorov-museum",
     "oktyabrsky-hall",
     "paradny-quarter",
+    "tauride-garden",
     "tauride-palace"
    ],
    "members": {
@@ -2937,6 +2938,7 @@
     "north-suvorov-museum": 7,
     "oktyabrsky-hall": 2,
     "paradny-quarter": 11,
+    "tauride-garden": 0,
     "tauride-palace": 1
    },
    "osm": {
@@ -2952,6 +2954,7 @@
     "north-suvorov-museum": "4f53cda18c2baa0c",
     "oktyabrsky-hall": "a2d31d19bfa13670",
     "paradny-quarter": "d5d720ba10e5ba46",
+    "tauride-garden": "06cfc6034050017e",
     "tauride-palace": "4f53cda18c2baa0c"
    },
    "bounds": {
@@ -3051,6 +3054,7 @@
      "z0": -1204.6,
      "z1": -878.7
     },
+    "tauride-garden": null,
     "tauride-palace": {
      "cx": 1375.9,
      "cz": -1727.1,
@@ -3071,8 +3075,8 @@
    ]
   },
   "claims": {
-   "n": 85,
-   "hash": "ff805c7445bed627"
+   "n": 528,
+   "hash": "7663d79c877b89bb"
   },
   "buildings": {
    "n": 2016,

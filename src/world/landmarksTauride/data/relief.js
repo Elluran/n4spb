@@ -2,20 +2,22 @@
 // Frame: metres from ORIGIN, +X east, +Z south (-Z is north), the frame of the whole project; y = 0 is the street level, the flat ground of everything outside the features.
 // ALL HEIGHTS ARE DESIGN VALUES. No survey, contour map or published height of the garden's hills exists (docs/research/tauride-reference.md: "no published heights"); the sources say only that Gould heaped the
 // earth of the ponds into hills along the banks and that the north of the Big island carries a high hill with a view of the palace. What rests on OpenStreetMap is a POSITION or an extent (`prov: 'osm'`, `evidence`
-// names the objects): the memorial stands where it stands, the stepped descents say there is a level change. Every other feature is `prov: 'design'`.
+// names the objects): the memorial stands where it stands, the stepped descents say there is a level change, a building is named "Gorka". Every other feature is `prov: 'design'`.
 // A feature (height.js): ellipse centre (x, z), semi-axes rx / rz, rotation rot (degrees), height h, flat top fraction `top`; `key` is the letter of the contour plan (tools/tauride-relief-plan.mjs).
 // The rules the features obey (tools/tauride-height-test.mjs asserts all of them against the real height function and the real data): zero within 8 m of the garden outline, within 3 m (HILL_KEEP_OUT_MARGIN)
-// of every building footprint, within 4 m of every OSM tree, within 3 m of the water (the banks of T4 are cut there), within 5 m of every bridge way; slope <= 1:4 everywhere on land and along the 120 ways.
+// of every building footprint, within 4 m of every OSM tree, within 3 m of the water (the banks of T4 are cut there), within 5 m of every bridge way, within 4 m of the camera poses, within 3 m of the pitch,
+// the playgrounds and the plazas; slope <= 1:4 everywhere on land and along the 120 ways. The retaining walls w1458068106 / w1458068108 (x 926-940, z -1517 .. -1474) lie 85 m OUTSIDE the outline, in the
+// neighbouring yard: no evidence for the garden relief, not used.
 export const RELIEF_BOX = [917.8, 1497.3, -1788.5, -1259.7];
 
 export const FEATURES = [
-  { key: 'N', id: 'north-hill', x: 1153, z: -1694, rx: 34, rz: 32, rot: -45, h: 4.4, top: 0.1, prov: 'design', evidence: 'text sources: Gould heaped the pond soil into hills; the plan: a north hill of +4.5 m (range 3-6)' },
-  { key: 'M', id: 'memorial-tip', x: 1371, z: -1451, rx: 9.5, rz: 14.5, rot: 0, h: 1.0, top: 0.3, prov: 'osm', evidence: 'n4186236011 memorial; steps w425635247 (2 steps) and w1458068086/92/93 down to the water' },
-  { key: 'G', id: 'gorka', x: 1048, z: -1432, rx: 16, rz: 14, rot: 0, h: 1.7, top: 0.2, prov: 'osm', evidence: 'w30324534 building "Gorka" (a hill or slide): its position only' },
-  { key: 'I', id: 'island-south-mound', x: 1305.5, z: -1328, rx: 12, rz: 24, rot: 0, h: 1.5, top: 0.1, prov: 'design', evidence: 'text sources: two islands in the south of the Big pond; the plan: island mound 1.5 m' },
-  { key: 'W', id: 'lake-west-mound', x: 1285, z: -1500, rx: 20, rz: 22, rot: 0, h: 2.6, top: 0.15, prov: 'design', evidence: 'bank mound of the pond soil' },
-  { key: 'E', id: 'lake-east-mound', x: 1455, z: -1520, rx: 18, rz: 26, rot: 0, h: 2.4, top: 0.15, prov: 'design', evidence: 'bank mound of the pond soil' },
-  { key: 'D', id: 'dam-knoll', x: 1225, z: -1655, rx: 22, rz: 20, rot: 0, h: 2.2, top: 0.15, prov: 'design', evidence: 'bank mound of the pond soil' },
-  { key: 'P', id: 'west-pond-mound', x: 1100, z: -1520, rx: 28, rz: 22, rot: 0, h: 3.0, top: 0.15, prov: 'design', evidence: 'bank mound of the pond soil' },
-  { key: 'C', id: 'centre-mound', x: 1250, z: -1440, rx: 20, rz: 24, rot: 0, h: 2.0, top: 0.15, prov: 'design', evidence: 'mound of the pond soil' },
+  { key: 'N', id: 'north-hill', x: 1153, z: -1694, rx: 34, rz: 32, rot: -45, h: 4.4, top: 0.1, prov: 'design', evidence: 'text sources: Gould heaped the pond soil into hills; plan: north hill +4.5 m (range 3-6); the free north lobe between the west-pond canal and the north fence' },
+  { key: 'M', id: 'memorial-tip', x: 1371, z: -1451, rx: 9.5, rz: 14.5, rot: 0, h: 1.0, top: 0.3, prov: 'osm', evidence: 'n4186236011 Pioneers memorial; steps w425635247 (2 steps) and w1458068086/92/93 down to the water; text: a hill on the north of the Big island (the tip is 19 m wide: 1.0 m at 1:4)' },
+  { key: 'G', id: 'gorka', x: 1048, z: -1432, rx: 16, rz: 14, rot: 0, h: 1.7, top: 0.2, prov: 'osm', evidence: 'w30324534 building "Gorka" (a hill or slide, 137 m2) at 1024, -1449: the position only; the hill rises beside it (3 m keep-out of the building)' },
+  { key: 'I', id: 'island-south-mound', x: 1305.5, z: -1328, rx: 12, rz: 24, rot: 0, h: 1.5, top: 0.1, prov: 'design', evidence: 'text sources: two islands in the south of the Big pond; plan: island mound ~1.5 m; the island (1,937 m2) is 27 m wide at the mound' },
+  { key: 'W', id: 'lake-west-mound', x: 1285, z: -1500, rx: 20, rz: 22, rot: 0, h: 2.6, top: 0.15, prov: 'design', evidence: 'pond-soil bank mound on the west shore of the Big pond, beside the OSM oaks (4 m kept clear)' },
+  { key: 'E', id: 'lake-east-mound', x: 1455, z: -1520, rx: 18, rz: 26, rot: 0, h: 2.4, top: 0.15, prov: 'design', evidence: 'pond-soil bank mound on the east shore of the Big pond, in the open meadow towards the palace view (T11)' },
+  { key: 'D', id: 'dam-knoll', x: 1225, z: -1655, rx: 22, rz: 20, rot: 0, h: 2.2, top: 0.15, prov: 'design', evidence: 'pond-soil knoll north-west of the dam (1272, -1674), on the channel side' },
+  { key: 'P', id: 'west-pond-mound', x: 1100, z: -1520, rx: 28, rz: 22, rot: 0, h: 3.0, top: 0.15, prov: 'design', evidence: 'pond-soil mound on the south bank of the west pond (the largest of the bank mounds)' },
+  { key: 'C', id: 'centre-mound', x: 1250, z: -1440, rx: 20, rz: 24, rot: 0, h: 2.0, top: 0.15, prov: 'design', evidence: 'a lawn mound between the fountain plaza and the Big pond (the pond soil carried inland)' },
 ];

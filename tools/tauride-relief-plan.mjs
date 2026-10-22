@@ -116,6 +116,7 @@ for (const c of CAMS) { disc(c.x, c.z, 5, [220, 30, 30]); text(c.id, c.x, c.z + 
 for (const v of VIEWS_PROPOSAL.filter((q) => q.x > 900 && q.x < 1500 && q.z > -1800 && q.z < -1250)) { disc(v.x, v.z, 4, [210, 60, 0]); text('D' + v.key.slice(-1), v.x, v.z + 9, { c: [150, 40, 0], k: 2 }); }
 text('TAURIDE GARDEN RELIEF PLAN - LAND ONLY, ALL HEIGHTS ARE DESIGN VALUES - CONTOURS 0.5 M, HEAVIER EVERY 1 M', 935, -1785, { k: 2, center: false });
 text('RED RING OSM EVIDENCE   PURPLE RING DESIGN   ORANGE BRIDGES   BROWN STEPS   GREEN RING OSM TREE + 4 M   PINK MONUMENT   RED DOT CAMERA T01-T12', 935, -1776, { k: 2, center: false });
+text('TAN BAND = KEEP-OUT, NO RELIEF: 8 M FROM THE OUTLINE, 3 M FROM BUILDINGS AND WATER, 4 M FROM TREES, 5 M FROM BRIDGES   LETTER + HEIGHT IN METRES ABOVE THE STREET LEVEL   BLUE = WATER (T4)', 935, -1767, { k: 2, center: false });
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 fs.writeFileSync(OUT, encodePng(W, HH, img));
 let maxH = 0; for (let k = 0; k < hg.length; k++) if (hg[k] > maxH) maxH = hg[k];
