@@ -37,6 +37,7 @@ export function createHandling(ctx, tuning = null) {
   const L = ctx.L, ph = ctx.physics;
   const T = tuning ? { ...COUPE_TUNING, ...tuning } : COUPE_TUNING, SPEC = T.spec || COUPE_SPEC, GEAR = T.gearTop;
   const collide = createCarCollisions(ph, SPEC);
+  const KEEP_OUT = HOOKS.carKeepOut;      // the area's own closed ground (the Tauride Garden, T2): a plain (x, z) => boolean, absent for the strip
   const DS = HOOKS.deckServices || [];      // the area's own deck services (a podium, stairs): their deckY comes before the bridge decks (docs/AREAS.md section 9)
   const oldDeckY = (x, z) => ctx.services.landmarksC?.bridge?.deckY?.(x, z) ?? ctx.services.bridges?.deckY(x, z) ?? null;      // the chain of before M6: this is all the strip runs (no deck service)
   const deckY = () => (DS.length ? (x, z) => {
@@ -54,6 +55,7 @@ export function createHandling(ctx, tuning = null) {
   }
   /** terrain the car may not enter: the river (the bridge deck is a floor), an escalator shaft, a building footprint */
   function solidBlocked(x, z) {
+    if (KEEP_OUT && KEEP_OUT(x, z)) return true;
     if (!(deck && deck(x, z) !== null) && L.heightAt(x, z) < -1) return true;
     if (ph.inHole(x, z, 0.2)) return true;
     return L.insideBuilding(x, z);
@@ -76,6 +78,14 @@ export function createHandling(ctx, tuning = null) {
   const blockedPoints = (x, z, sy, cy) => {
     let n = blocked(x, z) ? 1 : 0;
     for (const [a, b] of FOOT) if (footBlocked(x + sy * a + cy * b, z + cy * a - sy * b)) n++;
+    return n;
+  };
+  /** how many of the nine footprint points are inside the area's keep-out (always 0 for the strip: no hook). The keep-out is a CLOSED ground, so unlike the other obstacles it has no embedded-escape rule: the
+   *  count may never grow, whatever pushes the car (a solid's contact push in collide() carried a car over the outline, and once all nine points were inside the "not worse" rule let it roam: T2 fix round 2) */
+  const keepPoints = (x, z, sy, cy) => {
+    if (!KEEP_OUT) return 0;
+    let n = KEEP_OUT(x, z) ? 1 : 0;
+    for (const [a, b] of FOOT) if (KEEP_OUT(x + sy * a + cy * b, z + cy * a - sy * b)) n++;
     return n;
   };
   /** keep the origin EDGE_M inside the play area: the position slides to the nearest allowed point, the velocity loses its outward part (a 10 % bounce), the tangential part is kept (the car slides along
@@ -229,7 +239,8 @@ export function createHandling(ctx, tuning = null) {
     let nx = car.x + car.vx * h, nz = car.z + car.vz * h;
     if (carBlocked(nx, nz, sy, cy)) {
       // a pose that is blocked already (the steering swung a corner into a wall, the river, a footprint) must be able to get out: any move that does not make it worse is allowed
-      const here = blockedPoints(car.x, car.z, sy, cy), ok = (x, z) => here > 0 ? blockedPoints(x, z, sy, cy) <= here : !carBlocked(x, z, sy, cy);
+      const here = blockedPoints(car.x, car.z, sy, cy), keepHere = keepPoints(car.x, car.z, sy, cy);
+      const ok = (x, z) => (here > 0 ? blockedPoints(x, z, sy, cy) <= here : !carBlocked(x, z, sy, cy)) && (!KEEP_OUT || keepPoints(x, z, sy, cy) <= keepHere);
       if (ok(nx, nz)) { /* the move is allowed: it frees the car or keeps it where it was */ }
       else if (ok(nx, car.z)) { nz = car.z; car.vz *= 0.5; }
       else if (ok(car.x, nz)) { nx = car.x; car.vx *= 0.5; }
@@ -238,8 +249,11 @@ export function createHandling(ctx, tuning = null) {
     car.x = nx; car.z = nz;
     edgePush(h);
     car.y = car.air ? fly(h) : groundAt(car.x, car.z);
+    const kx = car.x, kz = car.z;
     if (car.air && T.hop.clearMax !== undefined && car.h > T.hop.clearMax) { const yAir = car.y; car.y = yAir - car.h + T.hop.clearMax; collide(car); car.y = yAir; }     // the solids see the car no higher than clearMax over the road: a barrel hop clears the low furniture, never a bus shelter or a kiosk
     else collide(car);
+    // a contact push may not carry the car (a bus shelter between the lane and the fence pushed it sideways) over the line of a closed ground: the push is undone, the impulse stays
+    if (KEEP_OUT && (car.x !== kx || car.z !== kz) && keepPoints(car.x, car.z, sy, cy) > keepPoints(kx, kz, sy, cy)) { car.x = kx; car.z = kz; }
     edgePush(h);
     car.odo += Math.hypot(car.vx, car.vz) * h;
     car.spin += (car.vx * sy + car.vz * cy) * h / SPEC.R;

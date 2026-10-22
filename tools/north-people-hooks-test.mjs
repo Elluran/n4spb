@@ -139,7 +139,7 @@ async function fast() {
         assert.ok(!target.endsWith('/src/world/area.js') && !target.includes('/src/areas/'), f + ' imports ' + m[1]);       // (people/area.js, the castle surfaces, is another file)
       }
     }
-    assert.match(fs.readFileSync(path.join(root, 'src/world/people/nav.js'), 'utf8'), /import \{ HOOKS \} from '\.\.\/lib\/area-tables\.js'/);
+    assert.match(fs.readFileSync(path.join(root, 'src/world/people/nav.js'), 'utf8'), /import \{ HOOKS(?:, HEIGHT_PATCHES)? \} from '\.\.\/lib\/area-tables\.js'/);       // T2 added HEIGHT_PATCHES to nav.js (surfaceY on the relief)
   });
 }
 

@@ -23,7 +23,7 @@ import { FR as OKT_FR, W as OKT_W, FOYER_OPEN as OKT_OPEN } from '../landmarksOk
 import { SITES, toUV as siteUV } from '../bridges/sites.js';       // pure data: the deck frames and the pavement bands of the west bridges
 import { PackedEdges, PackedAdjacency } from './packed-graph.js';
 import { PackedCellIndex } from './packed-cell-index.js';
-import { HOOKS } from '../lib/area-tables.js';       // the hooks of the area module (docs/AREAS.md section 9): inGarden, deckServices
+import { HOOKS, HEIGHT_PATCHES } from '../lib/area-tables.js';       // the hooks of the area module (docs/AREAS.md section 9): inGarden, deckServices; the height patches (T2: the relief of the Tauride Garden)
 const hyp = (a, b) => Math.sqrt(a * a + b * b);      // (round 4, 2026-10-16: Math.hypot allocates in V8 (117 MB per 20 s of driving); every use in this file has two arguments)
 
 const PAVE = L.SURFACE.sidewalk, ROAD_Y = L.SURFACE.road;
@@ -654,6 +654,8 @@ export function buildNav(ctx, cfg = {}) {
     const dy = serviceDeck(x, z) ?? (bridge && bridge.deckY ? bridge.deckY(x, z) : null);
     if (dy != null && Number.isFinite(dy)) { if (x < WEST_X) { const wd = westDeck(x, z); if (wd) return wd.y + (wd.foot ? 0 : WLIFT[wd.kind] || 0); } return dy + 0.12; }
     if (onDeck(x, z, 0.3)) { const h = ctx.physics.groundHeight(x, z, 2.0, false); return Number.isFinite(h) ? h + 0.12 : y; }
+    // T2: where the area lifts the terrain (a height patch: the relief of the Tauride Garden) a walker stands ON it, uphill and downhill (the physics lookup below only sees terrain within feet + 2.45 m and never lowers y); the strip has no patch
+    if (HEIGHT_PATCHES.length) { const th = L.heightAt(x, z); if (th > 0.06) return th + 0.02; }
     const h = ctx.physics.groundHeight(x, z, 2.0, false);
     return Number.isFinite(h) && h > 0.06 && h > y - 0.05 ? h + 0.02 : y;
   };
