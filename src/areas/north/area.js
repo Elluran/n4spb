@@ -258,7 +258,9 @@ export const ZONES = {
   crowds: CROWDS,
   fountains: [],
   // no station zone; the scripted places of the strip's west (Kazan, Palace Square, ... people/west.js) and of the castle (people/mars.js) stand at fixed coordinates of the strip, so the North switches them off
-  peopleDensity: { west: { scale: 1, platforms: 1, off: true }, mars: { scale: 1, zones: [], off: true } },
+  // + garden: the crowd cap of the Tauride Garden (hooks/people.js inGarden: inside it the density is `factor` x the plan and at most `maxPeople` people are in it; the numbers of the source's DENSITY.tauride).
+  //   ACTIVE in the generic North, not gated by MODULES (docs/AREAS.md section 9.1: the one hook of M6 that changes the generic North without a landmark module; measured at the Tauride gate: the park holds 348 on average of the ~640 visible people without it)
+  peopleDensity: { west: { scale: 1, platforms: 1, off: true }, mars: { scale: 1, zones: [], off: true }, garden: { factor: 0.22, maxPeople: 60 } },
   peopleCorridor: [],
   peopleHot: PEOPLE_HOT,
   tramLines: [],
@@ -284,7 +286,9 @@ export const GARAGE = {
  *  (landmarksSmolny, landmarksSuvorov, landmarksKirochnaya; landmarksD publishes an array that is empty in the North, as in the strip's list). landmarksNorthFull and landmarksOktyabrsky publish none
  *  (the strip's table does not list them either). */
 export const PRUNE_SERVICES = ['city', 'landmarksSmolny', 'landmarksSuvorov', 'landmarksKirochnaya', 'landmarksD'];
-/** the hand-merged hooks of the engine modules (milestone M6 of docs/AREAS.md): none yet */
-export const HOOKS = {};
-/** the height patches of layout.heightAt (milestone M6: the Paradny podium): none yet */
-export const HEIGHT_PATCHES = [];
+// The hook set (milestone M6, docs/AREAS.md section 9): hooks.js builds it from the module list above (a hook that serves a landmark module is dormant until the module is in MODULES).
+import { makeHooks, makeHeightPatches } from './hooks.js';
+/** the hooks of the engine modules (keep-outs of trees / tufts / props / ways / parking, the garden of the crowd cap, the deck services): src/areas/north/hooks.js documents the contract */
+export const HOOKS = makeHooks(MODULES);
+/** the height patches of layout.heightAt (the first patch that answers wins): the Paradny podium once 'landmarksTauride' is in MODULES (the Tauride remake), none before; the pond bed of the remake appends after it in hooks.js */
+export const HEIGHT_PATCHES = makeHeightPatches(MODULES);

@@ -454,7 +454,7 @@ const CROWDS = {
  *   crowHaunts     wildlife/zones.js CROW_HAUNTS [{ x, z, r }]
  *   crowds         wildlife/zones.js crowdTable: { tag: [r, f, level] }
  *   fountains      wildlife.js: the positional 'fountain' loops [[x, z, volume], ...] (only those inside the play area play)
- *   peopleDensity  people.js DENSITY: { station, west, mars } (the sub-tables are described there; an area without them gets the neutral ones)
+ *   peopleDensity  people.js DENSITY: { station, west, mars, garden } (the sub-tables are described there; an area without them gets the neutral ones; `garden` needs HOOKS.inGarden, the strip has neither)
  *   peopleCorridor people/zones.js: the Nevsky corridor weight [[u, weight], ...] (the corridor exists where the roads of NAMES.streets.nevsky do)
  *   peopleHot      people/zones.js: the hot spots of the zone weight field ([x, z, amplitude, sigma] | { u, d, a, s })
  *   tramLines      traffic/trams.js TRAM_LINES: [{ refs: [...], a: [x, z], b: [x, z], headway }] (the terminals are track ends; a line whose terminals are not in the data is skipped)
@@ -543,7 +543,8 @@ export const GARAGE = {
 // ---------------------------------------------------------------- the rest
 /** environment.js: the services whose `entrances` ([{ x, z, clearance? }]) clear the trees from the doors of the buildings they list */
 export const PRUNE_SERVICES = ['city', 'landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksNorth'];
-/** the area-specific hooks of the engine modules (named functions that the hand-merged, otherwise inert call sites of milestone M6 of docs/AREAS.md will call; nothing reads it yet): none in the strip */
+/** the area-specific hooks of the engine modules (milestone M6, docs/AREAS.md section 9: keep-outs of trees / tufts / props / ways / parking, the crowd garden, the deck services; the call sites read
+ *  them through lib/area-tables.js and are a no-op for a key that is absent): none in the strip */
 export const HOOKS = {};
-/** the height patches of layout.heightAt (milestone M6; the shape is fixed there, nothing reads it yet): none in the strip */
+/** the height patches of layout.heightAt (milestone M6, docs/AREAS.md section 9: `[{ id, box: [x0, x1, z0, z1], at(x, z) -> number | null }]`, the first non-null answer wins): none in the strip */
 export const HEIGHT_PATCHES = [];

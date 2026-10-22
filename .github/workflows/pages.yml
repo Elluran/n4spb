@@ -38,6 +38,18 @@ jobs:
         run: node tools/each-area.mjs tools/landmarks-groups-check.mjs
       - name: Areas, registry, gate geometry
         run: node tools/areas-test.mjs
+      # M6 (docs/AREAS.md section 9). The tests below import no three.js; tools/north-height-test.mjs, the engine part of tools/north-keepout-test.mjs and the --scene part of
+      # tools/north-people-hooks-test.mjs build the engine (three.js, 'npm ci'): they run locally with `npm run hooks:all` (this job has no 'npm ci' on purpose)
+      - name: Layout golden of both areas (the hook set moves neither)
+        run: |
+          node tools/layout-golden.mjs --diff
+          node tools/area.mjs north tools/layout-golden.mjs --diff
+      - name: Hook set contract of the North (M6)
+        run: node tools/area.mjs north tools/north-hooks-test.mjs
+      - name: Keep-out regions of the North (M6, factories and regions only)
+        run: node tools/area.mjs north tools/north-keepout-test.mjs --only pure
+      - name: Tauride Garden polygon and crowd cap row (M6)
+        run: node tools/north-people-hooks-test.mjs
       - name: Hand-off codec and gates
         run: |
           node tools/handoff-test.mjs
