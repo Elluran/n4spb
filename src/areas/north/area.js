@@ -258,8 +258,9 @@ export const ZONES = {
   crowds: CROWDS,
   fountains: [],
   // no station zone; the scripted places of the strip's west (Kazan, Palace Square, ... people/west.js) and of the castle (people/mars.js) stand at fixed coordinates of the strip, so the North switches them off
-  // + garden: the crowd cap of the Tauride Garden (hooks/people.js inGarden: factor x the density, at most maxPeople people in it; the numbers of the source). It exists with the Tauride remake only, as the garden does: the generic North's crowd is the one it had
-  peopleDensity: { west: { scale: 1, platforms: 1, off: true }, mars: { scale: 1, zones: [], off: true }, garden: MODULES.includes('landmarksTauride') ? { factor: 0.22, maxPeople: 60 } : undefined },
+  // + garden: the crowd cap of the Tauride Garden (hooks/people.js inGarden: inside it the density is `factor` x the plan and at most `maxPeople` people are in it; the numbers of the source's DENSITY.tauride).
+  //   ACTIVE in the generic North, not gated by MODULES (docs/AREAS.md section 9.1: the one hook of M6 that changes the generic North without a landmark module; measured at the Tauride gate: the park holds 348 on average of the ~640 visible people without it)
+  peopleDensity: { west: { scale: 1, platforms: 1, off: true }, mars: { scale: 1, zones: [], off: true }, garden: { factor: 0.22, maxPeople: 60 } },
   peopleCorridor: [],
   peopleHot: PEOPLE_HOT,
   tramLines: [],
@@ -289,5 +290,5 @@ export const PRUNE_SERVICES = ['city', 'landmarksSmolny', 'landmarksSuvorov', 'l
 import { makeHooks, makeHeightPatches } from './hooks.js';
 /** the hooks of the engine modules (keep-outs of trees / tufts / props / ways / parking, the garden of the crowd cap, the deck services): src/areas/north/hooks.js documents the contract */
 export const HOOKS = makeHooks(MODULES);
-/** the height patches of layout.heightAt (the Paradny podium and the like, the first patch that answers wins): none while the Tauride remake is not built */
+/** the height patches of layout.heightAt (the first patch that answers wins): the Paradny podium once 'landmarksTauride' is in MODULES (the Tauride remake), none before; the pond bed of the remake appends after it in hooks.js */
 export const HEIGHT_PATCHES = makeHeightPatches(MODULES);

@@ -8,7 +8,7 @@
 //
 //  THE CONTRACT (frozen by the foundation commit; the H.. ids are the items of the M6 inventory):
 //    HOOKS = {
-//      treeCleared(ctx)     -> ((x, z) => boolean) | null                                          H02  soft tree clearing (not applied to forced / mapped OSM trees)
+//      treeCleared(ctx)     -> ((x, z) => boolean) | null                                          H02  soft tree clearing (cleared() runs only under !o.force; no caller forces, so mapped OSM trees are cleared too)
 //      treeReject(ctx)      -> ((x, z) => 'paradny' | 'campus' | 'suvorov' | null) | null          H03  hard reject, mapped trees included; the string is the debug reason
 //      tuftReject(ctx)      -> ((x, z) => boolean) | null                                          H04  no grass tufts
 //      propReject(ctx)      -> ((cx, cz) => boolean) | null                                        H05  no bench / bin / kiosk stamped

@@ -6,14 +6,15 @@
 //   * hooks/people.js: the embedded ring equals the record r1582734 of the North facade GREEN vertex for vertex (one ring, no holes: there is nothing to probe on a hole), is the outline of the source's
 //     TAURIDE_GARDEN within the simplification of the data cut (when the source repository is at PITER_SRC / D:/git2/agi-fun-tests/102_3d_piter), inGarden agrees with an independent winding-number test on a
 //     grid and on fixed probes inside / outside / outside the bbox, and rejects NaN;
-//   * the area module: the cap row ZONES.peopleDensity.garden exists exactly while 'landmarksTauride' is in MODULES (the generic North's crowd is untouched), HOOKS.inGarden is the function; the strip
-//     exports no hook and no row; the three engine files read the hooks through lib/area-tables.js only;
-//   * --scene (the density cap logic on the real North nav: crowdedAt / recycle / recount are closures of createSim, a synthetic nav would need ~60 fields): ONE scene is built, with the neutral row
-//     (what the North has today), and people.build is run three more times in it with the row { factor 0.22, maxPeople 60 }, with the head cap alone and with the density factor alone; nav.densityFactor is
-//     0.22 inside the garden and 1 outside, 1 everywhere with the neutral row; with the camera in the middle of the garden all four simulations are stepped for N minutes (the camera jump makes every walker
-//     re-placed around it) and the number of visible people inside the garden is counted every second: the neutral one fills it (~400), the row holds it near the cap (soft: walkers who come in along a
-//     route and the scripted ones are not refused, ~75 against 60) and each half works alone; nav.surfaceY asks the services of HOOKS.deckServices first (+0.12), skips a service that is not built, has
-//     no deckY or answers null / NaN.
+//   * the area module: the cap row ZONES.peopleDensity.garden { factor 0.22, maxPeople 60 } is in the North's tables, NOT gated by MODULES (integration decision, docs/AREAS.md section 9.1: the cap is
+//     active in the generic North, with or without 'landmarksTauride'), HOOKS.inGarden is the function; the strip exports no hook and no row; the three engine files read the hooks through
+//     lib/area-tables.js only;
+//   * --scene (the density cap logic on the real North nav: crowdedAt / recycle / recount are closures of createSim, a synthetic nav would need ~60 fields): ONE scene is built, with the row the North has
+//     today { factor 0.22, maxPeople 60 }, and people.build is run three more times in it with the NEUTRAL row (no factor, no cap: what the North had before M6), with the head cap alone and with the density
+//     factor alone; nav.densityFactor is 0.22 inside the garden and 1 outside, 1 everywhere with the neutral row; with the camera in the middle of the garden all four simulations are stepped for N minutes
+//     (the camera jump makes every walker re-placed around it) and the number of visible people inside the garden is counted every second: the neutral one fills it (~400), the row holds it near the cap
+//     (soft: walkers who come in along a route and the scripted ones are not refused, ~75 against 60) and each half works alone; nav.surfaceY asks the services of HOOKS.deckServices first (+0.12), skips a
+//     service that is not built, has no deckY or answers null / NaN.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -110,12 +111,12 @@ async function fast() {
     assert.equal(S.ID, 'strip', 'run this test plain (not through tools/area.mjs): src/world/area.js is remapped to ' + S.ID);
     assert.deepEqual(S.HOOKS, {}); assert.equal(S.ZONES.peopleDensity.garden, undefined);
   });
-  await check('the North today: no landmarksTauride, so no cap row; HOOKS.inGarden is the hooks/people.js function', () => {
-    assert.ok(!N.MODULES.includes('landmarksTauride'), 'landmarksTauride is in MODULES: the Tauride remake has landed, give the cap row a look (area.js)');
-    assert.equal(N.ZONES.peopleDensity.garden, undefined);
+  await check('the North today: the cap row is { factor 0.22, maxPeople 60 } although no landmarksTauride is built; HOOKS.inGarden is the hooks/people.js function', () => {
+    assert.ok(!N.MODULES.includes('landmarksTauride'), 'landmarksTauride is in MODULES: the Tauride remake has landed, this check is about the generic North (the next one covers the listed case)');
+    assert.deepEqual(N.ZONES.peopleDensity.garden, CAP);
     assert.equal(N.HOOKS.inGarden, inGarden); assert.deepEqual([...N.HOOKS.deckServices], ['landmarksTauride']);
   });
-  await check("the North with 'landmarksTauride' in MODULES: the cap row is { factor 0.22, maxPeople 60 } (a copy of area.js with the module listed, imports made absolute)", async () => {
+  await check("the North with 'landmarksTauride' in MODULES: the cap row stays { factor 0.22, maxPeople 60 } (a copy of area.js with the module listed, imports made absolute)", async () => {
     const file = path.join(root, 'src/areas/north/area.js'), dir = path.dirname(file);
     let src = fs.readFileSync(file, 'utf8').replace(/from '(\.\.?\/[^']+)'/g, (m, p) => `from '${pathToFileURL(path.resolve(dir, p)).href}'`);
     const listed = src.replace(/(export const MODULES = \[\s*'environment',)/, "$1 'landmarksTauride',"); assert.notEqual(listed, src, 'MODULES has changed its shape: adapt this check');
@@ -151,7 +152,7 @@ function sceneParent() {
   console.log(`  (scene: ${((Date.now() - t0) / 1000).toFixed(0)} s)`);
 }
 
-/** The eval hook of tools/people-test.mjs: ctx holds the North (environment, streets, city, people: the people of the NEUTRAL row, which is what the North has today). */
+/** The eval hook of tools/people-test.mjs: ctx holds the North (environment, streets, city, people: the people of the cap row, which is what the North has today). */
 export default async function scene(ctx, L, THREE) {
   const minutes = Number(flagVal('minutes', '3')) || 3, checks = [];
   const note = (name, ok, detail = '') => { checks.push({ name, ok, detail }); console.log('[scene] ' + (ok ? 'ok   ' : 'FAIL ') + name + (detail ? '  ' + detail : '')); };
@@ -159,14 +160,14 @@ export default async function scene(ctx, L, THREE) {
   try {
     const { inGarden, GARDEN_RING } = await import(url('src/areas/north/hooks/people.js'));
     const people = await import(url('src/world/people.js'));
-    const A = ctx.services.people;                                         // built by people-test with people.js DENSITY.garden of the North today (neutral)
-    const neutral = people.DENSITY.garden;
-    run('the North today builds its people with the neutral garden row', () => { assert.equal(neutral.factor, 1); assert.equal(neutral.maxPeople, Infinity); assert.equal(A.sim.nav.gardenCfg, neutral); });
-    // more populations in the same scene (the earlier ones keep running, all see the same camera): the row the Tauride remake gives the North (area.js ZONES.peopleDensity.garden), and each half of it alone
-    const ROWS = { row: { ...CAP }, capOnly: { factor: 1, maxPeople: CAP.maxPeople }, factorOnly: { factor: CAP.factor, maxPeople: Infinity } }, pops = { neutral: A };
+    const A = ctx.services.people;                                         // built by people-test with people.js DENSITY.garden of the North today (the cap row of area.js)
+    const today = people.DENSITY.garden;
+    run('the North today builds its people with the cap row of area.js', () => { assert.deepEqual({ factor: today.factor, maxPeople: today.maxPeople }, CAP); assert.equal(A.sim.nav.gardenCfg, today); });
+    // more populations in the same scene (the earlier ones keep running, all see the same camera): the NEUTRAL row (what the North had before M6: no factor, no cap), and each half of the row alone
+    const ROWS = { neutral: { factor: 1, maxPeople: Infinity }, capOnly: { factor: 1, maxPeople: CAP.maxPeople }, factorOnly: { factor: CAP.factor, maxPeople: Infinity } }, pops = { row: A };
     for (const [name, row] of Object.entries(ROWS)) { people.DENSITY.garden = row; await people.build(ctx); pops[name] = ctx.services.people; }
-    people.DENSITY.garden = neutral; ctx.services.people = A;
-    const B = pops.row;
+    people.DENSITY.garden = today; ctx.services.people = A;
+    const B = A, NEU = pops.neutral;
     run('the other builds got their rows', () => {
       assert.equal(new Set(Object.values(pops)).size, 4);
       for (const [name, row] of Object.entries(ROWS)) assert.deepEqual({ factor: pops[name].sim.nav.gardenCfg.factor, maxPeople: pops[name].sim.nav.gardenCfg.maxPeople }, row, name);
@@ -174,7 +175,7 @@ export default async function scene(ctx, L, THREE) {
 
     // ---- nav.densityFactor / zoneW on a 9 m grid
     run('nav.densityFactor: 0.22 inside the garden and 1 outside with the row, 1 everywhere with the neutral one; zoneW follows', () => {
-      const nA = A.sim.nav, nB = B.sim.nav; let inside = 0, n = 0;
+      const nA = NEU.sim.nav, nB = B.sim.nav; let inside = 0, n = 0;
       for (let x = 900; x <= 1520; x += 9) for (let z = -1810; z <= -1240; z += 9) {
         const g = inGarden(x, z); n++; if (g) inside++;
         assert.equal(nA.densityFactor(x, z), 1, `neutral (${x}, ${z})`);

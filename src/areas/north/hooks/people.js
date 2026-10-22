@@ -6,8 +6,9 @@
 //  import a data facade (tools/areas-test.mjs loads it without the import-map remap and would get the strip's). The source's own TAURIDE_GARDEN (landmarksTauride/terrain.js, a later OSM snapshot) is the
 //  same outline with 15 more vertices (14 of them within 0.35 m of an edge of the facade ring, and the closing vertex) in the opposite winding: the two answer differently on 142 of 1,344,321 probes
 //  of a 0.5 m grid (tools/north-people-hooks-test.mjs, which also compares the literal with the facade record).
-//  THE FUNCTION IS NOT MODULE-GATED (contract: HOOKS.inGarden, hooks.js passes it as it is); what is gated is the CAP: the numbers (factor 0.22, maxPeople 60) are the data row
-//  ZONES.peopleDensity.garden of area.js, which exists only while 'landmarksTauride' is in MODULES, so the generic North's crowd is the one it always had (the garden is a generic OSM park there).
+//  NOTHING HERE IS MODULE-GATED (contract: HOOKS.inGarden, hooks.js passes it as it is; the numbers, factor 0.22 and maxPeople 60, are the data row ZONES.peopleDensity.garden of area.js, which is there
+//  with or without 'landmarksTauride'): the cap is active in the generic North, where the garden is a plain OSM park (decision of the integration step, docs/AREAS.md section 9.1: the frozen contract says
+//  "gating none", and the oracle of cluster E expects at most 60 heads in the garden). It is the one M6 hook that changes the generic North's crowd.
 //  PURE DATA + PURE FUNCTIONS: no three.js, no layout.js, no data facade (the area module loads this file without the import-map remap).
 //
 //    inGarden(x, z) -> boolean    H08  inside the Tauride Garden (the source's inTauride: strict bbox first, then the even-odd ring test)

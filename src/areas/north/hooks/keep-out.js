@@ -6,7 +6,7 @@
 //
 //  Each (ctx) factory is called ONCE per build by its engine module (the tuft / prop / tree paths are hot) and returns null when none of the modules it serves is in ctx.buildList (an absent
 //  ctx.buildList counts as "not built", as in the source: `ctx.buildList?.includes(name)`); the engine calls the returned function per candidate. THE SIGNATURES ARE FROZEN.
-//    treeCleared(ctx)      -> ((x, z) => boolean) | null    H02  environment/trees.js cleared(): SOFT clearing, not applied to forced / mapped OSM trees.  Serves landmarksSmolny (the two ceremonial approaches)
+//    treeCleared(ctx)      -> ((x, z) => boolean) | null    H02  environment/trees.js cleared(): SOFT clearing (cleared() runs only under `!o.force`; no caller forces, so mapped OSM trees are cleared too: none lies in the rectangles).  Serves landmarksSmolny (the two ceremonial approaches)
 //    treeReject(ctx)       -> ((x, z) => 'paradny' | 'campus' | 'suvorov' | null) | null    H03  environment/trees.js plant(): HARD reject, mapped trees too; the reason string is the ENV_DEBUG
 //                              counter.  Serves landmarksTauride (the podium), landmarksKirochnaya (the CAMPUS polygon, embedded here), landmarksSuvorov (x 1384 .. 1442, z -1226 .. -1208)
 //    tuftReject(ctx)       -> ((x, z) => boolean) | null    H04  environment/lawns.js buildTufts() live(): no grass tufts.  Serves landmarksTauride, landmarksKirochnaya

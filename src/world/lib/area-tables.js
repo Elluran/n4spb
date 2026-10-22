@@ -7,7 +7,8 @@
 //   ZONES            wildlife, people, trams, field, far  pigeons, crowHaunts, crowds, fountains, peopleDensity, peopleCorridor, peopleHot, tramLines, clearDiscs, farCentres
 //   GARAGE           drive/cars/index.js, drive.js        poses { coupe, truck, lada, roadster }, spawn
 //   PRUNE_SERVICES   environment.js                       the services whose door entrances clear the trees
-//   HOOKS, HEIGHT_PATCHES                                 the hand-merged hooks and the height patches of milestone M6 (nothing reads them yet)
+//   HOOKS, HEIGHT_PATCHES  layout.js, drive/handling.js, environment/trees.js + lawns.js, props/world.js, streets.js + streets/parking.js, people.js + people/nav.js + people/sim.js
+//                                                        the hooks and the height patches of milestone M6 (docs/AREAS.md section 9; the strip's are {} and []: every call site is a no-op without its key)
 import * as A from '../area.js';
 
 const arr = (v) => (Array.isArray(v) ? v : []);
