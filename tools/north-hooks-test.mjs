@@ -473,7 +473,7 @@ section('tools');
 section('static');
 {                                                                  // TEXT checks only (a regex over the engine files): they notice a hook that is no longer read through lib/area-tables.js, not a call site that misbehaves (that is `npm run hooks:all`)
   const WIRING = { 'src/world/layout.js': ['HEIGHT_PATCHES'], 'src/world/drive/handling.js': ['deckServices', 'carKeepOut'], 'src/world/environment/trees.js': ['treeCleared', 'treeReject'], 'src/world/environment/lawns.js': ['tuftReject'],
-    'src/world/props/world.js': ['propReject'], 'src/world/streets.js': ['pedestrianOnly'], 'src/world/streets/parking.js': ['parkingReject'], 'src/world/people/nav.js': ['inGarden', 'deckServices'] };
+    'src/world/props/world.js': ['propReject'], 'src/world/streets.js': ['pedestrianOnly'], 'src/world/streets/parking.js': ['parkingReject'], 'src/world/people/nav.js': ['inGarden', 'deckServices', 'HEIGHT_PATCHES'] };
   const strip = stripComments;
   for (const [file, keys] of Object.entries(WIRING)) {
     const src = strip(read(file)), imports = [...src.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)];

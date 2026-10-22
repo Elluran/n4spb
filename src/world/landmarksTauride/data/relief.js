@@ -10,7 +10,7 @@ export const RELIEF_BOX = [917.8, 1497.3, -1788.5, -1259.7];
 
 export const FEATURES = [
   { key: 'N', id: 'north-hill', x: 1153, z: -1694, rx: 34, rz: 32, rot: -45, h: 4.4, top: 0.1, prov: 'design', evidence: 'text sources: Gould heaped the pond soil into hills; the plan: a north hill of +4.5 m (range 3-6)' },
-  { key: 'M', id: 'memorial-tip', x: 1371, z: -1453, rx: 9.5, rz: 15, rot: 0, h: 1.2, top: 0.15, prov: 'osm', evidence: 'n4186236011 memorial; steps w425635247 (2 steps) and w1458068086/92/93 down to the water' },
+  { key: 'M', id: 'memorial-tip', x: 1371, z: -1451, rx: 9.5, rz: 14.5, rot: 0, h: 1.0, top: 0.3, prov: 'osm', evidence: 'n4186236011 memorial; steps w425635247 (2 steps) and w1458068086/92/93 down to the water' },
   { key: 'G', id: 'gorka', x: 1048, z: -1432, rx: 16, rz: 14, rot: 0, h: 1.7, top: 0.2, prov: 'osm', evidence: 'w30324534 building "Gorka" (a hill or slide): its position only' },
   { key: 'I', id: 'island-south-mound', x: 1305.5, z: -1328, rx: 12, rz: 24, rot: 0, h: 1.5, top: 0.1, prov: 'design', evidence: 'text sources: two islands in the south of the Big pond; the plan: island mound 1.5 m' },
   { key: 'W', id: 'lake-west-mound', x: 1285, z: -1500, rx: 20, rz: 22, rot: 0, h: 2.6, top: 0.15, prov: 'design', evidence: 'bank mound of the pond soil' },

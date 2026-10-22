@@ -23,8 +23,15 @@ export function makeGardenHeight(features = FEATURES, box = RELIEF_BOX) {
     const R = Math.max(f.rx, f.rz); rr2[i] = R * R;
   }
   const x0 = box[0], x1 = box[1], z0 = box[2], z1 = box[3];
+  // a coarse occupancy grid (CELL m cells of the box): 1 where the bounding box of any feature touches the cell. Most of the garden is flat, so most calls end after one lookup (heightAt runs for the whole map at start-up).
+  const CELL = 8, inv = 1 / CELL, nx = Math.ceil((x1 - x0) * inv) + 1, nz = Math.ceil((z1 - z0) * inv) + 1, occ = new Uint8Array(nx * nz);
+  for (let i = 0; i < n; i++) {
+    const R = Math.sqrt(rr2[i]), ax = Math.max(0, Math.floor((cx[i] - R - x0) * inv)), bx = Math.min(nx - 1, Math.floor((cx[i] + R - x0) * inv)), az = Math.max(0, Math.floor((cz[i] - R - z0) * inv)), bz = Math.min(nz - 1, Math.floor((cz[i] + R - z0) * inv));
+    for (let b = az; b <= bz; b++) for (let a = ax; a <= bx; a++) occ[b * nx + a] = 1;
+  }
   return function gardenHeight(x, z) {
     if (!(x >= x0 && x <= x1 && z >= z0 && z <= z1)) return null;        // also NaN and the far points
+    if (occ[(((z - z0) * inv) | 0) * nx + (((x - x0) * inv) | 0)] === 0) return null;      // no feature reaches this cell
     let best = 0;
     for (let i = 0; i < n; i++) {
       const dx = x - cx[i], dz = z - cz[i];
