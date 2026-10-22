@@ -3,7 +3,7 @@
 // of the world (x, z) alone (environment/ground.js: class mask, noise tile, patches; vPWorld.xz), so a mesh drawn with the SAME program shows the same lawn at the same place. What this CPU test proves about the
 // GPU result: the terrain meshes use a material that carries the ground's onBeforeCompile and customProgramCacheKey (the same compiled program and the same uniform OBJECTS), whose program-relevant
 // parameters equal the ground's, without the ground's polygonOffset (the relief must win over the ground by depth), without the vertex-colour attribute; that the shader text it produces is the ground's;
-// and that a context without a ground still gets the placeholder. The same checks run against copies of terrain-mesh.js with one line cut (the proof can fail). The picture itself needs a GPU look.
+// and that a context without a ground still gets the placeholder. The same checks run against four copies of terrain-mesh.js with one line cut (the proof can fail). The picture itself needs a GPU look.
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -61,7 +61,7 @@ async function checks(label, mod, expectPass) {
 
 const real = await checks('shipped terrain-mesh.js', TM, true);
 for (const [name, cond, detail] of real) ok(name, cond, detail);
-// the proof can fail: three copies of the file with one line cut, each must turn the matching checks red
+// the proof can fail: four copies of the file with one line cut, each must turn the matching checks red
 const cuts = [
   ['the copy of the ground\'s shader is gone (onBeforeCompile / customProgramCacheKey not taken)', /mat\.onBeforeCompile = gm\.onBeforeCompile; mat\.customProgramCacheKey = gm\.customProgramCacheKey;/, '', /ONE compiled|shader text|uniforms are the SAME|onBeforeCompile and customProgramCacheKey/],
   ['the relief carries the ground\'s polygonOffset (it would tie with the ground at long range)', /\{ paint: 0\.02, name: 'tauride-terrain-ground' \}/, "{ paint: 0.02, polygonOffset: 2, name: 'tauride-terrain-ground' }", /NO polygonOffset/],

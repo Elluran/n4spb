@@ -1,5 +1,5 @@
 // car-keepout-sim.mjs - the DYNAMIC proof of the garden's car keep-out (T2 fix round 2): real cars are DRIVEN at the closed ground, the footprint is measured after every step.
-//   node tools/area.mjs north tools/tauride/car-keepout-sim.mjs [--quick | --full] [--no-world]      (default ~3 min: 60 m steps, 5 headings; --full 36 m, 7 headings; --quick 90 m, 3 headings)
+//   node tools/area.mjs north tools/tauride/car-keepout-sim.mjs [--quick | --full] [--no-world]      (default ~100 s: 60 m steps, 5 headings, 900 runs; --full ~3.5 min: 36 m, 7 headings, 2,192 runs; --quick ~50 s: 90 m, 3 headings)
 // The static proof (tools/tauride-height-test.mjs: `createHandling().blocked` over the outline, 0 of 2,158 m) cannot see what the STEP does after the predicate has said yes. QA found two holes (round 2):
 //   H1  collide(car) (a bus shelter between the lane and the fence) pushes the car's origin across the outline after the KEEP_OUT test; the push was never re-checked;
 //   H2  the 'already embedded' rule (a blocked pose may move while the number of blocked footprint points does not grow) saturates at nine: a car with all nine points inside is free to roam.
