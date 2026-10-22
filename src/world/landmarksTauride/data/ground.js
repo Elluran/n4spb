@@ -16,8 +16,8 @@ export const MEADOWS = [
 ];
 
 /** AUTHORED CANOPY on top of the OSM woods (which are the claim list of T5: the ground under them is leaf litter): the belt of old trees along the fence ("old trees at the borders, open lawns in the middle", plan C),
- *  a band of `width` metres inside the outline with the canopy weight `k` (0.45: the shaded-lawn fringe, below the 0.5 of leaf litter: T5 plants it and may raise it), dissolved near gates (`gateClear` m). */
-export const CANOPY_BELT = { width: 9, k: 0.45, feather: 4, gateClear: 9 };
+ *  a band of `width` metres inside the outline with the canopy weight `k` (0.30: a shaded-lawn fringe far below the litter threshold of the shader, 0.62 .. 0.78: QA round 1 of T3 found 0.45 + noise tipping it into dark litter blotches; T5 plants it and may raise it), dissolved near gates (`gateClear` m). */
+export const CANOPY_BELT = { width: 8, k: 0.30, feather: 4, gateClear: 9 };
 
 /** WORN SPOTS: places that feet and benches wear to bare earth besides the ones the generator finds itself (a bench r 2.6 m, a gate r 5.5 m, a junction of three ways r 2.8 m, a monument or the fountain r 7 m,
  *  the apron of a building 2.6 m): x, z, radius r (m), wear k (0..1; 0.34 .. 0.5 is the first trampled patches, above 0.72 packed earth). */
@@ -40,7 +40,7 @@ export const GROUND_TUNING = {
   junctionR: 2.8, junctionK: 0.62,
   monumentR: 7, monumentK: 0.75,
   apron: 2.6, apronK: 0.6,
-  verge: 1.2, vergeK: 0.36,     // the worn edge of a path: wear 0.36 at the path edge, 0 at 1.2 m
+  verge: 1.2, vergeK: 0.30,     // the worn edge of a path: wear 0.30 at the path edge, 0 at 1.2 m (QA round 1 of T3: 0.36 stained the verges)
   stripeFeather: 3,        // m: the stripe weight of a block goes 0 -> 1 over this distance inside its edge
   shoreClear: 2.5,         // m: no stripes this close to the water
 };

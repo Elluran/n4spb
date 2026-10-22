@@ -3,6 +3,9 @@
 // the generic modules stop drawing what the garden's own builders replace (T3 ground and paths, T5 vegetation, T6 furniture; the relief and its terrain mesh are in the module since T2):
 //   osm = the park r1582734 + the 23 wood polygons of GARDEN_GREEN (data/footprints.js: NOT the pitch, the playgrounds, the fitness station or the wetland), the 120 garden ways (data/paths.js: the 118 of the
 //         source's terrain.js + w425188838 / w425188839, bridge ways included), the 132 benches and the 167 bins (data/furniture.js, OSM nodes: props/osm.js skips a claimed bench / waste basket).
+//   T3 fix round 1 added the 4 footway AREAS inside the fence (GARDEN_AREAS: the central round w415779476 and three plazas, 1,565 / 375 / 277 / 188 m2): streets drew each as a 10 cm kerb wall round a paver cap whose triangles
+//   wind downward (the cap is culled in the colour pass, the wall stays), a closed grey polygon on the lawn that the outline pass traced through the floor (QA: radius 27 m at the central round); the garden's own ground and
+//   paths replace them (the worn plazas of data/ground.js), and T6 owns the memorial and the fountain.
 //   Effect until the later phases: no generic trees, grass tufts, hedges, maroon path ribbons or OSM benches / bins in the garden (bare terrain). The 7 OSM trees are NOT claimed (they stay until T5).
 
 const GARDEN_GREEN_IDS = [
@@ -28,6 +31,7 @@ const GARDEN_WAYS = [
     'w425635266','w426502822','w426502824','w427110425','w427110426','w882128034','w882132271','w882132272',
     'w1458068086','w1458068087','w1458068088','w1458068089','w1458068092','w1458068093','w1458068094','w112880645',
 ];
+const GARDEN_AREAS = ['w415779476', 'w1458068090', 'w1458068100', 'w1458068120'];
 const GARDEN_BENCHES = [
     'n4244934439','n4257948325','n4257948326','n4257948327','n4257948328','n4326759653',
     'n4326759654','n4189483399','n4189483400','n4189483401','n4189483402','n4244934435',
@@ -86,5 +90,5 @@ const GARDEN_BINS = [
 export const GROUPS_LIST = [
   {key:'tauride-palace',name:'Таврический дворец',nameEn:'Tauride Palace',ids:['r3801092'],osm:[],at:[1380,-1735]},
   {key:'paradny-quarter',name:'Парадный квартал',nameEn:'Paradny Quarter',ids:['w102153008','w102153013','w145419644','r1452259','r1967088','r3304715','r3304716','w102153007','w134638076','w134638078','w134638079'],osm:['w1501496505','w1501496506'],at:[944,-1038]},
-  {key:'tauride-garden',name:'Таврический сад',nameEn:'Tauride Garden',ids:[],osm:[...GARDEN_GREEN_IDS,...GARDEN_WAYS,...GARDEN_BENCHES,...GARDEN_BINS],at:[1210,-1520]},
+  {key:'tauride-garden',name:'Таврический сад',nameEn:'Tauride Garden',ids:[],osm:[...GARDEN_GREEN_IDS,...GARDEN_WAYS,...GARDEN_AREAS,...GARDEN_BENCHES,...GARDEN_BINS],at:[1210,-1520]},
 ];

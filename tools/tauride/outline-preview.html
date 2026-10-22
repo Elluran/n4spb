@@ -1,0 +1,81 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tauride outline preview (software GL)</title>
+<!-- The harness of tools/tauride/outline-preview.mjs: the garden floor (the real modules) rendered through the REAL render pipeline of the engine (core/renderer.js: normal / depth pre-pass, colour pass, outline composite) on software GL,
+     with a stand-in for the near environment ground (layer 0, a plane with the hole of HOOKS.groundHoles) and boxes behind the hills. ?floor=nd (default: the floor in the outline pass) | old (the T3 first version: no-outline layer). -->
+<script type="importmap">
+{ "imports": {
+  "/src/world/data/city.js": "/src/areas/north/data/city.js",
+  "/src/world/area.js": "/src/areas/north/area.js",
+  "/src/world/city/known-data.js": "/src/areas/north/known-data.js",
+  "three": "/node_modules/three/build/three.module.js",
+  "three/addons/": "/node_modules/three/examples/jsm/"
+} }
+</script>
+<style>html,body{margin:0;background:#888}canvas{display:block}</style></head>
+<body><canvas id="c" width="960" height="540"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { createContext } from '/src/core/ctx.js';
+import { createRenderPipeline } from '/src/core/renderer.js';
+import * as L from '/src/world/layout.js';
+import { GREEN } from '/src/world/data/city.js';
+import { gardenHeight, RELIEF_BOX } from '/src/world/landmarksTauride/height.js';
+import { planTerrain, buildTerrain, gardenPieces, makeMeshHeight } from '/src/world/landmarksTauride/terrain-mesh.js';
+import { planGroundMask, gardenGroundMaterial, collectGroundInputs, makeNoiseTexture } from '/src/world/landmarksTauride/ground-material.js';
+import { planPaths, buildPaths } from '/src/world/landmarksTauride/paths-draped.js';
+import { insetRing, GROUND_HOLE_INSET } from '/src/areas/north/hooks/ground.js';
+import * as DG from '/src/world/landmarksTauride/data/footprints.js';
+import * as DW from '/src/world/landmarksTauride/data/water.js';
+import * as DP from '/src/world/landmarksTauride/data/paths.js';
+import * as DF from '/src/world/landmarksTauride/data/furniture.js';
+const q = new URLSearchParams(location.search), floorMode = q.get('floor') || 'nd', envMode = q.get('env') || 'plane';
+const errors = [];
+const origErr = console.error; console.error = (...a) => { errors.push(a.map(String).join(' ').slice(0, 2000)); origErr(...a); };
+const canvas = document.getElementById('c'), W = 960, H = 540;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H, false);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(62, W / H, 0.25, 2500);
+const sunDir = new THREE.Vector3(...L.SUN_DIR).normalize();
+scene.background = new THREE.Color('#a9c4e0'); scene.fog = new THREE.FogExp2('#b7cde6', 0.00045);
+const sun = new THREE.DirectionalLight('#fff2dc', 2.6); sun.position.copy(sunDir.clone().multiplyScalar(500)); scene.add(sun, new THREE.HemisphereLight('#cfe3ff', '#7a8a60', 1.1));
+const ctx = createContext({ scene, camera, renderer, audio: null, quality: { name: 'medium', pixelRatio: 1, msaa: 0, shadowMap: 2048, shadowSize: 70, petals: 0.6 }, sunDir });
+const pipeline = createRenderPipeline(renderer, { name: 'medium', pixelRatio: 1, msaa: 0 }); pipeline.setSize(W, H, 1);
+const root = new THREE.Group(); scene.add(root);
+// ---- the garden: the real modules
+const tplan = planTerrain(gardenHeight, RELIEF_BOX, { cover: gardenPieces() });
+const mask = planGroundMask(collectGroundInputs({ GARDEN: DG.GARDEN, GARDEN_GREEN: DG.GARDEN_GREEN, FOOTPRINTS: DG.FOOTPRINTS, WATER_UNION: DW.WATER_UNION, PATHS: DP.PATHS, BENCHES: DF.BENCHES, GATES: DF.GATES, MONUMENTS: DF.MONUMENTS, FOUNTAINS: DF.FOUNTAINS }, GREEN, gardenHeight));
+const noise = makeNoiseTexture(), ground = gardenGroundMaterial(ctx, mask, noise);
+buildTerrain(ctx, root, tplan, { material: ground.mat, noOutline: floorMode === 'old' });
+const pplan = planPaths(DP.PATHS, { meshHeight: makeMeshHeight(tplan), gh: gardenHeight }); buildPaths(ctx, root, pplan, noise);
+// ---- the stand-in for the near chunks of environment/ground.js: layer 0 (in the outline pass), a plane with the garden-shaped hole (the hole of HOOKS.groundHoles)
+if (envMode === 'plane') {
+  const hole = insetRing(DG.GARDEN.o, GROUND_HOLE_INSET), R = 1400, cx = 1200, cz = -1520;
+  const sh = new THREE.Shape([new THREE.Vector2(cx - R, -(cz - R)), new THREE.Vector2(cx + R, -(cz - R)), new THREE.Vector2(cx + R, -(cz + R)), new THREE.Vector2(cx - R, -(cz + R))]);
+  const hp = new THREE.Path(); for (let i = 0; i < hole.length; i += 2) { const p = new THREE.Vector2(hole[i], -hole[i + 1]); if (i === 0) hp.moveTo(p.x, p.y); else hp.lineTo(p.x, p.y); } hp.closePath(); sh.holes.push(hp);
+  const g = new THREE.ShapeGeometry(sh); g.rotateX(-Math.PI / 2);
+  const m = new THREE.Mesh(g, ctx.mat.toon('#6f9a3e', { paint: 0, polygonOffset: 2, name: 'env-ground-standin' })); m.name = 'env-ground'; root.add(m);
+}
+// ---- what stands behind the hills: terraced "buildings" (layer 0) and round "crowns"
+const bm = ctx.mat.toon('#d9b86a', { paint: 0, name: 'box' }), tm = ctx.mat.toon('#4f8f3a', { paint: 0, name: 'crown' });
+const box = (x, z, w, d, h) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), bm); m.position.set(x, h / 2, z); root.add(m); };
+const crown = (x, z, r) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), tm); m.position.set(x, r * 1.4 + 1.5, z); root.add(m); };
+if (q.get('hidden') === '1') {      // hidden: boxes of 3 m and crowns of 1.2 m that the hill covers completely from the eye of the grazing view: every outline pixel at their place is a ghost
+  for (const [x, z, w, d, h] of [[1120, -1745, 14, 8, 3], [1165, -1748, 12, 8, 3], [1200, -1745, 14, 8, 3]]) box(x, z, w, d, h);
+  for (const [x, z, r] of [[1140, -1738, 1.0], [1180, -1740, 1.1], [1150, -1750, 1.0]]) { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), tm); m.position.set(x, r + 0.1, z); root.add(m); }
+} else {
+for (const [x, z, w, d, h] of [[1110, -1760, 34, 16, 15], [1165, -1765, 26, 14, 18], [1215, -1750, 30, 16, 13]]) box(x, z, w, d, h);
+for (const [x, z, r] of [[1140, -1735, 4.5], [1180, -1740, 5], [1200, -1725, 4]]) crown(x, z, r);
+}
+const view = (x, y, z, yaw, pitch) => { camera.position.set(x, y, z); camera.rotation.order = 'YXZ'; camera.rotation.set(THREE.MathUtils.degToRad(pitch), THREE.MathUtils.degToRad(yaw), 0); camera.updateMatrixWorld(true); renderer.info.reset(); pipeline.render(scene, camera, sunDir, 0); window.__last = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; return canvas.toDataURL('image/png'); };
+// the pixels that the outline pass darkened inside a rectangle: the same frame with the outline off (uOutline 0) and on, the count of pixels whose luminance dropped by more than 10 / 255
+const snap = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(canvas, 0, 0); return g.getImageData(0, 0, W, H).data; };
+const edgePixels = (x, y, z, yaw, pitch, rect) => {
+  const u = pipeline.compMat.uniforms.uOutline; const on = u.value;
+  u.value = 0; view(x, y, z, yaw, pitch); const a = snap(); u.value = on; view(x, y, z, yaw, pitch); const b = snap();
+  let n = 0; const [x0, y0, x1, y1] = rect;
+  for (let j = y0; j < y1; j++) for (let i = x0; i < x1; i++) { const o = (j * W + i) * 4, la = a[o] * 0.2126 + a[o + 1] * 0.7152 + a[o + 2] * 0.0722, lb = b[o] * 0.2126 + b[o + 1] * 0.7152 + b[o + 2] * 0.0722; if (la - lb > 10) n++; }
+  return n;
+};
+window.__api = { view, edgePixels, errors, floorMode, envMode };
+window.__done = true;
+</script></body></html>

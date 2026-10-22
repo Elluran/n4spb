@@ -242,13 +242,15 @@ function makeColor() {
 
 /**
  * The meshes of a plan: one Mesh per chunk (`tauride-terrain-<cx>_<cz>`), noBatch + registerLOD(Infinity) like the chunks of environment/ground.js, no colliders. opts.material = the garden's own ground material
- * (ground-material.js; the geometry then carries no vertex colour); without it the vertex-coloured placeholder. opts.noOutline (default: with a material): the colour pass only, the outline pass draws no
- * hairline at the foot of a hill (T2 finding). Returns { group, triangles, draws, shared (a ground material was given), meshes }.
+ * (ground-material.js; the geometry then carries no vertex colour); without it the vertex-coloured placeholder. The floor is IN the normal / depth pass of the outlines (layer 0), exactly like the near chunks of
+ * environment/ground.js that it replaces inside the fence: out of it (the T3 first version, opts.noOutline true) the pass saw through the floor, QA round 1 of T3: the outlines of the buildings and crowns BEHIND a hill
+ * were drawn over its face and, along the garden outline, the environment ground (which is in the pass) ended in a dark depth-edge line. The hairline of T2 at the foot of a hill was the pad over that ground (two
+ * coplanar surfaces in a pass that has no polygonOffset); the floor has no ground under it. Returns { group, triangles, draws, shared (a ground material was given), meshes }.
  */
 export function buildTerrain(ctx, parent, plan, opts = {}) {
   const group = new THREE.Group(); group.name = 'tauride-terrain';
   const own = !!opts.material, mat = opts.material || ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0.02, name: 'tauride-terrain' });
-  const noOutline = opts.noOutline ?? own;
+  const noOutline = opts.noOutline ?? false;
   for (const c of plan.chunks) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(c.pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(c.nrm, 3)); if (!own) g.setAttribute('color', new THREE.BufferAttribute(c.col, 3));

@@ -204,15 +204,39 @@ ok('deterministic: two plans have the same bytes (ribbons and stairs)', hashOf(p
 // =============================================================== 5. the built module: meshes, material, hooks, the environment ground
 console.log('5. the built module (landmarksTauride) and the environment ground' + (args.has('--no-env') ? ' [environment skipped]' : ''));
 {
-  const names = args.has('--no-env') ? ['landmarksTauride'] : ['environment', 'landmarksTauride'];
+  const names = args.has('--no-env') ? ['landmarksTauride'] : ['environment', 'landmarksTauride', 'streets'];
   const { ctx } = SE.makeContext(eng, names);
-  const t0 = Date.now(); let n0 = 0; for (const n of names) { if (n === 'landmarksTauride') n0 = ctx.physics.count; await SE.buildModules(eng, ctx, [n]); } const ms = Date.now() - t0, nCol = ctx.physics.count - n0;
+  const t0 = Date.now(); let n0 = 0, nCol = 0, ms = 0; for (const n of names) { if (n === 'landmarksTauride') n0 = ctx.physics.count; const tb = Date.now(); await SE.buildModules(eng, ctx, [n]); if (n === 'landmarksTauride') { nCol = ctx.physics.count - n0; ms = Date.now() - tb; } }
   const svc = ctx.services.landmarksTauride;
   const meshes = []; ctx.staticRoot.traverse((o) => { if (o.isMesh && /^tauride-(terrain|paths)/.test(o.name)) meshes.push(o); });
   const terr = meshes.filter((m) => /^tauride-terrain-/.test(m.name)), pth = meshes.filter((m) => /^tauride-paths/.test(m.name));
   ok('the module publishes the floor (cover), the ground (mask bytes) and the paths (triangles, draws, stairs)', svc.terrain.cover === true && typeof svc.terrain.meshHeight === 'function' && svc.ground.maskBytes === mask.data.length && svc.paths.draws === pth.length && svc.paths.stairs.length === 6 && svc.triangles >= svc.terrain.triangles + svc.paths.triangles, `maskBytes ${svc.ground.maskBytes}, build ${ms} ms`);
   ok(`the floor: one material for all ${terr.length} meshes (<= ${TM.TERRAIN.drawsMax} draws), the garden's own shader (onBeforeCompile + a program key of its own), polygonOffset 2 like the environment ground, no vertex colour`, terr.length > 0 && terr.length <= TM.TERRAIN.drawsMax && new Set(terr.map((m) => m.material)).size === 1 && typeof terr[0].material.onBeforeCompile === 'function' && /tauride-ground/.test(terr[0].material.customProgramCacheKey()) && terr[0].material.polygonOffset === true && terr[0].material.polygonOffsetFactor === 2 && terr.every((m) => !m.geometry.getAttribute('color') && m.geometry.getAttribute('normal')));
-  ok('the floor and the paths are noBatch, on the no-outline layer (colour pass only: no outline hairline at a hill foot), receive shadow, cast none, and the floor is lifted 5 mm over the environment ground', meshes.every((m) => m.userData.noBatch === true && (m.layers.mask & 2) !== 0 && (m.layers.mask & 1) === 0 && m.receiveShadow && !m.castShadow) && terr.every((m) => m.position.y === TM.TERRAIN.lift), `${meshes.length} meshes`);
+  ok('the floor and the paths are noBatch, receive shadow, cast none, and the floor is lifted 5 mm over the environment ground', meshes.every((m) => m.userData.noBatch === true && m.receiveShadow && !m.castShadow) && terr.every((m) => m.position.y === TM.TERRAIN.lift), `${meshes.length} meshes`);
+  // QA round 1 of T3: a floor that is not in the normal / depth pass is seen through (the outlines of what stands behind a hill were drawn over its face) and the environment ground, which IS in the pass, ended in a dark
+  // depth-edge line along the outline. The floor is layer 0 like the near chunks of the ground it replaces; the ribbons and stairs (3 cm over the floor, colour only) stay on the no-outline layer.
+  ok('the floor is IN the normal / depth pass of the outlines (layer 0, not the no-outline layer), the ribbons and stairs are colour-pass only', terr.every((m) => (m.layers.mask & 1) !== 0 && (m.layers.mask & 2) === 0) && pth.every((m) => (m.layers.mask & 2) !== 0 && (m.layers.mask & 1) === 0), `floor mask ${[...new Set(terr.map((m) => m.layers.mask))]}, paths mask ${[...new Set(pth.map((m) => m.layers.mask))]}`);
+  if (!args.has('--no-env')) {
+    const near = []; ctx.staticRoot.traverse((o) => { if (o.isMesh && o.name === 'env-ground') near.push(o); });
+    ok('the floor and the near chunks of the environment ground it replaces are in the same pass (both layer 0): no depth edge along the outline, no gap in the pass under the garden', near.length > 0 && near.every((m) => (m.layers.mask & 1) !== 0) && terr.every((m) => (m.layers.mask & 1) !== 0), `${near.length} ground chunks`);
+    // the footway AREAS of the facade inside the fence are the garden's (groups.js GARDEN_AREAS): streets draws each as a 10 cm kerb wall round a paver cap (QA round 1: a closed grey polygon of radius 27 m at the central round)
+    const claimedIds = new Set((await imp('src/world/landmarksTauride/groups.js')).GROUPS_LIST.flatMap((g) => g.osm || []));
+    const areasIn = (claimed) => FAC.AREAS.filter((a) => a.polys.some((q) => { for (let i = 0; i < q.o.length; i += 2) if (C.inRing(q.o[i], q.o[i + 1], RING)) return true; return false; })).filter((a) => !claimed.has(a.id)).map((a) => a.id);
+    const unclaimed = areasIn(claimedIds), withoutAreas = new Set([...claimedIds].filter((id) => !['w415779476', 'w1458068090', 'w1458068100', 'w1458068120'].includes(id)));
+    ok('every AREAS polygon with a vertex inside the fence is claimed by the garden (4 footway areas, the central round w415779476 among them)', unclaimed.length === 0 && FAC.AREAS.filter((a) => claimedIds.has(a.id)).length === 4, `${unclaimed.length} unclaimed [${unclaimed}]`);
+    ok('mutant: without the four ids in the claim the check finds them unclaimed', areasIn(withoutAreas).length === 4, `${areasIn(withoutAreas).length} found`);
+    // (the pavements of the streets lie up to 4.5 m inside the park polygon with their own 12 cm walls: those are not counted, only a wall that stands ON the outline of one of the four areas, and any cap inside one)
+    const mine = FAC.AREAS.filter((a) => claimedIds.has(a.id)).flatMap((a) => a.polys.map((q) => q.o));
+    const onEdge = (x, z) => mine.some((o) => { for (let i = 0; i < o.length; i += 2) { const j = (i + 2) % o.length, ax = o[i], az = o[i + 1], dx = o[j] - ax, dz = o[j + 1] - az, l2 = dx * dx + dz * dz, t = l2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0; if (Math.hypot(x - ax - t * dx, z - az - t * dz) < 0.2) return true; } return false; });
+    const countOn = (c) => { let wallIn = 0, capIn = 0;
+      c.staticRoot.traverse((o) => { if (!(o.isMesh && (o.name === 'pt-skirt' || /^pt-area-/.test(o.name)))) return; const g = o.geometry, p = g.getAttribute('position'), ix = g.index; const n = ix ? ix.count : p.count; for (let t = 0; t < n; t += 3) { let cx = 0, cz = 0; for (let k = 0; k < 3; k++) { const i = ix ? ix.getX(t + k) : t + k; cx += p.getX(i) / 3; cz += p.getZ(i) / 3; } if (o.name === 'pt-skirt') { if (onEdge(cx, cz)) wallIn++; } else if (mine.some((r) => C.inRing(cx, cz, r))) capIn++; } });
+      return { wallIn, capIn }; };
+    const w1 = countOn(ctx);
+    ok('streets (built after the module) draws no kerb wall on the outline and no paver cap inside any of the four claimed areas', w1.wallIn === 0 && w1.capIn === 0, `${w1.wallIn} wall triangles, ${w1.capIn} cap triangles`);
+    { // the mutant: the same streets built in a list WITHOUT the module (no claim): the walls and caps are back (the 16-gon of the central round alone is 32 wall triangles)
+      const { ctx: c4 } = SE.makeContext(eng, ['environment', 'streets']); await SE.buildModules(eng, c4, ['environment', 'streets']); const w2 = countOn(c4);
+      ok('mutant: without the claim (module not in the build list) streets draws them: the check turns red', w2.wallIn >= 60 && w2.capIn > 20, `${w2.wallIn} wall triangles, ${w2.capIn} cap triangles`); }
+  }
   ok(`the paths are ${pth.length} draws (<= ${PD.PATHS_DRAPED.drawsMax}) and <= ${PD.PATHS_DRAPED.trianglesMax} triangles, the ribbons carry colour + aPath, the stairs colour + normals`, pth.length === 2 && pth.length <= PD.PATHS_DRAPED.drawsMax && svc.paths.triangles <= PD.PATHS_DRAPED.trianglesMax && !!pth.find((m) => m.name === 'tauride-paths-ribbons').geometry.getAttribute('aPath'), `${svc.paths.triangles} triangles`);
   ok('the module adds no collider (the player follows heightAt): 1,270 as before', nCol === 1270, String(nCol));
   // the shader text: the program is what the module says it is (balanced, every uniform declared and supplied)
@@ -226,10 +250,10 @@ console.log('5. the built module (landmarksTauride) and the environment ground' 
   // mutants of the build (a copy of terrain-mesh.js with one line cut)
   const bare = SE.makeContext(eng, []).ctx, planBare = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { cover: pieces });
   const fake = { mat: ctx.mat.toon('#ffffff', { paint: 0, polygonOffset: 2, name: 'x' }) };
-  const tm1 = await variant('terrain-mesh.js', /    if \(own\) m\.position\.y = TERRAIN\.lift;\n/, ''), tm2 = await variant('terrain-mesh.js', /if \(noOutline\) ctx\.noOutline\(m\); /, '');
+  const tm1 = await variant('terrain-mesh.js', /    if \(own\) m\.position\.y = TERRAIN\.lift;\n/, ''), tm2 = await variant('terrain-mesh.js', /const noOutline = opts\.noOutline \?\? false;/, 'const noOutline = opts.noOutline ?? true;');
   const lift = (mod) => mod.buildTerrain(bare, new eng.THREE.Group(), planBare, { material: fake.mat }).meshes.every((m) => m.position.y === TM.TERRAIN.lift);
-  const outl = (mod) => mod.buildTerrain(bare, new eng.THREE.Group(), planBare, { material: fake.mat }).meshes.every((m) => (m.layers.mask & 1) === 0);
-  ok('mutants: no lift and no no-outline layer in buildTerrain turn those checks red; the shipped file passes both', lift(TM) && outl(TM) && !lift(tm1) && !outl(tm2));
+  const outl = (mod) => mod.buildTerrain(bare, new eng.THREE.Group(), planBare, { material: fake.mat }).meshes.every((m) => (m.layers.mask & 1) !== 0);
+  ok('mutants: no lift and a floor on the no-outline layer (the T3 first version, seen through) in buildTerrain turn those checks red; the shipped file passes both', lift(TM) && outl(TM) && !lift(tm1) && !outl(tm2));
   if (!args.has('--no-env')) {
     // the environment ground has no triangle under the hole: the real ground built with the page's hooks, and again with the hook removed (the mutant)
     const groundTris = (c) => { let inside = 0, total = 0, area = 0; const hole = HG.insetRing(HP.GARDEN_RING, HG.GROUND_HOLE_INSET); c.staticRoot.traverse((o) => { if (!(o.isMesh && o.name === 'env-ground')) return; const p = o.geometry.getAttribute('position'), ix = o.geometry.index; const n = ix ? ix.count : p.count; for (let t = 0; t < n; t += 3) { const a = ix ? ix.getX(t) : t, b = ix ? ix.getX(t + 1) : t + 1, d = ix ? ix.getX(t + 2) : t + 2; const cx = (p.getX(a) + p.getX(b) + p.getX(d)) / 3, cz = (p.getZ(a) + p.getZ(b) + p.getZ(d)) / 3; total++; if (cx > 915 && cx < 1500 && cz > -1800 && cz < -1250 && C.inRing(cx, cz, hole)) { inside++; area += Math.abs((p.getX(b) - p.getX(a)) * (p.getZ(d) - p.getZ(a)) - (p.getX(d) - p.getX(a)) * (p.getZ(b) - p.getZ(a))) / 2; } } }); return { inside, total, area }; };
@@ -248,6 +272,47 @@ console.log('5. the built module (landmarksTauride) and the environment ground' 
       ok('mutant: with the hook removed the way paint is back (mean gravel weight > 0.6 on the centrelines)', b.mean > 0.6, `mean ${b.mean.toFixed(3)}`);
     } else ok('the environment service publishes its field (clsAt) for the class-mask check', false, 'no ctx.services.environment.field');
   }
+}
+// =============================================================== 6. the look of the ground (QA round 1 of T3): no lattice in the flecks, the litter not dark and dirty, the hills read from above
+console.log('6. the look of the ground (ground-material.js: the shader text, the noise tile, the colours)');
+{
+  const bare6 = SE.makeContext(eng, []).ctx, FAKE6 = () => ({ uniforms: {}, vertexShader: '#include <common>\n#include <fog_vertex>', fragmentShader: '#include <common>\n#include <map_fragment>\n#include <fog_fragment>' });
+  const fragOf = (mod) => { const m = mod.gardenGroundMaterial(bare6, mask).mat, sh = FAKE6(); m.onBeforeCompile(sh, null); return sh.fragmentShader; };
+  const frag = fragOf(GM);
+  // ---- the flecks. A JS port of the mark (the same noise tile, the same bilinear repeat read, the constants read from the shader text) and its correlation at the period of the tile
+  const tile = GM.noiseTileData(), NT = GM.GROUND.noiseSize;
+  const tex = (u, v, ch) => { const x = u * NT - 0.5, y = v * NT - 0.5, i = Math.floor(x), j = Math.floor(y), fx = x - i, fy = y - j; const g = (a, b) => tile[(((b % NT) + NT) % NT * NT + (((a % NT) + NT) % NT)) * 4 + ch] / 255; return (g(i, j) * (1 - fx) + g(i + 1, j) * fx) * (1 - fy) + (g(i, j + 1) * (1 - fx) + g(i + 1, j + 1) * fx) * fy; };
+  const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const num = (re) => { const m = re.exec(frag); return m ? m.slice(1).map(Number) : null; };
+  const jit = num(/vec4 n5 = gz\(P \+ \(n4\.rg - 0\.5\) \* ([0-9.]+), ([0-9.]+)\);/), rotRead = num(/vec4 n6 = gz\(vec2\(P\.x \* ([0-9.]+) \+ P\.y \* ([0-9.]+), P\.y \* [0-9.]+ - P\.x \* [0-9.]+\) \+ vec2\(([0-9.]+), ([0-9.]+)\), ([0-9.]+)\);/), fl = num(/float fleck = smoothstep\(([0-9.]+), ([0-9.]+), n5\.g\) \* smoothstep\(([0-9.]+), ([0-9.]+), n6\.b\)/);
+  ok('the shader reads the fine field in a jittered domain, the turned field n6 at another period, and the fleck needs both (n5.g and n6.b)', !!(jit && rotRead && fl && jit[0] === GM.LOOK.jitter && jit[1] === 1.9 && rotRead[4] === 1.43), `jitter ${jit && jit[0]}, rotated read ${rotRead && rotRead.join(' ')}, thresholds ${fl && fl.join(' ')}`);
+  const T = 1 / jit[1], step = T / 8, M = 320;
+  const field = (J, withRot) => (x, z) => {
+    const jx = x + (tex(x * 0.17, z * 0.17, 0) - 0.5) * J, jz = z + (tex(x * 0.17, z * 0.17, 1) - 0.5) * J;
+    const a = sstep(fl[0], fl[1], tex(jx * jit[1], jz * jit[1], 1)); if (!withRot) return a;
+    const rx = x * rotRead[0] + z * rotRead[1] + rotRead[2], rz = z * rotRead[0] - x * rotRead[1] + rotRead[3];
+    return a * sstep(fl[2], fl[3], tex(rx * rotRead[4], rz * rotRead[4], 2));
+  };
+  const corr = (f, lx, lz) => { let sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0, n = 0; for (let j = 0; j < M; j++) for (let i = 0; i < M; i++) { const x = i * step + 200, z = j * step + 300, a = f(x, z), b = f(x + lx, z + lz); sa += a; sb += b; saa += a * a; sbb += b * b; sab += a * b; n++; } const ma = sa / n, mb = sb / n; return (sab / n - ma * mb) / Math.sqrt(Math.max(1e-12, (saa / n - ma * ma) * (sbb / n - mb * mb))); };
+  const worst = (f) => Math.max(...[[T, 0], [0, T], [T, T], [2 * T, 0]].map(([a, b]) => Math.abs(corr(f, a, b))));
+  const cOld = worst(field(0, false)), cNew = worst(field(GM.LOOK.jitter, true)), cMut = worst(field(0, true));
+  ok('the fleck mark does not repeat with the tile: its correlation with itself shifted by the period of the tile (0.53 m, three directions) is below 0.2 (the first version, a threshold of the fine field alone: 1.000)', cOld > 0.99 && cNew < 0.2, `first version ${cOld.toFixed(3)}, shipped ${cNew.toFixed(3)}`);
+  ok('mutant: the rotated read without the jitter (jitter 0) leaves a lattice (correlation above 0.2): the jitter is needed', cMut > 0.2, `${cMut.toFixed(3)}`);
+  const gmNoJit = await variant('ground-material.js', /jitter: 0\.8 \}/, 'jitter: 0.0 }'), jit0 = /vec4 n5 = gz\(P \+ \(n4\.rg - 0\.5\) \* ([0-9.]+), /.exec(fragOf(gmNoJit));
+  ok('mutant: a ground-material.js with jitter 0 carries 0.00 in its shader text (the text check sees it)', !!jit0 && Number(jit0[1]) === 0 && Number(jit0[1]) !== GM.LOOK.jitter, jit0 ? jit0[1] : 'no match');
+  // ---- the colours: the litter is a shade of the lawn, not a different dirt (QA: roughly 40-50 % of the lawn was dark brown-olive camouflage, bare mud at eye level)
+  const lin = (c) => { const k = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); const h = c.replace('#', ''); return 0.2126 * k(parseInt(h.slice(0, 2), 16) / 255) + 0.7152 * k(parseInt(h.slice(2, 4), 16) / 255) + 0.0722 * k(parseInt(h.slice(4, 6), 16) / 255); };
+  const Ls = (Y) => (Y > 0.008856 ? 116 * Math.cbrt(Y) - 16 : 903.3 * Y);       // CIE lightness of a linear luminance
+  const CC = GM.GROUND_COLORS, lawn = (lin(CC.uGA) + lin(CC.uGB)) / 2, lit = (lin(CC.uLA) + lin(CC.uLB)) / 2, ratio = Ls(lit) / Ls(lawn), oldRatio = Ls((lin('#566830') + lin('#625838')) / 2) / Ls(lawn);
+  ok("the litter is a shade of the lawn, not another dirt: the CIE lightness of its two tones is 75-95 % of the lawn's (the first version: " + oldRatio.toFixed(2) + ')', ratio > 0.75 && ratio < 0.95 && oldRatio < 0.70, `litter / lawn = ${ratio.toFixed(2)} (linear luminance ${(lit / lawn).toFixed(2)})`);
+  const lm = /smoothstep\(([0-9.]+), ([0-9.]+), cw\)/.exec(frag), noiseMax = 0.45 / 2 + 0.12 / 2, beltTop = DG.CANOPY_BELT.k + noiseMax;
+  ok('the litter starts inside a wood (the threshold of the canopy weight is at least 0.6: the edge of a wood is 0.5) and the authored belt, with the strongest noise of the shader, stays below it: the belt is shade, never litter blotches', !!lm && Number(lm[1]) >= 0.6 && beltTop < Number(lm[1]), `litter ${lm && lm[1]} .. ${lm && lm[2]}, belt k ${DG.CANOPY_BELT.k} + noise ${noiseMax.toFixed(3)} = ${beltTop.toFixed(3)}`);
+  // ---- the relief read from above: the light and shade side of a hill of 4 m (the gradient of its flank 0.14, a slope of 1:7) differ by at least 1.5 times; the first version 1.13
+  const gain = num(/dot\(gr, uLight\) \* ([0-9.]+), -1\.0, 1\.0\)/), amp = num(/col \*= 1\.0 \+ ([0-9.]+) \* hs;/);
+  const ratioAt = (a, g, grad) => { const h = Math.min(1, grad * g); return (1 + a * h) / (1 - a * h); };
+  ok('the shader follows the gradient of the height (not 1 - normal.y) and the lit side of a 1:7 flank is at least 1.5 times as bright as the shade side (QA: the hills did not read from above)', !!(gain && amp) && /vec2 gr = nW\.xz \/ max\(nW\.y, 0\.2\);/.test(frag) && ratioAt(amp[0], gain[0], 0.14) >= 1.5, `lit / shade = ${gain && amp ? ratioAt(amp[0], gain[0], 0.14).toFixed(2) : '?'} (gain ${gain && gain[0]}, amplitude ${amp && amp[0]})`);
+  const gmFlat = await variant('ground-material.js', /shadeAmp: 0\.42/, 'shadeAmp: 0.05'), ampF = /col \*= 1\.0 \+ ([0-9.]+) \* hs;/.exec(fragOf(gmFlat));
+  ok('mutant: a ground-material.js with a shade amplitude of 0.05 gives a ratio below 1.5 (the check sees it)', !!ampF && !!gain && ratioAt(Number(ampF[1]), gain[0], 0.14) < 1.5, ampF ? ampF[1] : 'no match');
 }
 console.log(failed ? `RESULT: FAIL (${failed} of ${total} checks)` : `RESULT: OK (${total} checks)`);
 process.exit(failed ? 1 : 0);

@@ -17,6 +17,9 @@ import { FAR_FOG } from '../environment/farconf.js';
 import { MEADOWS, CANOPY_BELT, WORN_SPOTS, WORN_GREEN_IDS, GROUND_TUNING } from './data/ground.js';
 
 export const GROUND = Object.freeze({ res: 1, pad: 3, shoreLevels: 12, maxStripeBlocks: 8, noiseSize: 128 });
+/** The look numbers that the shader text carries as constants (DESIGN values; QA round 1 of T3 moved them): where the litter starts in the canopy weight (litA .. litB: it used to start at the edge of a wood, 0.48 .. 0.58,
+ *  and the noise of the belt tipped it into litter), the dim of the shade fringe, the opacity of worn earth, the gain and amplitude of the hill's light and shade side, the crown tone and the contour tone. */
+export const LOOK = Object.freeze({ litA: 0.62, litB: 0.78, shadeDim: 0.88, wornOpacity: 0.78, shadeGain: 5.0, shadeAmp: 0.42, crown: 0.38, contour: 0.09, jitter: 0.8 });
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 /** integer cell hash -> [0, 1) (deterministic) */
@@ -245,14 +248,20 @@ const BODY = /* glsl */`
   vec4 n2 = gz(Pw, 0.083);
   vec4 n3 = gz(vec2(Pw.x * 0.857 - Pw.y * 0.515, Pw.x * 0.515 + Pw.y * 0.857), 0.37);
   vec4 n4 = gz(P, 0.17);
-  vec4 n5 = gz(P, 1.9);                                                     // (the fine fields stay in the plain domain: warped, they stream into feathers)
+  // The fine field repeats every 0.53 m, and a threshold of it alone prints that lattice (QA round 1: identical stamps in rows on the world axes, 1.000 correlation at the tile lag). Two measures break it
+  // (tools/tauride/ground-test.mjs, group 6, measures the correlation of the mark at the lag of the tile): n5 is read in a lightly JITTERED domain (the +-0.4 m of the 5.9 m field n4: neighbouring cells move
+  // by different amounts; the big warp of Pw, ten times as wide, would only slide the whole lattice, and a much stronger one streams into feathers), and the second read n6 is turned by 29 degrees and has
+  // another period (0.70 m): a mark that needs BOTH fields (the flecks) is the product of two lattices that do not beat into a pattern; nf is the same idea for the soft brightness.
+  vec4 n5 = gz(P + (n4.rg - 0.5) * ${LOOK.jitter.toFixed(2)}, 1.9);
+  vec4 n6 = gz(vec2(P.x * 0.8746 + P.y * 0.4848, P.y * 0.8746 - P.x * 0.4848) + vec2(37.0, 11.0), 1.43);
+  float nf = 0.5 * (n5.r + n6.r);
   // ---- lawn: the ground's own four greens, lighter and darker mown patches, clumps, clover patches, mown stripes
   vec3 cg = mix(uGA, uGB, smoothstep(0.48, 0.66, n2.g));
   cg = mix(cg, uGC, smoothstep(0.62, 0.78, n3.r) * 0.45);
   cg = mix(cg, uGD, smoothstep(0.66, 0.84, n2.r) * 0.35);
-  cg *= 0.95 + 0.10 * n5.r;
+  cg *= 0.95 + 0.10 * nf;
   float clo = smoothstep(0.64, 0.72, 0.5 * gz(vec2(Pw.x * 0.857 - Pw.y * 0.515, Pw.x * 0.515 + Pw.y * 0.857), 0.113).g + 0.5 * gz(Pw, 0.071).r);
-  cg = mix(cg, uClover * (0.97 + 0.06 * n5.g), clo * 0.4);
+  cg = mix(cg, uClover * (0.97 + 0.06 * n6.g), clo * 0.4);
   float bIdx = floor(code / 32.0), sW = (code - bIdx * 32.0) / 31.0;
   if (sW > 0.0) {
     vec4 SP = uStripe[int(bIdx)];
@@ -261,19 +270,21 @@ const BODY = /* glsl */`
     cg *= 1.0 + sW * (band - 0.5) * 0.19;
   }
   // ---- under the canopy: dim fringe, then leaf litter (dark olive / brown with dry-leaf flecks)
-  float cw = M.r + (n2.g - 0.5) * 0.45 + (n5.r - 0.5) * 0.12;
-  float litK = smoothstep(0.48, 0.58, cw);
+  float cw = M.r + (n2.g - 0.5) * 0.45 + (nf - 0.5) * 0.12;
+  float litK = smoothstep(${LOOK.litA.toFixed(3)}, ${LOOK.litB.toFixed(3)}, cw);
   float shadeK = smoothstep(0.10, 0.48, M.r) * (1.0 - litK);
   vec3 cl = mix(uLA, uLB, smoothstep(0.40, 0.70, n2.g));
   cl = mix(cl, uLC, smoothstep(0.62, 0.80, n3.r) * 0.5);
-  cl = mix(cl, uLD, smoothstep(0.60, 0.74, n5.g) * 0.38 * patF);
-  cl *= 0.94 + 0.12 * n5.r;
-  vec3 col = cg * mix(1.0, 0.84, shadeK);
+  // dry-leaf flecks: both fine fields at once (no lattice), in patches of a few metres, fewer and softer than before (QA: stamps that read as a printed pattern)
+  float fleck = smoothstep(0.58, 0.72, n5.g) * smoothstep(0.44, 0.64, n6.b) * smoothstep(0.30, 0.62, n2.r + (n4.g - 0.5) * 0.5) * patF;
+  cl = mix(cl, uLD, fleck * 0.30);
+  cl *= 0.94 + 0.12 * nf;
+  vec3 col = cg * mix(1.0, ${LOOK.shadeDim.toFixed(3)}, shadeK);
   col = mix(col, cl, litK);
   // ---- the shore: mud band, the wet band of the waterline and (until T4 cuts the ponds) the bed under the water
   float d = (M.g * 255.0 - 128.0) / ${GROUND.shoreLevels.toFixed(1)};
-  float dn = d + (n3.r - 0.5) * 1.8 + (n5.g - 0.5) * 0.35;
-  vec3 mud = mix(uMA, uMB2, smoothstep(0.35, 0.65, n3.g)) * (0.94 + 0.12 * n5.r);
+  float dn = d + (n3.r - 0.5) * 1.8 + (n6.g - 0.5) * 0.35;
+  vec3 mud = mix(uMA, uMB2, smoothstep(0.35, 0.65, n3.g)) * (0.94 + 0.12 * nf);
   float mudK = (1.0 - smoothstep(0.9, 2.6, dn)) * (0.88 - 0.30 * smoothstep(1.2, 2.4, dn));
   col = mix(col, mud, mudK);
   float wetK = 1.0 - smoothstep(0.18, 0.62, d + (n4.g - 0.5) * 0.3);       // the 0.5 m wet band along the waterline (T4)
@@ -284,19 +295,21 @@ const BODY = /* glsl */`
   float wn = M.b + (n2.r - 0.5) * 0.5 + (n4.g - 0.5) * 0.18;
   float wornK = smoothstep(0.34, 0.50, wn) * (1.0 - inW);
   float packK = smoothstep(0.72, 0.86, wn) * (1.0 - inW);
-  vec3 earth = mix(uWA, uWB, smoothstep(0.35, 0.65, n3.g)) * (0.94 + 0.12 * n5.r) * mix(1.0, 0.82, litK);
-  col = mix(col, earth, wornK * 0.92);
+  vec3 earth = mix(uWA, uWB, smoothstep(0.35, 0.65, n3.g)) * (0.94 + 0.12 * nf) * mix(1.0, 0.88, litK);
+  col = mix(col, earth, wornK * ${LOOK.wornOpacity.toFixed(3)});
   col = mix(col, mix(earth, uWC, 0.5), packK * 0.85);
   // ---- the relief, read from above: darker and greener on the flanks, the lit side and the shade side, drier crowns, a faint contour tone (a painter's light from the north-west, not the sun)
+  // (QA: the hills did not read from above, under the litter least of all. The light and shade term now follows the GRADIENT of the height (0.25 = a slope of 1:4), not 1 - normal.y, which is only 0.01 at
+  //  1:7 and so left a hill of 4 m with a few percent of shading; it multiplies the colour AFTER the litter and the wear, so a hill under a wood reads like a hill under a meadow.)
   vec3 nW = normalize(vNW);
-  float slope = 1.0 - nW.y;
-  float sl = smoothstep(0.002, 0.020, slope);
-  float facing = dot(normalize(nW.xz + vec2(1.0e-5)), uLight);
-  col *= mix(vec3(1.0), vec3(0.88, 0.94, 0.84), sl * 0.8);
-  col *= 1.0 + 0.27 * facing * sl * (0.6 + 0.4 * smoothstep(0.01, 0.03, slope));
-  float crown = smoothstep(0.7, 3.8, vPWorld.y);
-  col = mix(col, col * vec3(1.08, 1.08, 0.93) + vec3(0.025, 0.025, 0.0), crown * 0.30 * (1.0 - wornK));
-  col *= 1.0 - 0.05 * smoothstep(0.52, 0.62, fract(vPWorld.y * 1.4 + n3.g * 0.12)) * sl * patF;
+  vec2 gr = nW.xz / max(nW.y, 0.2);
+  float sl = smoothstep(0.010, 0.080, length(gr));
+  float hs = clamp(dot(gr, uLight) * ${LOOK.shadeGain.toFixed(2)}, -1.0, 1.0);
+  col *= mix(vec3(1.0), vec3(0.90, 0.95, 0.86), sl * 0.7);
+  col *= 1.0 + ${LOOK.shadeAmp.toFixed(2)} * hs;
+  float crown = smoothstep(0.5, 3.0, vPWorld.y);
+  col = mix(col, col * vec3(1.10, 1.09, 0.93) + vec3(0.03, 0.03, 0.0), crown * ${LOOK.crown.toFixed(2)} * (1.0 - wornK));
+  col *= 1.0 - ${LOOK.contour.toFixed(2)} * smoothstep(0.50, 0.58, fract(vPWorld.y * 1.4 + n3.g * 0.12)) * sl * patF;
   // ---- far away the patchwork melts into its mean colour (atmospheric perspective, no shimmer)
   #ifdef USE_FOG
   vec3 mean = mix(uGA * 0.97, uLA * 1.05, M.r);
@@ -317,8 +330,8 @@ const FOG = /* glsl */`
 /** the colours of the ground (sRGB hex, converted to the linear working space by THREE.Color): the lawn is the environment ground's own palette, so that the garden and the lawns outside it agree */
 export const GROUND_COLORS = Object.freeze({
   uGA: '#5f8a34', uGB: '#78a043', uGC: '#4a7430', uGD: '#8ba84a', uClover: '#74a350', uEarth: '#7a6a50',
-  uLA: '#566830', uLB: '#625838', uLC: '#47592b', uLD: '#8f8048',
-  uMA: '#6c5b42', uMB2: '#564630', uBed: '#5b5a3f', uWA: '#8a7656', uWB: '#9a8763', uWC: '#aa9c7e',
+  uLA: '#5c7832', uLB: '#6a6e3a', uLC: '#4b6a2c', uLD: '#8b8048',
+  uMA: '#6c5b42', uMB2: '#564630', uBed: '#5b5a3f', uWA: '#988462', uWB: '#a69370', uWC: '#b4a686',
 });
 
 /** the stripe table of the shader: [normal x, normal z, period, phase] per block (the normal is across the stripes) */
