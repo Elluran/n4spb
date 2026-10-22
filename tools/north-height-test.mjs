@@ -24,6 +24,7 @@ import * as L from '../src/world/layout.js';
 import { makeHooks, makeHeightPatches } from '../src/areas/north/hooks.js';
 import { makeHeightPatches as terrainPatches } from '../src/areas/north/hooks/height.js';
 import * as P from '../src/areas/north/hooks/paradny.js';
+import * as GH from '../src/world/landmarksTauride/height.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const QUIET = process.argv.includes('--quiet'), VERBOSE = process.argv.includes('--verbose');
@@ -58,19 +59,20 @@ section('1. the registry');
   ok(mod, 'landmarksTauride is not in the North MODULES: T1 of the Tauride remake put it there (this test documents the flip)');
   ok(SAVED[0] && SAVED[0].id === 'paradny', `the page's list (with landmarksTauride) gives the Paradny patch first: [${SAVED.map((p) => p.id)}]`);
   ok(same(makeHeightPatches(A.MODULES).map((p) => p.id), SAVED.map((p) => p.id)), 'hooks.js makeHeightPatches(MODULES) equals what area.js exported');
-  // hooks/height.js is the Paradny terrain (exactly one patch); hooks.js may append the patches of the Tauride remake (the pond bed) AFTER it
+  // hooks/height.js is the Paradny terrain and (T2) the garden relief: exactly [paradny, garden]; hooks.js may append the patches of the later phases (the pond bed, T4) AFTER them
   for (const [name, list, exact] of [['hooks/height.js', terrainPatches, true], ['hooks.js', makeHeightPatches, false]]) {
     ok(list([]).length === 0, `${name}: no module, no patch`);
     ok(!list(A.MODULES.filter((m) => m !== 'landmarksTauride')).some((p) => p.id === 'paradny'), `${name}: the page's modules without landmarksTauride give no Paradny patch`);
     ok(list(undefined).length === 0, `${name}: an absent module list gives no patch (and does not throw)`);
     const pt = list(['environment', 'landmarksTauride', 'streets']);
-    ok(pt.length >= 1 && (!exact || pt.length === 1) && pt[0].id === 'paradny' && same(pt[0].box, BOX) && pt[0].at === P.paradnyDeckY, `${name}: landmarksTauride gives the Paradny patch FIRST (box = PARADNY_BOX, at = paradnyDeckY)`);
+    ok(pt.length >= 2 && (!exact || pt.length === 2) && pt[0].id === 'paradny' && same(pt[0].box, BOX) && pt[0].at === P.paradnyDeckY, `${name}: landmarksTauride gives the Paradny patch FIRST (box = PARADNY_BOX, at = paradnyDeckY)`);
+    ok(pt[1] && pt[1].id === 'garden' && same(pt[1].box, GH.RELIEF_BOX) && pt[1].at === GH.gardenHeight && pt[1].box !== GH.RELIEF_BOX, `${name}: then the garden relief patch (box = RELIEF_BOX copy, at = gardenHeight of landmarksTauride/height.js)`);
     ok(pt !== list(['landmarksTauride']) && pt[0].box !== BOX, `${name}: a fresh array and a fresh box on every call (the remake appends to it)`);
   }
   ok(same(BOX, [741, 1058.51, -1205, -873]), `PARADNY_BOX is [741, 1058.51, -1205, -873]: ${JSON.stringify(BOX)}`);
   const src = fs.readFileSync(path.join(root, 'src/areas/north/hooks/height.js'), 'utf8');
   const imports = [...src.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1]);
-  ok(imports.length > 0 && imports.every((i) => i.startsWith('./') && !/layout|data\/|city/.test(i)), `hooks/height.js imports only its own folder (pure data: no three.js, layout.js or facade): ${JSON.stringify(imports)}`);
+  ok(imports.length > 0 && imports.every((i) => (i.startsWith('./') && !/layout|data\/|city/.test(i)) || i === '../../../world/landmarksTauride/height.js'), `hooks/height.js imports only its own folder and the pure garden relief (no three.js, layout.js or facade): ${JSON.stringify(imports)}`);
   const lay = fs.readFileSync(path.join(root, 'src/world/layout.js'), 'utf8'), hand = fs.readFileSync(path.join(root, 'src/world/drive/handling.js'), 'utf8');
   ok(/import \{ HEIGHT_PATCHES \} from '\.\/lib\/area-tables\.js'/.test(lay), 'layout.js reads HEIGHT_PATCHES from lib/area-tables.js');
   ok(/import \{ HOOKS \} from '\.\.\/lib\/area-tables\.js'/.test(hand), 'handling.js reads HOOKS from lib/area-tables.js');
@@ -136,8 +138,11 @@ setPatches(terrainPatches(['landmarksTauride']));
   for (const [x, z] of [[BOX[0] - 0.01, -1000], [BOX[1] + 0.01, -1000], [900, BOX[2] - 0.01], [900, BOX[3] + 0.01]]) ok(L.heightAt(x, z) === OLD(x, z) && P.paradnyDeckY(x, z) === null, `just outside the box (${x}, ${z}): null from the deck, the old line from heightAt`);
   // the rest of the North is untouched
   const b = L.WORLD.play; let k = 0, kb = 0;
-  for (const [x, z] of lattice(b.x0 - 150, b.x1 + 150, b.z0 - 150, b.z1 + 150, 12)) { if (x >= BOX[0] && x <= BOX[1] && z >= BOX[2] && z <= BOX[3]) continue; k++; if (L.heightAt(x, z) !== OLD(x, z)) kb++; }
-  ok(kb === 0, `the rest of the North (${k} lattice points outside the box) is the old line (${kb} differ)`);
+  const GB = GH.RELIEF_BOX, inGB = (x, z) => x >= GB[0] && x <= GB[1] && z >= GB[2] && z <= GB[3];
+  let gIn = 0, gBad = 0, gLift = 0;
+  for (const [x, z] of lattice(b.x0 - 150, b.x1 + 150, b.z0 - 150, b.z1 + 150, 12)) { if (x >= BOX[0] && x <= BOX[1] && z >= BOX[2] && z <= BOX[3]) continue; if (inGB(x, z)) { gIn++; const g = GH.gardenHeight(x, z); if (g !== null) gLift++; if (L.heightAt(x, z) !== (g ?? OLD(x, z))) gBad++; continue; } k++; if (L.heightAt(x, z) !== OLD(x, z)) kb++; }
+  ok(kb === 0, `the rest of the North (${k} lattice points outside both boxes) is the old line (${kb} differ)`);
+  ok(gBad === 0 && gIn > 100, `inside the garden box (T2) heightAt is the relief where it lifts and the old line elsewhere (${gIn} lattice points, ${gLift} lifted, ${gBad} differ)`);
 }
 
 // ---- the stairs: eight stairs = the nine STEPS ways (w1303266326 is the tail of the L-shaped w1266791538)
@@ -251,7 +256,7 @@ section('7. the Digit4 pose (915, -1010)');
   // TRIPWIRE FLIPPED in T1 of the Tauride remake: VIEWS Digit4 moved to street level (900, -852) because the page's height patch (landmarksTauride is in MODULES) makes (915, -1010) a 3.3 m deck that tools/views-check.mjs refuses
   // (ground band -0.5 .. 1.5). This section still walks the M6 podium pose, a literal. The new assertion: with the page's real patch list, NO pose of VIEWS / HERO stands on the podium or its stairs (what views-check enforces).
   ok(!!d4 && !(d4.x === v.x && d4.z === v.z), `VIEWS Digit4 is no longer the M6 podium pose (it is (${d4 && d4.x}, ${d4 && d4.z}))`);
-  ok(SAVED.length > 0 && same(SAVED.map((p) => p.id), ['paradny']), `the page's own patch list holds the Paradny patch (T1: landmarksTauride is in MODULES): [${SAVED.map((p) => p.id)}]`);
+  ok(SAVED.length > 0 && same(SAVED.map((p) => p.id), ['paradny', 'garden']), `the page's own patch list holds the Paradny patch and the garden relief (T1 / T2: landmarksTauride is in MODULES): [${SAVED.map((p) => p.id)}]`);
   { const live = HEIGHT_PATCHES.slice(); setPatches(SAVED); const bad = [L.HERO, ...L.VIEWS].filter((q) => !(L.heightAt(q.x, q.z) >= -0.5 && L.heightAt(q.x, q.z) <= 1.5)).map((q) => `${q.key || 'HERO'} ${L.heightAt(q.x, q.z).toFixed(2)}`); setPatches(live); ok(bad.length === 0, `with the page's real patch list every pose of HERO / VIEWS stands on ground of -0.5 .. 1.5 m (views-check): ${bad.join(', ') || 'none out of band'}`); }
   ok(P.inParadny(v.x, v.z), 'the pose stands inside the podium polygon');
   const p = mkPlayer(ph); p.setPose(v.x, v.z, v.yaw, v.pitch);

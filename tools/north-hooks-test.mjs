@@ -113,7 +113,7 @@ const AREA = process.env.AREA || 'strip';
 if (AREA !== 'north') { console.log('usage: node tools/area.mjs north tools/north-hooks-test.mjs   (AREA=' + AREA + ')'); process.exit(2); }
 const A = await imp('src/world/area.js'), T = await imp('src/world/lib/area-tables.js');
 const L = await imp('src/world/layout.js'), C = await imp('src/world/data/city.js');
-const H = await imp('src/areas/north/hooks.js'), P = await imp('src/areas/north/hooks/paradny.js');
+const H = await imp('src/areas/north/hooks.js'), P = await imp('src/areas/north/hooks/paradny.js'), GH = await imp('src/world/landmarksTauride/height.js');
 const KO = await imp('src/areas/north/hooks/keep-out.js'), HG = await imp('src/areas/north/hooks/height.js'), HP = await imp('src/areas/north/hooks/people.js');
 const { CAMPUS, inCampus } = await imp('src/world/landmarksKirochnaya/groups.js');
 const MODULES = A.MODULES, TAURIDE = 'landmarksTauride';
@@ -227,7 +227,7 @@ for (const k of FACTORIES) {
 check('parkingReject is gated by MODULES: makeHooks([landmarksTauride]) has a function, makeHooks(OTHER) has none', typeof H.makeHooks([...OTHER, TAURIDE]).parkingReject === 'function' && H.makeHooks(OTHER).parkingReject === undefined,
   typeof H.makeHooks([...OTHER, TAURIDE]).parkingReject + ' / ' + typeof H.makeHooks(OTHER).parkingReject);
 check('makeHooks always has the eight keys (a gated parkingReject is a key with the value undefined)', eq(Object.keys(H.makeHooks(OTHER)).sort(), [...KEYS].sort()) && eq(Object.keys(H.makeHooks([...OTHER, TAURIDE])).sort(), [...KEYS].sort()));
-check('makeHeightPatches is gated by MODULES: [] without landmarksTauride, [paradny] with it', H.makeHeightPatches(OTHER).length === 0 && H.makeHeightPatches([...OTHER, TAURIDE]).length === 1 && H.makeHeightPatches([...OTHER, TAURIDE])[0].id === 'paradny',
+check('makeHeightPatches is gated by MODULES: [] without landmarksTauride, [paradny, garden] with it (T2)', H.makeHeightPatches(OTHER).length === 0 && H.makeHeightPatches([...OTHER, TAURIDE]).length === 2 && H.makeHeightPatches([...OTHER, TAURIDE]).map((p) => p.id).join() === 'paradny,garden',
   H.makeHeightPatches(OTHER).length + ' / ' + H.makeHeightPatches([...OTHER, TAURIDE]).length);
 check('makeHooks does not change the other keys with the module list (only parkingReject)', (() => { const a = H.makeHooks(OTHER), b = H.makeHooks([...OTHER, TAURIDE]); return Object.keys(a).filter((k) => k !== 'parkingReject').every((k) => a[k] === b[k] || (Array.isArray(a[k]) && eq(a[k], b[k]))); })());
 
@@ -368,7 +368,7 @@ section('height');
   const withT = H.makeHeightPatches([...OTHER, TAURIDE]), without = H.makeHeightPatches(OTHER);
   const par = withT.find((p) => p && p.id === 'paradny');                                // by id, not by position: a malformed or wide patch in front of it must fail a check, not hang a loop below
   check('height: no patch without landmarksTauride in MODULES', without.length === 0, String(without.length));
-  check('height: exactly the Paradny patch with landmarksTauride, with the box of paradny.js', withT.length === 1 && withT[0].id === 'paradny' && eq(withT[0].box, P.PARADNY_BOX) && typeof withT[0].at === 'function', JSON.stringify(withT.map((p) => p.id)));
+  check('height: exactly the Paradny patch, then the garden relief patch (T2), with landmarksTauride; the Paradny box of paradny.js, the garden box RELIEF_BOX', withT.length === 2 && withT[0].id === 'paradny' && eq(withT[0].box, P.PARADNY_BOX) && typeof withT[0].at === 'function' && withT[1].id === 'garden' && eq(withT[1].box, GH.RELIEF_BOX) && withT[1].at === GH.gardenHeight, JSON.stringify(withT.map((p) => p.id)));
   check('height: the Paradny patch gives 3.3 on the podium (900, -1000)', par ? par.at(900, -1000) === 3.3 : false, String(par && par.at(900, -1000)));
   check('height: the patch answers null where the deck is none (Smolny, the campus, a street at the foot of the podium)', par ? [[2380, -1833], [1230, -1150], [1413, -1217], [700, -900], [1100, -1000]].every(([x, z]) => par.at(x, z) === null) : false);
   check('height: the patch equals paradnyDeckY on a lattice over the Paradny box', par ? (() => { let bad = 0; const B = P.PARADNY_BOX; for (let x = B[0] - 2; x <= B[1] + 2; x += 3.7) for (let z = B[2] - 2; z <= B[3] + 2; z += 3.7) if (par.at(x, z) !== P.paradnyDeckY(x, z)) bad++; return bad === 0; })() : false);
@@ -414,11 +414,15 @@ section('pure');
     const src = stripComments(read(f));
     for (const m of src.matchAll(/(?:^|\s)(?:import|export)\s[^;'"]*?from\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]|(?:^|\s)import\s+['"]([^'"]+)['"]/gm)) {
       const spec = m[1] || m[2] || m[3], target = path.posix.normalize(path.posix.join(path.posix.dirname(f), spec));
+      if (target === 'src/world/landmarksTauride/height.js' && f === 'src/areas/north/hooks/height.js') continue;      // T2: the garden relief, itself pure (checked below)
       if (!spec.startsWith('./') || !target.startsWith('src/areas/north/hooks')) bad.push(`${f} imports ${spec}`);
     }
     if (/\bctx\.services\b|\bdocument\b|\bwindow\b|THREE|three/.test(src)) bad.push(`${f} reads services / DOM / three`);
   }
-  check('the hooks files are pure data + pure functions: they import only each other (no three.js, layout.js, data facade, world module), no ctx.services', bad.length === 0, bad.join('; '));
+  check('the hooks files are pure data + pure functions: they import only each other (no three.js, layout.js, data facade, world module; the one exception: hooks/height.js imports the pure landmarksTauride/height.js, T2), no ctx.services', bad.length === 0, bad.join('; '));
+  // the relief module the garden patch calls: pure too (T2): height.js imports only data/relief.js, relief.js imports nothing; neither touches three.js, layout.js, a facade, ctx or the DOM
+  { const hs = stripComments(read('src/world/landmarksTauride/height.js')), rs = stripComments(read('src/world/landmarksTauride/data/relief.js')), imps = (t) => [...t.matchAll(/(?:^|\s)(?:import|export)\s[^;'"]*?from\s*['"]([^'"]+)['"]|\bimport\s*\(|(?:^|\s)import\s+['"]([^'"]+)['"]/gm)].map((m) => m[1] || m[2] || 'dynamic import');
+    check('landmarksTauride/height.js imports only ./data/relief.js and data/relief.js imports nothing (pure: no three.js, layout.js, facade, ctx, DOM)', eq(imps(hs), ['./data/relief.js']) && imps(rs).length === 0 && !/\bctx\b|\bdocument\b|\bwindow\b|THREE|three|Math\.random|Date\.now/.test(hs + rs), JSON.stringify([imps(hs), imps(rs)])); }
 }
 
 // ================================================================ tables
