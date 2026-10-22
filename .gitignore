@@ -20,3 +20,4 @@ assets/baked/**/*.part
 # Guard: the third-party map screenshot (Yandex Maps) the original data was registered to is a private layout reference and must never be committed or deployed.
 docs/reference/yandex-center.png
 docs/reference/plan-overlay.png
+tools/tauride/raw/
