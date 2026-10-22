@@ -17,7 +17,8 @@ import { FAR_FOG, FAR_GRID } from './farconf.js';
 import { waterCuts } from './river.js';
 import { CLASS_PALETTE_GLSL } from './class-palette.js';
 import { DIST_ATLAS_GLSL, distanceUniforms } from './distance-atlas.js';
-import { clipHalf, subtractConvex, area2, bucketCuts } from './clip.js';
+import { clipHalf, subtractConvex, area2, bucketCuts, triangulateRing, boxOfPoly } from './clip.js';
+import { HOOKS } from '../lib/area-tables.js';
 import { splitGeometryByCell, registerLOD, superCells } from '../../core/spatial.js';
 export { clipHalf };
 
@@ -191,6 +192,9 @@ function groundCuts() {
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
     cuts.push({ poly: pts, box: [x0, x1, z0, z1] });
   }
+  // the rings that a landmark module draws the ground of itself (HOOKS.groundHoles, docs/AREAS.md 9.1: the Tauride Garden floor of the North): triangulated into convex cuts like a water body; the strip has no such hook
+  const rings = HOOKS.groundHoles ? HOOKS.groundHoles() : null;
+  if (rings) for (const r of rings) for (const t of triangulateRing(r)) cuts.push({ poly: t, box: boxOfPoly(t) });
   return cuts;
 }
 

@@ -19,7 +19,7 @@ import { BUILDINGS, ROADS, AREAS, GREEN, LANDUSE, PARKING, CROSSINGS, CROSSING_N
 import { isOwned } from '../lib/claims.js';
 import { waterPolys } from './river.js';
 import { slopeQuads } from './waterways.js';
-import { ZONES } from '../lib/area-tables.js';
+import { ZONES, HOOKS } from '../lib/area-tables.js';
 import { extraClaimRings } from './claims.js';
 import { clamp, hash2 } from './util.js';
 import { classLayer } from './class-palette.js';
@@ -349,8 +349,10 @@ export function buildField(ctx, owned, baked = null) {
   for (const a of AREAS) if (!isOwned(owned, a.id)) for (const p of a.polys) fillPoly(cg, cls, p, vec('paved'));
   // mapped surfaces of the pedestrian ways: a pedestrian street (Griboedov east bank, Italyanskaya) is setts / slabs, not a courtyard patchwork; footways follow their surface tag
   // (paving stones / setts: granite, compacted / fine gravel: park gravel). Streets draws only the footway strip itself, the rest of such a street shows this ground.
+  const wayReject = HOOKS.groundWayReject;                                                                       // HOOKS.groundWayReject (docs/AREAS.md 9.1): the ways that a landmark module draws itself are not painted (the Tauride Garden)
   for (const r of ROADS) {
     if (r.tunnel || r.bridge || r.passage) continue;
+    if (wayReject && wayReject(r)) continue;
     const sf = r.surface, paving = sf === 'paving_stones' || sf === 'sett' || sf === 'cobblestone' || sf === 'paved' || sf === 'unhewn_cobblestone';
     if (r.hw === 'pedestrian') stamp(cg, cls, r.pts, clamp((r.w || 0) / 2 || 6, 3, 10), vec(sf === 'asphalt' ? 'asphalt' : 'paved'));
     else if ((r.hw === 'footway' || r.hw === 'path') && paving) stamp(cg, cls, r.pts, 1.5, vec('paved'));

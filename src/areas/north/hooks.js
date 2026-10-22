@@ -4,7 +4,7 @@
 //  export: the layout golden dump lists every export). The strip's area module exports HOOKS = {} and HEIGHT_PATCHES = []: a key that is absent means the engine does what it does without the hook, so
 //  every call site is `HOOKS.key?.(...)` / `HOOKS.key || default` and a no-op for the strip.
 //  PURE DATA + PURE FUNCTIONS: no three.js, no import of layout.js, no data facade (tools/areas-test.mjs loads the area module without the import-map remap and would get the strip's facade).
-//  The bodies live in hooks/keep-out.js (cluster B), hooks/height.js (cluster A), hooks/people.js (cluster C) and the shared geometry in hooks/paradny.js.
+//  The bodies live in hooks/keep-out.js (cluster B), hooks/height.js (cluster A), hooks/people.js (cluster C), hooks/ground.js (T3) and the shared geometry in hooks/paradny.js.
 //
 //  THE CONTRACT (frozen by the foundation commit; the H.. ids are the items of the table in docs/AREAS.md 9.5):
 //    HOOKS = {
@@ -17,6 +17,8 @@
 //      carKeepOut           -> ((x, z) => boolean) | undefined                                     T2a  the garden outline is closed to cars (drive/handling.js solidBlocked); undefined unless MODULES has 'landmarksTauride'
 //      inGarden             -> ((x, z) => boolean) | undefined                                     H08  the Tauride Garden polygon, for the people crowd cap (the North always gives a function; the strip: absent)
 //      deckServices         -> ['landmarksTauride']                                                H09  names of ctx.services whose deckY(x, z) is consulted FIRST (cars, pedestrians)
+//      groundHoles          -> (() => [flat ring, ...]) | undefined                                T3a  the rings cut out of the environment ground (environment/ground.js groundCuts): the garden outline moved in by 6 cm; undefined unless MODULES has 'landmarksTauride'
+//      groundWayReject      -> ((road) => boolean) | undefined                                     T3b  the ways that the ground class mask does not paint (environment/field.js buildField): the 120 garden ways; undefined unless MODULES has 'landmarksTauride'
 //    }
 //    HEIGHT_PATCHES = [{ id: string, box: [x0, x1, z0, z1], at: (x, z) => number | null }]       H01  heightAt: per patch in array order a box reject, then at(); the first non-null wins;
 //                                                                                                     then the old waterway-bed / GROUND_Y line
@@ -27,6 +29,7 @@
 import { treeCleared, treeReject, tuftReject, propReject, pedestrianOnly, makeParkingReject, makeCarKeepOut } from './hooks/keep-out.js';
 import { makeHeightPatches as terrainPatches } from './hooks/height.js';
 import { inGarden } from './hooks/people.js';
+import { makeGroundHoles, makeGroundWayReject } from './hooks/ground.js';
 
 /** The services whose own deckY(x, z) (a podium, stairs, garden bridges) is consulted before the bridge decks by the drive handling and the pedestrian navigation (H09). An absent service is skipped. */
 const DECK_SERVICES = Object.freeze(['landmarksTauride']);
@@ -39,6 +42,8 @@ export function makeHooks(MODULES) {
     carKeepOut: makeCarKeepOut(MODULES),            // T2: the garden is closed to cars (a plain function, gated by the module list like parkingReject)
     inGarden,
     deckServices: DECK_SERVICES,
+    groundHoles: makeGroundHoles(MODULES),          // T3: the environment ground is cut out under the garden's own floor (a plain function, gated by the module list like parkingReject)
+    groundWayReject: makeGroundWayReject(MODULES),  // T3: the garden's ways are not painted into the ground class mask (the garden draws them)
   };
 }
 

@@ -183,7 +183,7 @@ const A = await imp('src/world/area.js');
 const GRP = await imp('src/world/landmarksKirochnaya/groups.js');
 const MODULES = A.MODULES;
 const FAC = ['treeCleared', 'treeReject', 'tuftReject', 'propReject', 'pedestrianOnly'];
-const CONTRACT_KEYS = ['carKeepOut', 'deckServices', 'inGarden', 'parkingReject', 'pedestrianOnly', 'propReject', 'tuftReject', 'treeCleared', 'treeReject'].sort();
+const CONTRACT_KEYS = ['carKeepOut', 'deckServices', 'groundHoles', 'groundWayReject', 'inGarden', 'parkingReject', 'pedestrianOnly', 'propReject', 'tuftReject', 'treeCleared', 'treeReject'].sort();
 const podium = PD.PARADNY_PODIUM.o.length ? pairs(PD.PARADNY_PODIUM.o) : [];
 const inPodium = (x, z) => winding(podium, x, z);
 const campusRing = GRP.CAMPUS;
@@ -217,7 +217,7 @@ check('each factory serves exactly the modules of its contract', () => {
   ok(typeof KO.makeParkingReject([MODS.tauride]) === 'function', 'makeParkingReject with landmarksTauride is no function');
   for (const m of [MODS.smolny, MODS.suvorov, MODS.kirochnaya]) ok(KO.makeParkingReject([m]) === undefined, 'parking gated by ' + m);
 });
-check('makeHooks(MODULES) has the nine keys of the contract (T2 added carKeepOut); parkingReject and carKeepOut only with landmarksTauride; the area module exports the same table', () => {
+check('makeHooks(MODULES) has the eleven keys of the contract (T2 added carKeepOut, T3 groundHoles and groundWayReject); parkingReject, carKeepOut, groundHoles and groundWayReject only with landmarksTauride; the area module exports the same table', () => {
   const real = HK.makeHooks(MODULES), fake = HK.makeHooks([...MODULES, MODS.tauride]);
   eq(Object.keys(real).sort(), CONTRACT_KEYS, 'keys');
   eq(Object.keys(fake).sort(), CONTRACT_KEYS, 'keys with landmarksTauride');

@@ -334,8 +334,8 @@
     "[hashed]": true,
     "kind": "object",
     "n": 7,
-    "bytes": 9970,
-    "hash": "a59bf734a6c22d9d"
+    "bytes": 10025,
+    "hash": "765202a76a76671d"
    },
    "HERO": {
     "pitch": 10,
@@ -424,8 +424,8 @@
     "[hashed]": true,
     "kind": "object",
     "n": 14,
-    "bytes": 10510,
-    "hash": "c3cc0de3dc61de84"
+    "bytes": 10565,
+    "hash": "32dc2c3527a3d44c"
    },
    "SUN_DIR": [
     -0.473,
@@ -2954,7 +2954,7 @@
     "north-suvorov-museum": "4f53cda18c2baa0c",
     "oktyabrsky-hall": "a2d31d19bfa13670",
     "paradny-quarter": "d5d720ba10e5ba46",
-    "tauride-garden": "06cfc6034050017e",
+    "tauride-garden": "29f75742c22c16c0",
     "tauride-palace": "4f53cda18c2baa0c"
    },
    "bounds": {
@@ -3075,8 +3075,8 @@
    ]
   },
   "claims": {
-   "n": 528,
-   "hash": "7663d79c877b89bb"
+   "n": 532,
+   "hash": "4d80857395f8216b"
   },
   "buildings": {
    "n": 2016,
