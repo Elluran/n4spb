@@ -178,6 +178,8 @@ export function createSim(ctx, nav, crowd, opts = {}) {
   let zoneCount = 0; const zoneMax = (nav.stationCfg && nav.stationCfg.maxPeople) || 1e9;
   // the garden of the area (nav.inGarden, people.js DENSITY.garden): at most nav.gardenCfg.maxPeople people inside it, counted like the station zone (a recount every MICRO steps, a re-placement reserves at once)
   let gardenCount = 0;
+  /** the visible members of a party that stand in the garden: a plain loop (recycle() runs hundreds of times in one step at a teleport, in the strip too, where nav.inGarden is the never-function) */
+  const gardenHeads = (party) => { let n = 0; for (let i = 0; i < party.length; i++) { const p = party[i]; if (!p.hidden && nav.inGarden(p.x, p.z)) n++; } return n; };
   // a FULL zone is a soft barrier for the routes of the people who do not live there: every edge inside it costs 2.5 x its length more (they walk round it when the detour is shorter than ~2.5 x the way through)
   const shutHere = (x, z) => { const k = nav.marsZone(x, z); return k >= 0 && k < mZones.length && !!mZones[k].shut; };          // zones that are shut at night (none in the strip)
   const nodeMZ = new Int8Array(mZones.length ? N.x.length : 0).fill(-2), mzOf = (i) => { if (i >= nodeMZ.length) return -1; let k = nodeMZ[i]; if (k === -2) k = nodeMZ[i] = nav.marsZone(N.x[i], N.z[i]); return k; };
@@ -421,7 +423,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
   /** mass: place anywhere 6-250 m around the camera (start / teleport); otherwise 60-290 m and never in view */
   const recycle = (a, t, mass = false) => {
     const party = [a, ...a.followers.filter(f => f.kind !== 'inside')];
-    const gardenBefore = party.filter(p => !p.hidden && nav.inGarden(p.x, p.z)).length;
+    const gardenBefore = gardenHeads(party);
     let best = -1, tot = 0; const lo = mass ? 6 : 60, hi = mass ? 250 : 290, ids = [], ws = [], zOwn = ownZone(a);
     for (let k = 0, kn = mass ? 26 : 14; k < kn; k++) {              // candidate points on the annulus around the camera, snapped to the nearest pavement node (more tries at a teleport: an avenue between quiet side streets fills only a few per cent of the disc)
       const r = lo + (hi - lo) * Math.pow(R(), mass ? 0.85 : 1), ang = R() * TAU, px = camPos.x + Math.sin(ang) * r, pz = camPos.z + Math.cos(ang) * r;
@@ -439,7 +441,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     for (const f of a.followers) { if (f.kind === 'inside') continue; leaveQueue(f); sim.placeAtNode(f, best, 2.2); f.speed = f.vpref * 0.8; f.kind = 'walk'; f.crossIdx = -1; f.stuck = 0; f.comp = a.comp; }
     // Reserve immediately: a camera teleport can place hundreds of agents in
     // one micro-step, before the periodic population recount runs again.
-    gardenCount += party.filter(p => !p.hidden && nav.inGarden(p.x, p.z)).length - gardenBefore;
+    gardenCount += gardenHeads(party) - gardenBefore;
     if (mZones.length) { const k = nav.marsZone(N.x[best], N.z[best]); if (k >= 0 && k < mZones.length && k !== zOwn) marsCount[k] += party.length; for (const q of party) q.zHome = k; }
     placed.set(cellHash(Math.floor(a.x / HC), Math.floor(a.z / HC)), (placed.get(cellHash(Math.floor(a.x / HC), Math.floor(a.z / HC))) || 0) + 1 + a.followers.length);
     newGoal(a, t); a.recycled = (a.recycled || 0) + 1; sim.recycled++; return true;
