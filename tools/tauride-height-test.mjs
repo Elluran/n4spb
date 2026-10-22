@@ -16,8 +16,8 @@
 //            has no keep-out (drive/handling.js solidBlocked: heightAt < -1, holes, buildings), so the generic North reports the whole outline open.
 //   landing  flight landing: the share of water cells where the real predicate (physics groundHeight < -1) refuses 'water'. NOT asserted unless --assert-landing (a pond bed of -0.5 m is not refused).
 //   T2 (the land relief of the garden; runs when `--build landmarksTauride` is given, on the REAL built module): the relief rules (zero within 8 m of the outline, 3 m of the footprints, 4 m of the OSM trees, 3 m of the water, 5 m of the bridges, 4 m of the camera
-//            poses, the flat zones; slope <= 1:4 on land, on the 120 ways and on the south gate -> memorial route), the terrain meshes (<= 16 draws, <= 40 k triangles, <= 5 cm, crack-free, no collider), heightAt through the page's patches (the diff against the old
-//            line is confined to the Paradny box and the garden box), determinism / purity / edge cases of gardenHeight, the cars with the real handling (0 m of the outline open; the same harness without the hook: 2,018 m), and 11 mutants that must turn a rule red.
+//            poses, the flat zones; slope <= 1:4 on land, on the 120 ways and on the south gate -> memorial route), the terrain meshes (<= 16 draws, <= 40 k triangles, <= 5 cm, crack-free, no collider, the footprint hugs the relief: no apron), heightAt through the page's patches (the diff against the old
+//            line is confined to the Paradny box and the garden box), the patch box RELIEF_HULL, determinism / purity / edge cases of gardenHeight and its cell masks against brute force, the cars with the real handling (0 m of the outline open; the same harness without the hook: 2,018 m), and 15 mutants that must turn a rule red.
 //            node tools/area.mjs north tools/tauride-height-test.mjs --model north --build landmarksTauride --assert-cars --no-selfcheck
 // Exit 0 = every expectation met (the main model passes, the self-check models behave as declared, the old trap reproduces).
 import fs from 'node:fs';
@@ -109,7 +109,7 @@ async function reliefSection(ctx, ph, engine) {
   const live = AT.HEIGHT_PATCHES, saved = live.slice();
   const OLD = (x, z) => { live.length = 0; const h = L.heightAt(x, z); live.push(...saved); return h; };
   // ---- the module and its service
-  rel('the page lists the garden patch after the Paradny patch (HEIGHT_PATCHES of src/areas/north/area.js)', saved.map((p) => p.id).join() === 'paradny,garden' && saved[1].at === GH.gardenHeight, saved.map((p) => p.id).join());
+  rel('the page lists the garden patch after the Paradny patch (HEIGHT_PATCHES of src/areas/north/area.js); its box is RELIEF_HULL, the hull of the hills', saved.map((p) => p.id).join() === 'paradny,garden' && saved[1].at === GH.gardenHeight && JSON.stringify(saved[1].box) === JSON.stringify(GH.RELIEF_HULL), saved.map((p) => p.id).join() + ' ' + JSON.stringify(saved[1] && saved[1].box));
   rel('the built module publishes the pure gardenHeight as terrain.heightAt, and deckY / paradny are still the Paradny deck', !!svc && svc.terrain.heightAt === GH.gardenHeight && typeof svc.deckY === 'function' && !!svc.paradny, '');
   const meshes = []; ctx.staticRoot.traverse((o) => { if (o.isMesh && /^tauride-terrain-/.test(o.name)) meshes.push(o); });
   const tris = meshes.reduce((s, m) => s + m.geometry.index.count / 3, 0);
@@ -120,7 +120,12 @@ async function reliefSection(ctx, ph, engine) {
   // ---- the mesh against the height function
   const plan = TM.planTerrain(), M = TM.measurePlan(plan);
   rel(`the planned mesh is within ${TM.TERRAIN.tol * 100} cm of gardenHeight (rasterised on a 0.5 m lattice)`, M.maxErr <= TM.TERRAIN.tol, `max ${(M.maxErr * 100).toFixed(2)} cm at ${JSON.stringify(M.at)}, ${M.samples} samples`);
-  rel('the mesh covers every lifted point (> 0.5 mm), is crack-free (no edge in more than 2 triangles; open edges only at the foot, <= 1 cm) and has no triangle where the ground is flat', M.uncovered === 0 && M.nonManifold === 0 && M.boundaryHigh <= 0.01, `uncovered ${M.uncovered} of ${M.lifted}, non-manifold edges ${M.nonManifold}, highest open edge ${(M.boundaryHigh * 100).toFixed(2)} cm`);
+  rel(`the mesh covers every point lifted by ${TM.TERRAIN.drop * 100} cm or more, is crack-free (no edge in more than 2 triangles; open edges only at the foot, <= ${TM.TERRAIN.drop * 100} cm)`, M.uncovered === 0 && M.nonManifold === 0 && M.boundaryHigh <= TM.TERRAIN.drop + 1e-9, `uncovered ${M.uncovered} of ${M.lifted}, non-manifold edges ${M.nonManifold}, highest open edge ${(M.boundaryHigh * 100).toFixed(2)} cm`);
+  // T2 fix round 1: the "pad" of the aerial views. The mesh used to keep every 16 m leaf that had one lifted sample, so each hill sat on an apron of flat triangles (25 % of the footprint) painted in the placeholder colour over the
+  // textured lawn, with straight leaf edges. Now a leaf across the foot splits down to TERRAIN.edge, and the footprint hugs the lifted ground.
+  rel(`the mesh footprint hugs the relief: ${(M.padArea).toFixed(0)} m2 of triangles for ${M.liftedArea.toFixed(0)} m2 lifted by ${TM.TERRAIN.drop * 100} cm or more (at most +20 %), and only ${(M.apronArea).toFixed(0)} m2 (${(100 * M.apronArea / M.padArea).toFixed(1)} %, at most 6 %) are flat triangles with no corner above ${TM.TERRAIN.drop * 100} cm`, M.padArea <= 1.2 * M.liftedArea && M.apronArea <= 0.06 * M.padArea && M.liftedArea > 8000, '');
+  { const old = TM.measurePlan(TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { edge: 16 }));
+    rel('mutant: leaves that straddle the foot left at 16 m (the apron of the first T2) turn the footprint check red (the check can fail)', !(old.padArea <= 1.2 * old.liftedArea && old.apronArea <= 0.06 * old.padArea), `pad ${old.padArea.toFixed(0)} m2 for ${old.liftedArea.toFixed(0)} lifted, apron ${old.apronArea.toFixed(0)} m2`); }
   rel('the plan of the build equals the plan of the test (deterministic)', plan.tris === svc.terrain.triangles, `${plan.tris} triangles, ${plan.leaves} leaves, ${plan.chunksBefore} chunks -> ${plan.chunks.length} draws`);
   { const bad2 = TM.measurePlan(TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { split: 0.4 }));
     rel('mutant: a split tolerance of 40 cm turns the 5 cm check red (the check can fail)', bad2.maxErr > TM.TERRAIN.tol, `max ${(bad2.maxErr * 100).toFixed(1)} cm`); }
@@ -135,6 +140,14 @@ async function reliefSection(ctx, ph, engine) {
       if (!inP && !inG) outside++; else if (inP && h !== Hk.paradnyDeckY(x, z)) notEq++; else if (!inP && h !== GH.gardenHeight(x, z)) notEq++;
     }
     rel('heightAt against the old line over the whole North + 150 m (2 m lattice): every difference is inside the Paradny box or the garden box and equals the patch', outside === 0 && notEq === 0 && diff > 1000, `${n} points, ${diff} differ, ${outside} outside both boxes, ${notEq} not equal to their patch`); }
+  // ---- the patch box (T2 fix round 1, the start-up cost of heightAt): the HULL of the hills, so that layout.heightAt does not call gardenHeight for the 39 % of the garden box where no hill stands
+  { const Hh = GH.RELIEF_HULL, b = GH.RELIEF_BOX, countOutside = (hull) => { let lifted = 0, out = 0, x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let x = b[0]; x <= b[1]; x += 0.5) for (let z = b[2]; z <= b[3]; z += 0.5) { if (GH.gardenHeight(x, z) === null) continue; lifted++; x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); if (!(x >= hull[0] && x <= hull[1] && z >= hull[2] && z <= hull[3])) out++; }
+      return { lifted, out, ext: [x0, x1, z0, z1] }; }, m = countOutside(Hh);
+    rel('the patch box RELIEF_HULL holds every lifted point of a 0.5 m lattice over the garden box, is at most 65 % of the garden box, and each side lies within 3 m of the outermost lifted point (tight)', m.out === 0 && m.lifted > 20000 && (Hh[1] - Hh[0]) * (Hh[3] - Hh[2]) <= 0.65 * (b[1] - b[0]) * (b[3] - b[2]) && Hh[0] <= m.ext[0] && m.ext[0] - Hh[0] <= 3 && Hh[1] >= m.ext[1] && Hh[1] - m.ext[1] <= 3 && Hh[2] <= m.ext[2] && m.ext[2] - Hh[2] <= 3 && Hh[3] >= m.ext[3] && Hh[3] - m.ext[3] <= 3,
+      `hull ${JSON.stringify(Hh)} = ${(100 * (Hh[1] - Hh[0]) * (Hh[3] - Hh[2]) / ((b[1] - b[0]) * (b[3] - b[2]))).toFixed(0)} % of the garden box, ${m.lifted} lifted points, ${m.out} outside, outermost lifted ${JSON.stringify(m.ext)}`);
+    const small = countOutside(GH.reliefHull(GH.FEATURES.filter((f) => f.key !== 'N')));
+    rel('mutant: the hull of the features without the north hill leaves lifted points outside (the hull check can fail)', small.out > 1000, `${small.out} lifted points of the north hill outside`); }
   // ---- the rules, on layout.heightAt (the whole chain) and on the pure function
   const viaEngine = (x, z) => { const h = L.heightAt(x, z); return h > 0 ? h : null; };
   for (const [label, fn] of [['layout.heightAt', viaEngine], ['gardenHeight', GH.gardenHeight]]) {
@@ -159,6 +172,32 @@ async function reliefSection(ctx, ph, engine) {
     const edge = [[NaN, 0], [0, NaN], [Infinity, 0], [0, -Infinity], [undefined, undefined], [null, null], [1e9, -1e9], [-1e9, 1e9], [0, 0], [GH.RELIEF_BOX[0] - 1e-9, -1500], [GH.RELIEF_BOX[1] + 1e-9, -1500], [1200, GH.RELIEF_BOX[2] - 1e-9], [1200, GH.RELIEF_BOX[3] + 1e-9]];
     rel('gardenHeight answers null (and does not throw) for NaN, +-Infinity, undefined, null, far points and points just outside the box', edge.every(([x, z]) => { try { return f1(x, z) === null; } catch (e) { return false; } }), '');
     const src = f1.toString(); rel('the body of gardenHeight allocates nothing (no new, closure, array / object literal, spread, iterator method): text check', !/\bnew\b|=>|\.\.\.|\.map\(|\.forEach\(|\.filter\(|\.reduce\(|\bfunction\b.*\bfunction\b|\{\s*[A-Za-z]+\s*:|\[\s*[^\]\s]+\s*,[^\]]*\]\s*[;,)]/.test(src.replace(/^function gardenHeight\(x, z\)/, '')), `${src.length} chars`); }
+  { // T2 fix round 1: the cell masks of gardenHeight (4 m cells, one bit per feature) against BRUTE FORCE (every feature at every point, the same arithmetic, no grid): bit for bit on a 1 m lattice, random points and a rotated / stretched copy of the features
+    const brute = (feats, box = GH.RELIEF_BOX) => (x, z) => {
+      if (!(x >= box[0] && x <= box[1] && z >= box[2] && z <= box[3])) return null;
+      let best = 0;
+      for (const f of feats) {
+        const a = (f.rot || 0) * Math.PI / 180, co = Math.cos(a), si = Math.sin(a), dx = x - f.x, dz = z - f.z, top = f.top || 0, u = (dx * co + dz * si) * (1 / f.rx), v = (-dx * si + dz * co) * (1 / f.rz), q = Math.sqrt(u * u + v * v);
+        if (q >= 1) continue;
+        let h; if (q <= top) h = f.h; else { const t = (1 - q) / (1 - top); h = f.h * t * t * (3 - 2 * t); }
+        if (h > best) best = h;
+      }
+      return best > 0 ? best : null;
+    };
+    const b = GH.RELIEF_BOX; let s = 4242; const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+    const sweep = (fa, fb) => { let n = 0, d = 0, lifted = 0; const one = (x, z) => { n++; const p = fa(x, z), r = fb(x, z); if (p !== null) lifted++; if (p !== r) d++; };
+      for (let x = b[0] - 2; x <= b[1] + 2; x += 1) for (let z = b[2] - 2; z <= b[3] + 2; z += 1) one(x, z);
+      for (let i = 0; i < 400000; i++) one(b[0] - 4 + rnd() * (b[1] - b[0] + 8), b[2] - 4 + rnd() * (b[3] - b[2] + 8));
+      for (const f of GH.FEATURES) for (let i = 0; i < 20000; i++) one(f.x + (rnd() * 2 - 1) * (Math.max(f.rx, f.rz) + 3), f.z + (rnd() * 2 - 1) * (Math.max(f.rx, f.rz) + 3));
+      return { n, d, lifted }; };
+    const m = sweep(GH.gardenHeight, brute(GH.FEATURES));
+    rel('gardenHeight (cell masks) equals the brute-force evaluation of every feature bit for bit (1 m lattice + 400,000 random + the feet of the nine hills)', m.d === 0 && m.lifted > 50000, `${m.n} points, ${m.lifted} lifted, ${m.d} differ`);
+    const mut = GH.FEATURES.map((f, i) => ({ ...f, rot: (f.rot || 0) + 23 * i, rx: f.rx * 1.25, rz: f.rz * 0.85 })), m2 = sweep(GH.makeGardenHeight(mut), brute(mut));
+    rel('... also for a rotated and stretched copy of the features (overlapping hills included)', m2.d === 0 && m2.lifted > 50000, `${m2.n} points, ${m2.lifted} lifted, ${m2.d} differ`);
+    const m3 = sweep(GH.gardenHeight, brute(GH.FEATURES.map((f) => (f.key === 'C' ? { ...f, h: f.h + 0.01 } : f))));
+    rel('mutant: one hill 1 cm higher in the reference makes the comparison red (the check can fail)', m3.d > 100, `${m3.d} points differ`);
+    let threw = false; try { GH.makeGardenHeight(Array.from({ length: 33 }, () => GH.FEATURES[0])); } catch (e) { threw = /at most 32/.test(String(e.message)); }
+    rel('makeGardenHeight refuses more than 32 features (the cell masks are 32 bits) with a clear error', threw, ''); }
   { const hs = fs.readFileSync(path.join(ROOT, 'src/world/landmarksTauride/height.js'), 'utf8').replace(/\/\/.*$/gm, ''), rs = fs.readFileSync(path.join(ROOT, 'src/world/landmarksTauride/data/relief.js'), 'utf8').replace(/\/\/.*$/gm, '');
     rel('height.js imports only ./data/relief.js, relief.js imports nothing, neither names three.js, layout.js, a facade, ctx, the DOM or a random source', [...hs.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1]).join() === './data/relief.js' && !/^import/m.test(rs) && !/\bTHREE\b|\bthree\b|layout|facade|\bctx\b|\bdocument\b|\bwindow\b|Math\.random|Date\.now/.test(hs + rs), ''); }
   { const feats = GH.FEATURES, ids = feats.map((f) => f.id), keys = feats.map((f) => f.key);

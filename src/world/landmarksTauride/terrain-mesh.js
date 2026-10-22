@@ -1,7 +1,9 @@
 // landmarksTauride/terrain-mesh.js - the LAND RELIEF of the Tauride Garden as a mesh (docs/TAURIDE-REMAKE.md, phase T2). planTerrain() is PURE (no three.js: tools and tests measure it); buildTerrain() makes the meshes.
 // The surface is the pure height function gardenHeight (height.js) sampled by an adaptive, crack-free, 2:1-balanced quadtree over a 1 m lattice: leaves of 1 .. 16 m, a leaf is split while the best of its two diagonal
-// triangulations is more than TOL (5 cm) away from gardenHeight on a 1 m sample lattice, a leaf whose samples are all ~0 is dropped (no triangles where the ground is flat: the flat ground below has polygonOffset +2
-// and must not z-fight), and a leaf next to a leaf of half its size gets that neighbour's midpoint as a vertex (no T-junction cracks, also across the 64 m chunk borders: both chunks hold the same vertices there).
+// triangulations is more than TOL (5 cm) away from gardenHeight on a 1 m sample lattice, a leaf whose samples are all below `drop` (2 cm) is dropped (no triangles where the ground is flat: the flat ground below has
+// polygonOffset +2 and must not z-fight), a leaf that lies across the foot of the relief (some samples lifted, some flat) splits down to `edge` (2 m) so that the mesh hugs the lifted ground instead of leaving an
+// apron of up to 16 m of flat triangles round every hill (T2 fix round 1: the apron was the straight-edged "pad" of the aerial views), and a leaf next to a leaf of half its size gets that neighbour's midpoint as a
+// vertex (no T-junction cracks, also across the 64 m chunk borders: both chunks hold the same vertices there).
 // Triangles go to the 64 m chunk of their leaf (one mesh and one draw per chunk that has any). NO COLLIDERS: the player and the pedestrians follow heightAt (the HEIGHT_PATCH is the same function).
 // The material is a PLACEHOLDER: a toon vertex-coloured grass (darker on slopes, with a little earth where it is steep); T3 replaces it with the painted ground of the garden.
 import * as THREE from 'three';
@@ -13,7 +15,8 @@ export const TERRAIN = Object.freeze({
   tol: 0.05,            // metres: the largest allowed distance between the mesh and gardenHeight (asserted on the built plan: tools/tauride-height-test.mjs, measurePlan)
   split: 0.04,          // metres: the error at which a leaf splits (below tol: the fan of a leaf with hanging midpoints is not the two-triangle quad that the split test measures)
   top: 16,              // metres: the first leaf size (a power of two); a leaf is dropped when no sample of it is lifted
-  drop: 5e-4,           // metres: below this a sample counts as flat ground
+  drop: 0.02,           // metres: below this a sample counts as flat ground (2 cm is not seen on a lawn and is the largest step between an open mesh border and the ground; below `split`)
+  edge: 2,              // metres: the smallest leaf that may still straddle the foot of the relief (lifted and flat samples in one leaf): the mesh follows the 2 cm contour within this
   drawsMax: 16,
   trianglesTarget: 40000,
 });
@@ -31,9 +34,9 @@ export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
   // the samples of a leaf: n x n cells of step s / n (n = min(s, 16): a step of one metre up to 16 m leaves) -> { max, err (best diagonal), diag }
   function measure(i, j, s) {
     const n = Math.min(s, 16), st = s / n, row = new Float64Array((n + 1) * (n + 1));
-    let max = 0;
-    for (let b = 0; b <= n; b++) for (let a = 0; a <= n; a++) { const h = hOf(gh, I0 + i + a * st, J0 + j + b * st); row[b * (n + 1) + a] = h; if (h > max) max = h; }
-    if (max < T.drop) return { max, err: 0, diag: 0 };
+    let max = 0, min = Infinity;
+    for (let b = 0; b <= n; b++) for (let a = 0; a <= n; a++) { const h = hOf(gh, I0 + i + a * st, J0 + j + b * st); row[b * (n + 1) + a] = h; if (h > max) max = h; if (h < min) min = h; }
+    if (max < T.drop) return { max, min, err: 0, diag: 0 };
     const h00 = row[0], h10 = row[n], h01 = row[n * (n + 1)], h11 = row[n * (n + 1) + n];
     let e0 = 0, e1 = 0;
     for (let b = 0; b <= n; b++) for (let a = 0; a <= n; a++) {
@@ -42,7 +45,7 @@ export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
       const d1 = u + v <= 1 ? h00 + (h10 - h00) * u + (h01 - h00) * v : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);   // diagonal (i1,j0)-(i0,j1)
       e0 = Math.max(e0, Math.abs(h - d0)); e1 = Math.max(e1, Math.abs(h - d1));
     }
-    return e0 <= e1 ? { max, err: e0, diag: 0 } : { max, err: e1, diag: 1 };
+    return e0 <= e1 ? { max, min, err: e0, diag: 0 } : { max, min, err: e1, diag: 1 };
   }
   // 1. the first leaves: every `top` m cell of the lattice with any lifted sample
   let leaves = [], splits = 0;
@@ -53,7 +56,7 @@ export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
   while (queue.length) {
     const lf = queue.pop(), m = measure(lf.i, lf.j, lf.s);
     if (m.max < T.drop) continue;                                  // all flat: no triangles
-    if (m.err > TOL && lf.s > 1) { const h = lf.s / 2; splits++; for (const [a, b] of [[0, 0], [h, 0], [0, h], [h, h]]) queue.push({ i: lf.i + a, j: lf.j + b, s: h }); continue; }
+    if ((m.err > TOL || (m.min < T.drop && lf.s > T.edge)) && lf.s > 1) { const h = lf.s / 2; splits++; for (const [a, b] of [[0, 0], [h, 0], [0, h], [h, h]]) queue.push({ i: lf.i + a, j: lf.j + b, s: h }); continue; }
     lf.diag = m.diag; out.push(lf);
   }
   leaves = out;
@@ -122,7 +125,7 @@ export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
     list[best] = { cx: a.cx, cz: a.cz, x0: a.x0, z0: a.z0, pos, nrm, col, idx: pos.length / 3 > 65535 ? idx : Uint16Array.from(idx), tris: a.tris + b.tris, verts: a.verts + b.verts, merged: (a.merged || []).concat([[b.cx, b.cz]], b.merged || []) };
     list.splice(k, 1);
   }
-  return { chunks: list, tris, leaves: leaves.length, splits, tol: T.tol, split: TOL, chunksBefore, box: [I0, I0 + W, J0, J0 + H] };
+  return { chunks: list, tris, leaves: leaves.length, splits, tol: T.tol, split: TOL, drop: T.drop, edge: T.edge, chunksBefore, box: [I0, I0 + W, J0, J0 + H] };
 }
 
 /** the placeholder grass: the mean of the ground shader's grass tones, darker with the slope, a little earth where it is steep (a smooth hash varies it by a few percent). (x, z, grad) -> [r, g, b] in the vertex colour space */
@@ -151,14 +154,16 @@ export function buildTerrain(ctx, parent, plan) {
   return { group, triangles: plan.tris, draws: plan.chunks.length };
 }
 
-/** The distance between the planned mesh and `gh`: rasterises every triangle on a `step` m lattice and compares the interpolated height with gh. { maxErr, at, samples, uncovered (lifted samples no triangle covers), boundaryHigh (the highest point of an open edge), nonManifold } */
+/** The distance between the planned mesh and `gh`: rasterises every triangle on a `step` m lattice and compares the interpolated height with gh. { maxErr, at, samples, uncovered (samples at or above the plan's `drop` that no triangle covers), boundaryHigh (the highest point of an open edge), nonManifold, padArea (m2 of the footprint of all triangles), apronArea (m2 of the triangles with no corner above `drop`), liftedArea (m2 of the lattice points at or above `drop`) } */
 export function measurePlan(plan, gh = gardenHeight, step = 0.5) {
-  let maxErr = 0, at = null, samples = 0;
-  const seen = new Map();
+  let maxErr = 0, at = null, samples = 0, padArea = 0, apronArea = 0;
+  const seen = new Map(), drop = plan.drop ?? TERRAIN.drop;
   for (const c of plan.chunks) {
     const p = c.pos, ix = c.idx;
     for (let t = 0; t < ix.length; t += 3) {
       const a = ix[t] * 3, b = ix[t + 1] * 3, d = ix[t + 2] * 3;
+      const ar = Math.abs((p[b] - p[a]) * (p[d + 2] - p[a + 2]) - (p[d] - p[a]) * (p[b + 2] - p[a + 2])) / 2;      // footprint of the triangle on the ground plane
+      padArea += ar; if (Math.max(p[a + 1], p[b + 1], p[d + 1]) < drop) apronArea += ar;                            // an "apron" triangle has no corner above the drop height: flat ground that the mesh paints over
       const x0 = Math.min(p[a], p[b], p[d]), x1 = Math.max(p[a], p[b], p[d]), z0 = Math.min(p[a + 2], p[b + 2], p[d + 2]), z1 = Math.max(p[a + 2], p[b + 2], p[d + 2]);
       const den = (p[b + 2] - p[d + 2]) * (p[a] - p[d]) + (p[d] - p[b]) * (p[a + 2] - p[d + 2]);
       if (Math.abs(den) < 1e-12) continue;
@@ -173,7 +178,7 @@ export function measurePlan(plan, gh = gardenHeight, step = 0.5) {
   }
   let uncovered = 0, lifted = 0;
   const b = plan.box;
-  for (let z = b[2]; z <= b[3]; z += step) for (let x = b[0]; x <= b[1]; x += step) { if (hOf(gh, x, z) > 5e-4) { lifted++; if (!seen.has(Math.round(x / step) * 100000 + Math.round(z / step))) uncovered++; } }
+  for (let z = b[2]; z <= b[3]; z += step) for (let x = b[0]; x <= b[1]; x += step) { if (hOf(gh, x, z) >= drop) { lifted++; if (!seen.has(Math.round(x / step) * 100000 + Math.round(z / step))) uncovered++; } }
   // edges over the whole plan (the chunks share positions on their borders): every edge in 2 triangles, or open at the foot of the relief (height ~ 0)
   const em = new Map(), key = (x, y, z) => Math.round(x * 100) * 1e9 + Math.round(z * 100) * 1e3 + 0 * y;
   for (const c of plan.chunks) for (let t = 0; t < c.idx.length; t += 3) for (let e = 0; e < 3; e++) {
@@ -182,5 +187,5 @@ export function measurePlan(plan, gh = gardenHeight, step = 0.5) {
   }
   let boundaryHigh = 0, nonManifold = 0;
   for (const r of em.values()) { if (r.n === 1 && r.h > boundaryHigh) boundaryHigh = r.h; if (r.n > 2) nonManifold++; }
-  return { maxErr, at, samples, lifted, uncovered, boundaryHigh, nonManifold };
+  return { maxErr, at, samples, lifted, uncovered, boundaryHigh, nonManifold, padArea, apronArea, liftedArea: lifted * step * step };
 }
