@@ -1,42 +1,98 @@
-// landmarksTauride/terrain-mesh.js - the LAND RELIEF of the Tauride Garden as a mesh (docs/TAURIDE-REMAKE.md, phase T2). planTerrain() is PURE (no three.js: tools and tests measure it); buildTerrain() makes the meshes.
+// landmarksTauride/terrain-mesh.js - the GROUND SURFACE of the Tauride Garden as a mesh (docs/TAURIDE-REMAKE.md, phase T2 the land relief, phase T3 the whole floor). planTerrain() is PURE (no scene: tools and tests measure it);
+// buildTerrain() makes the meshes.
 // The surface is the pure height function gardenHeight (height.js) sampled by an adaptive, crack-free, 2:1-balanced quadtree over a 1 m lattice: leaves of 1 .. 16 m, a leaf is split while the best of its two diagonal
-// triangulations is more than TOL (5 cm) away from gardenHeight on a 1 m sample lattice, a leaf whose samples are all below `drop` (2 cm) is dropped (no triangles where the ground is flat: the flat ground below has
-// polygonOffset +2 and must not z-fight), a leaf that lies across the foot of the relief (some samples lifted, some flat) splits down to `edge` (2 m) so that the mesh hugs the lifted ground instead of leaving an
-// apron of up to 16 m of flat triangles round every hill (T2 fix round 1: the apron was the straight-edged "pad" of the aerial views), and a leaf next to a leaf of half its size gets that neighbour's midpoint as a
-// vertex (no T-junction cracks, also across the 64 m chunk borders: both chunks hold the same vertices there).
-// Triangles go to the 64 m chunk of their leaf (one mesh and one draw per chunk that has any). NO COLLIDERS: the player and the pedestrians follow heightAt (the HEIGHT_PATCH is the same function).
-// The material is the GROUND'S OWN shader when the environment's ground exists (terrainMaterial: the same program, the colour a function of the world (x, z), so the hills show the lawn and the way paint of the
-// flat ground at the same place and no seam along the contour; T2 fix round 2); otherwise (a headless test of the builder alone) a PLACEHOLDER, a toon vertex-coloured grass (darker on slopes, a little earth where it is steep).
+// triangulations is more than TOL (4 cm) away from gardenHeight on a 1 m sample lattice, and a leaf next to a leaf of half its size gets that neighbour's midpoint as a vertex (no T-junction cracks, also across the 64 m chunk
+// borders: both chunks hold the same vertices there). Two modes:
+//   RELIEF ONLY (T2, the default of planTerrain): a leaf whose samples are all below `drop` (2 cm) is dropped (no triangles where the ground is flat) and a leaf across the foot of the relief splits down to `edge` (2 m) so that
+//     the mesh hugs the lifted ground. The mode of the tests of the relief and of a headless build of the builder alone.
+//   COVER (T3, `o.cover` = the convex pieces of the garden outline, gardenPieces()): the mesh is the WHOLE FLOOR of the garden, hills and flat lawn alike: every leaf that touches the polygon is kept (flat ground is a big leaf of
+//     16 m, two triangles), the leaves that cross the outline are clipped to it EXACTLY (each emitted triangle is clipped against the convex pieces of the polygon: convex x convex, the canonical cut points of
+//     environment/clip.js, so neighbours get bit-identical vertices), so nothing lies outside the fence and the garden's own ground material paints everything inside it. The environment ground is cut out under it
+//     (HOOKS.groundHoles, an inset polygon: the terrain overlaps the ground by 0.3 m all round, so no crack shows through).
+// Triangles go to the 64 m chunk of their leaf (one mesh and one draw per chunk that has any, merged down to `drawsMax`). NO COLLIDERS: the player and the pedestrians follow heightAt (the HEIGHT_PATCH is the same function).
+// The material is the garden's own ground (ground-material.js; passed to buildTerrain) or, without one (a headless test of the builder alone), a PLACEHOLDER: a toon vertex-coloured grass, darker on slopes.
 import * as THREE from 'three';
 import { registerLOD } from '../../core/spatial.js';
+import { clipHalf, area2, triangulateRing, boxOfPoly } from '../environment/clip.js';
 import { gardenHeight, RELIEF_BOX } from './height.js';
+import { GARDEN } from './data/footprints.js';
 
 export const TERRAIN = Object.freeze({
   chunk: 64,            // metres: the chunk grid of the meshes (aligned to multiples of 64 on the project frame)
   tol: 0.05,            // metres: the largest allowed distance between the mesh and gardenHeight (asserted on the built plan: tools/tauride-height-test.mjs, measurePlan)
   split: 0.04,          // metres: the error at which a leaf splits (below tol: the fan of a leaf with hanging midpoints is not the two-triangle quad that the split test measures)
-  top: 16,              // metres: the first leaf size (a power of two); a leaf is dropped when no sample of it is lifted
+  top: 16,              // metres: the first leaf size (a power of two); in the relief-only mode a leaf is dropped when no sample of it is lifted, in the cover mode flat leaves stay
   drop: 0.02,           // metres: below this a sample counts as flat ground (2 cm is not seen on a lawn and is the largest step between an open mesh border and the ground; below `split`)
-  edge: 2,              // metres: the smallest leaf that may still straddle the foot of the relief (lifted and flat samples in one leaf): the mesh follows the 2 cm contour within this
+  edge: 2,              // metres: (relief-only mode) the smallest leaf that may still straddle the foot of the relief (lifted and flat samples in one leaf): the mesh follows the 2 cm contour within this
   drawsMax: 16,
   trianglesTarget: 40000,
+  lift: 0.005,          // metres: the garden's own floor is drawn this much above the environment ground (a mesh offset, the plan and heightAt are exact): where the two overlap (the 6 cm round the outline, HOOKS.groundHoles) the floor wins by geometry, not by a tie of the depth bias
 });
 
 const hOf = (gh, x, z) => gh(x, z) ?? 0;
+/** distance of the point p to the segment a-b (all [x, z]) */
+function segDist(p, a, b) {
+  const dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz, t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / l2)) : 0;
+  return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dz);
+}
 
-/** The plan of the terrain meshes for a height function `gh` over `box` ([x0, x1, z0, z1]): { chunks: [{ cx, cz, x0, z0, pos, nrm, col, idx, tris }], tris, leaves, splits, stats }. Pure and deterministic. */
+/** The triangles of a ring merged into convex polygons (Hertel-Mehlhorn: two pieces that share an edge become one when the union is convex; counter-clockwise, strictly convex): fewer pieces, fewer slivers where the
+ *  outline is nearly straight (the earcut fan of the garden outline has a 7 mm wide triangle). Deterministic. */
+export function mergeConvex(tris) {
+  const polys = tris.map((t) => t.slice()), same = (p, q) => p[0] === q[0] && p[1] === q[1];
+  const convex = (poly) => { const n = poly.length; for (let i = 0; i < n; i++) { const a = poly[i], b = poly[(i + 1) % n], c = poly[(i + 2) % n]; if ((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) < -1e-9) return false; } return true; };
+  for (let again = true; again;) {
+    again = false;
+    search: for (let i = 0; i < polys.length; i++) for (let j = i + 1; j < polys.length; j++) {
+      const P = polys[i], Q = polys[j], n = P.length, m = Q.length;
+      for (let e = 0; e < n; e++) {
+        const a = P[e], b = P[(e + 1) % n];
+        for (let f = 0; f < m; f++) {
+          if (!(same(Q[f], b) && same(Q[(f + 1) % m], a))) continue;
+          const merged = []; for (let k = 1; k <= n; k++) merged.push(P[(e + k) % n]);          // b ... a
+          for (let k = 2; k < m; k++) merged.push(Q[(f + k) % m]);                              // the rest of Q, from the vertex after a back to the one before b
+          if (!convex(merged)) continue;
+          polys[i] = merged; polys.splice(j, 1); again = true; break search;
+        }
+      }
+    }
+  }
+  return polys;
+}
+/** The convex pieces (counter-clockwise in the (x, z) plane) of a garden ring: what planTerrain clips to. */
+export function gardenPieces(ring = GARDEN.o) { return mergeConvex(triangulateRing(ring)); }
+
+/** The plan of the terrain meshes for a height function `gh` over `box` ([x0, x1, z0, z1]): { chunks: [{ cx, cz, x0, z0, pos, nrm, col, idx, tris }], tris, leaves, splits, stats }. Pure and deterministic.
+ *  o.cover = the convex pieces of the garden outline (gardenPieces()) -> the whole floor of the garden, clipped to the outline `o.ring` (default: the garden outline); absent -> the relief only (T2). */
 export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
-  const T = { ...TERRAIN, ...o }, CH = T.chunk, TOL = T.split;
+  const T = { ...TERRAIN, ...o }, CH = T.chunk, TOL = T.split, pieces = o.cover || null;
+  const ringFlat = o.ring || GARDEN.o, ringPts = []; for (let i = 0; i < ringFlat.length; i += 2) ringPts.push([ringFlat[i], ringFlat[i + 1]]);
+  let fallbacks = 0;
+  // COVER mode: the lattice is shifted by a dyadic fraction of a metre (152/4096, 211/4096 m: exact in float32 and in every sum and average of the quadtree) so that no vertex of the outline, which OSM rounds to 0.1 m,
+  // lies exactly on a lattice line (a vertex on the edge between two leaves would be on the edge of the clipped neighbour and not on the edge of the unclipped one: a T-junction crack)
+  const SX = pieces ? (o.shift ? o.shift[0] : 152 / 4096) : 0, SZ = pieces ? (o.shift ? o.shift[1] : 211 / 4096) : 0;
   const I0 = Math.floor(box[0] / CH) * CH, J0 = Math.floor(box[2] / CH) * CH, W = Math.ceil((box[1] - I0) / CH) * CH, H = Math.ceil((box[3] - J0) / CH) * CH;
   const lev = new Int8Array(W * H).fill(-1);                      // per 1 m cell: log2 of the size of the meshed leaf that covers it, -1 = none
   const fill = (i, j, s, L) => { for (let b = j; b < j + s; b++) for (let a = i; a < i + s; a++) lev[b * W + a] = L; };
   const levAt = (i, j) => (i < 0 || j < 0 || i >= W || j >= H ? -1 : lev[j * W + i]);
   const log2 = (s) => Math.round(Math.log2(s));
+  // the part of the square [x, x + s] x [z, z + s] that lies inside the garden polygon, as a fraction (the pieces are interior-disjoint, so the clipped areas add up)
+  const pbox = pieces ? pieces.map(boxOfPoly) : null;
+  const covered = (x, z, s) => {
+    let a = 0;
+    for (let q = 0; q < pieces.length; q++) {
+      const b = pbox[q]; if (b[0] >= x + s || b[1] <= x || b[2] >= z + s || b[3] <= z) continue;
+      let poly = [[x, z], [x + s, z], [x + s, z + s], [x, z + s]]; const P = pieces[q];
+      for (let e = 0; e < P.length && poly.length >= 3; e++) poly = clipHalf(poly, P[e], P[(e + 1) % P.length], true);
+      if (poly.length >= 3) a += area2(poly) / 2;
+    }
+    return a / (s * s);
+  };
   // the samples of a leaf: n x n cells of step s / n (n = min(s, 16): a step of one metre up to 16 m leaves) -> { max, err (best diagonal), diag }
   function measure(i, j, s) {
     const n = Math.min(s, 16), st = s / n, row = new Float64Array((n + 1) * (n + 1));
     let max = 0, min = Infinity;
-    for (let b = 0; b <= n; b++) for (let a = 0; a <= n; a++) { const h = hOf(gh, I0 + i + a * st, J0 + j + b * st); row[b * (n + 1) + a] = h; if (h > max) max = h; if (h < min) min = h; }
+    for (let b = 0; b <= n; b++) for (let a = 0; a <= n; a++) { const h = hOf(gh, I0 + SX + i + a * st, J0 + SZ + j + b * st); row[b * (n + 1) + a] = h; if (h > max) max = h; if (h < min) min = h; }
     if (max < T.drop) return { max, min, err: 0, diag: 0 };
     const h00 = row[0], h10 = row[n], h01 = row[n * (n + 1)], h11 = row[n * (n + 1) + n];
     let e0 = 0, e1 = 0;
@@ -48,16 +104,20 @@ export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
     }
     return e0 <= e1 ? { max, min, err: e0, diag: 0 } : { max, min, err: e1, diag: 1 };
   }
-  // 1. the first leaves: every `top` m cell of the lattice with any lifted sample
+  // 1. the first leaves: relief only: every `top` m cell of the lattice with any lifted sample; cover: every cell that touches the garden polygon
   let leaves = [], splits = 0;
-  for (let j = 0; j < H; j += T.top) for (let i = 0; i < W; i += T.top) { const m = measure(i, j, T.top); if (m.max >= T.drop) leaves.push({ i, j, s: T.top }); }
+  for (let j = 0; j < H; j += T.top) for (let i = 0; i < W; i += T.top) {
+    if (pieces) { const c = covered(I0 + SX + i, J0 + SZ + j, T.top); if (c > 1e-9) leaves.push({ i, j, s: T.top, cov: c }); }
+    else { const m = measure(i, j, T.top); if (m.max >= T.drop) leaves.push({ i, j, s: T.top }); }
+  }
   // 2. the adaptive split
   const out = [];
   const queue = leaves; leaves = [];
+  const child = (lf, a, b, h) => { const c = { i: lf.i + a, j: lf.j + b, s: h }; if (pieces) { c.cov = covered(I0 + SX + c.i, J0 + SZ + c.j, h); if (c.cov <= 1e-9) return null; } return c; };
   while (queue.length) {
     const lf = queue.pop(), m = measure(lf.i, lf.j, lf.s);
-    if (m.max < T.drop) continue;                                  // all flat: no triangles
-    if ((m.err > TOL || (m.min < T.drop && lf.s > T.edge)) && lf.s > 1) { const h = lf.s / 2; splits++; for (const [a, b] of [[0, 0], [h, 0], [0, h], [h, h]]) queue.push({ i: lf.i + a, j: lf.j + b, s: h }); continue; }
+    if (!pieces && m.max < T.drop) continue;                       // all flat: no triangles (relief only)
+    if ((m.err > TOL || (!pieces && m.min < T.drop && lf.s > T.edge)) && lf.s > 1) { const h = lf.s / 2; splits++; for (const [a, b] of [[0, 0], [h, 0], [0, h], [h, h]]) { const c = child(lf, a, b, h); if (c) queue.push(c); } continue; }
     lf.diag = m.diag; out.push(lf);
   }
   leaves = out;
@@ -72,7 +132,9 @@ export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
       }
       if (!bad) { next.push(lf); continue; }
       again = true; splits++; const h = lf.s / 2;
-      for (const [a, b] of [[0, 0], [h, 0], [0, h], [h, h]]) { const c = { i: lf.i + a, j: lf.j + b, s: h }; c.diag = measure(c.i, c.j, c.s).diag; fill(c.i, c.j, c.s, log2(h)); next.push(c); }
+      // (a cover-mode leaf that is split by the balance un-fills its cells first: the children that lie outside the polygon do not exist)
+      if (pieces) fill(lf.i, lf.j, lf.s, -1);
+      for (const [a, b] of [[0, 0], [h, 0], [0, h], [h, h]]) { const c = child(lf, a, b, h); if (!c) continue; c.diag = measure(c.i, c.j, c.s).diag; fill(c.i, c.j, c.s, log2(h)); next.push(c); }
     }
     leaves = next;
   }
@@ -81,10 +143,11 @@ export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
   const colorOf = makeColor();
   const norm = (x, z) => { const dx = hOf(gh, x + NB, z) - hOf(gh, x - NB, z), dz = hOf(gh, x, z + NB) - hOf(gh, x, z - NB); const g = Math.hypot(dx, dz) / (2 * NB), l = Math.hypot(dx / (2 * NB), 1, dz / (2 * NB)); return [-dx / (2 * NB) / l, 1 / l, -dz / (2 * NB) / l, g]; };
   for (const lf of leaves) {
-    const x = I0 + lf.i, z = J0 + lf.j, cx = Math.floor(x / CH), cz = Math.floor(z / CH), key = cx + ',' + cz;
+    const x = I0 + lf.i + SX, z = J0 + lf.j + SZ, cx = Math.floor((I0 + lf.i) / CH), cz = Math.floor((J0 + lf.j) / CH), key = cx + "," + cz;
     let c = chunks.get(key); if (!c) chunks.set(key, c = { cx, cz, x0: cx * CH, z0: cz * CH, vmap: new Map(), pos: [], nrm: [], col: [], idx: [] });
     const vert = (px, pz) => {
-      const k = px * 4096 + pz, hit = c.vmap.get(k); if (hit !== undefined) return hit;
+      // integer lattice points have a numeric key (injective: |z| < 2048); the cut points of the polygon clip are keyed by their float32 values (the canonical cut gives bit-identical doubles to both neighbours)
+      const k = Number.isInteger(px) && Number.isInteger(pz) ? px * 4096 + pz : Math.fround(px) + ',' + Math.fround(pz), hit = c.vmap.get(k); if (hit !== undefined) return hit;
       const h = hOf(gh, px, pz), n = norm(px, pz), col = colorOf(px, pz, n[3]), id = c.pos.length / 3;
       c.pos.push(px, h, pz); c.nrm.push(n[0], n[1], n[2]); c.col.push(col[0], col[1], col[2]); c.vmap.set(k, id); return id;
     };
@@ -92,12 +155,50 @@ export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
     const half = (i0, j0, di, dj) => s > 1 && (levAt(i0, j0) === L - 1 || levAt(i0 + di, j0 + dj) === L - 1);      // the neighbour across an edge has leaves of half the size (either half of the edge may be meshed)
     const hang = { b: half(lf.i + h2 - 1, lf.j - 1, 1, 0), r: half(lf.i + s, lf.j + h2 - 1, 0, 1), t: half(lf.i + h2 - 1, lf.j + s, 1, 0), l: half(lf.i - 1, lf.j + h2 - 1, 0, 1) };
     const P = { x0: x, x1: x + s, z0: z, z1: z + s, xm: x + h2, zm: z + h2 };
-    const emit = (a, b, d) => {
+    const push = (a, b, d) => {
       // orientation: counter-clockwise seen from +y (the normal of (b - a) x (d - a) points up)
       const cr = (b[0] - a[0]) * (d[1] - a[1]) - (b[1] - a[1]) * (d[0] - a[0]);       // x * z' - z * x' (the y component of the cross product with x east, z south, is -(that))
       const A = vert(a[0], a[1]), B = vert(b[0], b[1]), C = vert(d[0], d[1]);
       if (A === B || B === C || A === C) return;
       if (cr > 0) c.idx.push(A, C, B); else c.idx.push(A, B, C);
+    };
+    const partial = !!pieces && lf.cov < 1 - 1e-9;                                      // a leaf across the outline: every triangle is clipped to the polygon
+    const emit = !partial ? push : (a, b, d) => {
+      let tri = [a, b, d]; if (area2(tri) < 0) tri = [a, d, b];
+      // T clipped to the polygon: the OUTLINE (an arbitrary simple polygon) is the subject of Sutherland-Hodgman and the triangle (convex) the clip, so the result has the vertices of the outline inside T and the
+      // cut points of the outline edges with the three edges of T, and NO internal diagonal (a clip against the convex pieces would cut every triangle that a diagonal crosses, and a neighbour that lies
+      // wholly inside would not be cut: a T-junction crack). The cut points are canonical (clipHalf: the same two outline endpoints in the same order for both triangles that share an edge).
+      let poly = ringPts;
+      for (let e = 0; e < 3 && poly.length >= 3; e++) poly = clipHalf(poly, tri[e], tri[(e + 1) % 3], true);
+      if (poly.length < 3) return;
+      const at = Math.abs(area2(tri)) / 2, ap = Math.abs(area2(poly)) / 2;
+      if (ap < 1e-7) return;
+      if (Math.abs(at - ap) <= 1e-9 * at + 1e-12) { push(a, b, d); return; }                      // wholly inside: unchanged
+      // snap the cut points to 1/4096 m (0.24 mm: exact in float32 below 2048 m): two neighbours that cut the same edge by the same line differ by about 1e-13 m before this, and one float32 ulp would be a crack
+      poly = poly.map((v) => [Math.round(v[0] * 4096) / 4096, Math.round(v[1] * 4096) / 4096]).filter((v, k, all) => { const u = all[(k + all.length - 1) % all.length]; return !(u[0] === v[0] && u[1] === v[1]); });
+      // the clip of a concave outline leaves zero-width spikes (a path out along an edge of T and back along it, joining two pieces of the intersection): cut them off
+      for (let again = true; again && poly.length >= 3;) {
+        again = false;
+        for (let k = 0; k < poly.length; k++) {
+          const p0 = poly[(k + poly.length - 1) % poly.length], p1 = poly[k], p2 = poly[(k + 1) % poly.length];
+          if (segDist(p2, p0, p1) < 5e-4 || segDist(p0, p1, p2) < 5e-4) { poly = poly.filter((_, q) => q !== k); again = true; break; }
+        }
+      }
+      if (poly.length < 3) return;
+      let convexPoly = poly.length >= 3; for (let k = 0; k < poly.length && convexPoly; k++) { const p0 = poly[k], p1 = poly[(k + 1) % poly.length], p2 = poly[(k + 2) % poly.length], cr = (p1[0] - p0[0]) * (p2[1] - p1[1]) - (p1[1] - p0[1]) * (p2[0] - p1[0]); if ((area2(poly) > 0 ? cr : -cr) < -1e-9) convexPoly = false; }
+      if (convexPoly) { for (let k = 1; k + 1 < poly.length; k++) push(poly[0], poly[k], poly[k + 1]); return; }
+      // not convex (the outline cuts a notch out of T): earcut, checked against the area (a weakly simple polygon can confuse it); the fallback is the clip against the convex pieces
+      const tris = triangulateRing(poly.flat());
+      let sum = 0; for (const q of tris) sum += Math.abs(area2(q)) / 2;
+      if (Math.abs(sum - Math.abs(area2(poly)) / 2) <= 2e-4 + 1e-6 * ap) { for (const q of tris) push(q[0], q[1], q[2]); return; }
+      fallbacks++;
+      for (let q = 0; q < pieces.length; q++) {
+        const Q = pieces[q]; let pc = tri;
+        for (let e = 0; e < Q.length && pc.length >= 3; e++) pc = clipHalf(pc, Q[e], Q[(e + 1) % Q.length], true);
+        if (pc.length < 3 || Math.abs(area2(pc)) < 1e-6) continue;
+        pc = pc.map((v) => [Math.round(v[0] * 4096) / 4096, Math.round(v[1] * 4096) / 4096]);
+        for (let k = 1; k + 1 < pc.length; k++) push(pc[0], pc[k], pc[k + 1]);
+      }
     };
     // a right triangle A, B (right angle), C with midpoints on AB and BC, the hypotenuse CA without
     const rt = (A, B, C, mAB, mBC) => {
@@ -126,7 +227,7 @@ export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
     list[best] = { cx: a.cx, cz: a.cz, x0: a.x0, z0: a.z0, pos, nrm, col, idx: pos.length / 3 > 65535 ? idx : Uint16Array.from(idx), tris: a.tris + b.tris, verts: a.verts + b.verts, merged: (a.merged || []).concat([[b.cx, b.cz]], b.merged || []) };
     list.splice(k, 1);
   }
-  return { chunks: list, tris, leaves: leaves.length, splits, tol: T.tol, split: TOL, drop: T.drop, edge: T.edge, chunksBefore, box: [I0, I0 + W, J0, J0 + H] };
+  return { chunks: list, tris, leaves: leaves.length, splits, tol: T.tol, split: TOL, drop: T.drop, edge: T.edge, chunksBefore, box: [I0, I0 + W, J0, J0 + H], cover: !!pieces, clipFallbacks: fallbacks };
 }
 
 /** the placeholder grass: the mean of the ground shader's grass tones, darker with the slope, a little earth where it is steep (a smooth hash varies it by a few percent). (x, z, grad) -> [r, g, b] in the vertex colour space */
@@ -139,48 +240,64 @@ function makeColor() {
   };
 }
 
-/** The material of the environment's ground (the painterly world-space shader of environment/ground.js: its meshes are named 'env-ground' in the group 'env' of ctx.staticRoot, built before this module), or null. */
-export function groundMaterial(ctx) {
-  const env = ctx.staticRoot && ctx.staticRoot.children ? ctx.staticRoot.children.find((o) => o.name === 'env') : null;
-  const grp = env && env.getObjectByName ? env.getObjectByName('env-ground') : null;
-  const mesh = grp && grp.children ? grp.children.find((o) => o.isMesh && o.material && typeof o.material.onBeforeCompile === 'function') : null;
-  return mesh ? mesh.material : null;
-}
-
 /**
- * The material of the relief. THE GROUND'S OWN SHADER when the environment's ground exists: its colour is a function of the world position (x, z) alone (the class mask of the OSM data, the noise tile, the
- * lawn / gravel / earth patches), so a hill painted with the same program shows exactly what the flat ground shows at the same (x, z): no seam along the contour, the grey way paint stays visible on the
- * hill. The copy is a second `ctx.mat.toon` material that takes the ground's onBeforeCompile and customProgramCacheKey (the same compiled program, the same shared uniform objects) WITHOUT its
- * polygonOffset: the ground is pushed back by 2 depth units so that everything above it wins, and the relief (2 cm and more above the ground) must keep winning over it. No ground (a headless test of the
- * builder alone) -> the vertex-coloured placeholder grass of makeColor().
+ * The meshes of a plan: one Mesh per chunk (`tauride-terrain-<cx>_<cz>`), noBatch + registerLOD(Infinity) like the chunks of environment/ground.js, no colliders. opts.material = the garden's own ground material
+ * (ground-material.js; the geometry then carries no vertex colour); without it the vertex-coloured placeholder. opts.noOutline (default: with a material): the colour pass only, the outline pass draws no
+ * hairline at the foot of a hill (T2 finding). Returns { group, triangles, draws, shared (a ground material was given), meshes }.
  */
-export function terrainMaterial(ctx) {
-  const gm = groundMaterial(ctx);
-  if (!gm) return { mat: ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0.02, name: 'tauride-terrain' }), shared: false };
-  const mat = ctx.mat.toon('#ffffff', { paint: 0.02, name: 'tauride-terrain-ground' });
-  mat.onBeforeCompile = gm.onBeforeCompile; mat.customProgramCacheKey = gm.customProgramCacheKey;
-  return { mat, shared: true };
-}
-
-/** The meshes of a plan: one Mesh per chunk (`tauride-terrain-<cx>_<cz>`), noBatch + registerLOD(Infinity) like the chunks of environment/ground.js, no colliders. Returns { group, triangles, draws, shared (the ground's own shader) }. */
-export function buildTerrain(ctx, parent, plan) {
+export function buildTerrain(ctx, parent, plan, opts = {}) {
   const group = new THREE.Group(); group.name = 'tauride-terrain';
-  const { mat, shared } = terrainMaterial(ctx);
+  const own = !!opts.material, mat = opts.material || ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0.02, name: 'tauride-terrain' });
+  const noOutline = opts.noOutline ?? own;
   for (const c of plan.chunks) {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(c.pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(c.nrm, 3)); if (!shared) g.setAttribute('color', new THREE.BufferAttribute(c.col, 3));
+    g.setAttribute('position', new THREE.BufferAttribute(c.pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(c.nrm, 3)); if (!own) g.setAttribute('color', new THREE.BufferAttribute(c.col, 3));
     g.setIndex(new THREE.BufferAttribute(c.idx, 1)); g.computeBoundingBox(); g.computeBoundingSphere();
     const m = new THREE.Mesh(g, mat); m.name = `tauride-terrain-${c.cx}_${c.cz}`; m.receiveShadow = true; m.castShadow = false;
-    if (shared) m.renderOrder = -1;      // the painterly shader is dear: drawn BEFORE the ground (three sorts opaque meshes by renderOrder first, then by material id = creation order, the ground first), so the ground fragments under a hill fail the early depth test instead of being shaded twice
-    ctx.noBatch(m); group.add(m);
+    if (own) m.position.y = TERRAIN.lift;
+    ctx.noBatch(m); if (noOutline) ctx.noOutline(m); group.add(m);
   }
   parent.add(group); group.updateMatrixWorld(true);
   for (const m of group.children) registerLOD(m, Infinity);
-  return { group, triangles: plan.tris, draws: plan.chunks.length, shared };
+  return { group, triangles: plan.tris, draws: plan.chunks.length, shared: own, meshes: group.children.slice() };
 }
 
-/** The distance between the planned mesh and `gh`: rasterises every triangle on a `step` m lattice and compares the interpolated height with gh. { maxErr, at, samples, uncovered (samples at or above the plan's `drop` that no triangle covers), boundaryHigh (the highest point of an open edge), nonManifold, padArea (m2 of the footprint of all triangles), apronArea (m2 of the triangles with no corner above `drop`), liftedArea (m2 of the lattice points at or above `drop`) } */
-export function measurePlan(plan, gh = gardenHeight, step = 0.5) {
+/** The height of the PLANNED mesh at (x, z) (the triangle that holds the point, barycentric), or null where no triangle is: what the path ribbons and the stairs are draped on. Triangles are bucketed on an 8 m grid. */
+export function makeMeshHeight(plan, cell = 8) {
+  const b = plan.box, nx = Math.ceil((b[1] - b[0]) / cell), nz = Math.ceil((b[3] - b[2]) / cell), grid = new Array(nx * nz);
+  let n = 0; for (const c of plan.chunks) n += c.idx.length / 3;
+  const T = new Float64Array(n * 10);
+  let t = 0;
+  for (const c of plan.chunks) {
+    const p = c.pos, ix = c.idx;
+    for (let q = 0; q < ix.length; q += 3) {
+      const a = ix[q] * 3, bb = ix[q + 1] * 3, d = ix[q + 2] * 3, o = t * 10;
+      const x0 = p[a], z0 = p[a + 2], x1 = p[bb], z1 = p[bb + 2], x2 = p[d], z2 = p[d + 2];
+      T[o] = x0; T[o + 1] = z0; T[o + 2] = p[a + 1]; T[o + 3] = x1; T[o + 4] = z1; T[o + 5] = p[bb + 1]; T[o + 6] = x2; T[o + 7] = z2; T[o + 8] = p[d + 1];
+      T[o + 9] = (z1 - z2) * (x0 - x2) + (x2 - x1) * (z0 - z2);                                              // the denominator of the barycentric weights
+      const i0 = Math.max(0, Math.floor((Math.min(x0, x1, x2) - b[0]) / cell)), i1 = Math.min(nx - 1, Math.floor((Math.max(x0, x1, x2) - b[0]) / cell));
+      const j0 = Math.max(0, Math.floor((Math.min(z0, z1, z2) - b[2]) / cell)), j1 = Math.min(nz - 1, Math.floor((Math.max(z0, z1, z2) - b[2]) / cell));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * nx + i; (grid[k] || (grid[k] = [])).push(t); }
+      t++;
+    }
+  }
+  return (x, z) => {
+    const i = Math.floor((x - b[0]) / cell), j = Math.floor((z - b[2]) / cell);
+    if (i < 0 || j < 0 || i >= nx || j >= nz) return null;
+    const list = grid[j * nx + i]; if (!list) return null;
+    for (let q = 0; q < list.length; q++) {
+      const o = list[q] * 10, den = T[o + 9]; if (Math.abs(den) < 1e-12) continue;
+      const l1 = ((T[o + 4] - T[o + 7]) * (x - T[o + 6]) + (T[o + 6] - T[o + 3]) * (z - T[o + 7])) / den, l2 = ((T[o + 7] - T[o + 1]) * (x - T[o + 6]) + (T[o] - T[o + 6]) * (z - T[o + 7])) / den, l3 = 1 - l1 - l2;
+      if (l1 < -1e-9 || l2 < -1e-9 || l3 < -1e-9) continue;
+      return l1 * T[o + 2] + l2 * T[o + 5] + l3 * T[o + 8];
+    }
+    return null;
+  };
+}
+
+/** The distance between the planned mesh and `gh`: rasterises every triangle on a `step` m lattice and compares the interpolated height with gh. { maxErr, at, samples, uncovered (samples at or above the plan's `drop` that no triangle covers), boundaryHigh (the highest point of an open edge), nonManifold, padArea (m2 of the footprint of all triangles), apronArea (m2 of the triangles with no corner above `drop`), liftedArea (m2 of the lattice points at or above `drop`) }.
+ *  With `ring` (the garden outline, flat): also { ringArea, polyUncovered (lattice points inside the ring that no triangle covers), polyTotal, vertsOutside (the farthest a triangle corner lies outside the ring, m), trianglesOutside (triangles whose centroid is outside) } for the cover mode. */
+export function measurePlan(plan, gh = gardenHeight, step = 0.5, ring = null) {
   let maxErr = 0, at = null, samples = 0, padArea = 0, apronArea = 0;
   const seen = new Map(), drop = plan.drop ?? TERRAIN.drop;
   for (const c of plan.chunks) {
@@ -212,5 +329,30 @@ export function measurePlan(plan, gh = gardenHeight, step = 0.5) {
   }
   let boundaryHigh = 0, nonManifold = 0;
   for (const r of em.values()) { if (r.n === 1 && r.h > boundaryHigh) boundaryHigh = r.h; if (r.n > 2) nonManifold++; }
-  return { maxErr, at, samples, lifted, uncovered, boundaryHigh, nonManifold, padArea, apronArea, liftedArea: lifted * step * step };
+  const res = { maxErr, at, samples, lifted, uncovered, boundaryHigh, nonManifold, padArea, apronArea, liftedArea: lifted * step * step };
+  if (ring) {
+    const inR = (x, z) => { let c = false; for (let i = 0, j = ring.length - 2; i < ring.length; j = i, i += 2) if ((ring[i + 1] > z) !== (ring[j + 1] > z) && x < (ring[j] - ring[i]) * (z - ring[i + 1]) / (ring[j + 1] - ring[i + 1]) + ring[i]) c = !c; return c; };
+    const dR = (x, z) => { let m = Infinity; for (let i = 0; i < ring.length; i += 2) { const k = (i + 2) % ring.length, ax = ring[i], az = ring[i + 1], dx = ring[k] - ax, dz = ring[k + 1] - az, l2 = dx * dx + dz * dz, t = l2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0; m = Math.min(m, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return m; };
+    let ra = 0; for (let i = 0; i < ring.length; i += 2) { const j = (i + 2) % ring.length; ra += ring[i] * ring[j + 1] - ring[j] * ring[i + 1]; }
+    let polyUncovered = 0, polyTotal = 0, farOut = 0, trianglesOutside = 0;
+    for (let z = b[2]; z <= b[3]; z += step) for (let x = b[0]; x <= b[1]; x += step) if (inR(x, z)) { polyTotal++; if (!seen.has(Math.round(x / step) * 100000 + Math.round(z / step))) polyUncovered++; }
+    for (const c of plan.chunks) {
+      const p = c.pos, ix = c.idx;
+      for (let t = 0; t < ix.length; t += 3) {
+        let cx = 0, cz = 0;
+        for (let e = 0; e < 3; e++) { const x = p[ix[t + e] * 3], z = p[ix[t + e] * 3 + 2]; cx += x / 3; cz += z / 3; if (!inR(x, z)) farOut = Math.max(farOut, dR(x, z)); }
+        if (!inR(cx, cz)) trianglesOutside++;
+      }
+    }
+    // watertight in the exact positions of the float32 vertices: an edge that only one triangle uses must lie on the outline (anywhere else it is a T-junction crack), none lies in more than two
+    const ex = new Map(), ek = (x, z) => x + ',' + z;
+    for (const c of plan.chunks) for (let t = 0; t < c.idx.length; t += 3) for (let e = 0; e < 3; e++) {
+      const i = c.idx[t + e] * 3, j = c.idx[t + (e + 1) % 3] * 3, ka = ek(c.pos[i], c.pos[i + 2]), kb = ek(c.pos[j], c.pos[j + 2]), k = ka < kb ? ka + '|' + kb : kb + '|' + ka, rec = ex.get(k);
+      if (rec) rec.n++; else ex.set(k, { n: 1, m: [(c.pos[i] + c.pos[j]) / 2, (c.pos[i + 2] + c.pos[j + 2]) / 2] });
+    }
+    let openInterior = 0, nonManifoldExact = 0, openBoundary = 0;
+    for (const r of ex.values()) { if (r.n > 2) nonManifoldExact++; else if (r.n === 1) { if (dR(r.m[0], r.m[1]) > 2e-3) openInterior++; else openBoundary++; } }
+    Object.assign(res, { ringArea: Math.abs(ra) / 2, polyUncovered, polyTotal, vertsOutside: farOut, trianglesOutside, openInterior, openBoundary, nonManifoldExact });
+  }
+  return res;
 }
