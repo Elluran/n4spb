@@ -6,7 +6,8 @@
 //   node tools/layout-golden.mjs --diff [<file>]       -> compares the current tree with a dump (default tools/golden/layout-<area>.json); exit 1 and the first differences when it changed
 //   --area <id>                                        -> dump another area (docs/AREAS.md; default: the area tools/area.mjs runs as, else 'strip'); the probe grid follows the area's play bounding box
 // Another area runs through the loader remap of its page: `node tools/area.mjs north tools/layout-golden.mjs --diff` (golden tools/golden/layout-north.json, M6 oracle: the hook set of the North must not move it),
-// `node tools/area.mjs north tools/layout-golden.mjs --out tools/golden/layout-north.json` writes it. `--area <id>` without the remap of that area would dump the strip's world under another name: refused.
+// `node tools/area.mjs north tools/layout-golden.mjs --out tools/golden/layout-north.json` writes it. `--area <id>` without the remap of that area would dump the strip's world under another name: refused. So is an `AREA=<id>` exported in the shell without the remap:
+// dump() checks the ID of the area module it really loaded (src/world/area.js) against the area it labels the dump with, and exits 2 on a mismatch (tools/north-hooks-test.mjs, group tools, tests it).
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -44,6 +45,10 @@ function summarise(v) {
 }
 
 async function dump(area) {
+  // The golden is named after the area it holds: refuse to dump a world that is not that area's (`AREA=north node tools/layout-golden.mjs --out tools/golden/layout-north.json` without the remap of tools/area.mjs
+  // would write the strip's world into the North golden). src/world/area.js is the module the loader remap replaces, so its ID is the area that layout.js and the facade are really built from.
+  const AM = await import(pathToFileURL(path.join(root, 'src/world/area.js')).href);
+  if (AM.ID !== area) { console.error(`layout-golden: the area module loaded is "${AM.ID}", not "${area}": nothing dumped. Run  node tools/area.mjs ${area} tools/layout-golden.mjs ...  (the loader remap of that area)`); process.exit(2); }
   const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);
   const C = await import(pathToFileURL(path.join(root, 'src/world/data/city.js')).href);
   const out = { schema: 1, area, layout: { consts: {}, fns: {} }, facade: {}, probes: {} };
