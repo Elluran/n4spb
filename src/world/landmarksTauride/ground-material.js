@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 import { FAR_FOG } from '../environment/farconf.js';
 import { MEADOWS, CANOPY_BELT, WORN_SPOTS, WORN_GREEN_IDS, GROUND_TUNING } from './data/ground.js';
+import * as PONDS from './data/ponds.js';
 
 export const GROUND = Object.freeze({ res: 1, pad: 3, shoreLevels: 12, maxStripeBlocks: 8, noiseSize: 128 });
 /** The look numbers that the shader text carries as constants (DESIGN values; QA round 1 of T3 moved them): where the litter starts in the canopy weight (litA .. litB: it used to start at the edge of a wood, 0.48 .. 0.58,
@@ -252,7 +253,7 @@ uniform sampler2D uMask; uniform sampler2D uNoise;
 uniform vec4 uMB; uniform vec2 uMS; uniform vec4 uStripe[${GROUND.maxStripeBlocks}]; uniform vec2 uLight; uniform vec2 uFogK;
 uniform vec3 uGA; uniform vec3 uGB; uniform vec3 uGC; uniform vec3 uGD; uniform vec3 uClover; uniform vec3 uEarth;
 uniform vec3 uLA; uniform vec3 uLB; uniform vec3 uLC; uniform vec3 uLD;
-uniform vec3 uMA; uniform vec3 uMB2; uniform vec3 uBed; uniform vec3 uWA; uniform vec3 uWB; uniform vec3 uWC;
+uniform vec3 uMA; uniform vec3 uMB2; uniform vec3 uBed; uniform vec3 uSilt; uniform vec3 uSand; uniform vec3 uWet; uniform vec3 uWA; uniform vec3 uWB; uniform vec3 uWC;
 varying vec3 vNW;
 vec4 gz(vec2 p, float s) { return texture2D(uNoise, p * s); }
 `;
@@ -305,16 +306,18 @@ const BODY = /* glsl */`
   cl *= 0.94 + 0.12 * nf;
   vec3 col = cg * mix(1.0, ${LOOK.shadeDim.toFixed(3)}, shadeK);
   col = mix(col, cl, litK);
-  // ---- the shore: mud band, the wet band of the waterline and (until T4 cuts the ponds) the bed under the water
+  // ---- the shore (T4a: the ponds are cut into the floor, data/ponds.js): the mud band, the pale sand / silt strip above the wet band, the wet band of the waterline (WET_BAND m) and the bed under the water (mud / silt)
   float d = (M.g * 255.0 - 128.0) / ${GROUND.shoreLevels.toFixed(1)};
   float dn = d + (n3.r - 0.5) * 1.8 + (n6.g - 0.5) * 0.35;
   vec3 mud = mix(uMA, uMB2, smoothstep(0.35, 0.65, n3.g)) * (0.94 + 0.12 * nf);
   float mudK = (1.0 - smoothstep(0.9, 2.6, dn)) * (0.88 - 0.30 * smoothstep(1.2, 2.4, dn));
   col = mix(col, mud, mudK);
-  float wetK = 1.0 - smoothstep(0.18, 0.62, d + (n4.g - 0.5) * 0.3);       // the 0.5 m wet band along the waterline (T4)
-  col = mix(col, mud * vec3(0.55, 0.60, 0.64), wetK * 0.9);
+  float wetK = 1.0 - smoothstep(${(PONDS.WET_BAND - 0.32).toFixed(3)}, ${(PONDS.WET_BAND + 0.12).toFixed(3)}, d + (n4.g - 0.5) * 0.3);       // the wet band along the waterline: darker, bluish, WET_BAND m wide
+  float sandK = (1.0 - smoothstep(${PONDS.WET_BAND.toFixed(3)}, ${(PONDS.WET_BAND + PONDS.SHORE_SAND).toFixed(3)}, d + (n4.g - 0.5) * 0.45)) * (1.0 - wetK) * (0.45 + 0.35 * n3.g);
+  col = mix(col, uSand * (0.94 + 0.12 * nf), sandK);
+  col = mix(col, uWet * (0.92 + 0.16 * n3.g), wetK * 0.9);
   float inW = 1.0 - smoothstep(-0.35, 0.0, d + (n4.g - 0.5) * 0.25);
-  col = mix(col, uBed * (0.90 + 0.20 * n3.g), inW);
+  col = mix(col, mix(uBed, uSilt, smoothstep(0.30, 0.70, n3.g)) * (0.90 + 0.20 * n3.g), inW);
   // ---- worn ground: trampled patches, then packed earth (benches, gates, junctions, plazas, the verge of the paths)
   float wn = M.b + (n2.r - 0.5) * 0.5 + (n4.g - 0.5) * 0.18;
   float wornK = smoothstep(0.34, 0.50, wn) * (1.0 - inW);
@@ -363,7 +366,7 @@ const FOG = /* glsl */`
 export const GROUND_COLORS = Object.freeze({
   uGA: '#5f8a34', uGB: '#78a043', uGC: '#4a7430', uGD: '#8ba84a', uClover: '#74a350', uEarth: '#7a6a50',
   uLA: '#5c7832', uLB: '#6a6e3a', uLC: '#4b6a2c', uLD: '#8b8048',
-  uMA: '#6c5b42', uMB2: '#564630', uBed: '#5b5a3f', uWA: '#988462', uWB: '#a69370', uWC: '#b4a686',
+  uMA: '#6c5b42', uMB2: '#564630', uBed: PONDS.BED_COLORS.mud, uSilt: PONDS.BED_COLORS.silt, uSand: PONDS.BED_COLORS.sand, uWet: PONDS.BED_COLORS.wet, uWA: '#988462', uWB: '#a69370', uWC: '#b4a686',
 });
 
 /** the direction TO the sun on the ground plane (x, z), normalised: the engine's own sun (ctx.sunDir = layout.SUN_DIR at the day preset), LOOK.sun when the context has none */
@@ -410,7 +413,7 @@ export function gardenGroundMaterial(ctx, mask, noise = null, meadows = MEADOWS)
       .replace('#include <map_fragment>', '#include <map_fragment>\n' + BODY)
       .replace('#include <fog_fragment>', FOG);
   };
-  mat.customProgramCacheKey = () => 'paint|tauride-ground-t3-r2';
+  mat.customProgramCacheKey = () => 'paint|tauride-ground-t4a';
   mat.userData.tauride = 'ground';
   return { mat, uniforms: U, maskTexture, noiseTexture };
 }

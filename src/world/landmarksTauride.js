@@ -13,7 +13,9 @@ import { PALACE_PARTS } from './landmarksTauride/palace-parts.js';
 import { paradnyBuildings } from './landmarksTauride/paradny-buildings.js';
 import { paradnyCourts } from './landmarksTauride/paradny-courts.js';
 import { GREEN } from './data/city.js';
-import { gardenHeight, RELIEF_BOX } from './landmarksTauride/height.js';
+import { gardenHeight, RELIEF_BOX, GARDEN_SHORE } from './landmarksTauride/height.js';
+import { planPonds, buildPonds } from './landmarksTauride/ponds.js';
+import * as PONDS from './landmarksTauride/data/ponds.js';
 import { planTerrain, buildTerrain, gardenPieces, makeMeshHeight } from './landmarksTauride/terrain-mesh.js';
 import { planGroundMask, gardenGroundMaterial, collectGroundInputs, makeNoiseTexture } from './landmarksTauride/ground-material.js';
 import { planPaths, buildPaths } from './landmarksTauride/paths-draped.js';
@@ -74,8 +76,10 @@ export function build(ctx) {
   const noise=makeNoiseTexture(),ground=gardenGroundMaterial(ctx,mask,noise);
   const terrain=buildTerrain(ctx,root,tplan,{material:ground.mat});
   const meshHeight=makeMeshHeight(tplan),pplan=planPaths(DP.PATHS,{meshHeight,gh:gardenHeight}),paths=buildPaths(ctx,root,pplan,noise);
+  // T4a: the water surface at the one level of data/ponds.js and the impassable shore (the bowls and the banks are the floor above: gardenHeight is the terrain, ponds included). The bridges are T4b.
+  const pondsPlan=planPonds(),ponds=buildPonds(ctx,root,pondsPlan);
   ctx.addStatic(root);
   // The service the engine reads (docs/AREAS.md 9.1 HOOKS.deckServices, docs/TAURIDE-REMAKE.md T1): deckY(x, z) = the Paradny podium (3.3 m) and its eight stair ramps, else null; cars (drive/handling.js)
   // and walkers (people/nav.js surfaceY) ask it FIRST. The later phases compose the garden bridges into it (`courts.deckY(x,z) ?? bridgesDeckY(x,z)`). No `entrances`: PRUNE_SERVICES does not list this module.
-  ctx.services.landmarksTauride={paradny:courts,deckY:(x,z)=>courts.deckY(x,z),terrain:{heightAt:gardenHeight,meshHeight,triangles:terrain.triangles,draws:terrain.draws,cover:true},ground:{mask:mask.stats,maskBytes:mask.data.length,material:ground.mat},paths:{triangles:paths.triangles,draws:paths.draws,stats:pplan.stats,stairs:pplan.stairs},kitTriangles:K.tris,triangles:K.tris+terrain.triangles+paths.triangles};
+  ctx.services.landmarksTauride={paradny:courts,deckY:(x,z)=>courts.deckY(x,z),terrain:{heightAt:gardenHeight,meshHeight,triangles:terrain.triangles,draws:terrain.draws,cover:true},ground:{mask:mask.stats,maskBytes:mask.data.length,material:ground.mat},paths:{triangles:paths.triangles,draws:paths.draws,stats:pplan.stats,stairs:pplan.stairs},ponds:{y:PONDS.WATER_Y,triangles:ponds.triangles,draws:ponds.draws,colliders:ponds.colliders,buildMs:ponds.buildMs,stats:pondsPlan.stats,mesh:ponds.mesh,inWater:(x,z)=>GARDEN_SHORE.dist(x,z)<0,shoreDist:GARDEN_SHORE.dist},kitTriangles:K.tris,triangles:K.tris+terrain.triangles+paths.triangles+ponds.triangles};
 }

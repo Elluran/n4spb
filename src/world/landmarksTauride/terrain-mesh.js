@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { registerLOD } from '../../core/spatial.js';
 import { clipHalf, area2, triangulateRing, boxOfPoly } from '../environment/clip.js';
-import { gardenHeight, RELIEF_BOX } from './height.js';
+import { reliefHeight, RELIEF_BOX } from './height.js';
 import { GARDEN } from './data/footprints.js';
 
 export const TERRAIN = Object.freeze({
@@ -64,7 +64,7 @@ export function gardenPieces(ring = GARDEN.o) { return mergeConvex(triangulateRi
 
 /** The plan of the terrain meshes for a height function `gh` over `box` ([x0, x1, z0, z1]): { chunks: [{ cx, cz, x0, z0, pos, nrm, col, idx, tris }], tris, leaves, splits, stats }. Pure and deterministic.
  *  o.cover = the convex pieces of the garden outline (gardenPieces()) -> the whole floor of the garden, clipped to the outline `o.ring` (default: the garden outline); absent -> the relief only (T2). */
-export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
+export function planTerrain(gh = reliefHeight, box = RELIEF_BOX, o = {}) {
   const T = { ...TERRAIN, ...o }, CH = T.chunk, TOL = T.split, pieces = o.cover || null;
   const ringFlat = o.ring || GARDEN.o, ringPts = []; for (let i = 0; i < ringFlat.length; i += 2) ringPts.push([ringFlat[i], ringFlat[i + 1]]);
   let fallbacks = 0;
@@ -93,7 +93,7 @@ export function planTerrain(gh = gardenHeight, box = RELIEF_BOX, o = {}) {
     const n = Math.min(s, 16), st = s / n, row = new Float64Array((n + 1) * (n + 1));
     let max = 0, min = Infinity;
     for (let b = 0; b <= n; b++) for (let a = 0; a <= n; a++) { const h = hOf(gh, I0 + SX + i + a * st, J0 + SZ + j + b * st); row[b * (n + 1) + a] = h; if (h > max) max = h; if (h < min) min = h; }
-    if (max < T.drop) return { max, min, err: 0, diag: 0 };
+    if (max < T.drop && min > -T.drop) return { max, min, err: 0, diag: 0 };          // flat (a bowl is not flat: T4a, the ponds sink the ground below -2 cm)
     const h00 = row[0], h10 = row[n], h01 = row[n * (n + 1)], h11 = row[n * (n + 1) + n];
     let e0 = 0, e1 = 0;
     for (let b = 0; b <= n; b++) for (let a = 0; a <= n; a++) {
@@ -299,8 +299,8 @@ export function makeMeshHeight(plan, cell = 8) {
 
 /** The distance between the planned mesh and `gh`: rasterises every triangle on a `step` m lattice and compares the interpolated height with gh. { maxErr, at, samples, uncovered (samples at or above the plan's `drop` that no triangle covers), boundaryHigh (the highest point of an open edge), nonManifold, padArea (m2 of the footprint of all triangles), apronArea (m2 of the triangles with no corner above `drop`), liftedArea (m2 of the lattice points at or above `drop`) }.
  *  With `ring` (the garden outline, flat): also { ringArea, polyUncovered (lattice points inside the ring that no triangle covers), polyTotal, vertsOutside (the farthest a triangle corner lies outside the ring, m), trianglesOutside (triangles whose centroid is outside) } for the cover mode. */
-export function measurePlan(plan, gh = gardenHeight, step = 0.5, ring = null) {
-  let maxErr = 0, at = null, samples = 0, padArea = 0, apronArea = 0;
+export function measurePlan(plan, gh = reliefHeight, step = 0.5, ring = null) {
+  let maxErr = 0, at = null, samples = 0, padArea = 0, apronArea = 0, over5 = 0;
   const seen = new Map(), drop = plan.drop ?? TERRAIN.drop;
   for (const c of plan.chunks) {
     const p = c.pos, ix = c.idx;
@@ -316,6 +316,7 @@ export function measurePlan(plan, gh = gardenHeight, step = 0.5, ring = null) {
         if (l1 < -1e-9 || l2 < -1e-9 || l3 < -1e-9) continue;
         const y = l1 * p[a + 1] + l2 * p[b + 1] + l3 * p[d + 1], e = Math.abs(y - hOf(gh, x, z)); samples++;
         if (e > maxErr) { maxErr = e; at = { x, z, mesh: +y.toFixed(4), want: +hOf(gh, x, z).toFixed(4) }; }
+        if (e > 0.05) over5++;
         seen.set(Math.round(x / step) * 100000 + Math.round(z / step), 1);
       }
     }
@@ -331,7 +332,7 @@ export function measurePlan(plan, gh = gardenHeight, step = 0.5, ring = null) {
   }
   let boundaryHigh = 0, nonManifold = 0;
   for (const r of em.values()) { if (r.n === 1 && r.h > boundaryHigh) boundaryHigh = r.h; if (r.n > 2) nonManifold++; }
-  const res = { maxErr, at, samples, lifted, uncovered, boundaryHigh, nonManifold, padArea, apronArea, liftedArea: lifted * step * step };
+  const res = { maxErr, at, over5, samples, lifted, uncovered, boundaryHigh, nonManifold, padArea, apronArea, liftedArea: lifted * step * step };
   if (ring) {
     const inR = (x, z) => { let c = false; for (let i = 0, j = ring.length - 2; i < ring.length; j = i, i += 2) if ((ring[i + 1] > z) !== (ring[j + 1] > z) && x < (ring[j] - ring[i]) * (z - ring[i + 1]) / (ring[j + 1] - ring[i + 1]) + ring[i]) c = !c; return c; };
     const dR = (x, z) => { let m = Infinity; for (let i = 0; i < ring.length; i += 2) { const k = (i + 2) % ring.length, ax = ring[i], az = ring[i + 1], dx = ring[k] - ax, dz = ring[k + 1] - az, l2 = dx * dx + dz * dz, t = l2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0; m = Math.min(m, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return m; };
