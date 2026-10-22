@@ -8,6 +8,8 @@
 //      call time): 3.3 m on the podium, the source's answer inside the box, the old line outside it, a monotone ramp along every stair (the nine STEPS ways = eight stairs), and the real Player walks every stair
 //      up and down (walking, running, 20 fps): no stuck, no fall; the M6 podium pose (915, -1010, the former Digit4) stands on the podium and stays walkable, and (T1) no pose of the page's VIEWS stands on the deck;
 //   4. drive/handling.js: HOOKS.deckServices names the services whose deckY comes before the bridge decks; an absent key / service / deckY is the old chain; the car rides the deck and climbs the stairs only through it.
+//      Since T1 fix 2 the service is the REAL module's: section 8 builds src/world/landmarksTauride.js headless (tools/tauride/lib/stub-env.mjs) and compares ctx.services.landmarksTauride.deckY and .paradny.deckY
+//      with hooks/paradny.js paradnyDeckY bit for bit on a 0.5 m lattice over the box + 5 m (449,360 points), and heightAt with the module's deck; the car checks then run through that service, not a stand-in.
 // The activation is undone at the end (and on exit): the other checks of the process see the North as the page builds it.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -269,7 +271,40 @@ section('7. the Digit4 pose (915, -1010)');
 // ------------------------------------------------------------------ 8. the deck services of the car handling
 section('8. drive/handling.js deckServices');
 const mkWorld = (services) => ({ physics: new Physics(L.heightAt), L: { WORLD: L.WORLD, inPlay: L.inPlay, clampToPlay: L.clampToPlay, inExtent: L.inExtent, heightAt: L.heightAt, insideBuilding: () => false }, services });
-const tauride = { deckY: (x, z) => P.paradnyDeckY(x, z) };
+// T1 fix 2 (lens finding): the service the car meets below is the REAL module's, not a stand-in. The module is built headless (the DOM stubs and the context of tools/tauride/lib/stub-env.mjs, the same ones that
+// tools/tauride/paradny-walk.mjs uses) and `tauride` is ctx.services.landmarksTauride as src/world/landmarksTauride.js publishes it. Before this, section 8 used `{ deckY: (x, z) => P.paradnyDeckY(x, z) }` and a
+// module whose service answered null (`deckY: () => null`) passed every gate; with the real service that mutant fails the lattice group below and every car check that stands on the deck.
+const stubDoc = { document: globalThis.document, addEventListener: globalThis.addEventListener };     // stub-env replaces the DOM stubs of this file; they are put back after the build (the Player needs document.pointerLockElement)
+const SE = await import('./tauride/lib/stub-env.mjs'), eng = await SE.loadEngine(root), built = SE.makeContext(eng, ['landmarksTauride']);
+await SE.buildModules(eng, built.ctx, ['landmarksTauride']);
+globalThis.document = stubDoc.document; globalThis.addEventListener = stubDoc.addEventListener;
+const tauride = built.ctx.services.landmarksTauride;
+{
+  // the real module's service against the independent oracle (hooks/paradny.js paradnyDeckY, the North's port of the deck, held equal to the module's paradny-surface.js by north-hooks-test): a 0.5 m lattice over
+  // the box + 5 m; deckY, paradny.deckY and the oracle must answer bit for bit (null stays null), and the page's patch (heightAt) must read the same deck
+  ok(!!tauride && typeof tauride.deckY === 'function' && !!tauride.paradny && typeof tauride.paradny.deckY === 'function', `the built module publishes ctx.services.landmarksTauride { deckY, paradny.deckY }: [${tauride ? Object.keys(tauride) : ''}]`);
+  ok(Array.isArray(HOOKS.deckServices) && HOOKS.deckServices.length > 0 && HOOKS.deckServices.every((n) => typeof built.ctx.services[n]?.deckY === 'function'), `every service HOOKS.deckServices names is published by the built module with a deckY: ${JSON.stringify(HOOKS.deckServices)} -> [${Object.keys(built.ctx.services)}]`);
+  if (!tauride || typeof tauride.deckY !== 'function' || !tauride.paradny || typeof tauride.paradny.deckY !== 'function') { console.log(`\nFAILED ${fails.length} of ${checks} checks (the module publishes no usable service: the rest of section 8 needs it)`); process.exit(1); }
+  ok(tauride.triangles > 100000,`the built module counted its triangles (the budget check reads them): ${tauride.triangles}`);
+  let n = 0, deck = 0, nul = 0, bad = 0, badP = 0, badH = 0, hMax = -Infinity, hMin = Infinity, first = null;
+  const live = HEIGHT_PATCHES.slice(); setPatches(SAVED);
+  try {
+    for (const [x, z] of lattice(BOX[0] - 5, BOX[1] + 5, BOX[2] - 5, BOX[3] + 5, 0.5)) {
+      n++;
+      const o = P.paradnyDeckY(x, z), s = tauride.deckY(x, z), q = tauride.paradny.deckY(x, z);
+      if (o === null) nul++; else { deck++; if (o > hMax) hMax = o; if (o < hMin) hMin = o; }
+      if (s !== o) { bad++; if (!first) first = [x, z, s, o]; }
+      if (q !== o) badP++;
+      if (o !== null && Number.isInteger(x) && Number.isInteger(z) && L.heightAt(x, z) !== s) badH++;      // the page's patch reads the deck the module serves (integer metres: 0.5 m would be 4 times the work for nothing)
+    }
+  } finally { setPatches(live); }
+  ok(n === 449360, `the lattice has the expected size (656 x 685): ${n} points`);
+  ok(deck > 50000 && nul > 50000 && hMin < 0.5 && hMax >= 3.3 && hMax < 3.4, `the oracle sees the whole deck on the lattice: ${deck} points on it (${hMin.toFixed(2)} .. ${hMax.toFixed(3)} m: the stair feet to the podium + the landing steps), ${nul} off it`);
+  ok(bad === 0, `ctx.services.landmarksTauride.deckY answers paradnyDeckY bit for bit on ${n} lattice points (${bad} differ${first ? '; first at ' + JSON.stringify(first) : ''})`);
+  ok(badP === 0, `ctx.services.landmarksTauride.paradny.deckY answers paradnyDeckY bit for bit on ${n} lattice points (${badP} differ)`);
+  ok(badH === 0, `layout.heightAt (the page's patch list) equals the module's deck wherever the module has one (${badH} differ)`);
+  say(`  real module: service.deckY == service.paradny.deckY == paradnyDeckY on ${n} points (${deck} on the deck, ${nul} off it), ${tauride.triangles} triangles`);
+}
 {
   ok(same(HOOKS.deckServices, ['landmarksTauride']) && same(makeHooks([]).deckServices, ['landmarksTauride']), `HOOKS.deckServices is ['landmarksTauride']: ${JSON.stringify(HOOKS.deckServices)}`);
   const pod = [900, -1000], flight = P.PARADNY_FLIGHTS.find((f) => f.id === STAIRS[3].id), mid = [(flight.pts[0] + flight.pts[2]) / 2, (flight.pts[1] + flight.pts[3]) / 2];
