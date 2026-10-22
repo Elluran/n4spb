@@ -246,7 +246,7 @@ Digit5 was (1390,-1457): on the deck of bridge w81524417 (0.7 m from the water).
 ```
 node tools/tauride/build.mjs --check            # the committed data modules equal what the facade gives (needs python + shapely)
 node tools/tauride/data-test.mjs                # 141 checks ( --no-regen skips the python runs )
-node tools/tauride-cams-check.mjs [--plan] [--colliders]
+node tools/tauride-cams-check.mjs [--plan] [--colliders] [--poses yourposes.mjs]
 node tools/tauride-height-test.mjs              # generic North + self-check of the harness
 PITER_SRC=D:/git2/agi-fun-tests/102_3d_piter node tools/tauride-height-test.mjs --source     # the old trap: 12 of 14 enter, 0 exit
 node tools/tauride-height-test.mjs --model path/to/yourmodel.mjs [--build landmarksTauride] --assert-cars --assert-landing

@@ -6,15 +6,19 @@
 // building of the layout in between); the stored yaw looks at the target (+-1 degree) and the stored pitch aims at its height from the 1.7 m eye (+-3.5 degrees); the object the target names
 // (gate, bridge site, monument, green, fountain, building) exists in the data and the target is within 3 m of it. The aerial: a flight pose inside the play area, 100-400 m up, the ground point
 // its pitch looks at is the target (+-6 m).
+// --poses <file.mjs> checks another set of poses (exports CAMS [, VIEWS_PROPOSAL]); the 12-pose count and the kind coverage are then required of that set too
 // --plan  prints what is wrong with each pose of the PLAN (expected failures: they justify the corrections; always exit 0)
 // --colliders builds the page's static modules like tools/views-check.mjs (heavy: ~2 GB, a minute or two) and adds: the real colliders do not push the pose (0.05 m), the streets net cover, ground height
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
-import { CAMS, VIEWS_PROPOSAL, PLAN_POSES, VIEWS_WAS, EYE } from './tauride-cams.mjs';
+import { CAMS as DEFAULT_CAMS, VIEWS_PROPOSAL as DEFAULT_VIEWS, PLAN_POSES, VIEWS_WAS, EYE } from './tauride-cams.mjs';
 import * as S from './tauride/lib/site.mjs';
 import { ROOT, parseArgs, inPoly, polyDist, ringDist } from './tauride/lib/common.mjs';
 
 const args = parseArgs();
+// --poses <file.mjs>: check another set of poses (a module exporting CAMS and optionally VIEWS_PROPOSAL in the shape of tools/tauride-cams.mjs): the garden team's re-picked poses, or a mutation test
+const custom = args.poses ? await import(pathToFileURL(path.resolve(ROOT, args.poses)).href) : null;
+const CAMS = custom ? custom.CAMS : DEFAULT_CAMS, VIEWS_PROPOSAL = custom ? (custom.VIEWS_PROPOSAL || []) : DEFAULT_VIEWS;
 const { L } = S;
 const reach = S.walkGrid().reach(S.S_GATE.x, S.S_GATE.z - 5);
 const D = await import(pathToFileURL(path.join(ROOT, 'src/areas/north/data/city.js')).href);

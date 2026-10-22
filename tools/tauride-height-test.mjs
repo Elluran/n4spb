@@ -92,7 +92,8 @@ if (!onlySource) {
   const buildList = args.build ? String(args.build).split(',') : [];
   if (args.model && !models[args.model]) {
     const mod = await import(pathToFileURL(path.resolve(ROOT, args.model)).href);
-    main = { ...(mod.model || mod.default), wadeDepth: (mod.model || mod.default).wadeDepth ?? WADE };
+    const m = mod.model || mod.default;
+    main = { name: path.basename(args.model), waterLevel: -0.45, inWater: (x, z) => inPolys(x, z, S.U), addColliders() {}, ...m, wadeDepth: m.wadeDepth ?? WADE };      // defaults for what a model leaves out
   } else main = models[args.model || 'north'];
   if (!main) { console.error(`unknown model ${args.model}`); process.exit(2); }
   say(`TAURIDE HEIGHT TEST (real Player + Physics of ${path.basename(ROOT)})${buildList.length ? ', modules built: ' + buildList.join(', ') : ''}`);

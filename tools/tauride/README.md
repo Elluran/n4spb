@@ -75,7 +75,7 @@ Pure data, no imports; the header of each says where it comes from (OSM via the 
 
 ## The acceptance tools (in `tools/`)
 
-* `tauride-cams.mjs` / `tauride-cams-check.mjs`: the 12 corrected camera poses and the proof (dry, outside buildings, off bridge decks, reachable on foot, line of sight; `--plan` shows what was wrong with the plan's poses; `--colliders` builds the real modules).
+* `tauride-cams.mjs` / `tauride-cams-check.mjs`: the 12 corrected camera poses and the proof (dry, outside buildings, off bridge decks, reachable on foot, line of sight; `--plan` shows what was wrong with the plan's poses; `--colliders` builds the real modules; `--poses <file.mjs>` checks another set of poses, e.g. the team's re-picked ones: a mutation test with 4 spoiled poses fails 4 of 4).
 * `tauride-height-test.mjs`: the CPU wading / walkability harness with the real `Player` and `Physics`. `node tools/tauride-height-test.mjs` runs the generic North (trivial: no ponds, no hills), the self-check on three synthetic models,
   and with `PITER_SRC=...` the reproduction of the old trap (14 shore probes, 12 walk into the lake and 0 of 12 get out). `--model <file.mjs>` takes the garden team's height model and collider set (see `lib/demo-models.mjs`), `--build <modules>` the colliders of built modules.
 * `tauride-overlay.mjs`: the acceptance overlay (plan raster at 0.5 m/px over an aerial image, water IoU, path P90, canopy per quadrant).
