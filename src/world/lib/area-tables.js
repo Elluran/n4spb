@@ -19,7 +19,7 @@ const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 const kind = (v) => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v === 'object' ? 'an object' : typeof v === 'number' ? `the number ${v}` : `a ${typeof v}`);
 
 /** the HOOKS keys that must be functions (the factories of (ctx) and the plain functions); `deckServices` must be an array of strings */
-const HOOK_FUNCTIONS = ['treeCleared', 'treeReject', 'tuftReject', 'propReject', 'pedestrianOnly', 'parkingReject', 'carKeepOut', 'inGarden'];
+const HOOK_FUNCTIONS = ['treeCleared', 'treeReject', 'tuftReject', 'propReject', 'pedestrianOnly', 'parkingReject', 'carKeepOut', 'inGarden', 'groundHoles', 'groundWayReject'];
 /** HOOKS of an area module, checked: every known key is a function (undefined / null = absent), `deckServices` an array of strings; anything else is dropped with one warning naming the key. Unknown keys pass. */
 export function checkHooks(raw, warn = console.warn) {
   if (raw != null && obj(raw) !== raw) warn(`[area-tables] HOOKS is ${kind(raw)}, not an object: ignored`);
