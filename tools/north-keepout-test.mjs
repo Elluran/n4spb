@@ -10,18 +10,21 @@
 //   (rank 0 and MORE than 60 % of the points in the podium) on fixture ways.
 // PART 3, the engine (one child process per variant: the North page's environment, streets, city and props are built headless and the sets are compared):
 //   (T1 of the Tauride remake flipped the roles: landmarksTauride is in the page's MODULES now, see the tripwire note above the check "the variants built what they should")
-//   off      HOOKS emptied (the keys deleted = the engine of before M6), buildList = the page's MODULES  -> the reference
+//   off0     HOOKS emptied (the keys deleted = the engine of before M6), buildList = the page's MODULES WITHOUT landmarksTauride (no claims of the module)   -> the reference of `dormant`
 //   dormant  makeHooks(MODULES without landmarksTauride), HEIGHT_PATCHES emptied, buildList = MODULES without it (the North of M5 / M6)
 //                                                                                                           -> no tree and no tuft stands in a Smolny / Suvorov / campus region; streets, parked
-//                                                                                                              slots and props are IDENTICAL to `off` (the Paradny hooks are dormant)
+//                                                                                                              slots and props are IDENTICAL to `off0` (the Paradny hooks are dormant)
+//   off      HOOKS emptied, buildList = the page's MODULES (landmarksTauride listed: the module's claims alone)                                            -> the reference of `real`
 //   real     HOOKS as area.js builds them, buildList = the page's MODULES (landmarksTauride listed; the module itself is
 //            NOT built in this test, the hooks only read the list)                                          -> no tree, tuft, parked slot or bay line in the podium, no STAMPED prop there, the
-//                                                                                                              rank-0 ways of the podium are pedestrianOnly, nothing else changed against `dormant`
+//                                                                                                              rank-0 ways of the podium are pedestrianOnly, nothing else changed against `off`
+//   fake     `off0` + propReject alone, evaluated for the page's list (landmarksTauride listed) while the module is NOT in the build list (no claims). The claims of the module already take 4 of the 5 props of the
+//            podium away, so `real` vs `off` cannot see the hook at props/world.js fits(): `fake` vs `off0` is its proof (every stamped prop gone from the podium, mapped ones stay, nothing else differs)
 //   A tree that differs between two variants OUTSIDE the regions must belong to a record that overlaps one: the trees of a GREEN polygon / a courtyard come from ONE random stream (trees.js seed()),
-//   so a candidate that a hook rejects shifts the rest of its record (the same in the source); props draw from one stream for the whole page, so a prop far from the podium may be re-rolled in `fake`.
+//   so a candidate that a hook rejects shifts the rest of its record (the same in the source); props draw from one stream for the whole page, so a prop far from the podium may be re-rolled in `fake` / `real`.
 //   Mapped OSM trees and furniture: trees.js plant() has no caller that passes `force`, so the soft clearing of Smolny takes the mapped trees too (the North data has none in the regions); the mapped
 //   furniture of props/osm.js is placed without fits() and stays in the podium (the source hook is in fits()).
-//   --baseline <file>  also compares the `off` sets with a file written by `--child off --out <file>` of ANOTHER checkout (the pristine engine): the hook call sites are inert where the hooks are absent.
+//   --baseline <file>  also compares the `off0` sets with a file written by `--child off --out <file>` of a checkout of feat/areas BEFORE T1 (its `off` is this test's `off0`; the pristine engine): the hook call sites are inert where the hooks are absent.
 // PART 4 (--footprints, one more child, ~15 s): the static regions are numbers of the source repository and the M5 modules are verbatim copies; the three modules are built and the regions are checked against
 //   what they draw (door, photo spot, frontage and footprints inside; no solid of the module in the open part of a Smolny approach; the campus buildings in the polygon).
 // RESULT: OK / FAIL (exit 1). NODE_OPTIONS=--max-old-space-size=8000 (three children of ~2 GB each, one after another unless --parallel).
@@ -38,7 +41,7 @@ const imp = (p) => import(pathToFileURL(path.join(root, p)).href);
 if ((process.env.AREA || 'strip') !== 'north') { console.error('run it as the North: node tools/area.mjs north tools/north-keepout-test.mjs'); process.exit(2); }
 
 const r3 = (v) => Math.round(v * 1000) / 1000;
-const VARIANTS = ['off0', 'dormant', 'off', 'real'];
+const VARIANTS = ['off0', 'dormant', 'off', 'real', 'fake'];
 const MODS = { smolny: 'landmarksSmolny', suvorov: 'landmarksSuvorov', kirochnaya: 'landmarksKirochnaya', tauride: 'landmarksTauride' };
 
 // ---------------------------------------------------------------- the regions, written out here (not read from hooks/keep-out.js)
@@ -97,10 +100,14 @@ if (opt('child')) {
   const { mainModules } = await imp('tools/modules-list.mjs');
   if (A.ID !== 'north') throw new Error('the area module is ' + A.ID);
   let buildList = mainModules();
-  if (variant === 'off0' || variant === 'dormant') buildList = buildList.filter((m) => m !== MODS.tauride);                     // the North of M5 / M6: the page's list WITHOUT landmarksTauride (no claims of the module, the Paradny set dormant)
-  if (variant === 'off0' || variant === 'off') { for (const k of Object.keys(HOOKS)) delete HOOKS[k]; HEIGHT_PATCHES.length = 0; }    // the engine of before M6: every call site meets an absent key, the height line is the old one
+  const pageList = buildList;
+  if (variant === 'off0' || variant === 'dormant' || variant === 'fake') buildList = buildList.filter((m) => m !== MODS.tauride);   // the North of M5 / M6: the page's list WITHOUT landmarksTauride (no claims of the module, the Paradny set dormant)
+  if (variant === 'off0' || variant === 'off' || variant === 'fake') { for (const k of Object.keys(HOOKS)) delete HOOKS[k]; HEIGHT_PATCHES.length = 0; }    // the engine of before M6: every call site meets an absent key, the height line is the old one
   else if (variant === 'dormant') { for (const k of Object.keys(HOOKS)) delete HOOKS[k]; Object.assign(HOOKS, makeHooks(buildList)); HEIGHT_PATCHES.length = 0; }    // the hooks and patches of the list without the module
   else if (variant !== 'real' && variant !== 'modules') throw new Error('variant ' + variant);
+  // `fake` = `off0` plus ONE hook: propReject, evaluated for the PAGE's list (landmarksTauride listed) while the engine's own ctx.buildList lacks the module. The module's claims are therefore absent and the hook is the only
+  // difference from `off0`: whatever props/world.js fits() stops stamping in the podium is the call site's doing (the former `fake` of before T1: the Paradny set on without the module; the claims of the module hide it in `real`).
+  if (variant === 'fake') { const hk = makeHooks(pageList); HOOKS.propReject = () => hk.propReject({ buildList: pageList }); }
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.1, 2500);
   const ctx = createContext({ scene, camera, renderer: null, audio: null, quality: { name: 'high', pixelRatio: 1, msaa: 4, shadowMap: 4096, shadowSize: 75, petals: 1 }, sunDir: new THREE.Vector3(...L.SUN_DIR).normalize() });
   ctx.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight(), uniforms: {} };
@@ -355,17 +362,21 @@ const reasons = (S1) => { const o = {}; for (const [k, v] of Object.entries(S1.t
 // palace, their courtyards stop growing trees, the props stream shifts), the Paradny effects are measured against `off` = the page's own list with the hooks deleted, never against `dormant` (that would mix in the claims).
 // Every former assertion is kept: what was asserted of real-vs-off is asserted of dormant-vs-off0 (the M5 modules' keep-outs; the Paradny set silent: streets and props identical), what was asserted of fake-vs-real
 // is asserted of real-vs-off (the Paradny set: nothing in the podium, nothing else changed; the M5 regions are included in `real` now).
-check('the variants built what they should: `off0` / `off` have no hook, `dormant` has the hooks of the list without landmarksTauride, `real` the page\'s own (landmarksTauride IS in MODULES: the Paradny set is active)', () => {
+check('the variants built what they should: `off0` / `off` have no hook, `dormant` has the hooks of the list without landmarksTauride, `real` the page\'s own (landmarksTauride IS in MODULES: the Paradny set is active), `fake` only propReject on the list without the module', () => {
   ok(MODULES.includes(MODS.tauride), 'landmarksTauride is not in the North MODULES: T1 of the Tauride remake put it there (this test documents the flip of its tripwire; if it was taken out on purpose, restore the old real / fake assertions)');
   eq(S.off0.hooks, [], 'off0 hooks');
   eq(S.off.hooks, [], 'off hooks');
   eq(S.dormant.hooks, CONTRACT_KEYS, 'dormant hooks');
   eq(S.real.hooks, CONTRACT_KEYS, 'real hooks');
+  eq(S.fake.hooks, ['propReject'], 'fake hooks');
   const without = MODULES.filter((m) => m !== MODS.tauride);
   eq(S.off0.buildList, without, 'off0 buildList');
   eq(S.dormant.buildList, without, 'dormant buildList');
   eq(S.off.buildList, MODULES, 'off buildList');
   eq(S.real.buildList, MODULES, 'real buildList');
+  eq(S.fake.buildList, without, 'fake buildList');
+  // `fake` must differ from `off0` by the one hook and nothing else upstream of the props: its trees, tufts, ways, slots and bay lines are those of `off0` (propReject has no other call site)
+  for (const k of ['trees', 'treeStats', 'tufts', 'wayCount', 'pedWays', 'laneCount', 'parked', 'parkLines', 'podiumWays']) eq(S.fake[k], S.off0[k], k + ' fake vs off0');
 });
 
 if (opt('baseline')) check('the hook call sites are inert where the hooks are absent: `off0` equals the sets of --baseline (the engine before the hook edits; baseline = a checkout of feat/areas BEFORE T1)', () => {
@@ -451,9 +462,25 @@ check('streets: unchanged in `dormant` (pedestrianOnly ways, lanes, parked slots
   ok(ll.gone.length > 0 && ll.came.length === 0 && ll.gone.every((s) => inPodium(s[0], s[1])), `bay lines changed outside the podium (gone ${ll.gone.length}, came ${ll.came.length})`);
   ok(!S.real.parkLines.some((s) => inPodium(s[0], s[1])), 'a bay line stands in the podium');
 });
-check('props: unchanged in `dormant` (every list identical to `off0`); in `real` (landmarksTauride listed) nothing is STAMPED in the podium (the mapped OSM furniture, which props/osm.js places without fits(), stays)', () => {
+check('props: unchanged in `dormant` (every list identical to `off0`); the hook ALONE (`fake`: no claims) takes the stamped props out of the podium; in `real` (landmarksTauride listed) nothing is STAMPED in the podium (the mapped OSM furniture, which props/osm.js places without fits(), stays)', () => {
   const LISTS_P = Object.keys(S.off.props);
   for (const k of LISTS_P) eq(S.dormant.props[k], S.off0.props[k], 'props.' + k + ' dormant vs off0');
+  const podiumProps = (V) => LISTS_P.reduce((n, k) => n + V.props[k].filter((p) => inPodium(p[0], p[1])).length, 0);
+  // The guard of the hook ITSELF (the call site `propReject(cx, cz)` in props/world.js fits()). The claims of the module already take 4 of the 5 props of these lists out of the podium (`off0`, no claim and no hook: 5; `off`, claims
+  // only: 1; `real`: 1), so `real` against `off` cannot see the hook and a dead call site would pass: the proof is `fake` = `off0` + propReject alone, the module NOT in the build list (no claims). Every prop `off0` stamped in the
+  // podium must be gone there but the mapped OSM furniture (props/osm.js places it without fits()), nothing may come into the podium, and the totals stay close (one random stream for the whole page).
+  let goneHook = 0, stayHook = 0;
+  for (const k of LISTS_P) {
+    const { gone, came } = sets(S.off0.props[k], S.fake.props[k]), had = new Set(S.off0.props[k].map(k2));
+    const inFake = S.fake.props[k].filter((p) => inPodium(p[0], p[1]));
+    ok(inFake.every((p) => had.has(k2(p))), `fake: a ${k} that \`off0\` did not have stands in the podium: ${describe(inFake.filter((p) => !had.has(k2(p))))}`);
+    ok(came.every((p) => !inPodium(p[0], p[1])), `fake: ${k} came into the podium`);
+    goneHook += gone.filter((p) => inPodium(p[0], p[1])).length; stayHook += inFake.length;
+  }
+  ok(goneHook > 0, `vacuous: no prop that \`off0\` stamped in the podium is gone in \`fake\` (the propReject call site of props/world.js fits() is dead, or the hook no longer reaches it): off0 ${podiumProps(S.off0)} in the podium, fake ${podiumProps(S.fake)}`);
+  ok(podiumProps(S.fake) === podiumProps(S.off0) - goneHook, `fake: the podium holds ${podiumProps(S.fake)} props, off0 ${podiumProps(S.off0)} - ${goneHook} gone`);
+  for (const k of ['benches', 'bins', 'kiosks']) ok(Math.abs(S.fake.props[k].length - S.off0.props[k].length) <= Math.max(3, 0.03 * S.off0.props[k].length), `fake ${k}: ${S.off0.props[k].length} -> ${S.fake.props[k].length}`);
+  console.log(`       the hook alone (fake vs off0, no claim): ${goneHook} stamped props gone from the podium (${podiumProps(S.off0)} -> ${podiumProps(S.fake)}), ${stayHook} mapped ones stay`);
   let goneIn = 0, mapped = 0;
   for (const k of LISTS_P) {
     const { gone, came } = sets(S.off.props[k], S.real.props[k]), had = new Set(S.off.props[k].map(k2));
@@ -463,12 +490,11 @@ check('props: unchanged in `dormant` (every list identical to `off0`); in `real`
     goneIn += gone.filter((p) => inPodium(p[0], p[1])).length; mapped += inReal.length;
     console.log(`       ${k.padEnd(9)} off ${String(S.off.props[k].length).padStart(4)}, real ${String(S.real.props[k].length).padStart(4)}  (${gone.length} gone, ${came.length} came; ${inReal.length} stay in the podium)`);
   }
-  // T1: the claims of the module (not the hook) already take 4 of the 5 props of this test's lists out of the podium: the generic North (`off0`, no claim, no hook) has 5 there, `off` (the page's list, hooks deleted) 1; the guard is therefore
-  // measured against `off0`, and the claims-only effect is printed so that the hook (a belt-and-braces guard for the day the claims change) is not mistaken for the cause.
-  const podiumProps = (V) => LISTS_P.reduce((n, k) => n + V.props[k].filter((p) => inPodium(p[0], p[1])).length, 0);
-  ok(podiumProps(S.off0) > podiumProps(S.real), `vacuous: the podium holds ${podiumProps(S.off0)} props under \`off0\`, ${podiumProps(S.off)} under \`off\` (claims only), ${podiumProps(S.real)} under \`real\``);
+  // T1: the claims of the module (not the hook) take 4 of the 5 props of this test's lists out of the podium: `off0` (no claim, no hook) has 5 there, `off` (the page's list, hooks deleted) 1. `real` against `off` therefore
+  // sees no stamped prop go (goneIn is 0 today, which is why the hook's own proof is `fake` above, not a vacuity guard on the claims, which may legitimately change); the claims-only effect is printed so that the hook is
+  // not mistaken for the cause, and the page must not hold more than claims alone.
   ok(podiumProps(S.real) <= podiumProps(S.off), 'the hook put a prop INTO the podium');
-  console.log(`       props in the podium: off0 ${podiumProps(S.off0)} (no claim, no hook), off ${podiumProps(S.off)} (claims only), real ${podiumProps(S.real)}; ${goneIn} stamped props gone by the hook itself, ${mapped} mapped ones stay`);
+  console.log(`       props in the podium: off0 ${podiumProps(S.off0)} (no claim, no hook), off ${podiumProps(S.off)} (claims only), real ${podiumProps(S.real)}, fake ${podiumProps(S.fake)} (hook only); real vs off: ${goneIn} stamped props gone, ${mapped} mapped ones stay`);
   // props draw from ONE stream for the whole page (props/state.js R): a stamp that fits() refuses shifts the later placements, so props far from the podium may be re-rolled; the totals must stay close
   for (const k of ['benches', 'bins', 'kiosks']) ok(Math.abs(S.real.props[k].length - S.off.props[k].length) <= Math.max(3, 0.03 * S.off.props[k].length), `${k}: ${S.off.props[k].length} -> ${S.real.props[k].length}`);
 });
