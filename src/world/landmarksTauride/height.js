@@ -1,4 +1,6 @@
 // landmarksTauride/height.js - the land relief of the Tauride Garden as a PURE function (docs/TAURIDE-REMAKE.md, phase T2).
+// T4a: the same file also holds the TERRAIN = the pond bowls and banks + the relief (makeShore: the exact signed distance to the water outline, pondProfile: the profile of data/ponds.js, makeTerrainHeight, and the exported gardenHeight).
+// `reliefHeight` below is the T2 function (the hills alone); `gardenHeight` at the end of the file is what the HEIGHT_PATCH 'garden', the floor mesh, the paths and the ground mask read. Pure data imports only (relief, water, footprints, ponds).
 //   gardenHeight(x, z) -> number | null    the terrain height in metres above the street level (y = 0), or null where the garden has no relief (the old line of layout.heightAt answers: the waterway bed or 0)
 // The function is the body of the second HEIGHT_PATCH of the North (src/areas/north/hooks/height.js, box RELIEF_HULL: the box of the hills, not the garden's). layout.heightAt is evaluated for every map point at start-up
 // (82,500 calls on the garden box), so: the patch box is the tight hull of the features (62 % of the garden box: no call at all for the rest), the function rejects its own box FIRST, the features are prepared ONCE into
