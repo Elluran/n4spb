@@ -171,14 +171,14 @@ export function makeViews({ yawToward }) {
   const VIEWS = [
     { key: 'Digit1', label: 'Чернышевская', x: 444, z: -1351, yaw: -90, pitch: 10 },
     { key: 'Digit2', label: 'Спасо-Преображенский собор', x: 22, z: -1186, yaw: -95, pitch: 18 },
-    { key: 'Digit3', label: 'Дом Мурузи', x: -165, z: -1170, yaw: -137, pitch: 22 },
-    { key: 'Digit4', label: 'Парадный квартал', x: 915, z: -1010, yaw: -60, pitch: 18 },
-    { key: 'Digit5', label: 'Таврический сад', x: 1390, z: -1457, yaw: 0, pitch: 0 },
-    { key: 'Digit6', label: 'Таврический дворец', x: 1379, z: -1600, yaw: 0, pitch: 6 },
+    { key: 'Digit3', label: 'Дом Мурузи', x: -167, z: -1157, yaw: -107, pitch: 20 },       // T1: was (-165, -1170) yaw -137, where a pedestrian-signal pole 1.3 m away covered the right third of the picture (M5 GPU QA)
+    { key: 'Digit4', label: 'Парадный квартал', x: 900, z: -852, yaw: 0, pitch: 16 },       // T1: was ON the podium (915, -1010): the height patch makes it 3.3 m, views-check allows -0.5 .. 1.5; now street level on the south side, looking up the central axis between the two south blocks
+    { key: 'Digit5', label: 'Таврический сад', x: 1368, z: -1471, yaw: -4, pitch: 2 },       // T1: was (1390, -1457) on the deck of bridge w81524417; now on w1458068089 at the north end of the memorial island, 8 m from the water (docs/TAURIDE-REMAKE.md section 8)
+    { key: 'Digit6', label: 'Таврический дворец', x: 1379, z: -1800, yaw: 180, pitch: 8 },       // T1: was (1379, -1600) in the lake; now in the palace front court, 48 m from the portico (docs/TAURIDE-REMAKE.md section 8)
     { key: 'Digit7', label: 'Смольный собор', x: 2335, z: -1833, yaw: -90, pitch: 21 },
     { key: 'Digit8', label: 'Смольный институт', x: 2461, z: -1471, yaw: yawToward(2461, -1471, 2518, -1544), pitch: 8 },
     { key: 'Digit9', label: 'Музей Суворова · Суворовский проспект', x: 1395, z: -1180, yaw: yawToward(1395, -1180, 1413, -1206), pitch: 8 },
-    { key: 'Digit0', label: 'Кирочная улица', x: 1225, z: -1243, yaw: 180, pitch: 6 },
+    { key: 'Digit0', label: 'Кирочная улица', x: 1224, z: -1266, yaw: -173, pitch: 10 },       // T1: was (1225, -1243) yaw 180, 5 m from the facade of w232918735 (a wall close-up, M5 GPU QA); now across the street, 28 m from it, looking at the house church
     // the Places list only
     { key: 'Place.oktyabrsky', label: 'БКЗ «Октябрьский» · Лиговский проспект', x: 737.5, z: -344.3, yaw: -50.4, pitch: 8 },
   ];
