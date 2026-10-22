@@ -27,7 +27,7 @@ const [mask, mMs, mCalls] = timed(() => GM.planGroundMask(inputs(gh)));
 const [mesh, hMs] = timed(() => TM.makeMeshHeight(plan));
 const [pp, pMs, pCalls] = timed(() => PD.planPaths(Pd.PATHS, { meshHeight: mesh, gh }));
 const [noise, nMs] = timed(() => GM.noiseTileData());
-const relief = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX);
+const relief = TM.planTerrain(GH.reliefHeight, GH.RELIEF_BOX);
 const h1 = heap();
 console.log(`terrain (cover) : ${plan.tris} triangles, ${plan.chunks.length} draws, ${tMs.toFixed(0)} ms, ${tCalls} gardenHeight calls (relief only T2: ${relief.tris} triangles)`);
 console.log(`ground mask     : ${mask.box.W} x ${mask.box.H} cells, ${mask.data.length} bytes, ${mMs.toFixed(0)} ms, ${mCalls} gardenHeight calls (slope of the stripe cells)`);

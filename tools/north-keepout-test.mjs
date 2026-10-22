@@ -178,12 +178,14 @@ if (opt('child')) {
 const KO = await imp('src/areas/north/hooks/keep-out.js');
 const PD = await imp('src/areas/north/hooks/paradny.js');
 const HK = await imp('src/areas/north/hooks.js');
+const GHm = await imp('src/world/landmarksTauride/height.js');          // T4a: the exact shore of the garden ponds (the water mask hook removes trees that stood in the water)
+const WUm = (await imp('src/world/landmarksTauride/data/water.js')).WATER_UNION;
 const PE = await imp('src/areas/north/hooks/people.js');          // GARDEN_RING: the garden outline as data (the claim-skip check below tests it with its own winding-number test)
 const A = await imp('src/world/area.js');
 const GRP = await imp('src/world/landmarksKirochnaya/groups.js');
 const MODULES = A.MODULES;
 const FAC = ['treeCleared', 'treeReject', 'tuftReject', 'propReject', 'pedestrianOnly'];
-const CONTRACT_KEYS = ['carKeepOut', 'deckServices', 'groundHoles', 'groundWayReject', 'inGarden', 'parkingReject', 'pedestrianOnly', 'propReject', 'tuftReject', 'treeCleared', 'treeReject'].sort();
+const CONTRACT_KEYS = ['carKeepOut', 'deckServices', 'groundHoles', 'groundWayReject', 'inGarden', 'parkingReject', 'pedestrianOnly', 'propReject', 'tuftReject', 'treeCleared', 'treeReject', 'waterBodies'].sort();
 const podium = PD.PARADNY_PODIUM.o.length ? pairs(PD.PARADNY_PODIUM.o) : [];
 const inPodium = (x, z) => winding(podium, x, z);
 const campusRing = GRP.CAMPUS;
@@ -217,7 +219,7 @@ check('each factory serves exactly the modules of its contract', () => {
   ok(typeof KO.makeParkingReject([MODS.tauride]) === 'function', 'makeParkingReject with landmarksTauride is no function');
   for (const m of [MODS.smolny, MODS.suvorov, MODS.kirochnaya]) ok(KO.makeParkingReject([m]) === undefined, 'parking gated by ' + m);
 });
-check('makeHooks(MODULES) has the eleven keys of the contract (T2 added carKeepOut, T3 groundHoles and groundWayReject); parkingReject, carKeepOut, groundHoles and groundWayReject only with landmarksTauride; the area module exports the same table', () => {
+check('makeHooks(MODULES) has the twelve keys of the contract (T2 added carKeepOut, T3 groundHoles and groundWayReject, T4a waterBodies); parkingReject, carKeepOut, groundHoles, groundWayReject and waterBodies only with landmarksTauride; the area module exports the same table', () => {
   const real = HK.makeHooks(MODULES), fake = HK.makeHooks([...MODULES, MODS.tauride]);
   eq(Object.keys(real).sort(), CONTRACT_KEYS, 'keys');
   eq(Object.keys(fake).sort(), CONTRACT_KEYS, 'keys with landmarksTauride');
@@ -420,8 +422,10 @@ check('trees: `real` has no tree in any declared region (the podium too); a diff
   ok(inside.length === 0, `${inside.length} trees of \`real\` stand in a keep-out region (podium included): ${describe(inside)}`);
   const offIn = S.off.trees.filter((t) => inPodium(t[0], t[1]));
   ok(offIn.length > 0, 'vacuous: `off` has no tree in the podium');
-  const rings = regionRings(built, { smolny: 1, suvorov: 1, campus: 1, podium: 1 }), zones = touchedRecords(rings), stray = [];
-  for (const t of [...gone, ...came]) if (!recordOf(zones, rings, t[0], t[1])) stray.push(t);
+  // T4a: HOOKS.waterBodies puts the garden ponds into the field's water mask in `real` (the hook is deleted in `off`): a tree that stood in the water is gone, and the trees of the same random stream (the record
+  // that overlaps the ponds) re-roll. Such a difference is legitimate when the tree lies within 4 m of the shore or in a record that overlaps the water outline.
+  const rings = regionRings(built, { smolny: 1, suvorov: 1, campus: 1, podium: 1 }), zones = touchedRecords(rings), pondZones = (() => { const zs = [], near = (o) => { for (let i = 0; i < o.length; i += 2) { const j = (i + 2) % o.length, l = Math.hypot(o[j] - o[i], o[j + 1] - o[i + 1]), n = Math.max(1, Math.ceil(l / 2)); for (let k = 0; k < n; k++) if (GHm.GARDEN_SHORE.dist(o[i] + (o[j] - o[i]) * k / n, o[i + 1] + (o[j + 1] - o[i + 1]) * k / n) < 7) return true; } return false; }; for (const g of D.GREEN) for (const q of g.polys) if (near(q.o)) zs.push({ what: 'GREEN ' + g.id + ':' + g.kind + ' (within 7 m of the ponds)', o: q.o, h: q.h || [] }); for (const bb of D.BUILDINGS) for (const q of bb.polys) for (const h of q.h || []) if (near(h)) zs.push({ what: 'courtyard of ' + bb.id, o: h, h: [] }); return zs; })(), stray = [];
+  for (const t of [...gone, ...came]) if (!recordOf(zones, rings, t[0], t[1]) && !(GHm.GARDEN_SHORE.dist(t[0], t[1]) < 4) && !recordOf(pondZones, [], t[0], t[1])) stray.push(t);
   console.log(`       off ${S.off.trees.length} trees, real ${S.real.trees.length}: ${offIn.length} stood in the podium, ${gone.length - offIn.length} more gone and ${came.length} came in records that overlap a region; rejections by reason: ${JSON.stringify(reasons(S.real))}`);
   ok(stray.length === 0, `${stray.length} tree differences outside every region and every record that overlaps one: ${describe(stray)}`);
   ok((reasons(S.real).paradny || 0) > 0 && !reasons(S.off).paradny, 'the rejection counters show no paradny reason (or `off` shows one)');
