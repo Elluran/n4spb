@@ -3,7 +3,7 @@
 //  Suvorov Museum and Kirochnaya Street, 3.947 km2, plus a one-sided 200 m band of the strip's territory (z -405 .. -205, x -420 .. 835) so that an arrival from the strip lands on real, identical streets.
 //  Milestone M3 was the GENERIC North (environment, streets, city, props, traffic, people, wildlife, drive); milestone M5 adds the landmark modules copied from the source: landmarksNorthFull (Chernyshevskaya,
 //  the Transfiguration Cathedral, Dom Muruzi, the Podpisnye Izdaniya bookstore, the corridor houses), landmarksSmolny, landmarksSuvorov, landmarksKirochnaya, and the strip's own landmarksD (library only) and
-//  landmarksOktyabrsky for the 200 m band. GROUPS below holds their claims; the generic `city` draws every building they do not claim. The Tauride remake and the Paradny quarter are still to come (docs/AREAS.md section 8).
+//  landmarksOktyabrsky for the 200 m band. GROUPS below holds their claims; the generic `city` draws every building they do not claim. Phase T1 of the Tauride remake added landmarksTauride (the Palace and the Paradny quarter; docs/TAURIDE-REMAKE.md), the garden follows in T2-T6.
 //  north.html remaps ./src/world/area.js to this file with an import map (tools/area.mjs does the same for the headless tools). PURE DATA: no three.js, no import of layout.js (layout.js imports this
 //  file) and NO import of the strip's area module (the remap would hand back this very file): the values that the engine reads from every area (NAMES, SQUARE, OBELISK, STATION) are COPIES of the
 //  strip's, which keeps the 200 m band identical on both pages (the style of a block follows its distance to SQUARE: city/archetypes.js, streets/style.js).
@@ -14,6 +14,7 @@ import { GROUPS_LIST as G_NORTHFULL } from '../../world/landmarksNorthFull/group
 import { GROUPS_LIST as G_SMOLNY } from '../../world/landmarksSmolny/groups.js';
 import { GROUPS_LIST as G_SUVOROV } from '../../world/landmarksSuvorov/groups.js';
 import { GROUPS_LIST as G_KIROCHNAYA } from '../../world/landmarksKirochnaya/groups.js';
+import { GROUPS_LIST as G_TAURIDE } from '../../world/landmarksTauride/groups.js';
 import { LIBRARY_GROUP } from '../../world/landmarksD/groups.js';
 import { GROUPS_LIST as G_OKTYABRSKY } from '../../world/landmarksOktyabrsky/groups.js';
 
@@ -32,6 +33,7 @@ export const MODULES = [
   'landmarksSmolny', // Smolny Cathedral and the convent / Institute (docs/research/north-smolny.md)
   'landmarksSuvorov', // the Suvorov Memorial Museum on Kirochnaya (7 OSM footprints, mosaics, tower)
   'landmarksKirochnaya', // the Elena Pavlovna Clinical Institute, Kirochnaya 41: 20 OSM footprints, garden campus (lawn, service lanes, trees, fence); before streets, it claims 14 service ways
+  'landmarksTauride', // the Tauride Palace and the Paradny Quarter (T1 of docs/TAURIDE-REMAKE.md; the garden is rewritten by the later phases); before streets / city, it claims 2 sub-groups (12 buildings, 2 fountain waters) and switches the Paradny hooks on
   'streets',      // roads, markings, kerbs, granite pavements, crossings, road furniture, trolleybus overhead wires
   'city',         // every OSM building that no landmark module claims: Petersburg facade grammar, roofs, courtyards, entrances
   'landmarksD',   // the National Library (Fontanka 36) and the Mariinsky hospital block, the strip's band at (-334, -311): only the 'library' sub-group is claimed here
@@ -49,6 +51,7 @@ export const LABELS = {
   landmarksNorthFull: 'Чернышевская, Спасо-Преображенский собор, дом Мурузи',
   landmarksSuvorov: 'Музей Суворова',
   landmarksKirochnaya: 'Клинический институт на Кирочной',
+  landmarksTauride: 'Таврический дворец и Парадный квартал',
   landmarksD: 'Национальная библиотека', landmarksOktyabrsky: 'БКЗ «Октябрьский»',
 };
 
@@ -89,12 +92,13 @@ export const STATION = { x: 612, z: 300, facadeBearing: 348, trackBearing: 167, 
 
 // ---------------------------------------------------------------- landmark groups
 /** The landmark claims of the North (M5, docs/AREAS.md section 8): module name -> sub-groups { key, name, nameEn, ids, osm, at }. `city` / `environment` / `streets` skip what a group claims (src/world/lib/claims.js).
- *  The Tauride remake and the Paradny quarter are not here yet, so the generic `city` still draws them. */
+ *  T1 of the Tauride remake added landmarksTauride: the Palace and the Paradny quarter (the garden is not claimed yet, so the generic North still draws it). */
 export const GROUPS = {};
 GROUPS.landmarksNorthFull = G_NORTHFULL;
 GROUPS.landmarksSmolny = G_SMOLNY;
 GROUPS.landmarksSuvorov = G_SUVOROV;
 GROUPS.landmarksKirochnaya = G_KIROCHNAYA;
+GROUPS.landmarksTauride = G_TAURIDE;      // T1: the Tauride Palace r3801092 and the Paradny quarter (11 buildings + the two fountain waters)
 GROUPS.landmarksD = [LIBRARY_GROUP];      // the strip's landmarksD claims four sub-groups; only the National Library / Mariinsky block lies in the band (landmarksD/groups.js)
 GROUPS.landmarksOktyabrsky = G_OKTYABRSKY;      // the concert hall w30324279 (797, -347), shared with the strip
 
@@ -171,14 +175,14 @@ export function makeViews({ yawToward }) {
   const VIEWS = [
     { key: 'Digit1', label: 'Чернышевская', x: 444, z: -1351, yaw: -90, pitch: 10 },
     { key: 'Digit2', label: 'Спасо-Преображенский собор', x: 22, z: -1186, yaw: -95, pitch: 18 },
-    { key: 'Digit3', label: 'Дом Мурузи', x: -165, z: -1170, yaw: -137, pitch: 22 },
-    { key: 'Digit4', label: 'Парадный квартал', x: 915, z: -1010, yaw: -60, pitch: 18 },
-    { key: 'Digit5', label: 'Таврический сад', x: 1390, z: -1457, yaw: 0, pitch: 0 },
-    { key: 'Digit6', label: 'Таврический дворец', x: 1379, z: -1600, yaw: 0, pitch: 6 },
+    { key: 'Digit3', label: 'Дом Мурузи', x: -167, z: -1157, yaw: -107, pitch: 20 },       // T1: was (-165, -1170) yaw -137, where a pedestrian-signal pole 1.3 m away covered the right third of the picture (M5 GPU QA)
+    { key: 'Digit4', label: 'Парадный квартал', x: 900, z: -852, yaw: 0, pitch: 16 },       // T1: was ON the podium (915, -1010): the height patch makes it 3.3 m, views-check allows -0.5 .. 1.5; now street level on the south side, looking up the central axis between the two south blocks
+    { key: 'Digit5', label: 'Таврический сад', x: 1368, z: -1471, yaw: -4, pitch: 2 },       // T1: was (1390, -1457) on the deck of bridge w81524417; now on w1458068089 at the north end of the memorial island, 8 m from the water (docs/TAURIDE-REMAKE.md section 8)
+    { key: 'Digit6', label: 'Таврический дворец', x: 1379, z: -1800, yaw: 180, pitch: 8 },       // T1: was (1379, -1600) in the lake; now in the palace front court, 48 m from the portico (docs/TAURIDE-REMAKE.md section 8)
     { key: 'Digit7', label: 'Смольный собор', x: 2335, z: -1833, yaw: -90, pitch: 21 },
     { key: 'Digit8', label: 'Смольный институт', x: 2461, z: -1471, yaw: yawToward(2461, -1471, 2518, -1544), pitch: 8 },
     { key: 'Digit9', label: 'Музей Суворова · Суворовский проспект', x: 1395, z: -1180, yaw: yawToward(1395, -1180, 1413, -1206), pitch: 8 },
-    { key: 'Digit0', label: 'Кирочная улица', x: 1225, z: -1243, yaw: 180, pitch: 6 },
+    { key: 'Digit0', label: 'Кирочная улица', x: 1224, z: -1266, yaw: -173, pitch: 10 },       // T1: was (1225, -1243) yaw 180, 5 m from the facade of w232918735 (a wall close-up, M5 GPU QA); now across the street, 28 m from it, looking at the house church
     // the Places list only
     { key: 'Place.oktyabrsky', label: 'БКЗ «Октябрьский» · Лиговский проспект', x: 737.5, z: -344.3, yaw: -50.4, pitch: 8 },
   ];
@@ -202,6 +206,11 @@ export const TEST = {
     { id: 'r3127704', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
     { id: 'w30324355', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
     { id: 'r3801087', by: 'landmarksD', group: 'library' }, { id: 'w30324279', by: 'landmarksOktyabrsky', group: 'oktyabrsky-hall' },
+    { id: 'r3801092', by: 'landmarksTauride', group: 'tauride-palace' },                  // T1: the Tauride Palace
+    { id: 'w102153008', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w102153013', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w145419644', by: 'landmarksTauride', group: 'paradny-quarter' },
+    { id: 'r1452259', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'r1967088', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'r3304715', by: 'landmarksTauride', group: 'paradny-quarter' },
+    { id: 'r3304716', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w102153007', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w134638076', by: 'landmarksTauride', group: 'paradny-quarter' },
+    { id: 'w134638078', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w134638079', by: 'landmarksTauride', group: 'paradny-quarter' },      // the 11 buildings of the Paradny quarter
   ],      // M5: one row per landmark module and sub-group (the vestibule, the cathedrals, Dom Muruzi, the bookstore, the band houses, the Suvorov Museum, the clinical institute, the library, the Oktyabrsky hall)
   viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Place.oktyabrsky'],
   mustHaveAreas: [

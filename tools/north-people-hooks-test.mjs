@@ -112,19 +112,21 @@ async function fast() {
     assert.equal(S.ID, 'strip', 'run this test plain (not through tools/area.mjs): src/world/area.js is remapped to ' + S.ID);
     assert.deepEqual(S.HOOKS, {}); assert.equal(S.ZONES.peopleDensity.garden, undefined);
   });
-  await check('the North today: the cap row is { factor 0.22, maxPeople 60 } although no landmarksTauride is built; HOOKS.inGarden is the hooks/people.js function', () => {
-    assert.ok(!N.MODULES.includes('landmarksTauride'), 'landmarksTauride is in MODULES: the Tauride remake has landed, this check is about the generic North (the next one covers the listed case)');
+  // TRIPWIRE FLIPPED in T1 of the Tauride remake (docs/TAURIDE-REMAKE.md 12): this check used to assert `!MODULES.includes('landmarksTauride')` (the generic North, M6). The module is in MODULES now, so the real North is the
+  // LISTED case and the check below it is the UNLISTED one (a copy of area.js with the module taken out): the cap row is the same in both, which is the point of the integration decision of docs/AREAS.md 9.3.
+  await check('the North with landmarksTauride in MODULES (T1): the cap row is { factor 0.22, maxPeople 60 } as before the module; HOOKS.inGarden is the hooks/people.js function', () => {
+    assert.ok(N.MODULES.includes('landmarksTauride'), "landmarksTauride is not in MODULES: T1 of the Tauride remake put it there (tools/north-people-hooks-test.mjs documents the flip); if it was taken out on purpose, restore the generic-North assertion");
     assert.deepEqual(N.ZONES.peopleDensity.garden, CAP);
     assert.equal(N.HOOKS.inGarden, inGarden); assert.deepEqual([...N.HOOKS.deckServices], ['landmarksTauride']);
   });
-  await check("the North with 'landmarksTauride' in MODULES: the cap row stays { factor 0.22, maxPeople 60 } (a copy of area.js with the module listed, imports made absolute)", async () => {
+  await check("the generic North WITHOUT 'landmarksTauride' in MODULES: the cap row stays { factor 0.22, maxPeople 60 } (a copy of area.js with the module taken out, imports made absolute)", async () => {
     const file = path.join(root, 'src/areas/north/area.js'), dir = path.dirname(file);
     let src = fs.readFileSync(file, 'utf8').replace(/from '(\.\.?\/[^']+)'/g, (m, p) => `from '${pathToFileURL(path.resolve(dir, p)).href}'`);
-    const listed = src.replace(/(export const MODULES = \[\s*'environment',)/, "$1 'landmarksTauride',"); assert.notEqual(listed, src, 'MODULES has changed its shape: adapt this check');
-    const tmp = path.join(os.tmpdir(), `north-area-tauride-${process.pid}.mjs`); fs.writeFileSync(tmp, listed);
+    const unlisted = src.replace(/^[ \t]*'landmarksTauride',[^\n]*\n/m, ''); assert.notEqual(unlisted, src, 'MODULES has changed its shape: adapt this check');
+    const tmp = path.join(os.tmpdir(), `north-area-tauride-${process.pid}.mjs`); fs.writeFileSync(tmp, unlisted);
     try {
       const T = await import(pathToFileURL(tmp).href);
-      assert.ok(T.MODULES.includes('landmarksTauride')); assert.deepEqual(T.ZONES.peopleDensity.garden, CAP);
+      assert.ok(!T.MODULES.includes('landmarksTauride')); assert.deepEqual(T.ZONES.peopleDensity.garden, CAP);
       assert.equal(T.HOOKS.inGarden, inGarden);
       assert.deepEqual(T.ZONES.peopleDensity.west, N.ZONES.peopleDensity.west); assert.deepEqual(T.ZONES.peopleDensity.mars, N.ZONES.peopleDensity.mars);
     } finally { fs.rmSync(tmp, { force: true }); }

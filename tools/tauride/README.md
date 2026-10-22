@@ -51,7 +51,7 @@ Re-run: `node tools/tauride/tauride-generate.mjs --source raw --work tools/tauri
 | `paradny-inspect.mjs` | the Paradny records of a data facade (default the North's) -> `raw/work/paradny-data.json` |
 | `paradny-roofs.py` | `paradny-data.json` -> `raw/out/paradny-roofs.js` (footprints inset 2.4 m, mitred) |
 | `paradny-floor.mjs` + `paradny-floor.py` | the podium polygon and the 8 stairs of `paradny-surface.js` (this repository after the port, `--surface <file>`, or `$PITER_SRC`) -> `raw/out/paradny-floor.js` (podium minus the stair strips) |
-| `paradny-walk.mjs` | CPU harness: the REAL Player climbs the 8 mapped Paradny stairs (needs `landmarksTauride` built: here after the port, or `PITER_SRC=...`): 8 stairs, 0 failing on the source module |
+| `paradny-walk.mjs` | CPU harness: the REAL Player climbs the 8 mapped Paradny stairs (needs `landmarksTauride` built: here after the port, or `PITER_SRC=...`): 8 stairs, 0 failing on the source module; **T1: the port exists here, `node tools/tauride/paradny-walk.mjs` = 8 stairs, 0 failing on this repository's module as well** |
 | `tauride-plan.py`, `paradny-plan.py` | matplotlib plans (`raw/out/*.png`): ways coloured by class, the union, fences, gates; Paradny buildings, roads and stairs |
 | `fetch-tauride.mjs`, `tauride-extract.py`, `read-osm.py` | OPTIONAL: download the Overpass snapshot / rebuild it from OSM XML / inspect it (into `raw/`) |
 | `data-test.mjs` | the checks of the data modules |

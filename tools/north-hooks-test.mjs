@@ -57,14 +57,15 @@ if (argv[0] === '--child') {
   } else if (mode === 'north-noremap') {                    // the North's area module loaded as areas-test loads it: no import-map remap (its landmark groups then read the strip facade)
     const A = await imp('src/areas/north/area.js');
     print({ id: A.ID, modules: A.MODULES, keys: Object.keys(A.HOOKS), types: Object.fromEntries(Object.entries(A.HOOKS).map(([k, v]) => [k, Array.isArray(v) ? 'array' : typeof v])), patches: A.HEIGHT_PATCHES.map((p) => ({ id: p.id, box: p.box })) });
-  } else if (mode === 'whatif' || mode === 'malformed') {   // the North with another area module: a data: URL module mapped over src/world/area.js by a data: URL loader hook
+  } else if (mode === 'whatif' || mode === 'dormant' || mode === 'malformed') {   // the North with another area module: a data: URL module mapped over src/world/area.js by a data: URL loader hook
     const { REGISTRY } = await imp('src/areas/registry.js');
     const href = (rel) => pathToFileURL(path.join(root, rel)).href, northUrl = href('src/areas/north/area.js'), hooksUrl = href('src/areas/north/hooks.js');
-    // whatif:    'landmarksTauride' appended to the MODULES, HOOKS and HEIGHT_PATCHES built for that list
+    // whatif:    'landmarksTauride' in the MODULES (appended when absent: since T1 of the Tauride remake the page lists it already), HOOKS and HEIGHT_PATCHES built for that list
+    // dormant:   the page's MODULES WITHOUT 'landmarksTauride' (the North of M5 / M6, the former real list), HOOKS and HEIGHT_PATCHES built for that list
     // malformed: the North's area module with a HOOKS and a HEIGHT_PATCHES of the wrong kinds (the table of a hand-written area), and one well-formed patch behind the bad ones
-    const whatif = 'data:text/javascript,' + encodeURIComponent(mode === 'whatif'
+    const whatif = 'data:text/javascript,' + encodeURIComponent(mode === 'whatif' || mode === 'dormant'
       ? `export * from ${JSON.stringify(northUrl)}; import { MODULES as M0 } from ${JSON.stringify(northUrl)}; import { makeHooks, makeHeightPatches } from ${JSON.stringify(hooksUrl)};
-      export const MODULES = [...M0, 'landmarksTauride']; export const HOOKS = makeHooks(MODULES); export const HEIGHT_PATCHES = makeHeightPatches(MODULES);`
+      export const MODULES = ${mode === 'whatif' ? "[...new Set([...M0, 'landmarksTauride'])]" : "M0.filter((m) => m !== 'landmarksTauride')"}; export const HOOKS = makeHooks(MODULES); export const HEIGHT_PATCHES = makeHeightPatches(MODULES);`
       : `export * from ${JSON.stringify(northUrl)};
       export const HOOKS = { treeCleared: false, treeReject: 'yes', inGarden: () => true, deckServices: 'landmarksTauride', futureHook: 1 };
       export const HEIGHT_PATCHES = [null, { id: 'nobox', at() { return 9; } }, { id: 'nan', box: [0, 1, 0, NaN], at() { return 9; } }, { id: 'noat', box: [0, 1, 0, 1] }, { id: 'ok', box: [890, 910, -1010, -990], at: () => 7 }];`);
@@ -198,9 +199,11 @@ check('north: area-tables HOOKS is the area module HOOKS (same keys)', eq(Object
 for (const k of FACTORIES) check(`north: HOOKS.${k} is a factory (function of ctx)`, typeof HK[k] === 'function' && HK[k].length <= 1, typeof HK[k] + '/' + (HK[k] && HK[k].length));
 check('north: HOOKS.inGarden is a function of (x, z)', typeof HK.inGarden === 'function' && HK.inGarden.length === 2, typeof HK.inGarden + '/' + (HK.inGarden && HK.inGarden.length));
 check('north: HOOKS.deckServices is ["landmarksTauride"], frozen', eq(HK.deckServices, [TAURIDE]) && Object.isFrozen(HK.deckServices), JSON.stringify(HK.deckServices) + ' frozen ' + Object.isFrozen(HK.deckServices));
-check(`north: HOOKS.parkingReject is ${MODULES.includes(TAURIDE) ? 'a function (landmarksTauride is in MODULES)' : 'undefined (landmarksTauride is not in MODULES)'}`, MODULES.includes(TAURIDE) ? typeof HK.parkingReject === 'function' : HK.parkingReject === undefined, typeof HK.parkingReject);
+// TRIPWIRES FLIPPED in T1 of the Tauride remake (docs/TAURIDE-REMAKE.md 12): the next two checks used to accept both states of the page's module list; landmarksTauride is in MODULES now, so the active branch is the only one that passes
+// (the gated-by-MODULES behaviour of both hooks is still proved with synthetic lists in the `gating` group and by the `dormant` child of the `height` group).
+check('north: landmarksTauride is in the North MODULES (T1 of the Tauride remake) and HOOKS.parkingReject is a function', MODULES.includes(TAURIDE) && typeof HK.parkingReject === 'function', MODULES.includes(TAURIDE) + ' ' + typeof HK.parkingReject);
 check('north: HEIGHT_PATCHES is an array shaped { id, box[4], at() }', Array.isArray(T.HEIGHT_PATCHES) && T.HEIGHT_PATCHES.every((p) => typeof p.id === 'string' && Array.isArray(p.box) && p.box.length === 4 && p.box[0] < p.box[1] && p.box[2] < p.box[3] && typeof p.at === 'function'));
-check(`north: HEIGHT_PATCHES is ${MODULES.includes(TAURIDE) ? 'the Paradny patch first' : '[] (landmarksTauride is not in MODULES)'}`, MODULES.includes(TAURIDE) ? T.HEIGHT_PATCHES[0]?.id === 'paradny' : T.HEIGHT_PATCHES.length === 0, T.HEIGHT_PATCHES.map((p) => p.id).join());
+check('north: HEIGHT_PATCHES is the Paradny patch first (landmarksTauride is in MODULES since T1)', MODULES.includes(TAURIDE) && T.HEIGHT_PATCHES[0]?.id === 'paradny', T.HEIGHT_PATCHES.map((p) => p.id).join());
 check('north: the MODULES list parsed by tools/modules-list.mjs is the one of the area module', eq((await imp('tools/modules-list.mjs')).mainModules('north'), MODULES));
 await guard('north child', async () => {
   const c = child('north-noremap');
@@ -321,6 +324,22 @@ await guard('paradny source', async () => {
   for (let i = 0; i < 60000; i++) { const x = 721 + rnd() * 358, z = -1225 + rnd() * 372; b.add(P.paradnyDeckY(x, z) === S0.paradnyDeckY(x, z), `(${x.toFixed(2)}, ${z.toFixed(2)})`); }
   b.fin('source: paradnyDeckY answers bit for bit as the source module does');
 });
+await guard('paradny twin', async () => {                    // T1 of the Tauride remake: the module landmarksTauride has its OWN copy of the deck logic (paradny-surface.js, verbatim from the source) next to the port of hooks/paradny.js (docs/AREAS.md 9.5 point 4): they must never drift
+  const M = await imp('src/world/landmarksTauride/paradny-surface.js');            // needs no three.js: it imports the data facade only (the North's, through the remap of tools/area.mjs)
+  check('twin: PARADNY_Y, PARADNY_PODIUM, PARADNY_STAIRS (id, w, pts), PARADNY_FLIGHTS and PARADNY_LANDINGS of landmarksTauride/paradny-surface.js equal hooks/paradny.js', P.PARADNY_Y === M.PARADNY_Y && eq(P.PARADNY_PODIUM, M.PARADNY_PODIUM) && eq(P.PARADNY_STAIRS.map((s) => [s.id, s.pts, s.w]), M.PARADNY_STAIRS.map((s) => [s.id, s.pts, s.w])) && eq(P.PARADNY_FLIGHTS, M.PARADNY_FLIGHTS) && eq(P.PARADNY_LANDINGS, M.PARADNY_LANDINGS));
+  const file = path.join(root, GOLDEN_FILE);
+  if (fs.existsSync(file)) {                                  // the module's copy against the pinned golden (the same lattice the port is held to: a mutant of either file is caught without the source repository)
+    const g = JSON.parse(fs.readFileSync(file, 'utf8')), w = g.lattice, q = new Int32Array(w.nx * w.nz); let k = 0, deck = 0, sumQ = 0;
+    for (let i = 0; i < w.nx; i++) for (let j = 0; j < w.nz; j++) { const y = M.paradnyDeckY(w.x0 + i * w.step, w.z0 + j * w.step); if (y === null) q[k++] = -2147483648; else { const v = Math.round(y * Q); q[k++] = v; deck++; sumQ += v; } }
+    const hash = createHash('sha256').update(Buffer.from(q.buffer, q.byteOffset, q.byteLength)).digest('hex').slice(0, 16);
+    check(`twin: the module's paradnyDeckY on the golden ${w.nx} x ${w.nz} lattice (${w.step} m) hashes to ${w.hash} (${w.deck} deck points)`, q.length === w.points && deck === w.deck && sumQ === w.sumQ && hash === w.hash, `deck ${deck} vs ${w.deck}, sum ${sumQ} vs ${w.sumQ}, hash ${hash} vs ${w.hash}`);
+  } else check(`twin: ${GOLDEN_FILE} exists`, false, 'missing');
+  const b = bag(), B = P.PARADNY_BOX; let seed = 987654; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  for (let x = B[0] - 3; x <= B[1] + 3; x += 0.5) for (let z = B[2] - 3; z <= B[3] + 3; z += 0.5) b.add(P.paradnyDeckY(x, z) === M.paradnyDeckY(x, z) && P.inParadny(x, z) === M.inParadny(x, z), `(${x}, ${z}) ${P.paradnyDeckY(x, z)} vs ${M.paradnyDeckY(x, z)}`);
+  for (let i = 0; i < 60000; i++) { const x = 721 + rnd() * 358, z = -1225 + rnd() * 372; b.add(P.paradnyDeckY(x, z) === M.paradnyDeckY(x, z), `(${x.toFixed(3)}, ${z.toFixed(3)})`); }
+  for (const [x, z] of [[NaN, 0], [0, NaN], [1e9, 1e9], [-1e9, 5], [900, -1000], [1058.51, -1000], [741, -873]]) b.add(Object.is(P.paradnyDeckY(x, z), M.paradnyDeckY(x, z)), `edge (${x}, ${z})`);
+  b.fin('twin: hooks/paradny.js paradnyDeckY / inParadny answer bit for bit as the module\'s paradny-surface.js on a 0.5 m lattice over the box (+ 3 m) and 60,000 random points');
+});
 await guard('campus and garden data', async () => {
   const camp = [...CAMPUS_RING], b = bag();
   for (let x = 1090; x <= 1365; x += 1.3) for (let z = -1262; z <= -1030; z += 1.3) { if (ringDist(camp, x, z) < EPS) continue; b.add(inCampus(x, z) === ringHas(camp, x, z), `(${x}, ${z})`); }
@@ -353,16 +372,27 @@ section('height');
   check('height: the Paradny patch gives 3.3 on the podium (900, -1000)', par ? par.at(900, -1000) === 3.3 : false, String(par && par.at(900, -1000)));
   check('height: the patch answers null where the deck is none (Smolny, the campus, a street at the foot of the podium)', par ? [[2380, -1833], [1230, -1150], [1413, -1217], [700, -900], [1100, -1000]].every(([x, z]) => par.at(x, z) === null) : false);
   check('height: the patch equals paradnyDeckY on a lattice over the Paradny box', par ? (() => { let bad = 0; const B = P.PARADNY_BOX; for (let x = B[0] - 2; x <= B[1] + 2; x += 3.7) for (let z = B[2] - 2; z <= B[3] + 2; z += 3.7) if (par.at(x, z) !== P.paradnyDeckY(x, z)) bad++; return bad === 0; })() : false);
-  check('height: the North as built (no landmarksTauride in MODULES) leaves layout.heightAt at street level on the podium', L.heightAt(900, -1000) === 0 && L.heightAt(1047, -1100) === 0 || MODULES.includes(TAURIDE), L.heightAt(900, -1000) + ' ' + L.heightAt(1047, -1100));
+  // TRIPWIRE FLIPPED in T1 of the Tauride remake (docs/TAURIDE-REMAKE.md 12): this check used to read "the North as built (no landmarksTauride in MODULES) leaves layout.heightAt at street level on the podium", with an
+  // `|| MODULES.includes(TAURIDE)` escape that made it pass either way. The module is in MODULES now: the page's own layout.heightAt is the deck on the podium; the street-level answer is asserted in the `dormant` child below.
+  check('height: the North as built (landmarksTauride IS in MODULES since T1) answers the podium deck: heightAt(900, -1000) = 3.3, the street at the foot of the podium stays 0', MODULES.includes(TAURIDE) && L.heightAt(900, -1000) === 3.3 && L.heightAt(1100, -1000) === 0 && L.heightAt(2000, -500) === 0, MODULES.includes(TAURIDE) + ' ' + L.heightAt(900, -1000) + ' ' + L.heightAt(1100, -1000));
 }
+await guard('dormant child', async () => {
+  const d = child('dormant');
+  check('dormant (the page\'s MODULES without landmarksTauride, the former real list): no height patch, no parkingReject, heightAt(900, -1000) is street level', d.patches.length === 0 && d.hookTypes.parkingReject !== 'function' && d.podium === 0, JSON.stringify({ patches: d.patches.map((p) => p.id), parkingReject: d.hookTypes.parkingReject, podium: d.podium }));
+  const OLD0 = (x, z) => { const k = L.waterwayAt(x, z); return k ? L.WATERWAYS[k].bed : L.GROUND_Y; };
+  const b = bag(); let i = 0;
+  for (let x = d.xs[0]; x <= d.xs[1]; x += d.xs[2]) for (let z = d.zs[0]; z <= d.zs[1]; z += d.zs[2]) { const want = OLD0(x, z); b.add(Math.abs(d.h[i++] - want) < 1e-5, `(${x}, ${z}) ${d.h[i - 1]} != ${want.toFixed(5)}`); }
+  b.fin('dormant: layout.heightAt is the old waterway-bed / street-level line on the lattice 4 m over the podium box');
+});
 await guard('what-if child', async () => {
   const w = child('whatif');
   check('what-if (landmarksTauride appended to MODULES): HEIGHT_PATCHES holds the Paradny patch first', w.patches.length >= 1 && w.patches[0].id === 'paradny' && eq(w.patches[0].box, P.PARADNY_BOX), JSON.stringify(w.patches.map((p) => p.id)));
   check('what-if: HOOKS.parkingReject is a function', w.hookTypes.parkingReject === 'function', String(w.hookTypes.parkingReject));
   check('what-if: layout.heightAt(900, -1000) is 3.3 (the engine reads the patch through area-tables)', w.podium === 3.3, String(w.podium));
-  // baseline = this process (no patch): heightAt must equal paradnyDeckY(x, z) ?? baseline(x, z) on the lattice, and everywhere else stay the baseline
+  // baseline = the OLD line (waterway bed / street level; since T1 this process has the patch itself, so its own heightAt is no baseline): heightAt must equal paradnyDeckY(x, z) ?? old line on the lattice
+  const OLD = (x, z) => { const k = L.waterwayAt(x, z); return k ? L.WATERWAYS[k].bed : L.GROUND_Y; };
   const b = bag(); let i = 0;
-  for (let x = w.xs[0]; x <= w.xs[1]; x += w.xs[2]) for (let z = w.zs[0]; z <= w.zs[1]; z += w.zs[2]) { const want = P.paradnyDeckY(x, z) ?? L.heightAt(x, z); b.add(Math.abs(w.h[i++] - want) < 1e-5, `(${x}, ${z}) ${w.h[i - 1]} != ${want.toFixed(5)}`); }
+  for (let x = w.xs[0]; x <= w.xs[1]; x += w.xs[2]) for (let z = w.zs[0]; z <= w.zs[1]; z += w.zs[2]) { const want = P.paradnyDeckY(x, z) ?? OLD(x, z); b.add(Math.abs(w.h[i++] - want) < 1e-5, `(${x}, ${z}) ${w.h[i - 1]} != ${want.toFixed(5)}`); }
   b.fin('what-if: layout.heightAt = paradnyDeckY ?? the old line on the lattice 4 m over the podium and its stairs');
 });
 
