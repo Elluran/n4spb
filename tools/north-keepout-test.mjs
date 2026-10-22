@@ -128,6 +128,7 @@ if (opt('child')) {
   if (!tuftMesh) throw new Error('no env-tufts mesh');
   const SPOTS = { podium: [900, -1000], podiumEdge: [757, -1040], campus: [1230, -1150], campusEdge: [1120, -1230], campusSouth: [1250, -1062], suvorov: [1413, -1217], smolny1: [2380, -1833], smolny2: [2460, -1543], garden: [1200, -1500], chernyshevskaya: [444, -1351] };
   out.tufts = {};
+  out.tuftMax = tuftMesh.instanceMatrix.count;                                          // the capacity of the pool (lawns.js buildTufts: MAX = round(4800 * scale^2 + 500), 5300 at the quality 'high' of this ctx)
   for (const [name, [x, z]] of Object.entries(SPOTS)) {
     camera.position.set(x, 1.7, z);
     for (const f of ctx._updates) f(0.016, 0);
@@ -243,6 +244,12 @@ check('pedestrianOnly: rank 0 and MORE than 60 % of the points in the podium (fi
   ok(f(way(0, outside)) === false, 'all outside');
   ok(f(way(0, [...inside.slice(0, 3), ...outside.slice(0, 2)])) === false, '3 of 5 (60 %, not more than 60 %)');
   ok(f(way(0, [...inside.slice(0, 4), ...outside.slice(0, 1)])) === true, '4 of 5');
+  // 20-vertex ways with the fractions the 5-vertex fixtures cannot give: 65 % must be pedestrian-only (a threshold of 0.7 would refuse it), 60 % and 55 % must not (0.5 would take them)
+  const many = (k) => way(0, Array.from({ length: 20 }, (_, i) => (i < k ? [900 + i, -1000 - i] : [100 + i, -100])));
+  ok(inPodium(...[900 + 12, -1000 - 12]), 'the 20-vertex fixture leaves the podium');
+  ok(f(many(13)) === true, '13 of 20 (65 %, more than 60 %)');
+  ok(f(many(12)) === false, '12 of 20 (60 %, not more than 60 %)');
+  ok(f(many(11)) === false, '11 of 20 (55 %)');
 });
 
 console.log('PART 2: the regions');
@@ -385,7 +392,10 @@ check('tufts: no tuft stands in a keep-out (campus; with landmarksTauride the po
     for (const name of Object.keys(a.tufts)) {
       const { gone, came } = sets(a.tufts[name], b.tufts[name]), bad = gone.filter((t) => !reg(t[0], t[1]));
       ok(bad.length === 0, `${label} at ${name}: ${bad.length} tufts vanished outside the regions: ${describe(bad)}`);
-      ok(came.length === 0 || a.tufts[name].length >= 5299, `${label} at ${name}: ${came.length} tufts appeared (pool ${a.tufts[name].length}): ${describe(came)}`);
+      // a tuft can only come in when the reference pool was SATURATED (n reached MAX and lawns.js stopped adding): the freed places are then taken by tufts that did not fit before. The capacity is read from the
+      // engine's own mesh (a.tuftMax); today no pool of the camera spots is saturated (the largest holds 3563 of 5300), so `came` must be empty everywhere.
+      ok(Number.isInteger(a.tuftMax) && a.tuftMax > 0, `${label}: the snapshot carries no tuftMax`);
+      ok(came.length === 0 || a.tufts[name].length >= a.tuftMax, `${label} at ${name}: ${came.length} tufts appeared (pool ${a.tufts[name].length} of ${a.tuftMax}): ${describe(came)}`);
       removed += gone.length;
     }
   };

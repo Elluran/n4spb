@@ -38,7 +38,7 @@ const REGIONS = {
   paradny: [741, 1058.51, -1205, -873],                 // the podium + stair box (hooks/paradny.js PARADNY_BOX): trees, tufts, props, ways, parking (dormant)
 };
 const ACTIVE = ['smolny-a', 'smolny-b', 'suvorov', 'campus'];      // switched on by the modules the North builds since M5
-/** the exact shapes behind --expect-empty: the podium ring (the source's paradny-surface.js, hooks/paradny.js PARADNY_PODIUM) and the CAMPUS polygon (landmarksKirochnaya/groups.js) as flat rings; hooks-test pins both */
+/** the exact shapes behind --expect-empty: the podium ring (the source's paradny-surface.js, hooks/paradny.js PARADNY_PODIUM) and the CAMPUS polygon (landmarksKirochnaya/groups.js) as flat rings; they are literals because this file runs as a script, and tools/north-hooks-test.mjs (group data) reads them back from this text and pins both */
 const PODIUM_RING = [744, -884, 741, -970, 777, -995, 777, -1095, 839, -1095, 840, -1137, 978, -1137, 983, -1205, 1055, -1203, 1041, -905, 974, -898, 965, -881, 900, -873, 820, -875];
 const CAMPUS_RING = [1118, -1237.6, 1150.5, -1242.2, 1241.6, -1239.8, 1343.1, -1237, 1336.5, -1068.8, 1244, -1047, 1134.4, -1048.8, 1110.1, -1100.5];
 const rectRing = (b) => [b[0], b[2], b[1], b[2], b[1], b[3], b[0], b[3]];
@@ -195,7 +195,7 @@ globalThis.performance = globalThis.performance || { now: () => Date.now() };
 // ---------------------------------------------------------------- build
 const OUT = opt('out');
 if (!OUT) { console.log('usage: node tools/area.mjs north tools/north-env-snapshot.mjs --out file.json [--mods a,b] [--also landmarksTauride] [--q high] [--lattice 36] [--no-tufts]\n       node tools/north-env-snapshot.mjs --diff a.json b.json [--allow campus,suvorov,smolny,paradny] [--margin 8] [--verbose]\n       --regions'); process.exit(1); }
-process.env.PROPS_DUMP = '1';                                                   // props: ctx.services.props.inst = every instance by type (the frozen-district proof of tools/props-islands.mjs)
+process.env.PROPS_DUMP = '1';                                                   // props: ctx.services.props.inst = every instance by type (what --diff compares for the props of two runs)
 const THREE = await import('three');
 const { createContext } = await imp('src/core/ctx.js');
 const { createKnock } = await imp('src/core/knock.js');

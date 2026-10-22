@@ -1,20 +1,27 @@
 // tools/north-hooks-test.mjs - the CPU CONTRACT TEST of the hook set of milestone M6 (docs/AREAS.md section 9): HOOKS and HEIGHT_PATCHES of the area modules, the factories of src/areas/north/hooks.js, the Paradny deck,
-// and the wiring of the engine files. Written against the FROZEN CONTRACT, so it is red where a cluster has not landed (A: height patches + drive/handling, B: keep-outs, C: garden) and green when all are in.
-//   node tools/area.mjs north tools/north-hooks-test.mjs            (npm run hooks)        [--source <dir>] the source repository for the optional Paradny equality (default D:/git2/agi-fun-tests/102_3d_piter, skipped when absent)
+// the validation of the tables (lib/area-tables.js) and a TEXT check of the engine files. Written against the FROZEN CONTRACT. It needs no three.js, so it is a CI step; it does NOT run the engine: the
+// behaviour of the call sites (trees, tufts, props, ways, parking, heightAt, handling, nav, sim) is proved by the engine tests of `npm run hooks:all` (local, needs `npm ci`), see docs/AREAS.md 9.6.
+//   node tools/area.mjs north tools/north-hooks-test.mjs            (npm run hooks)        [--source <dir>] the source repository for the optional Paradny equality (else $PITER_SRC, else D:/git2/agi-fun-tests/102_3d_piter; skipped when absent)
+//   node tools/area.mjs north tools/north-hooks-test.mjs --write-paradny-golden            rewrites tools/golden/paradny-deck.json from hooks/paradny.js (only after a deliberate change, with the source repository present)
 // Groups:  strip     the strip's HOOKS is {} and HEIGHT_PATCHES is [] (a child process WITHOUT the remap: the area module of the strip, area-tables, heightAt)
 //          contract  the North's HOOKS has exactly the eight keys of the contract, their types; deckServices; HEIGHT_PATCHES shape; the area module loads without the remap (child process)
 //          gating    every (ctx) factory returns null for a ctx whose buildList lacks the modules it serves (absent list, empty list, other modules) and a function for each served module; parkingReject / HEIGHT_PATCHES by MODULES
 //          probes    the factories fire at the fixed probes (podium (900, -1000), campus (1230, -1150), Suvorov (1413, -1217), Smolny (2380, -1833) and (2460, -1543)) and ONLY inside their declared regions: grids around
 //                    every place and a coarse lattice over the whole play area, against independent oracles (rectangles, the embedded CAMPUS of landmarksKirochnaya/groups.js, the garden ring of the facade)
-//          data      the Paradny literals equal the North facade STEPS (and, when the source repository is present, the source module); the podium ring, box, flights, landings; the deck ramps; the garden ring = GREEN r1582734
+//          data      the Paradny literals equal the North facade STEPS; the podium ring, box, flights, landings; the deck ramps; the garden ring = GREEN r1582734; the Paradny golden (tools/golden/paradny-deck.json:
+//                    flights, landings, deck heights on a 0.25 m lattice: the port is pinned WITHOUT the source repository) and, when the source repository is present, the source module bit for bit
 //          height    the height patch gives 3.3 on the podium with 'landmarksTauride' in MODULES and nothing without; layout.heightAt with the module listed (child process with a patched area module)
 //          pure      makeHooks / makeHeightPatches are pure (twice = the same), the hooks files import nothing but each other (no three.js, layout.js, data facade)
-//          wiring    each engine file reads its hook through lib/area-tables.js (never from area.js); layout.js gains no export
+//          tables    lib/area-tables.js validates HOOKS and HEIGHT_PATCHES: a malformed table does not throw, drops the bad key / patch and warns, naming it (units, and a child with a malformed area module)
+//          tools     tools/layout-golden.mjs refuses a dump of the wrong world (AREA=north without the remap writes nothing)
+//          static    TEXT checks of the engine sources (no run): each reads its hook through lib/area-tables.js (never from area.js); layout.js gains no export
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import os from 'node:os';
 import { register } from 'node:module';
 import path from 'node:path';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const imp = (p) => import(pathToFileURL(path.join(root, p)).href);
@@ -45,19 +52,37 @@ if (argv[0] === '--child') {
   const tables = async () => { const T = await imp('src/world/lib/area-tables.js'); return { hooks: Object.keys(T.HOOKS), hookTypes: Object.fromEntries(Object.entries(T.HOOKS).map(([k, v]) => [k, Array.isArray(v) ? 'array' : typeof v])), patches: T.HEIGHT_PATCHES.map((p) => ({ id: p.id, box: p.box })) }; };
   if (mode === 'strip') {                                    // the strip's own area module, no remap
     const A = await imp('src/world/area.js'), L = await imp('src/world/layout.js');
-    print({ id: A.ID, areaHooks: Object.keys(A.HOOKS), areaPatches: A.HEIGHT_PATCHES.length, ...(await tables()), h: [L.heightAt(900, -1000), L.heightAt(0, 0)], layoutExports: Object.keys(L).filter((k) => /HOOKS|HEIGHT_PATCHES/.test(k)) });
+    const T0 = await imp('src/world/lib/area-tables.js');
+    print({ id: A.ID, areaHooks: Object.keys(A.HOOKS), areaPatches: A.HEIGHT_PATCHES.length, ownTables: T0.HOOKS === A.HOOKS && T0.HEIGHT_PATCHES === A.HEIGHT_PATCHES, ...(await tables()), h: [L.heightAt(900, -1000), L.heightAt(0, 0)], layoutExports: Object.keys(L).filter((k) => /HOOKS|HEIGHT_PATCHES/.test(k)) });
   } else if (mode === 'north-noremap') {                    // the North's area module loaded as areas-test loads it: no import-map remap (its landmark groups then read the strip facade)
     const A = await imp('src/areas/north/area.js');
     print({ id: A.ID, modules: A.MODULES, keys: Object.keys(A.HOOKS), types: Object.fromEntries(Object.entries(A.HOOKS).map(([k, v]) => [k, Array.isArray(v) ? 'array' : typeof v])), patches: A.HEIGHT_PATCHES.map((p) => ({ id: p.id, box: p.box })) });
-  } else if (mode === 'whatif') {                           // the North with 'landmarksTauride' appended to its MODULES: a data: URL area module, mapped over src/world/area.js by a data: URL loader hook
+  } else if (mode === 'whatif' || mode === 'malformed') {   // the North with another area module: a data: URL module mapped over src/world/area.js by a data: URL loader hook
     const { REGISTRY } = await imp('src/areas/registry.js');
     const href = (rel) => pathToFileURL(path.join(root, rel)).href, northUrl = href('src/areas/north/area.js'), hooksUrl = href('src/areas/north/hooks.js');
-    const whatif = 'data:text/javascript,' + encodeURIComponent(`export * from ${JSON.stringify(northUrl)}; import { MODULES as M0 } from ${JSON.stringify(northUrl)}; import { makeHooks, makeHeightPatches } from ${JSON.stringify(hooksUrl)};
-      export const MODULES = [...M0, 'landmarksTauride']; export const HOOKS = makeHooks(MODULES); export const HEIGHT_PATCHES = makeHeightPatches(MODULES);`);
+    // whatif:    'landmarksTauride' appended to the MODULES, HOOKS and HEIGHT_PATCHES built for that list
+    // malformed: the North's area module with a HOOKS and a HEIGHT_PATCHES of the wrong kinds (the table of a hand-written area), and one well-formed patch behind the bad ones
+    const whatif = 'data:text/javascript,' + encodeURIComponent(mode === 'whatif'
+      ? `export * from ${JSON.stringify(northUrl)}; import { MODULES as M0 } from ${JSON.stringify(northUrl)}; import { makeHooks, makeHeightPatches } from ${JSON.stringify(hooksUrl)};
+      export const MODULES = [...M0, 'landmarksTauride']; export const HOOKS = makeHooks(MODULES); export const HEIGHT_PATCHES = makeHeightPatches(MODULES);`
+      : `export * from ${JSON.stringify(northUrl)};
+      export const HOOKS = { treeCleared: false, treeReject: 'yes', inGarden: () => true, deckServices: 'landmarksTauride', futureHook: 1 };
+      export const HEIGHT_PATCHES = [null, { id: 'nobox', at() { return 9; } }, { id: 'nan', box: [0, 1, 0, NaN], at() { return 9; } }, { id: 'noat', box: [0, 1, 0, 1] }, { id: 'ok', box: [890, 910, -1010, -990], at: () => 7 }];`);
     const entries = Object.entries(REGISTRY.north.remap).map(([k, v]) => [href(k), k === 'src/world/area.js' ? whatif : href(v)]);
     entries.push([href('src/world/area.js'), whatif]);
     const loader = 'let map = new Map(); export async function initialize(d) { map = new Map(d); } export async function resolve(s, c, n) { const r = await n(s, c); const t = map.get(r.url); return t ? { ...r, url: t, shortCircuit: true } : r; }';
     register('data:text/javascript,' + encodeURIComponent(loader), { parentURL: import.meta.url, data: [...new Map(entries)] });
+    if (mode === 'malformed') {
+      const warns = [], w0 = console.warn; console.warn = (...a) => warns.push(a.join(' '));
+      let threw = null, out = {};
+      try {
+        const T = await imp('src/world/lib/area-tables.js'), L = await imp('src/world/layout.js');
+        out = { hookKeys: Object.keys(T.HOOKS).sort(), patchIds: T.HEIGHT_PATCHES.map((p) => p.id), h: [L.heightAt(900, -1000), L.heightAt(0, 0), L.heightAt(2000, -500)] };
+      } catch (e) { threw = String(e && e.stack || e).split('\n').slice(0, 3).join(' | '); }
+      console.warn = w0;
+      print({ threw, warns, ...out });
+      process.exit(0);
+    }
     const L = await imp('src/world/layout.js'), T = await tables(), xs = [], zs = [], h = [];
     for (let x = 700; x <= 1100; x += 4) xs.push(x);
     for (let z = -1260; z <= -820; z += 4) zs.push(z);
@@ -91,6 +116,29 @@ const H = await imp('src/areas/north/hooks.js'), P = await imp('src/areas/north/
 const KO = await imp('src/areas/north/hooks/keep-out.js'), HG = await imp('src/areas/north/hooks/height.js'), HP = await imp('src/areas/north/hooks/people.js');
 const { CAMPUS, inCampus } = await imp('src/world/landmarksKirochnaya/groups.js');
 const MODULES = A.MODULES, TAURIDE = 'landmarksTauride';
+
+// ---------------------------------------------------------------- the Paradny golden (tools/golden/paradny-deck.json): the stair geometry pinned WITHOUT the source repository
+// FLIGHTS, LANDINGS, Y and BOX of hooks/paradny.js (rounded to 1e-6) and paradnyDeckY on a fixed 0.25 m lattice (off the integer grid), as the count of deck points, the sum and the hash of the heights quantised to 0.1 mm.
+// It is a snapshot of THIS module, taken while it equalled the source module bit for bit (the optional `source` check below); regenerate it only after a deliberate change of paradny.js:
+//   node tools/area.mjs north tools/north-hooks-test.mjs --write-paradny-golden        (then run the test with the source repository present)
+const GOLDEN_FILE = 'tools/golden/paradny-deck.json', Q = 1e4;
+const r6 = (v) => Math.round(v * 1e6) / 1e6;
+const round6 = (v) => JSON.parse(JSON.stringify(v, (k, x) => (typeof x === 'number' ? r6(x) : x)));
+const lattice = (spec) => {
+  const q = new Int32Array(spec.nx * spec.nz); let k = 0, deck = 0, sumQ = 0;
+  for (let i = 0; i < spec.nx; i++) for (let j = 0; j < spec.nz; j++) { const y = P.paradnyDeckY(spec.x0 + i * spec.step, spec.z0 + j * spec.step); if (y === null) q[k++] = -2147483648; else { const v = Math.round(y * Q); q[k++] = v; deck++; sumQ += v; } }
+  return { points: q.length, deck, sumQ, hash: createHash('sha256').update(Buffer.from(q.buffer, q.byteOffset, q.byteLength)).digest('hex').slice(0, 16) };
+};
+if (argv.includes('--write-paradny-golden')) {
+  const B = P.PARADNY_BOX, step = 0.25, x0 = r6(B[0] - 2 + 0.0371), z0 = r6(B[2] - 2 + 0.0529), nx = Math.floor((B[1] + 2 - x0) / step) + 1, nz = Math.floor((B[3] + 2 - z0) / step) + 1;
+  const spec = { x0, z0, step, nx, nz }, g = { schema: 1, what: 'Paradny deck of src/areas/north/hooks/paradny.js, pinned without the source repository (tools/north-hooks-test.mjs, group data)',
+    regenerate: 'node tools/area.mjs north tools/north-hooks-test.mjs --write-paradny-golden', source: '102_3d_piter@0568f7af src/world/landmarksTauride/paradny-surface.js',
+    y: P.PARADNY_Y, box: round6(P.PARADNY_BOX), landings: round6(P.PARADNY_LANDINGS), flights: round6(P.PARADNY_FLIGHTS), lattice: { ...spec, quantum: 1 / Q, ...lattice(spec) } };
+  const j = JSON.stringify, rows = (a) => '[\n  ' + a.map((o) => j(o)).join(',\n  ') + '\n ]';                      // one flight / landing per line: a diff of the golden reads
+  fs.writeFileSync(path.join(root, GOLDEN_FILE), '{\n' + Object.entries(g).map(([k, v]) => ` ${j(k)}: ${Array.isArray(v) && v.length && v[0] && typeof v[0] === 'object' && !Array.isArray(v[0]) ? rows(v) : j(v)}`).join(',\n') + '\n}\n');
+  console.log(`wrote ${GOLDEN_FILE}: ${g.flights.length} flights, ${g.landings.length} landings, lattice ${nx} x ${nz} = ${g.lattice.points} points, ${g.lattice.deck} on the deck, hash ${g.lattice.hash}`);
+  process.exit(0);
+}
 
 // ---------------------------------------------------------------- independent oracles
 /** even-odd ring test over [x, z, ...] */
@@ -138,6 +186,7 @@ await guard('strip child', async () => {
   check('strip: lib/area-tables.js gives HOOKS {} and HEIGHT_PATCHES []', eq(s.hooks, []) && s.patches.length === 0, JSON.stringify([s.hooks, s.patches]));
   check('strip: heightAt is the old line (street level 0 at the probes)', s.h[0] === 0 && s.h[1] === 0, JSON.stringify(s.h));
   check('strip: layout.js exports neither HOOKS nor HEIGHT_PATCHES', s.layoutExports.length === 0, s.layoutExports.join());
+  check('strip: lib/area-tables.js hands out the area module\'s own {} and [] (a well-formed table is not copied)', s.ownTables === true, String(s.ownTables));
 });
 
 // ================================================================ contract
@@ -205,6 +254,8 @@ for (const [name, [x, z]] of Object.entries(PROBES)) {
     check('pedestrianOnly: a rank-0 way inside the podium is pedestrian-only', f(way(0, inside)) === true);
     check('pedestrianOnly: a rank-1 way inside the podium is not (rank must be 0)', f(way(1, inside)) === false && f(way(2, inside)) === false && f(way(4, inside)) === false);
     check('pedestrianOnly: more than 60 % of the points inside (4 of 5 yes, 3 of 5 no, 2 of 5 no)', f(mix(4)) === true && f(mix(3)) === false && f(mix(2)) === false, [f(mix(4)), f(mix(3)), f(mix(2))].join());
+    const many = (k) => way(0, Array.from({ length: 20 }, (_, i) => (i < k ? [900 + i, -1000 - i] : [100 + i, -100])));            // 20 vertices: the fractions the 5-vertex fixtures cannot give
+    check('pedestrianOnly: 13 of 20 vertices (65 %) is pedestrian-only (a threshold of 0.7 would refuse it); 12 of 20 (60 %) and 11 of 20 (55 %) are not', f(many(13)) === true && f(many(12)) === false && f(many(11)) === false && P.inParadny(900 + 12, -1000 - 12), [f(many(13)), f(many(12)), f(many(11))].join());
     check('pedestrianOnly: a rank-0 way at Smolny / the campus / Suvorov is not', f(way(0, outside)) === false && f(way(0, [[2380, -1833], [2390, -1830]])) === false && f(way(0, [[1230, -1150], [1240, -1150]])) === false);
     check('pedestrianOnly: the answer is a boolean, also for a way without points', f(way(0, inside)) === true && f(way(0, outside)) === false && f({ rank: 0, x: [], z: [] }) === false);
   } else { check('pedestrianOnly: the factory yields a predicate when landmarksTauride is built', false, 'null'); }
@@ -249,8 +300,20 @@ await guard('paradny data', async () => {
     check(`stair ${s.id}: a monotone ramp from the street (${first === null ? '-' : first.toFixed(2)}) to the podium (${last === null ? '-' : last.toFixed(2)}), no hole on its centre line`, hole === 0 && first !== null && first < 0.35 && last > 3.2 && dip < 0.02, `hole ${hole} dip ${dip.toFixed(3)}`);
   }
 });
+await guard('paradny golden', async () => {                  // the port pinned without the source repository (CI never has it): flights, landings, the +.015 landing step, the 0.9 m cuts, the widths
+  const file = path.join(root, GOLDEN_FILE);
+  if (!fs.existsSync(file)) { check(`${GOLDEN_FILE} exists`, false, 'missing; regenerate: node tools/area.mjs north tools/north-hooks-test.mjs --write-paradny-golden'); return; }
+  const g = JSON.parse(fs.readFileSync(file, 'utf8')), fl = round6(P.PARADNY_FLIGHTS), ld = round6(P.PARADNY_LANDINGS);
+  const where = (a, b) => 'differs at index ' + (a.map((v, i) => (eq(v, b[i]) ? -1 : i)).filter((i) => i >= 0).join() || '(length ' + a.length + ' vs ' + b.length + ')');
+  check(`golden: PARADNY_Y and PARADNY_BOX equal ${GOLDEN_FILE}`, P.PARADNY_Y === g.y && eq(round6(P.PARADNY_BOX), g.box), JSON.stringify([P.PARADNY_Y, round6(P.PARADNY_BOX)]) + ' vs ' + JSON.stringify([g.y, g.box]));
+  check(`golden: the ${g.landings.length} landings (x, z, y, w) equal ${GOLDEN_FILE}`, eq(ld, g.landings), where(ld, g.landings));
+  check(`golden: the ${g.flights.length} flights (id, w, pts, start, end, total) equal ${GOLDEN_FILE}`, eq(fl, g.flights), where(fl, g.flights));
+  const t = lattice(g.lattice), w = g.lattice;
+  check(`golden: paradnyDeckY on the ${w.nx} x ${w.nz} lattice (${w.step} m) equals ${GOLDEN_FILE}: ${w.deck} deck points, the heights hash to ${w.hash}`, t.points === w.points && t.deck === w.deck && t.sumQ === w.sumQ && t.hash === w.hash,
+    `deck ${t.deck} vs ${w.deck}, sum ${t.sumQ} vs ${w.sumQ} (units of ${w.quantum} m), hash ${t.hash} vs ${w.hash}`);
+});
 await guard('paradny source', async () => {
-  const dir = (() => { const i = argv.indexOf('--source'); return i >= 0 ? argv[i + 1] : 'D:/git2/agi-fun-tests/102_3d_piter'; })(), file = path.join(dir, 'src/world/landmarksTauride/paradny-surface.js');
+  const dir = (() => { const i = argv.indexOf('--source'); return i >= 0 ? argv[i + 1] : process.env.PITER_SRC || 'D:/git2/agi-fun-tests/102_3d_piter'; })(), file = path.join(dir, 'src/world/landmarksTauride/paradny-surface.js');          // --source, else $PITER_SRC (as north-people-hooks-test.mjs), else the default checkout
   if (!fs.existsSync(file)) { console.log(`skip [data] Paradny port equals the source module (${file} not found)`); return; }
   const S0 = await import(pathToFileURL(file).href);
   check('source: PARADNY_PODIUM, PARADNY_STAIRS, FLIGHTS, LANDINGS and Y equal the source module (commit 0568f7af)', eq(P.PARADNY_PODIUM, S0.PARADNY_PODIUM) && eq(P.PARADNY_STAIRS.map((s) => [s.id, s.pts, s.w]), S0.PARADNY_STAIRS.map((s) => [s.id, s.pts, s.w])) && eq(P.PARADNY_FLIGHTS, S0.PARADNY_FLIGHTS) && eq(P.PARADNY_LANDINGS, S0.PARADNY_LANDINGS) && P.PARADNY_Y === S0.PARADNY_Y);
@@ -274,15 +337,22 @@ await guard('campus and garden data', async () => {
   if (HP.GARDEN_RING || HP.GARDEN) check('hooks/people.js exports its ring: equal to the facade GREEN ring', eq(HP.GARDEN_RING || HP.GARDEN, g.polys[0].o));
 });
 
+await guard('env snapshot rings', async () => {              // tools/north-env-snapshot.mjs is a script (it cannot be imported): its two ring literals are read back from the text
+  const txt = read('tools/north-env-snapshot.mjs'), lit = (name) => { const m = new RegExp(`const ${name} = (\\[[^\\]]*\\]);`).exec(txt); return m ? JSON.parse(m[1]) : null; };
+  check('tools/north-env-snapshot.mjs: PODIUM_RING equals the podium ring of hooks/paradny.js and of the source', eq(lit('PODIUM_RING'), P.PARADNY_PODIUM.o) && eq(lit('PODIUM_RING'), PODIUM), JSON.stringify(lit('PODIUM_RING')));
+  check('tools/north-env-snapshot.mjs: CAMPUS_RING equals CAMPUS of landmarksKirochnaya/groups.js and of hooks/keep-out.js', eq(lit('CAMPUS_RING'), CAMPUS.flat()) && eq(lit('CAMPUS_RING'), KO.CAMPUS.flat()), JSON.stringify(lit('CAMPUS_RING')));
+});
+
 // ================================================================ height
 section('height');
 {
   const withT = H.makeHeightPatches([...OTHER, TAURIDE]), without = H.makeHeightPatches(OTHER);
+  const par = withT.find((p) => p && p.id === 'paradny');                                // by id, not by position: a malformed or wide patch in front of it must fail a check, not hang a loop below
   check('height: no patch without landmarksTauride in MODULES', without.length === 0, String(without.length));
   check('height: exactly the Paradny patch with landmarksTauride, with the box of paradny.js', withT.length === 1 && withT[0].id === 'paradny' && eq(withT[0].box, P.PARADNY_BOX) && typeof withT[0].at === 'function', JSON.stringify(withT.map((p) => p.id)));
-  check('height: the Paradny patch gives 3.3 on the podium (900, -1000)', withT[0] ? withT[0].at(900, -1000) === 3.3 : false, String(withT[0] && withT[0].at(900, -1000)));
-  check('height: the patch answers null where the deck is none (Smolny, the campus, a street at the foot of the podium)', withT[0] ? [[2380, -1833], [1230, -1150], [1413, -1217], [700, -900], [1100, -1000]].every(([x, z]) => withT[0].at(x, z) === null) : false);
-  check('height: the patch equals paradnyDeckY on a lattice over its box', withT[0] ? (() => { let bad = 0; const B = withT[0].box; for (let x = B[0] - 2; x <= B[1] + 2; x += 3.7) for (let z = B[2] - 2; z <= B[3] + 2; z += 3.7) if (withT[0].at(x, z) !== P.paradnyDeckY(x, z)) bad++; return bad === 0; })() : false);
+  check('height: the Paradny patch gives 3.3 on the podium (900, -1000)', par ? par.at(900, -1000) === 3.3 : false, String(par && par.at(900, -1000)));
+  check('height: the patch answers null where the deck is none (Smolny, the campus, a street at the foot of the podium)', par ? [[2380, -1833], [1230, -1150], [1413, -1217], [700, -900], [1100, -1000]].every(([x, z]) => par.at(x, z) === null) : false);
+  check('height: the patch equals paradnyDeckY on a lattice over the Paradny box', par ? (() => { let bad = 0; const B = P.PARADNY_BOX; for (let x = B[0] - 2; x <= B[1] + 2; x += 3.7) for (let z = B[2] - 2; z <= B[3] + 2; z += 3.7) if (par.at(x, z) !== P.paradnyDeckY(x, z)) bad++; return bad === 0; })() : false);
   check('height: the North as built (no landmarksTauride in MODULES) leaves layout.heightAt at street level on the podium', L.heightAt(900, -1000) === 0 && L.heightAt(1047, -1100) === 0 || MODULES.includes(TAURIDE), L.heightAt(900, -1000) + ' ' + L.heightAt(1047, -1100));
 }
 await guard('what-if child', async () => {
@@ -321,9 +391,52 @@ section('pure');
   check('the hooks files are pure data + pure functions: they import only each other (no three.js, layout.js, data facade, world module), no ctx.services', bad.length === 0, bad.join('; '));
 }
 
-// ================================================================ wiring
-section('wiring');
+// ================================================================ tables
+section('tables');
 {
+  const W = [], warn = (m) => W.push(String(m)), flush = () => W.splice(0);
+  const tryit = (fn) => { try { return { v: fn() }; } catch (e) { return { threw: String(e && e.message || e) }; } };
+  const named = (ws, text) => ws.filter((m) => m.includes(text)).length;
+  check('north: lib/area-tables.js hands out the area module\'s own HOOKS and HEIGHT_PATCHES (a well-formed table is not copied)', T.HOOKS === A.HOOKS && T.HEIGHT_PATCHES === A.HEIGHT_PATCHES);
+  check('checkHooks / checkPatches: the tables of the North pass as they are, without a warning', (() => { const h = H.makeHooks(MODULES), p = H.makeHeightPatches([...MODULES, TAURIDE]); return T.checkHooks(h, warn) === h && T.checkPatches(p, warn) === p && W.length === 0; })(), flush().join(' | '));
+  // HOOKS: every known key must be a function (undefined / null = none), deckServices an array of strings
+  const bad = { treeCleared: false, treeReject: 'yes', tuftReject: 0, propReject: {}, pedestrianOnly: [], parkingReject: true, inGarden: 'garden', deckServices: 'landmarksTauride' };
+  let r = tryit(() => T.checkHooks(bad, warn)), ws = flush();
+  check('checkHooks: a table of the wrong kinds (false, string, 0, object, array, true, string; deckServices a string) does not throw and drops all eight keys, the input stays as it was', !r.threw && eq(Object.keys(r.v || { x: 1 }), []) && Object.keys(bad).length === 8 && bad.treeCleared === false, r.threw || Object.keys(r.v).join());
+  check('checkHooks: one warning per dropped key, each names its key', ws.length === 8 && Object.keys(bad).every((k) => named(ws, 'HOOKS.' + k + ' ') === 1), ws.join(' | '));
+  const f = () => null, mix = { treeCleared: f, inGarden: undefined, parkingReject: null, deckServices: ['a', 3], futureHook: 5 };
+  r = tryit(() => T.checkHooks(mix, warn)); ws = flush();
+  check('checkHooks: a function stays, undefined / null mean none (no warning), a list with a non-string is dropped (one warning naming deckServices), an unknown key passes', !r.threw && r.v.treeCleared === f && 'inGarden' in r.v && r.v.parkingReject === null && !('deckServices' in r.v) && r.v.futureHook === 5 && ws.length === 1 && named(ws, 'HOOKS.deckServices') === 1 && Array.isArray(mix.deckServices), r.threw || ws.join(' | '));
+  check('checkHooks: a table that is not an object is ignored with one warning ({} comes back); undefined and null are silent', [false, 'x', 5, [], () => 1].every((v) => { const q = tryit(() => T.checkHooks(v, warn)), n = flush().length; return !q.threw && eq(q.v, {}) && n === 1; }) && [undefined, null].every((v) => { const q = tryit(() => T.checkHooks(v, warn)); return !q.threw && eq(q.v, {}) && flush().length === 0; }));
+  // HEIGHT_PATCHES: { id: string, box: 4 finite numbers, at: function }
+  const okp = { id: 'ok', box: [0, 1, 0, 1], at: () => 1 };
+  const list = [okp, null, { id: 'nobox', at() {} }, { id: 'nan', box: [0, 1, 0, NaN], at() {} }, { id: 'noat', box: [0, 1, 0, 1] }, { box: [0, 1, 0, 1], at() {} }, { id: 'short', box: [0, 1, 0], at() {} }, 5];
+  r = tryit(() => T.checkPatches(list, warn)); ws = flush();
+  check('checkPatches: entries that are not { id, box[4 finite], at() } are skipped, the well-formed one stays, the input list is not touched', !r.threw && r.v.length === 1 && r.v[0] === okp && list.length === 8, r.threw || r.v.length);
+  check('checkPatches: seven warnings, those with an id name it (nobox, nan, noat, short), those without an id name their index (1, 5, 7)', ws.length === 7 && ['"nobox"', '"nan"', '"noat"', '"short"', 'HEIGHT_PATCHES[1]', 'HEIGHT_PATCHES[5]', 'HEIGHT_PATCHES[7]'].every((t) => named(ws, t) === 1), ws.join(' | '));
+  check('checkPatches: a list that is not an array is ignored with one warning ([] comes back); undefined and null are silent', [{}, 'x', 5, () => 1].every((v) => { const q = tryit(() => T.checkPatches(v, warn)), n = flush().length; return !q.threw && eq(q.v, []) && n === 1; }) && [undefined, null].every((v) => { const q = tryit(() => T.checkPatches(v, warn)); return !q.threw && eq(q.v, []) && flush().length === 0; }));
+}
+await guard('malformed child', async () => {                // the real path: an area module with malformed tables, area-tables.js and layout.heightAt on top of it
+  const m = child('malformed'), pre = m.warns.filter((x) => x.includes('[area-tables]'));
+  check('malformed area module: loading area-tables.js and calling layout.heightAt does not throw', m.threw === null, String(m.threw));
+  check('malformed area module: HOOKS keeps the function and the unknown key only (treeCleared false, treeReject "yes", deckServices a string are dropped)', eq(m.hookKeys, ['futureHook', 'inGarden']), JSON.stringify(m.hookKeys));
+  check('malformed area module: HEIGHT_PATCHES keeps the one well-formed patch only', eq(m.patchIds, ['ok']), JSON.stringify(m.patchIds));
+  check('malformed area module: it warns, naming each dropped key and each skipped patch (3 keys, 4 patches)', pre.length === 7 && ['HOOKS.treeCleared', 'HOOKS.treeReject', 'HOOKS.deckServices', '"nobox"', '"nan"', '"noat"', 'HEIGHT_PATCHES[0]'].every((t) => pre.filter((x) => x.includes(t)).length === 1), pre.join(' | '));
+  check('malformed area module: heightAt answers through the good patch (7 inside its box) and the old line elsewhere (0)', eq(m.h, [7, 0, 0]), JSON.stringify(m.h));
+});
+
+// ================================================================ tools
+section('tools');
+{                                                                  // a golden must never be written from the wrong world: AREA=north in the shell without the remap of tools/area.mjs would dump the strip under the North's name
+  const tmp = path.join(os.tmpdir(), `layout-golden-refusal-${process.pid}.json`);
+  const r = spawnSync(process.execPath, ['tools/layout-golden.mjs', '--out', tmp], { cwd: root, env: { ...process.env, AREA: 'north' }, encoding: 'utf8' });
+  const wrote = fs.existsSync(tmp); fs.rmSync(tmp, { force: true });
+  check('tools/layout-golden.mjs: AREA=north without the remap of tools/area.mjs is refused (exit 2, the strip\'s world is not dumped under the North\'s name) and writes nothing', r.status === 2 && !wrote && /not "north"/.test(r.stderr), `exit ${r.status}, wrote ${wrote}, ${String(r.stderr).slice(0, 160)}`);
+}
+
+// ================================================================ static
+section('static');
+{                                                                  // TEXT checks only (a regex over the engine files): they notice a hook that is no longer read through lib/area-tables.js, not a call site that misbehaves (that is `npm run hooks:all`)
   const WIRING = { 'src/world/layout.js': ['HEIGHT_PATCHES'], 'src/world/drive/handling.js': ['deckServices'], 'src/world/environment/trees.js': ['treeCleared', 'treeReject'], 'src/world/environment/lawns.js': ['tuftReject'],
     'src/world/props/world.js': ['propReject'], 'src/world/streets.js': ['pedestrianOnly'], 'src/world/streets/parking.js': ['parkingReject'], 'src/world/people/nav.js': ['inGarden', 'deckServices'] };
   const strip = stripComments;
