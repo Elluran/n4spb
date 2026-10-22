@@ -1,4 +1,4 @@
-// landmarksTauride - the Tauride Palace and the Paradny Quarter (docs/TAURIDE-REMAKE.md, phase T1): a North module. The Garden is NOT here: the old garden.js / terrain.js of the source are not ported and the garden is
+// landmarksTauride - the Tauride Palace, the Paradny Quarter (docs/TAURIDE-REMAKE.md, phase T1) and the land relief of the garden (T2): a North module. The Garden is NOT here: the old garden.js / terrain.js of the source are not ported and the garden is
 // rewritten by the later phases (T2-T6), so for now the generic North draws the garden (the park polygon, the ways) and this module claims only the palace and the quarter.
 // SOURCE: 102_3d_piter src/world/landmarksTauride.js, commit 0568f7af. The palace() function and the imports of the palace and the quarter are the source's text; changed: the garden import and call are gone and the service is
 // built from the quarter only (the source merged the garden's deckY, entrances, benches and ponds into it: `deckY` here is the Paradny deck alone; the quarter and the palace publish no entrances: they have none).
@@ -10,6 +10,8 @@ import { dome, drum, ringWindows } from './landmarksD/parts.js';
 import { PALACE_PARTS } from './landmarksTauride/palace-parts.js';
 import { paradnyBuildings } from './landmarksTauride/paradny-buildings.js';
 import { paradnyCourts } from './landmarksTauride/paradny-courts.js';
+import { gardenHeight } from './landmarksTauride/height.js';
+import { planTerrain, buildTerrain } from './landmarksTauride/terrain-mesh.js';
 export const OWNS_GROUPS = true;
 
 function palace(K) {
@@ -54,8 +56,10 @@ export function build(ctx) {
   const K=makeKit(ctx),root=new THREE.Group();root.name='landmarks-tauride';K.svc={houses:[],entrances:[],monuments:[],photoSpots:[]};
   K.begin();palace(K);K.flush(root,'tauride-palace');
   K.begin();paradnyBuildings(K);K.flush(root,'paradny-quarter');
-  K.begin();const courts=paradnyCourts(K,root);K.flush(root,'paradny-courts');ctx.addStatic(root);
+  K.begin();const courts=paradnyCourts(K,root);K.flush(root,'paradny-courts');
+  // T2: the land relief of the garden (hills, mounds, the memorial plateau): the pure gardenHeight sampled into <= 16 chunk meshes (no colliders: the player follows heightAt, the same function as the HEIGHT_PATCH 'garden')
+  const terrain=buildTerrain(ctx,root,planTerrain());ctx.addStatic(root);
   // The service the engine reads (docs/AREAS.md 9.1 HOOKS.deckServices, docs/TAURIDE-REMAKE.md T1): deckY(x, z) = the Paradny podium (3.3 m) and its eight stair ramps, else null; cars (drive/handling.js)
   // and walkers (people/nav.js surfaceY) ask it FIRST. The later phases compose the garden bridges into it (`courts.deckY(x,z) ?? bridgesDeckY(x,z)`). No `entrances`: PRUNE_SERVICES does not list this module.
-  ctx.services.landmarksTauride={paradny:courts,deckY:(x,z)=>courts.deckY(x,z),triangles:K.tris};
+  ctx.services.landmarksTauride={paradny:courts,deckY:(x,z)=>courts.deckY(x,z),terrain:{heightAt:gardenHeight,triangles:terrain.triangles,draws:terrain.draws},kitTriangles:K.tris,triangles:K.tris+terrain.triangles};
 }
