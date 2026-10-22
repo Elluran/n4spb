@@ -1,7 +1,7 @@
 // landmarksTauride - the Tauride Palace, the Paradny Quarter (docs/TAURIDE-REMAKE.md, phase T1), the land relief of the garden (T2) and its ground and alleys (T3): a North module. The garden is NOT fully here: the old garden.js / terrain.js of the source are not ported and the garden is
 // rewritten by the later phases (T4-T6). Since T2 the module draws the relief and CLAIMS the garden (the park, 23 woods, 120 ways, 132 benches, 167 bins), so the generic North draws no tree, path ribbon or OSM bench there. Since T3 the terrain mesh is the WHOLE floor of the garden polygon
 // (terrain-mesh.js, cover mode; the environment ground is cut out under it, HOOKS.groundHoles), painted by the garden's own ground material (ground-material.js: a 1 m mask computed from data/ground.js, the relief, the water outline, the woods and the ways), with the 106 alleys draped on it (paths-draped.js:
-// ribbons, discs at the junctions, the 6 stairs). Bare of trees, furniture, water and bridges until T4 / T5 / T6.
+// ribbons, discs at the junctions, the 6 stairs). Since T4a: the ponds (the bowls and banks are in the floor: gardenHeight is the terrain, ponds included; the water surface and the impassable shore are ponds.js). Bare of trees, furniture and bridges until T4b / T5 / T6.
 // SOURCE: 102_3d_piter src/world/landmarksTauride.js, commit 0568f7af. The palace() function and the imports of the palace and the quarter are the source's text; changed: the garden import and call are gone and the service is
 // built from the quarter only (the source merged the garden's deckY, entrances, benches and ponds into it: `deckY` here is the Paradny deck alone; the quarter and the palace publish no entrances: they have none).
 import * as THREE from 'three';
