@@ -80,6 +80,14 @@ export function createHandling(ctx, tuning = null) {
     for (const [a, b] of FOOT) if (footBlocked(x + sy * a + cy * b, z + cy * a - sy * b)) n++;
     return n;
   };
+  /** how many of the nine footprint points are inside the area's keep-out (always 0 for the strip: no hook). The keep-out is a CLOSED ground, so unlike the other obstacles it has no embedded-escape rule: the
+   *  count may never grow, whatever pushes the car (a solid's contact push in collide() carried a car over the outline, and once all nine points were inside the "not worse" rule let it roam: T2 fix round 2) */
+  const keepPoints = (x, z, sy, cy) => {
+    if (!KEEP_OUT) return 0;
+    let n = KEEP_OUT(x, z) ? 1 : 0;
+    for (const [a, b] of FOOT) if (KEEP_OUT(x + sy * a + cy * b, z + cy * a - sy * b)) n++;
+    return n;
+  };
   /** keep the origin EDGE_M inside the play area: the position slides to the nearest allowed point, the velocity loses its outward part (a 10 % bounce), the tangential part is kept (the car slides along
    *  the edge) and a nose that points into the edge is swung along it (a yaw torque, like the contact torque of a real hit; the grip model would otherwise scrub the whole sideways slide away) */
   function edgePush(h) {
@@ -231,7 +239,8 @@ export function createHandling(ctx, tuning = null) {
     let nx = car.x + car.vx * h, nz = car.z + car.vz * h;
     if (carBlocked(nx, nz, sy, cy)) {
       // a pose that is blocked already (the steering swung a corner into a wall, the river, a footprint) must be able to get out: any move that does not make it worse is allowed
-      const here = blockedPoints(car.x, car.z, sy, cy), ok = (x, z) => here > 0 ? blockedPoints(x, z, sy, cy) <= here : !carBlocked(x, z, sy, cy);
+      const here = blockedPoints(car.x, car.z, sy, cy), keepHere = keepPoints(car.x, car.z, sy, cy);
+      const ok = (x, z) => (here > 0 ? blockedPoints(x, z, sy, cy) <= here : !carBlocked(x, z, sy, cy)) && (!KEEP_OUT || keepPoints(x, z, sy, cy) <= keepHere);
       if (ok(nx, nz)) { /* the move is allowed: it frees the car or keeps it where it was */ }
       else if (ok(nx, car.z)) { nz = car.z; car.vz *= 0.5; }
       else if (ok(car.x, nz)) { nx = car.x; car.vx *= 0.5; }
@@ -240,8 +249,11 @@ export function createHandling(ctx, tuning = null) {
     car.x = nx; car.z = nz;
     edgePush(h);
     car.y = car.air ? fly(h) : groundAt(car.x, car.z);
+    const kx = car.x, kz = car.z;
     if (car.air && T.hop.clearMax !== undefined && car.h > T.hop.clearMax) { const yAir = car.y; car.y = yAir - car.h + T.hop.clearMax; collide(car); car.y = yAir; }     // the solids see the car no higher than clearMax over the road: a barrel hop clears the low furniture, never a bus shelter or a kiosk
     else collide(car);
+    // a contact push may not carry the car (a bus shelter between the lane and the fence pushed it sideways) over the line of a closed ground: the push is undone, the impulse stays
+    if (KEEP_OUT && (car.x !== kx || car.z !== kz) && keepPoints(car.x, car.z, sy, cy) > keepPoints(kx, kz, sy, cy)) { car.x = kx; car.z = kz; }
     edgePush(h);
     car.odo += Math.hypot(car.vx, car.vz) * h;
     car.spin += (car.vx * sy + car.vz * cy) * h / SPEC.R;
