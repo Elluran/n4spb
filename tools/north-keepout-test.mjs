@@ -20,6 +20,8 @@
 //                                                                                                              rank-0 ways of the podium are pedestrianOnly, nothing else changed against `off`
 //   fake     `off0` + propReject alone, evaluated for the page's list (landmarksTauride listed) while the module is NOT in the build list (no claims). The claims of the module already take 4 of the 5 props of the
 //            podium away, so `real` vs `off` cannot see the hook at props/world.js fits(): `fake` vs `off0` is its proof (every stamped prop gone from the podium, mapped ones stay, nothing else differs)
+//   free     `real` with the 299 benches and bins of the garden claim taken out of the claim of landmarksTauride (T2 fix round 1): the positive control of the claim skip of props/osm.js. L.isClaimed is the static claim
+//            table, so the skip acts in every other variant too; `free` is the only one that places the garden's OSM benches and bins (the check "props: the claim skip" asserts 0 in the five, many in `free`)
 //   A tree that differs between two variants OUTSIDE the regions must belong to a record that overlaps one: the trees of a GREEN polygon / a courtyard come from ONE random stream (trees.js seed()),
 //   so a candidate that a hook rejects shifts the rest of its record (the same in the source); props draw from one stream for the whole page, so a prop far from the podium may be re-rolled in `fake` / `real`.
 //   Mapped OSM trees and furniture: trees.js plant() has no caller that passes `force`, so the soft clearing of Smolny takes the mapped trees too (the North data has none in the regions); the mapped
@@ -41,7 +43,7 @@ const imp = (p) => import(pathToFileURL(path.join(root, p)).href);
 if ((process.env.AREA || 'strip') !== 'north') { console.error('run it as the North: node tools/area.mjs north tools/north-keepout-test.mjs'); process.exit(2); }
 
 const r3 = (v) => Math.round(v * 1000) / 1000;
-const VARIANTS = ['off0', 'dormant', 'off', 'real', 'fake'];
+const VARIANTS = ['off0', 'dormant', 'off', 'real', 'fake', 'free'];
 const MODS = { smolny: 'landmarksSmolny', suvorov: 'landmarksSuvorov', kirochnaya: 'landmarksKirochnaya', tauride: 'landmarksTauride' };
 
 // ---------------------------------------------------------------- the regions, written out here (not read from hooks/keep-out.js)
@@ -91,6 +93,14 @@ if (opt('child')) {
   globalThis.innerWidth = 1280; globalThis.innerHeight = 720; globalThis.devicePixelRatio = 1; globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
   globalThis.performance = globalThis.performance || { now: () => Date.now() };
 
+  if (variant === 'free') {
+    // `free` = `real` with the garden's benches and bins taken OUT of the claim: the positive control of the claim skip of props/osm.js (see the check "props: the claim skip"). layout.js builds its claim table from the
+    // area module's GROUPS when it first loads (core/ctx.js imports it), so the sub-group is edited here, before any engine import.
+    const A0 = await imp('src/world/area.js'), D0 = await imp('src/world/data/city.js');
+    const furn = new Set(D0.FURNITURE.filter((f) => f.kind === 'bench' || f.kind === 'waste_basket').map((f) => f.id));
+    let n = 0; for (const g of A0.GROUPS.landmarksTauride) { const keep = g.osm.filter((id) => !furn.has(id)); n += g.osm.length - keep.length; g.osm = keep; }
+    console.log(`[free] ${n} benches and bins taken out of the claim of landmarksTauride`);
+  }
   const THREE = await import('three');
   const { createContext } = await imp('src/core/ctx.js');
   const L = await imp('src/world/layout.js');
@@ -104,7 +114,7 @@ if (opt('child')) {
   if (variant === 'off0' || variant === 'dormant' || variant === 'fake') buildList = buildList.filter((m) => m !== MODS.tauride);   // the North of M5 / M6: the page's list WITHOUT landmarksTauride (no claims of the module, the Paradny set dormant)
   if (variant === 'off0' || variant === 'off' || variant === 'fake') { for (const k of Object.keys(HOOKS)) delete HOOKS[k]; HEIGHT_PATCHES.length = 0; }    // the engine of before M6: every call site meets an absent key, the height line is the old one
   else if (variant === 'dormant') { for (const k of Object.keys(HOOKS)) delete HOOKS[k]; Object.assign(HOOKS, makeHooks(buildList)); HEIGHT_PATCHES.length = 0; }    // the hooks and patches of the list without the module
-  else if (variant !== 'real' && variant !== 'modules') throw new Error('variant ' + variant);
+  else if (variant !== 'real' && variant !== 'free' && variant !== 'modules') throw new Error('variant ' + variant);
   // `fake` = `off0` plus ONE hook: propReject, evaluated for the PAGE's list (landmarksTauride listed) while the engine's own ctx.buildList lacks the module. The module's claims are therefore absent and the hook is the only
   // difference from `off0`: whatever props/world.js fits() stops stamping in the podium is the call site's doing (the former `fake` of before T1: the Paradny set on without the module; the claims of the module hide it in `real`).
   if (variant === 'fake') { const hk = makeHooks(pageList); HOOKS.propReject = () => hk.propReject({ buildList: pageList }); }
@@ -168,6 +178,7 @@ if (opt('child')) {
 const KO = await imp('src/areas/north/hooks/keep-out.js');
 const PD = await imp('src/areas/north/hooks/paradny.js');
 const HK = await imp('src/areas/north/hooks.js');
+const PE = await imp('src/areas/north/hooks/people.js');          // GARDEN_RING: the garden outline as data (the claim-skip check below tests it with its own winding-number test)
 const A = await imp('src/world/area.js');
 const GRP = await imp('src/world/landmarksKirochnaya/groups.js');
 const MODULES = A.MODULES;
@@ -369,6 +380,8 @@ check('the variants built what they should: `off0` / `off` have no hook, `dorman
   eq(S.dormant.hooks, CONTRACT_KEYS, 'dormant hooks');
   eq(S.real.hooks, CONTRACT_KEYS, 'real hooks');
   eq(S.fake.hooks, ['propReject'], 'fake hooks');
+  eq(S.free.hooks, CONTRACT_KEYS, 'free hooks');
+  eq(S.free.buildList, MODULES, 'free buildList');
   const without = MODULES.filter((m) => m !== MODS.tauride);
   eq(S.off0.buildList, without, 'off0 buildList');
   eq(S.dormant.buildList, without, 'dormant buildList');
@@ -497,6 +510,29 @@ check('props: unchanged in `dormant` (every list identical to `off0`); the hook 
   console.log(`       props in the podium: off0 ${podiumProps(S.off0)} (no claim, no hook), off ${podiumProps(S.off)} (claims only), real ${podiumProps(S.real)}, fake ${podiumProps(S.fake)} (hook only); real vs off: ${goneIn} stamped props gone, ${mapped} mapped ones stay`);
   // props draw from ONE stream for the whole page (props/state.js R): a stamp that fits() refuses shifts the later placements, so props far from the podium may be re-rolled; the totals must stay close
   for (const k of ['benches', 'bins', 'kiosks']) ok(Math.abs(S.real.props[k].length - S.off.props[k].length) <= Math.max(3, 0.03 * S.off.props[k].length), `${k}: ${S.off.props[k].length} -> ${S.real.props[k].length}`);
+});
+// T2 fix round 1: the guard of the CLAIM SKIP in props/osm.js placeOsm (`if ((f.kind === 'bench' || f.kind === 'waste_basket') && L.isClaimed(f.id)) continue;`). The skip had no test of its own: the hooks above are not its
+// call site (propReject is `fits()` of the stamped props), the strip proof (tools/tauride/strip-furniture-claims.mjs) says only that the strip claims no FURNITURE node, and every other gate counts props loosely (3 %).
+// With the line deleted the garden's OSM benches and bins stand again in a garden whose own furniture comes with T6. NOTE `L.isClaimed` is the STATIC claim table of the area's GROUPS (it does not look at the build
+// list), so the skip acts in EVERY variant, `off0` and `dormant` included: no variant may place a bench or bin on a claimed node (to the millimetre) or inside the garden outline (an independent winding-number test
+// of the OSM park ring). The positive control is `free` = `real` with those 299 records taken out of the claim: it must place MANY there, else the zero above could be a node that okPoint / nudge refuses anyway.
+check('props: the claim skip of props/osm.js - no variant places a bench or bin of the garden claim on its node or inside the outline; `free` (those records unclaimed) places many', () => {
+  const g = A.GROUPS.landmarksTauride.find((q) => q.key === 'tauride-garden');
+  ok(g, 'the sub-group tauride-garden of landmarksTauride is gone: the claim skip has nothing to skip');
+  const claimed = new Set([...g.ids, ...g.osm]), garden = pairs(PE.GARDEN_RING);
+  const nodes = D.FURNITURE.filter((f) => (f.kind === 'bench' || f.kind === 'waste_basket') && claimed.has(f.id));
+  ok(nodes.length > 250, `only ${nodes.length} bench / waste_basket records of the garden claim (132 benches + 167 bins expected)`);
+  const at = new Set(nodes.map((f) => r3(f.x) + ',' + r3(f.z)));
+  const furniture = (V) => [...V.props.benches, ...V.props.bins];
+  const onNode = (V) => furniture(V).filter((p) => at.has(p[0] + ',' + p[1])).length;
+  const inGarden = (V) => furniture(V).filter((p) => winding(garden, p[0], p[1])).length;
+  const row = (v) => `${v}: ${onNode(S[v])} on a claimed node, ${inGarden(S[v])} inside the outline (${furniture(S[v]).length} benches + bins in all)`;
+  console.log('       ' + VARIANTS.map(row).join('\n       '));
+  ok(onNode(S.free) > 100 && inGarden(S.free) > 100, `vacuous: ${row('free')} (with the records unclaimed the garden's OSM benches and bins must be placed: > 100 on their nodes and > 100 inside the outline)`);
+  for (const v of VARIANTS.filter((q) => q !== 'free')) {
+    ok(onNode(S[v]) === 0, `the claim skip of props/osm.js is dead: ${row(v)} (the garden's claimed benches and bins are drawn again; ${onNode(S.free)} would stand on their nodes)`);
+    ok(inGarden(S[v]) === 0, `a bench or bin stands inside the garden outline: ${row(v)} (the nodes are skipped, nothing else may furnish the garden before T6)`);
+  }
 });
 
 // ================================================================ PART 4 (--footprints): the static regions against the real geometry of the M5 modules
