@@ -38,10 +38,11 @@ export function createHandling(ctx, tuning = null) {
   const T = tuning ? { ...COUPE_TUNING, ...tuning } : COUPE_TUNING, SPEC = T.spec || COUPE_SPEC, GEAR = T.gearTop;
   const collide = createCarCollisions(ph, SPEC);
   const DS = HOOKS.deckServices || [];      // the area's own deck services (a podium, stairs): their deckY comes before the bridge decks (docs/AREAS.md section 9)
-  const deckY = () => (x, z) => {
-    for (const n of DS) { const d = ctx.services[n]?.deckY?.(x, z); if (Number.isFinite(d)) return d; }      // null / undefined / NaN / Infinity = no deck here (the old chain answers); 0 is a deck
-    return ctx.services.landmarksC?.bridge?.deckY?.(x, z) ?? ctx.services.bridges?.deckY(x, z) ?? null;
-  };
+  const oldDeckY = (x, z) => ctx.services.landmarksC?.bridge?.deckY?.(x, z) ?? ctx.services.bridges?.deckY(x, z) ?? null;      // the chain of before M6: this is all the strip runs (no deck service)
+  const deckY = () => (DS.length ? (x, z) => {
+    for (let i = 0; i < DS.length; i++) { const d = ctx.services[DS[i]]?.deckY?.(x, z); if (Number.isFinite(d)) return d; }      // null / undefined / NaN / Infinity = no deck here (the old chain answers); 0 is a deck
+    return oldDeckY(x, z);
+  } : oldDeckY);
   const deck = deckY();
 
   /** road surface height at (x, z): the humped Anichkov deck, a low (<= 0.3 m) pavement / kerb slab, else the asphalt (0.03) */
