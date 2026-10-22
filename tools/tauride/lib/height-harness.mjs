@@ -147,3 +147,56 @@ export function carBreach(S, carBlocked) {
   }
   return { samples, breachM: Math.round(breachM), perimeterM: Math.round(samples), stretches: stretches.map((s) => ({ ...s, lenM: Math.round(s.lenM) })) };
 }
+
+// ---------------------------------------------------------------- T4a: the ring of shore probes (the acceptance of "ponds are impassable")
+/**
+ * A DENSE RING of wading probes on the REAL shore. `segs` = the shore segments of height.js shoreSegments() (start a, edge e, unit normal n to the LAND), `shore` = the signed-distance structure (+ land).
+ * Every `spacing` m along every segment a walker starts `inland` m from the shore and pushes TOWARDS the water for `ticks` 60 Hz steps, at each angle (degrees away from the perpendicular) and in each mode:
+ *   walk | sprint (ShiftLeft) | jump (a hop every time the feet are on the ground: vy 4.2 = the engine's jump, apex 0.73 m).
+ * A start that is not a clean standing place (closer than 2.5 m to a shore, in a building, inside a collider) is skipped (counted). A run `entered` the water when the feet got more than 2 cm past the outline
+ * (shore distance < -0.02) or below the waterline; `minD` = the closest the feet came to the outline (negative = past it). Entered runs then walk back for 10 s: `exited` = back on land.
+ * Returns { runs, skipped, entered, trapped, minD, p01, byMode: { mode: { runs, entered, minD } }, worst: [{ x, z, angle, mode, minD }] }
+ */
+export function wadeRing(world, shore, segs, { spacing = 3, inland = 4, angles = [0, 30, -30, 60, -60, 80, -80], modes = ['walk', 'sprint', 'jump'], ticks = 360, waterY = -0.45, limit = Infinity, offset = 0.5 } = {}) {
+  const { ph } = world, res = { runs: 0, skipped: 0, entered: 0, trapped: 0, minD: Infinity, byMode: {}, worst: [], samples: [] };
+  for (const m of modes) res.byMode[m] = { runs: 0, entered: 0, minD: Infinity };
+  let started = 0;
+  for (let i = 0; i < segs.n; i++) {
+    const len = Math.hypot(segs.ex[i], segs.ez[i]), k = Math.max(1, Math.floor(len / spacing));
+    for (let q = 0; q < k; q++) {
+      if (started++ >= limit) return finish(res);
+      const t = (q + offset) / k, px = segs.ax[i] + segs.ex[i] * t, pz = segs.az[i] + segs.ez[i] * t, nx = segs.nx[i], nz = segs.nz[i];
+      const sx = px + nx * inland, sz = pz + nz * inland;
+      if (shore.dist(sx, sz) < 2.5 || world.L.insideBuilding(sx, sz, 1.5)) { res.skipped++; continue; }
+      const h0 = world.heightAt(sx, sz);
+      if (ph.columnBlocked(sx, sz, 0.3, h0 + 0.45, h0 + 1.7)) { res.skipped++; continue; }
+      for (const a of angles) {
+        const c = Math.cos(a * Math.PI / 180), s = Math.sin(a * Math.PI / 180), dx = -(nx * c - nz * s), dz = -(nx * s + nz * c);       // -n turned by a
+        for (const mode of modes) {
+          const p = world.player();
+          p.setPose(sx, sz, 0, 0, null, { stand: true });
+          let minD = Infinity, entered = false, still = 0, bx = p.pos.x, bz = p.pos.z;
+          for (let tk = 0; tk < ticks; tk++) {
+            p.yaw = Math.atan2(-dx, -dz); p.keys.add('KeyW'); if (mode === 'sprint') p.keys.add('ShiftLeft');
+            if (mode === 'jump' && p.onGround) p.vy = 4.2;
+            p.update(1 / 60);
+            const d = shore.dist(p.pos.x, p.pos.z); if (d < minD) minD = d;
+            if (d < -0.02 || (d < 0 && p.pos.y < waterY - 0.02)) entered = true;
+            if (tk % 30 === 29) { if (Math.hypot(p.pos.x - bx, p.pos.z - bz) < 0.01 && tk > 120) { still++; if (still >= 2) break; } else still = 0; bx = p.pos.x; bz = p.pos.z; }
+          }
+          p.keys.delete('KeyW'); p.keys.delete('ShiftLeft');
+          res.runs++; const bm = res.byMode[mode]; bm.runs++; if (minD < bm.minD) bm.minD = minD; if (minD < res.minD) res.minD = minD;
+          res.samples.push(minD);
+          if (entered) {
+            res.entered++; bm.entered++;
+            for (let tk = 0; tk < 600; tk++) { p.yaw = Math.atan2(dx, dz); p.keys.add('KeyW'); p.update(1 / 60); } p.keys.delete('KeyW');
+            if (!(shore.dist(p.pos.x, p.pos.z) > 0)) res.trapped++;
+            if (res.worst.length < 8) res.worst.push({ x: +px.toFixed(1), z: +pz.toFixed(1), angle: a, mode, minD: +minD.toFixed(2) });
+          }
+        }
+      }
+    }
+  }
+  return finish(res);
+  function finish(r) { const s = r.samples.slice().sort((u, v) => u - v); r.p01 = s.length ? s[Math.floor(s.length * 0.01)] : 0; r.p50 = s.length ? s[Math.floor(s.length / 2)] : 0; delete r.samples; return r; }
+}

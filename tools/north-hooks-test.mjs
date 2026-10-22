@@ -192,9 +192,9 @@ await guard('strip child', async () => {
 
 // ================================================================ contract
 section('contract');
-const KEYS = ['treeCleared', 'treeReject', 'tuftReject', 'propReject', 'pedestrianOnly', 'parkingReject', 'carKeepOut', 'inGarden', 'deckServices', 'groundHoles', 'groundWayReject'];
+const KEYS = ['treeCleared', 'treeReject', 'tuftReject', 'propReject', 'pedestrianOnly', 'parkingReject', 'carKeepOut', 'inGarden', 'deckServices', 'groundHoles', 'groundWayReject', 'waterBodies'];
 const HK = T.HOOKS;
-check('north: HOOKS has exactly the eleven keys of the contract (T2 added carKeepOut, T3 groundHoles and groundWayReject)', eq(Object.keys(HK).sort(), [...KEYS].sort()), Object.keys(HK).join());
+check('north: HOOKS has exactly the twelve keys of the contract (T2 added carKeepOut, T3 groundHoles and groundWayReject, T4a waterBodies)', eq(Object.keys(HK).sort(), [...KEYS].sort()), Object.keys(HK).join());
 check('north: area-tables HOOKS is the area module HOOKS (same keys)', eq(Object.keys(HK).sort(), Object.keys(A.HOOKS).sort()));
 for (const k of FACTORIES) check(`north: HOOKS.${k} is a factory (function of ctx)`, typeof HK[k] === 'function' && HK[k].length <= 1, typeof HK[k] + '/' + (HK[k] && HK[k].length));
 check('north: HOOKS.inGarden is a function of (x, z)', typeof HK.inGarden === 'function' && HK.inGarden.length === 2, typeof HK.inGarden + '/' + (HK.inGarden && HK.inGarden.length));
@@ -227,10 +227,10 @@ for (const k of FACTORIES) {
 check('parkingReject is gated by MODULES: makeHooks([landmarksTauride]) has a function, makeHooks(OTHER) has none', typeof H.makeHooks([...OTHER, TAURIDE]).parkingReject === 'function' && H.makeHooks(OTHER).parkingReject === undefined,
   typeof H.makeHooks([...OTHER, TAURIDE]).parkingReject + ' / ' + typeof H.makeHooks(OTHER).parkingReject);
 check('carKeepOut (T2) is gated by MODULES: a function with landmarksTauride, undefined without; it is the garden ring (inGarden) with no exception: true inside the outline, false outside, on 40,000 probes of the garden box + 40 m', (() => { const on = H.makeHooks([...OTHER, TAURIDE]).carKeepOut, off = H.makeHooks(OTHER).carKeepOut, off2 = H.makeHooks(undefined).carKeepOut; if (typeof on !== 'function' || off !== undefined || off2 !== undefined) return false; let bad = 0; for (let i = 0; i < 40000; i++) { const x = 877 + ((i * 7919) % 200) * 3.3, z = -1830 + (Math.floor(i / 200)) * 2.6; if (on(x, z) !== HK.inGarden(x, z)) bad++; } return bad === 0 && on(1226, -1268.5) === true && on(1226, -1260) === false && on(NaN, 0) === false; })(), typeof H.makeHooks([...OTHER, TAURIDE]).carKeepOut + ' / ' + typeof H.makeHooks(OTHER).carKeepOut);
-check('makeHooks always has the eleven keys (a gated parkingReject / carKeepOut / groundHoles / groundWayReject is a key with the value undefined)', eq(Object.keys(H.makeHooks(OTHER)).sort(), [...KEYS].sort()) && eq(Object.keys(H.makeHooks([...OTHER, TAURIDE])).sort(), [...KEYS].sort()));
+check('makeHooks always has the twelve keys (a gated parkingReject / carKeepOut / groundHoles / groundWayReject / waterBodies is a key with the value undefined)', eq(Object.keys(H.makeHooks(OTHER)).sort(), [...KEYS].sort()) && eq(Object.keys(H.makeHooks([...OTHER, TAURIDE])).sort(), [...KEYS].sort()));
 check('makeHeightPatches is gated by MODULES: [] without landmarksTauride, [paradny, garden] with it (T2)', H.makeHeightPatches(OTHER).length === 0 && H.makeHeightPatches([...OTHER, TAURIDE]).length === 2 && H.makeHeightPatches([...OTHER, TAURIDE]).map((p) => p.id).join() === 'paradny,garden',
   H.makeHeightPatches(OTHER).length + ' / ' + H.makeHeightPatches([...OTHER, TAURIDE]).length);
-check('makeHooks does not change the other keys with the module list (only parkingReject, carKeepOut, groundHoles and groundWayReject)', (() => { const a = H.makeHooks(OTHER), b = H.makeHooks([...OTHER, TAURIDE]); return Object.keys(a).filter((k) => k !== 'parkingReject' && k !== 'carKeepOut' && k !== 'groundHoles' && k !== 'groundWayReject').every((k) => a[k] === b[k] || (Array.isArray(a[k]) && eq(a[k], b[k]))); })());
+check('makeHooks does not change the other keys with the module list (only parkingReject, carKeepOut, groundHoles, groundWayReject and waterBodies)', (() => { const a = H.makeHooks(OTHER), b = H.makeHooks([...OTHER, TAURIDE]); return Object.keys(a).filter((k) => k !== 'parkingReject' && k !== 'carKeepOut' && k !== 'groundHoles' && k !== 'groundWayReject' && k !== 'waterBodies').every((k) => a[k] === b[k] || (Array.isArray(a[k]) && eq(a[k], b[k]))); })());
 
 // ================================================================ probes
 section('probes');
@@ -369,7 +369,7 @@ section('height');
   const withT = H.makeHeightPatches([...OTHER, TAURIDE]), without = H.makeHeightPatches(OTHER);
   const par = withT.find((p) => p && p.id === 'paradny');                                // by id, not by position: a malformed or wide patch in front of it must fail a check, not hang a loop below
   check('height: no patch without landmarksTauride in MODULES', without.length === 0, String(without.length));
-  check('height: exactly the Paradny patch, then the garden relief patch (T2), with landmarksTauride; the Paradny box of paradny.js, the box of the hills RELIEF_HULL (T2 fix round 1)', withT.length === 2 && withT[0].id === 'paradny' && eq(withT[0].box, P.PARADNY_BOX) && typeof withT[0].at === 'function' && withT[1].id === 'garden' && eq(withT[1].box, GH.RELIEF_HULL) && withT[1].at === GH.gardenHeight, JSON.stringify(withT.map((p) => p.id)));
+  check('height: exactly the Paradny patch, then the garden terrain patch (T2 relief, T4a ponds), with landmarksTauride; the Paradny box of paradny.js, the box of the hills and of the shore band TERRAIN_HULL', withT.length === 2 && withT[0].id === 'paradny' && eq(withT[0].box, P.PARADNY_BOX) && typeof withT[0].at === 'function' && withT[1].id === 'garden' && eq(withT[1].box, GH.TERRAIN_HULL) && withT[1].at === GH.gardenHeight, JSON.stringify(withT.map((p) => p.id)));
   check('height: the Paradny patch gives 3.3 on the podium (900, -1000)', par ? par.at(900, -1000) === 3.3 : false, String(par && par.at(900, -1000)));
   check('height: the patch answers null where the deck is none (Smolny, the campus, a street at the foot of the podium)', par ? [[2380, -1833], [1230, -1150], [1413, -1217], [700, -900], [1100, -1000]].every(([x, z]) => par.at(x, z) === null) : false);
   check('height: the patch equals paradnyDeckY on a lattice over the Paradny box', par ? (() => { let bad = 0; const B = P.PARADNY_BOX; for (let x = B[0] - 2; x <= B[1] + 2; x += 3.7) for (let z = B[2] - 2; z <= B[3] + 2; z += 3.7) if (par.at(x, z) !== P.paradnyDeckY(x, z)) bad++; return bad === 0; })() : false);
@@ -417,14 +417,15 @@ section('pure');
       const spec = m[1] || m[2] || m[3], target = path.posix.normalize(path.posix.join(path.posix.dirname(f), spec));
       if (target === 'src/world/landmarksTauride/height.js' && f === 'src/areas/north/hooks/height.js') continue;      // T2: the garden relief, itself pure (checked below)
       if (target === 'src/world/landmarksTauride/data/paths.js' && f === 'src/areas/north/hooks/ground.js') continue;     // T3: the ids of the garden ways, pure data with no import (checked below)
+      if (target === 'src/world/landmarksTauride/data/water.js' && f === 'src/areas/north/hooks/water.js') continue;     // T4a: the union outline of the ponds, pure data with no import (checked below)
       if (!spec.startsWith('./') || !target.startsWith('src/areas/north/hooks')) bad.push(`${f} imports ${spec}`);
     }
     if (/\bctx\.services\b|\bdocument\b|\bwindow\b|THREE|three/.test(src)) bad.push(`${f} reads services / DOM / three`);
   }
-  check('the hooks files are pure data + pure functions: they import only each other (no three.js, layout.js, data facade, world module; the exceptions: hooks/height.js imports the pure landmarksTauride/height.js, T2, and hooks/ground.js the pure data landmarksTauride/data/paths.js, T3), no ctx.services', bad.length === 0, bad.join('; '));
+  check('the hooks files are pure data + pure functions: they import only each other (no three.js, layout.js, data facade, world module; the exceptions: hooks/height.js imports the pure landmarksTauride/height.js, T2, hooks/ground.js the pure data landmarksTauride/data/paths.js, T3, and hooks/water.js the pure data landmarksTauride/data/water.js, T4a), no ctx.services', bad.length === 0, bad.join('; '));
   // the relief module the garden patch calls: pure too (T2): height.js imports only data/relief.js, relief.js imports nothing; neither touches three.js, layout.js, a facade, ctx or the DOM
   { const hs = stripComments(read('src/world/landmarksTauride/height.js')), rs = stripComments(read('src/world/landmarksTauride/data/relief.js')), imps = (t) => [...t.matchAll(/(?:^|\s)(?:import|export)\s[^;'"]*?from\s*['"]([^'"]+)['"]|\bimport\s*\(|(?:^|\s)import\s+['"]([^'"]+)['"]/gm)].map((m) => m[1] || m[2] || 'dynamic import');
-    check('landmarksTauride/height.js imports only ./data/relief.js and data/relief.js imports nothing (pure: no three.js, layout.js, facade, ctx, DOM)', eq(imps(hs), ['./data/relief.js']) && imps(rs).length === 0 && !/\bctx\b|\bdocument\b|\bwindow\b|THREE|three|Math\.random|Date\.now/.test(hs + rs), JSON.stringify([imps(hs), imps(rs)])); }
+    check('landmarksTauride/height.js imports only the pure data modules data/relief.js, data/water.js, data/footprints.js and data/ponds.js, and they import nothing (pure: no three.js, layout.js, facade, ctx, DOM)', eq(imps(hs), ['./data/relief.js', './data/water.js', './data/footprints.js', './data/ponds.js']) && imps(rs).length === 0 && ['data/water.js', 'data/footprints.js', 'data/ponds.js'].every((n) => imps(stripComments(read('src/world/landmarksTauride/' + n))).length === 0) && !/\bctx\b|\bdocument\b|\bwindow\b|THREE|three|Math\.random|Date\.now/.test(hs + rs), JSON.stringify([imps(hs), imps(rs)])); }
 }
 
 // ================================================================ tables
@@ -436,10 +437,10 @@ section('tables');
   check('north: lib/area-tables.js hands out the area module\'s own HOOKS and HEIGHT_PATCHES (a well-formed table is not copied)', T.HOOKS === A.HOOKS && T.HEIGHT_PATCHES === A.HEIGHT_PATCHES);
   check('checkHooks / checkPatches: the tables of the North pass as they are, without a warning', (() => { const h = H.makeHooks(MODULES), p = H.makeHeightPatches([...MODULES, TAURIDE]); return T.checkHooks(h, warn) === h && T.checkPatches(p, warn) === p && W.length === 0; })(), flush().join(' | '));
   // HOOKS: every known key must be a function (undefined / null = none), deckServices an array of strings
-  const bad = { treeCleared: false, treeReject: 'yes', tuftReject: 0, propReject: {}, pedestrianOnly: [], parkingReject: true, carKeepOut: 'closed', inGarden: 'garden', deckServices: 'landmarksTauride', groundHoles: 'rings', groundWayReject: 3 };
+  const bad = { treeCleared: false, treeReject: 'yes', tuftReject: 0, propReject: {}, pedestrianOnly: [], parkingReject: true, carKeepOut: 'closed', inGarden: 'garden', deckServices: 'landmarksTauride', groundHoles: 'rings', groundWayReject: 3, waterBodies: 'ponds' };
   let r = tryit(() => T.checkHooks(bad, warn)), ws = flush();
-  check('checkHooks: a table of the wrong kinds (false, string, 0, object, array, true, string; deckServices a string) does not throw and drops all eleven keys (carKeepOut: a string, groundHoles: a string, groundWayReject: a number), the input stays as it was', !r.threw && eq(Object.keys(r.v || { x: 1 }), []) && Object.keys(bad).length === 11 && bad.treeCleared === false, r.threw || Object.keys(r.v).join());
-  check('checkHooks: one warning per dropped key, each names its key', ws.length === 11 && Object.keys(bad).every((k) => named(ws, 'HOOKS.' + k + ' ') === 1), ws.join(' | '));
+  check('checkHooks: a table of the wrong kinds (false, string, 0, object, array, true, string; deckServices a string) does not throw and drops all twelve keys (carKeepOut: a string, groundHoles: a string, groundWayReject: a number, waterBodies: a string), the input stays as it was', !r.threw && eq(Object.keys(r.v || { x: 1 }), []) && Object.keys(bad).length === 12 && bad.treeCleared === false, r.threw || Object.keys(r.v).join());
+  check('checkHooks: one warning per dropped key, each names its key', ws.length === 12 && Object.keys(bad).every((k) => named(ws, 'HOOKS.' + k + ' ') === 1), ws.join(' | '));
   const f = () => null, mix = { treeCleared: f, inGarden: undefined, parkingReject: null, deckServices: ['a', 3], futureHook: 5 };
   r = tryit(() => T.checkHooks(mix, warn)); ws = flush();
   check('checkHooks: a function stays, undefined / null mean none (no warning), a list with a non-string is dropped (one warning naming deckServices), an unknown key passes', !r.threw && r.v.treeCleared === f && 'inGarden' in r.v && r.v.parkingReject === null && !('deckServices' in r.v) && r.v.futureHook === 5 && ws.length === 1 && named(ws, 'HOOKS.deckServices') === 1 && Array.isArray(mix.deckServices), r.threw || ws.join(' | '));
@@ -473,7 +474,7 @@ section('tools');
 // ================================================================ static
 section('static');
 {                                                                  // TEXT checks only (a regex over the engine files): they notice a hook that is no longer read through lib/area-tables.js, not a call site that misbehaves (that is `npm run hooks:all`)
-  const WIRING = { 'src/world/layout.js': ['HEIGHT_PATCHES'], 'src/world/drive/handling.js': ['deckServices', 'carKeepOut'], 'src/world/environment/trees.js': ['treeCleared', 'treeReject'], 'src/world/environment/lawns.js': ['tuftReject'], 'src/world/environment/ground.js': ['groundHoles'], 'src/world/environment/field.js': ['groundWayReject'],
+  const WIRING = { 'src/world/layout.js': ['HEIGHT_PATCHES'], 'src/world/drive/handling.js': ['deckServices', 'carKeepOut'], 'src/world/environment/trees.js': ['treeCleared', 'treeReject'], 'src/world/environment/lawns.js': ['tuftReject'], 'src/world/environment/ground.js': ['groundHoles'], 'src/world/environment/field.js': ['groundWayReject', 'waterBodies'],
     'src/world/props/world.js': ['propReject'], 'src/world/streets.js': ['pedestrianOnly'], 'src/world/streets/parking.js': ['parkingReject'], 'src/world/people/nav.js': ['inGarden', 'deckServices', 'HEIGHT_PATCHES'] };
   const strip = stripComments;
   for (const [file, keys] of Object.entries(WIRING)) {

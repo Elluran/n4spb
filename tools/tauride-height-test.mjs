@@ -25,9 +25,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ROOT, parseArgs, inPolys } from './tauride/lib/common.mjs';
 import * as S from './tauride/lib/site.mjs';
-import { loadEngine, makeContext, buildModules, engineRoot } from './tauride/lib/stub-env.mjs';
+import { loadEngine, makeContext, makePlayer, buildModules, engineRoot } from './tauride/lib/stub-env.mjs';
 import { builtinModels } from './tauride/lib/demo-models.mjs';
-import { makeWorld, wadeProbes, wadeSummary, shoreProbes, pathGraph, route, walkRoute, slopeReport, landingReport, carBreach } from './tauride/lib/height-harness.mjs';
+import { makeWorld, wadeProbes, wadeSummary, wadeRing, shoreProbes, pathGraph, route, walkRoute, slopeReport, landingReport, carBreach } from './tauride/lib/height-harness.mjs';
 
 const args = parseArgs();
 const WADE = Number(args['wade-depth'] ?? 0.3), PROBES = Number(args.probes ?? 14), MAX_SLOPE = Number(args['max-slope'] ?? 0.25);
@@ -57,9 +57,12 @@ async function evaluate(model, { engine, world, wet, ring, bounds = BOUNDS, labe
     const r = a && b ? route(g, a, b) : null;
     if (!r) { say('  route  : no way route from the south gate to the memorial in the garden ways  -> FAIL'); res.verdict.route = false; }
     else {
-      const w = walkRoute(world, r), ok = w.ok && w.maxDepth <= model.wadeDepth;
-      res.route = { ways: [...new Set(r.map((q) => q.way).filter(Boolean))].length, ...w };
-      say(`  route  : south gate -> memorial along ${res.route.ways} ways, ${w.lengthM} m: ${w.ok ? 'arrived' : 'STUCK at ' + JSON.stringify(w.stuckAt)} in ${(w.ticks / 60).toFixed(0)} s, lowest feet ${w.minY} m, deepest water ${w.maxDepth} m  -> ${mark(ok)}`);
+      const w = walkRoute(world, r);
+      // T4a: the ponds are impassable and the bridges are T4b (the 8 bridge ways are claimed and not drawn): until they exist the walk MUST stop at a shore, on a bridge way, dry (model.routeToShore)
+      const bridgeIds = new Set(S.P.PATHS.filter((p) => p.bridge).map((p) => p.id)), atShore = !w.ok && !!w.stuckAt && bridgeIds.has(w.stuckAt.way) && S.waterDist(w.stuckAt.x, w.stuckAt.z) >= 0 && S.waterDist(w.stuckAt.x, w.stuckAt.z) < 3.5;
+      const ok = (w.ok || (model.routeToShore && atShore)) && w.maxDepth <= model.wadeDepth;
+      res.route = { ways: [...new Set(r.map((q) => q.way).filter(Boolean))].length, ...w, atShore };
+      say(`  route  : south gate -> memorial along ${res.route.ways} ways, ${w.lengthM} m: ${w.ok ? 'arrived' : 'STUCK at ' + JSON.stringify(w.stuckAt)} in ${(w.ticks / 60).toFixed(0)} s, lowest feet ${w.minY} m, deepest water ${w.maxDepth} m  -> ${mark(ok)}${!w.ok && model.routeToShore ? (atShore ? ` (T4a: reachable up to the shore of the water, where the bridge way ${w.stuckAt.way} needs its deck: T4b)` : ' (NOT at a bridge head)') : ''}`);
       res.verdict.route = ok;
     }
   }
@@ -102,21 +105,21 @@ async function reliefSection(ctx, ph, engine) {
   const Hk = await import(pathToFileURL(path.join(ROOT, 'src/areas/north/hooks/paradny.js')).href);
   const { createHandling } = await import(pathToFileURL(path.join(ROOT, 'src/world/drive/handling.js')).href);
   const { CAMS, EYE } = await import('./tauride-cams.mjs');
-  const L = engine.L, svc = ctx.services.landmarksTauride;
+  const L = engine.L, svc = ctx.services.landmarksTauride, RH = GH.reliefHeight;      // T4a: the T2 relief rules and the mesh checks of the relief run on the pure RELIEF (reliefHeight); gardenHeight is now the terrain: ponds + relief
   let bad = 0;
   const rel = (name, ok, detail = '') => { say(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? '  ' + detail : ''}`); out.sections.push({ role: 'relief', name, ok, detail }); if (!ok) bad++; };
   say('RELIEF (T2) on the real built module');
   const live = AT.HEIGHT_PATCHES, saved = live.slice();
   const OLD = (x, z) => { live.length = 0; const h = L.heightAt(x, z); live.push(...saved); return h; };
   // ---- the module and its service
-  rel('the page lists the garden patch after the Paradny patch (HEIGHT_PATCHES of src/areas/north/area.js); its box is RELIEF_HULL, the hull of the hills', saved.map((p) => p.id).join() === 'paradny,garden' && saved[1].at === GH.gardenHeight && JSON.stringify(saved[1].box) === JSON.stringify(GH.RELIEF_HULL), saved.map((p) => p.id).join() + ' ' + JSON.stringify(saved[1] && saved[1].box));
+  rel('the page lists the garden patch after the Paradny patch (HEIGHT_PATCHES of src/areas/north/area.js); its box is TERRAIN_HULL, the hull of the hills and of the shore band of the ponds', saved.map((p) => p.id).join() === 'paradny,garden' && saved[1].at === GH.gardenHeight && JSON.stringify(saved[1].box) === JSON.stringify(GH.TERRAIN_HULL), saved.map((p) => p.id).join() + ' ' + JSON.stringify(saved[1] && saved[1].box));
   rel('the built module publishes the pure gardenHeight as terrain.heightAt, and deckY / paradny are still the Paradny deck', !!svc && svc.terrain.heightAt === GH.gardenHeight && typeof svc.deckY === 'function' && !!svc.paradny, '');
   const meshes = []; ctx.staticRoot.traverse((o) => { if (o.isMesh && /^tauride-terrain-/.test(o.name)) meshes.push(o); });
   const tris = meshes.reduce((s, m) => s + m.geometry.index.count / 3, 0);
   rel(`the terrain is at most ${TM.TERRAIN.drawsMax} meshes and ${TM.TERRAIN.trianglesTarget} triangles, and the service counts them`, meshes.length > 0 && meshes.length <= TM.TERRAIN.drawsMax && tris <= TM.TERRAIN.trianglesTarget && svc.terrain.draws === meshes.length && svc.terrain.triangles === tris, `${meshes.length} meshes, ${tris} triangles`);
-  rel('the terrain meshes are noBatch (the garden ground material of T3, no vertex colour, one draw per chunk), carry normals and are inside the garden box', meshes.every((m) => m.userData.noBatch && !m.geometry.attributes.color && m.geometry.attributes.normal && m.material.userData.tauride === 'ground') && meshes.every((m) => { const b = m.geometry.boundingBox; return b.min.x >= GH.RELIEF_BOX[0] - 1 && b.max.x <= GH.RELIEF_BOX[1] + 1 && b.min.z >= GH.RELIEF_BOX[2] - 1 && b.max.z <= GH.RELIEF_BOX[3] + 1 && b.min.y >= -1e-6; }), '');
+  rel('the terrain meshes are noBatch (the garden ground material of T3, no vertex colour, one draw per chunk), carry normals and are inside the garden box', meshes.every((m) => m.userData.noBatch && !m.geometry.attributes.color && m.geometry.attributes.normal && m.material.userData.tauride === 'ground') && meshes.every((m) => { const b = m.geometry.boundingBox; return b.min.x >= GH.RELIEF_BOX[0] - 1 && b.max.x <= GH.RELIEF_BOX[1] + 1 && b.min.z >= GH.RELIEF_BOX[2] - 1 && b.max.z <= GH.RELIEF_BOX[3] + 1 && b.min.y >= GH.PONDS.BED_BIG - 0.01; }), '');
   { const c2 = makeContext(engine, []), n0 = c2.ctx.physics.count; TM.buildTerrain(c2.ctx, new engine.THREE.Group(), TM.planTerrain()); rel('the terrain builder adds no collider (the player follows heightAt)', c2.ctx.physics.count === n0, `${n0} -> ${c2.ctx.physics.count}`); }
-  rel('the module still has the colliders of T1 only (Paradny and palace: 1,270)', ph.count === 1270, String(ph.count));
+  rel('the module has the colliders of T1 (Paradny and palace: 1,270) and the shore colliders of the ponds (T4a), nothing else', ph.count === 1270 + svc.ponds.colliders && svc.ponds.colliders > 100, `${ph.count} = 1270 + ${svc.ponds.colliders}`);
   // ---- the mesh against the height function
   const plan = TM.planTerrain(), M = TM.measurePlan(plan);
   rel(`the planned mesh is within ${TM.TERRAIN.tol * 100} cm of gardenHeight (rasterised on a 0.5 m lattice)`, M.maxErr <= TM.TERRAIN.tol, `max ${(M.maxErr * 100).toFixed(2)} cm at ${JSON.stringify(M.at)}, ${M.samples} samples`);
@@ -124,11 +127,11 @@ async function reliefSection(ctx, ph, engine) {
   // T2 fix round 1: the "pad" of the aerial views. The mesh used to keep every 16 m leaf that had one lifted sample, so each hill sat on an apron of flat triangles (25 % of the footprint) painted in the placeholder colour over the
   // textured lawn, with straight leaf edges. Now a leaf across the foot splits down to TERRAIN.edge, and the footprint hugs the lifted ground.
   rel(`the mesh footprint hugs the relief: ${(M.padArea).toFixed(0)} m2 of triangles for ${M.liftedArea.toFixed(0)} m2 lifted by ${TM.TERRAIN.drop * 100} cm or more (at most +20 %), and only ${(M.apronArea).toFixed(0)} m2 (${(100 * M.apronArea / M.padArea).toFixed(1)} %, at most 6 %) are flat triangles with no corner above ${TM.TERRAIN.drop * 100} cm`, M.padArea <= 1.2 * M.liftedArea && M.apronArea <= 0.06 * M.padArea && M.liftedArea > 8000, '');
-  { const old = TM.measurePlan(TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { edge: 16 }));
+  { const old = TM.measurePlan(TM.planTerrain(RH, GH.RELIEF_BOX, { edge: 16 }));
     rel('mutant: leaves that straddle the foot left at 16 m (the apron of the first T2) turn the footprint check red (the check can fail)', !(old.padArea <= 1.2 * old.liftedArea && old.apronArea <= 0.06 * old.padArea), `pad ${old.padArea.toFixed(0)} m2 for ${old.liftedArea.toFixed(0)} lifted, apron ${old.apronArea.toFixed(0)} m2`); }
   const planBuilt = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { cover: TM.gardenPieces() });
   rel('the plan of the build (the COVER plan of T3: the whole floor of the garden) equals the plan of the test (deterministic)', planBuilt.tris === svc.terrain.triangles, `${planBuilt.tris} triangles, ${planBuilt.leaves} leaves, ${planBuilt.chunksBefore} chunks -> ${planBuilt.chunks.length} draws (the relief-only plan of T2: ${plan.tris})`);
-  { const bad2 = TM.measurePlan(TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { split: 0.4 }));
+  { const bad2 = TM.measurePlan(TM.planTerrain(RH, GH.RELIEF_BOX, { split: 0.4 }));
     rel('mutant: a split tolerance of 40 cm turns the 5 cm check red (the check can fail)', bad2.maxErr > TM.TERRAIN.tol, `max ${(bad2.maxErr * 100).toFixed(1)} cm`); }
   // ---- heightAt through the page's patches
   { let n = 0, bad1 = 0, lifted = 0; const b = GH.RELIEF_BOX;
@@ -143,15 +146,16 @@ async function reliefSection(ctx, ph, engine) {
     rel('heightAt against the old line over the whole North + 150 m (2 m lattice): every difference is inside the Paradny box or the garden box and equals the patch', outside === 0 && notEq === 0 && diff > 1000, `${n} points, ${diff} differ, ${outside} outside both boxes, ${notEq} not equal to their patch`); }
   // ---- the patch box (T2 fix round 1, the start-up cost of heightAt): the HULL of the hills, so that layout.heightAt does not call gardenHeight for the 39 % of the garden box where no hill stands
   { const Hh = GH.RELIEF_HULL, b = GH.RELIEF_BOX, countOutside = (hull) => { let lifted = 0, out = 0, x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-      for (let x = b[0]; x <= b[1]; x += 0.5) for (let z = b[2]; z <= b[3]; z += 0.5) { if (GH.gardenHeight(x, z) === null) continue; lifted++; x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); if (!(x >= hull[0] && x <= hull[1] && z >= hull[2] && z <= hull[3])) out++; }
+      for (let x = b[0]; x <= b[1]; x += 0.5) for (let z = b[2]; z <= b[3]; z += 0.5) { if (RH(x, z) === null) continue; lifted++; x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); if (!(x >= hull[0] && x <= hull[1] && z >= hull[2] && z <= hull[3])) out++; }
       return { lifted, out, ext: [x0, x1, z0, z1] }; }, m = countOutside(Hh);
     rel('the patch box RELIEF_HULL holds every lifted point of a 0.5 m lattice over the garden box, is at most 65 % of the garden box, and each side lies within 3 m of the outermost lifted point (tight)', m.out === 0 && m.lifted > 20000 && (Hh[1] - Hh[0]) * (Hh[3] - Hh[2]) <= 0.65 * (b[1] - b[0]) * (b[3] - b[2]) && Hh[0] <= m.ext[0] && m.ext[0] - Hh[0] <= 3 && Hh[1] >= m.ext[1] && Hh[1] - m.ext[1] <= 3 && Hh[2] <= m.ext[2] && m.ext[2] - Hh[2] <= 3 && Hh[3] >= m.ext[3] && Hh[3] - m.ext[3] <= 3,
       `hull ${JSON.stringify(Hh)} = ${(100 * (Hh[1] - Hh[0]) * (Hh[3] - Hh[2]) / ((b[1] - b[0]) * (b[3] - b[2]))).toFixed(0)} % of the garden box, ${m.lifted} lifted points, ${m.out} outside, outermost lifted ${JSON.stringify(m.ext)}`);
     const small = countOutside(GH.reliefHull(GH.FEATURES.filter((f) => f.key !== 'N')));
     rel('mutant: the hull of the features without the north hill leaves lifted points outside (the hull check can fail)', small.out > 1000, `${small.out} lifted points of the north hill outside`); }
   // ---- the rules, on layout.heightAt (the whole chain) and on the pure function
-  const viaEngine = (x, z) => { const h = L.heightAt(x, z); return h > 0 ? h : null; };
-  for (const [label, fn] of [['layout.heightAt', viaEngine], ['gardenHeight', GH.gardenHeight]]) {
+  // the engine's height minus the bank profile of the ponds (the terrain is bank + relief): what is left is the relief (null in the water and where nothing lifts)
+  const viaEngine = (x, z) => { const d = GH.GARDEN_SHORE.dist(x, z); if (d < 0) return null; const pr = GH.gardenHeight.profile, r = L.heightAt(x, z) - (GH.GARDEN_SHORE.inGarden(x, z) ? pr.landH(d, pr.slopeAt(x, z)) : 0); return r > 1e-9 ? r : null; };
+  for (const [label, fn] of [['layout.heightAt minus the bank', viaEngine], ['reliefHeight', RH]]) {
     const m = R.checkMargins(fn, undefined, 1), sl = R.slopes(fn, 2), vio = Object.fromEntries(m.violations.map((v) => [v.rule, v]));
     for (const k of Object.keys(R.MARGINS)) rel(`[${label}] relief is zero within ${R.MARGINS[k]} m of ${{ outline: 'the garden outline (no cliff at the fence line, inside or outside)', footprint: 'every building footprint (HILL_KEEP_OUT_MARGIN)', tree: 'every OSM tree', water: 'the water (the banks of T4 are cut there)', bridge: 'every bridge way', flat: 'the pitch, playgrounds, fitness station, fountain and statues', pose: 'the camera poses T01-T11 and the VIEWS poses' }[k]}`, !vio[k], vio[k] ? `${vio[k].n} cells, worst ${vio[k].worst} m at ${JSON.stringify(vio[k].at)}` : `${m.lifted} lifted cells checked`);
     rel(`[${label}] land slope <= 1:4 (${R.MAX_SLOPE}) on every lifted cell; ways <= 1:4 per metre on the 120 ways`, sl.land.max <= R.MAX_SLOPE && sl.ways.max <= R.MAX_SLOPE, `land ${sl.land.max.toFixed(3)} at ${JSON.stringify(sl.land.at)}, ways ${sl.ways.max.toFixed(3)} (${sl.ways.id})`);
@@ -165,9 +169,9 @@ async function reliefSection(ctx, ph, engine) {
     let worst = Infinity, wp = null, hmax = 0;
     for (const c of CAMS) { if (c.flight) continue; const h0 = L.heightAt(c.x, c.z); hmax = Math.max(hmax, h0); const ex = c.x, ez = c.z, ey = h0 + EYE, tx = c.target.x, tz = c.target.z, ty = L.heightAt(tx, tz) + c.target.y, d = Math.hypot(tx - ex, tz - ez), n = Math.max(2, Math.ceil(d));
       for (let k = 1; k < n; k++) { const s = k / n; if ((1 - s) * d < 3) break; const ry = ey + (ty - ey) * s, gy = L.heightAt(ex + (tx - ex) * s, ez + (tz - ez) * s), clear = ry - gy; if (clear < worst) { worst = clear; wp = c.id; } } }
-    rel('the 11 ground camera poses stand at street level (relief 0 within 4 m) and no hill hides their target (the eye line clears the terrain by 0.5 m or more except in the last 3 m)', hmax === 0 && worst > 0.5, `highest pose ground ${hmax.toFixed(2)} m, tightest eye-line clearance ${worst.toFixed(2)} m at ${wp}`); }
+    rel('the 11 ground camera poses stand at street level (relief 0 within 4 m; the crest of a pond bank, at most BANK_TOP, may lift a pose that is 3 .. 8 m from the water) and no hill hides their target (the eye line clears the terrain by 0.5 m or more except in the last 3 m)', hmax <= GH.PONDS.BANK_TOP + 1e-9 && worst > 0.5, `highest pose ground ${hmax.toFixed(2)} m, tightest eye-line clearance ${worst.toFixed(2)} m at ${wp}`); }
   // ---- determinism, purity, edge cases
-  { let det = 0, nonNum = 0; const f1 = GH.gardenHeight, f2 = GH.makeGardenHeight();
+  { let det = 0, nonNum = 0; const f1 = RH, f2 = GH.makeGardenHeight();
     for (let i = 0; i < 20000; i++) { const x = GH.RELIEF_BOX[0] + ((i * 7919) % 5803) / 10, z = GH.RELIEF_BOX[2] + ((i * 104729) % 5290) / 10, a = f1(x, z), b = f1(x, z), c = f2(x, z); if (a !== b || a !== c) det++; if (a !== null && !(typeof a === 'number' && Number.isFinite(a) && a > 0)) nonNum++; }
     rel('gardenHeight is deterministic (same bits on a second call and from a fresh makeGardenHeight()) and answers null or a finite number > 0', det === 0 && nonNum === 0, `20,000 points, ${det} differ, ${nonNum} malformed`);
     const edge = [[NaN, 0], [0, NaN], [Infinity, 0], [0, -Infinity], [undefined, undefined], [null, null], [1e9, -1e9], [-1e9, 1e9], [0, 0], [GH.RELIEF_BOX[0] - 1e-9, -1500], [GH.RELIEF_BOX[1] + 1e-9, -1500], [1200, GH.RELIEF_BOX[2] - 1e-9], [1200, GH.RELIEF_BOX[3] + 1e-9]];
@@ -191,16 +195,16 @@ async function reliefSection(ctx, ph, engine) {
       for (let i = 0; i < 400000; i++) one(b[0] - 4 + rnd() * (b[1] - b[0] + 8), b[2] - 4 + rnd() * (b[3] - b[2] + 8));
       for (const f of GH.FEATURES) for (let i = 0; i < 20000; i++) one(f.x + (rnd() * 2 - 1) * (Math.max(f.rx, f.rz) + 3), f.z + (rnd() * 2 - 1) * (Math.max(f.rx, f.rz) + 3));
       return { n, d, lifted }; };
-    const m = sweep(GH.gardenHeight, brute(GH.FEATURES));
+    const m = sweep(RH, brute(GH.FEATURES));
     rel('gardenHeight (cell masks) equals the brute-force evaluation of every feature bit for bit (1 m lattice + 400,000 random + the feet of the nine hills)', m.d === 0 && m.lifted > 50000, `${m.n} points, ${m.lifted} lifted, ${m.d} differ`);
     const mut = GH.FEATURES.map((f, i) => ({ ...f, rot: (f.rot || 0) + 23 * i, rx: f.rx * 1.25, rz: f.rz * 0.85 })), m2 = sweep(GH.makeGardenHeight(mut), brute(mut));
     rel('... also for a rotated and stretched copy of the features (overlapping hills included)', m2.d === 0 && m2.lifted > 50000, `${m2.n} points, ${m2.lifted} lifted, ${m2.d} differ`);
-    const m3 = sweep(GH.gardenHeight, brute(GH.FEATURES.map((f) => (f.key === 'C' ? { ...f, h: f.h + 0.01 } : f))));
+    const m3 = sweep(RH, brute(GH.FEATURES.map((f) => (f.key === 'C' ? { ...f, h: f.h + 0.01 } : f))));
     rel('mutant: one hill 1 cm higher in the reference makes the comparison red (the check can fail)', m3.d > 100, `${m3.d} points differ`);
     let threw = false; try { GH.makeGardenHeight(Array.from({ length: 33 }, () => GH.FEATURES[0])); } catch (e) { threw = /at most 32/.test(String(e.message)); }
     rel('makeGardenHeight refuses more than 32 features (the cell masks are 32 bits) with a clear error', threw, ''); }
   { const hs = fs.readFileSync(path.join(ROOT, 'src/world/landmarksTauride/height.js'), 'utf8').replace(/\/\/.*$/gm, ''), rs = fs.readFileSync(path.join(ROOT, 'src/world/landmarksTauride/data/relief.js'), 'utf8').replace(/\/\/.*$/gm, '');
-    rel('height.js imports only ./data/relief.js, relief.js imports nothing, neither names three.js, layout.js, a facade, ctx, the DOM or a random source', [...hs.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1]).join() === './data/relief.js' && !/^import/m.test(rs) && !/\bTHREE\b|\bthree\b|layout|facade|\bctx\b|\bdocument\b|\bwindow\b|Math\.random|Date\.now/.test(hs + rs), ''); }
+    rel('height.js imports only the four pure data modules (relief, water, footprints, ponds), they import nothing, neither names three.js, layout.js, a facade, ctx, the DOM or a random source', [...hs.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1]).join() === './data/relief.js,./data/water.js,./data/footprints.js,./data/ponds.js' && !/^import/m.test(rs) && ['water', 'footprints', 'ponds'].every((n) => !/^import/m.test(fs.readFileSync(path.join(ROOT, 'src/world/landmarksTauride/data/' + n + '.js'), 'utf8'))) && !/\bTHREE\b|\bthree\b|layout|facade|\bctx\b|\bdocument\b|\bwindow\b|Math\.random|Date\.now/.test(hs + rs), ''); }
   { const feats = GH.FEATURES, ids = feats.map((f) => f.id), keys = feats.map((f) => f.key);
     rel('every relief feature has a unique id and key, a provenance (osm | design) and an evidence text, and is inside the garden box', new Set(ids).size === ids.length && new Set(keys).size === keys.length && feats.every((f) => (f.prov === 'osm' || f.prov === 'design') && typeof f.evidence === 'string' && f.evidence.length > 10 && f.x - f.rx >= GH.RELIEF_BOX[0] && f.x + f.rx <= GH.RELIEF_BOX[1] && f.z - f.rz >= GH.RELIEF_BOX[2] && f.z + f.rz <= GH.RELIEF_BOX[3]), `${feats.length} features, ${feats.filter((f) => f.prov === 'osm').length} with an OSM position, highest ${Math.max(...feats.map((f) => f.h))} m`);
     rel('the relief heights are within the plan: hills <= 6 m, the north hill 3-6 m, mounds 1.2-3 m, island mound ~1.5 m', Math.max(...feats.map((f) => f.h)) <= 6 && feats.find((f) => f.id === 'north-hill').h >= 3 && feats.find((f) => f.id === 'island-south-mound').h >= 1 && feats.filter((f) => /mound|knoll|gorka/.test(f.id)).every((f) => f.h >= 1.2 || f.id === 'island-south-mound'), ''); }
@@ -238,6 +242,43 @@ async function reliefSection(ctx, ph, engine) {
   return bad;
 }
 
+// ---------------------------------------------------------------- T4a: the ponds are impassable (the wading acceptance on the REAL built module)
+/** PONDS section: a dense ring of shore probes (<= 3 m apart) approached from land at several angles and speeds including a jump, on the real Physics of the built module (the shore colliders, the Paradny colliders, the engine's heightAt
+ *  with the garden patch); the mutants (no shore colliders; the old module's 0.22 m box) must let walkers into the water; the datum numbers the harness relies on. Returns the number of failed checks. */
+async function pondSection(ctx, ph, engine) {
+  const GH = await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/height.js')).href);
+  const PM = await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/ponds.js')).href);
+  const { STEP_HEIGHT } = engine;
+  const svc = ctx.services.landmarksTauride, L = engine.L, P = GH.PONDS, C = P.COLLIDER;
+  let bad = 0;
+  const rel = (name, ok, detail = '') => { say(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? '  ' + detail : ''}`); out.sections.push({ role: 'ponds', name, ok, detail }); if (!ok) bad++; };
+  say('PONDS (T4a): impassable shores on the real built module');
+  const segs = GH.shoreSegments(S.U), shore = GH.GARDEN_SHORE, { camera } = makeContext(engine, []);
+  const world = (physics, hAt) => ({ engine, L, ph: physics, model: { waterLevel: P.WATER_Y, inWater: (x, z) => shore.dist(x, z) < 0 }, camera, bounds: BOUNDS, heightAt: hAt, player: () => makePlayer(engine, camera, physics, BOUNDS) });
+  const real = world(ph, (x, z) => L.heightAt(x, z));
+  rel(`the contour collider stands above any feet that can reach it: top ${C.top} m > contour ${C.contourY} + STEP_HEIGHT ${STEP_HEIGHT} + a jump 0.73 m + the crest ${P.BANK_TOP} m, bottom ${C.y0} m below the deepest bed ${Math.min(P.BED_BIG, P.BED_SMALL)} m`, C.top > C.contourY + STEP_HEIGHT && C.top > P.BANK_TOP + 0.73 + STEP_HEIGHT && C.y0 < Math.min(P.BED_BIG, P.BED_SMALL), '');
+  rel('the module published its pond service: level, triangles, colliders, build time', svc.ponds && svc.ponds.y === P.WATER_Y && svc.ponds.colliders === svc.ponds.stats.colliders && svc.ponds.colliders > 100, svc.ponds ? `${svc.ponds.colliders} colliders, ${svc.ponds.triangles} water triangles, built in ${svc.ponds.buildMs.toFixed(1)} ms` : 'no service');
+  const t0 = Date.now(), ring = wadeRing(real, shore, segs, { spacing: 3 }), sec = ((Date.now() - t0) / 1000).toFixed(0);
+  rel(`RING: ${ring.runs} runs from ${ring.runs / 21 | 0} starts every 3 m along the 2,666 m of shore (${ring.skipped} starts skipped), 7 angles (0, +-30, +-60, +-80 degrees from the perpendicular) x walk / sprint / jump: 0 entered the water (closest feet to the waterline ${ring.minD.toFixed(2)} m, p1 ${ring.p01.toFixed(2)}, median ${ring.p50.toFixed(2)})`, ring.entered === 0 && ring.trapped === 0 && ring.runs > 12000 && ring.minD > 0, `${ring.entered} entered, ${ring.trapped} trapped, by mode ${JSON.stringify(ring.byMode)}, ${sec} s`);
+  const walkOnly = wadeRing(real, shore, segs, { spacing: 3, angles: [0], modes: ['walk'], limit: 400, offset: 0.1 });
+  rel('RING (a second lattice of starts, straight walk): 0 entered', walkOnly.entered === 0 && walkOnly.runs > 300, `${walkOnly.runs} runs, closest ${walkOnly.minD.toFixed(2)} m`);
+  // the mutants: the harness must be able to see a trap
+  { const bareH = (x, z) => L.heightAt(x, z), bare = new engine.Physics(bareH), n = wadeRing(world(bare, bareH), shore, segs, { spacing: 3, angles: [0], modes: ['walk'], limit: 120, offset: 0.2 });
+    rel('mutant: no shore colliders -> walkers wade into the water (the ring can fail)', n.entered > n.runs * 0.5, `${n.entered} of ${n.runs} entered, closest ${n.minD.toFixed(2)} m`); }
+  { const old = new engine.Physics((x, z) => L.heightAt(x, z)), pl = PM.planPonds({ ponds: { ...P, COLLIDER: { ...C, top: 0.22, y0: -1.5, contourY: 0.05 } } });
+    for (const c of pl.colliders) old.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1);
+    const n = wadeRing(world(old, (x, z) => L.heightAt(x, z)), shore, segs, { spacing: 3, angles: [0], modes: ['walk', 'sprint'], limit: 150, offset: 0.3 });
+    rel("mutant: the old module's shore box (top 0.22 m, bottom -1.5 m, on the ground at the crest: a walker at feet 0.05 steps over it) -> walkers get into the water and cannot get out (the old trap)", n.entered > n.runs * 0.3 && n.trapped > 0, `${n.entered} of ${n.runs} entered, ${n.trapped} trapped`); }
+  { const low = new engine.Physics((x, z) => L.heightAt(x, z)), pl = PM.planPonds({ ponds: { ...P, COLLIDER: { ...C, top: C.contourY + 0.3 } } });
+    for (const c of pl.colliders) low.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1);
+    const n = wadeRing(world(low, (x, z) => L.heightAt(x, z)), shore, segs, { spacing: 3, angles: [0], modes: ['walk'], limit: 120, offset: 0.4 });
+    rel('mutant: a top below contour + STEP_HEIGHT (a box that a walker steps over) -> entries (the top is a real parameter)', n.entered > 0, `${n.entered} of ${n.runs} entered`); }
+  // flight landing (reported; the refusal is the engine's: groundHeight < -1)
+  const ld = landingReport(real, { ...S, U: S.U }), bigDeep = ld.refused;
+  rel('flight landing over the water: the Big Pond bed (-1.2 m) triggers the engine\'s refusal (ground < -1) where the water is deeper than 0.55 m, the shallows and the whole Small Pond (-0.5 m) do not: REPORTED, the engine is not changed here', ld.cells > 1000 && bigDeep > 0, `${ld.cells} water cells (4 m lattice), ${ld.refused} refused as 'water', ${ld.cells - ld.refused} landable (${ld.landableDeep} deeper than 0.3 m), and the landing then sits inside the shore ring`);
+  return bad;
+}
+
 // ---------------------------------------------------------------- which runs
 const models = onlySource ? {} : builtinModels(S, engine.L);
 for (const m of Object.values(models)) m.wadeDepth = WADE;
@@ -249,6 +290,7 @@ if (!onlySource) {
     const m = mod.model || mod.default;
     main = { name: path.basename(args.model), waterLevel: -0.45, inWater: (x, z) => inPolys(x, z, S.U), addColliders() {}, ...m, wadeDepth: m.wadeDepth ?? WADE };      // defaults for what a model leaves out
   } else main = models[args.model || 'north'];
+  if (main && main === models.north && buildList.includes('landmarksTauride')) main = { ...main, name: 'north + landmarksTauride (the REAL built module: ponds, banks, shore colliders)', waterLevel: (await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/data/ponds.js')).href)).WATER_Y, routeToShore: true };
   if (!main) { console.error(`unknown model ${args.model}`); process.exit(2); }
   say(`TAURIDE HEIGHT TEST (real Player + Physics of ${path.basename(ROOT)})${buildList.length ? ', modules built: ' + buildList.join(', ') : ''}`);
   const ex = { buildList };
@@ -257,7 +299,7 @@ if (!onlySource) {
   if (!r.pass) failed++;
   say(`  => ${main.name.split(' (')[0]}: ${mark(r.pass)}`);
   say();
-  if (buildList.includes('landmarksTauride') && ex.built) { const nb = await reliefSection(ex.built.ctx, ex.built.ph, engine); if (nb) failed++; say(`  => RELIEF (T2): ${nb ? nb + ' check(s) FAILED' : 'every check passed'}`); say(); }
+  if (buildList.includes('landmarksTauride') && ex.built) { const nb = await reliefSection(ex.built.ctx, ex.built.ph, engine); if (nb) failed++; say(`  => RELIEF (T2): ${nb ? nb + ' check(s) FAILED' : 'every check passed'}`); say(); const np = await pondSection(ex.built.ctx, ex.built.ph, engine); if (np) failed++; say(`  => PONDS (T4a): ${np ? np + ' check(s) FAILED' : 'every check passed'}`); say(); }
 }
 
 // the self-check of the harness: a trap must FAIL, a contour fix and a wade model must PASS

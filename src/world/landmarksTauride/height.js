@@ -173,16 +173,19 @@ export function makeShore(union = WATER_UNION, reach = pondReach().max, CELL = 2
     }
     return c || near;
   };
-  for (let j = 0; j < nz; j++) for (let a = 0; a < nx; a++) {
-    const cx0 = x0 + a * CELL, cz0 = z0 + j * CELL, cx1 = cx0 + CELL, cz1 = cz0 + CELL; let cross = false;
-    for (let i = 0; i < gn && !cross; i++) {                                // does the garden edge i touch the square? (bbox first, then the four corners against the edge's line)
-      const ax = garden[2 * i], az = garden[2 * i + 1], bx = garden[2 * ((i + 1) % gn)], bz = garden[2 * ((i + 1) % gn) + 1];
-      if (Math.max(ax, bx) < cx0 || Math.min(ax, bx) > cx1 || Math.max(az, bz) < cz0 || Math.min(az, bz) > cz1) continue;
-      const ex = bx - ax, ez = bz - az; let pos = 0, neg = 0;
-      for (const [px, pz] of [[cx0, cz0], [cx1, cz0], [cx0, cz1], [cx1, cz1]]) { const v = ex * (pz - az) - ez * (px - ax); if (v > 0) pos++; else if (v < 0) neg++; }
-      if (pos > 0 && neg > 0) cross = true;
+  const parity = (x, z) => { let c = false; for (let i = 0, j = gn - 1; i < gn; j = i++) { const zi = garden[2 * i + 1], zj = garden[2 * j + 1]; if ((zi > z) !== (zj > z) && x < (garden[2 * j] - garden[2 * i]) * (z - zi) / (zj - zi) + garden[2 * i]) c = !c; } return c; };
+  const gx0 = new Float64Array(gn), gx1 = new Float64Array(gn), gz0 = new Float64Array(gn), gz1 = new Float64Array(gn);
+  for (let i = 0; i < gn; i++) { const k = (i + 1) % gn; gx0[i] = Math.min(garden[2 * i], garden[2 * k]) - 0.06; gx1[i] = Math.max(garden[2 * i], garden[2 * k]) + 0.06; gz0[i] = Math.min(garden[2 * i + 1], garden[2 * k + 1]) - 0.06; gz1[i] = Math.max(garden[2 * i + 1], garden[2 * k + 1]) + 0.06; }
+  for (let c = 0; c < nx * nz; c++) {
+    if (start[c] === start[c + 1]) continue;                               // only the near cells are ever asked (a far cell is water or the relief's)
+    const a = c % nx, j = (c - a) / nx, cx0 = x0 + a * CELL, cz0 = z0 + j * CELL, cx1 = cx0 + CELL, cz1 = cz0 + CELL; let cross = false;
+    for (let i = 0; i < gn && !cross; i++) {                                // does the garden edge i come within 6 cm of the square? (bbox first, then the four corners against the edge's line)
+      if (gx1[i] < cx0 || gx0[i] > cx1 || gz1[i] < cz0 || gz0[i] > cz1) continue;
+      const k = (i + 1) % gn, ax = garden[2 * i], az = garden[2 * i + 1], ex = garden[2 * k] - ax, ez = garden[2 * k + 1] - az, l = Math.hypot(ex, ez) || 1;
+      const v0 = (ex * (cz0 - az) - ez * (cx0 - ax)) / l, v1 = (ex * (cz0 - az) - ez * (cx1 - ax)) / l, v2 = (ex * (cz1 - az) - ez * (cx0 - ax)) / l, v3 = (ex * (cz1 - az) - ez * (cx1 - ax)) / l;
+      if (Math.min(v0, v1, v2, v3) < 0.06 && Math.max(v0, v1, v2, v3) > -0.06) cross = true;
     }
-    gate[j * nx + a] = cross ? 1 : (inGarden(cx0 + CELL / 2, cz0 + CELL / 2) ? 0 : 2);
+    gate[c] = cross ? 1 : (parity(cx0 + CELL / 2, cz0 + CELL / 2) ? 0 : 2);
   }
   const dist = (x, z) => {
     if (!(x >= x0 && x < x0 + nx * CELL && z >= z0 && z < z0 + nz * CELL)) return reach + CELL;
@@ -234,22 +237,41 @@ export function makeTerrainHeight(o = {}) {
   const P = o.ponds || PONDS, union = o.union || WATER_UNION, relief = makeGardenHeight(o.features || FEATURES, o.box || RELIEF_BOX);
   const prof = pondProfile(P), reach = pondReach(P), shore = o.shore || makeShore(union, reach.max), slopeAt = prof.slopeAt, bedAt = prof.bedAt, landH = prof.landH, waterH = prof.waterH;
   const [bx0, bx1, bz0, bz1] = shore.box, C = shore.cell, inv = 1 / C, nx = shore.nx, far = shore.far, start = shore.start, dist = shore.dist, gate = shore.gate, inGarden = shore.inGarden;
-  const deepWater = reach.water;
+  const deepWater = reach.water, SP = P.SMALL_POND, BIGBED = P.BED_BIG, SMALLBED = P.BED_SMALL;
+  // which bed a cell has: 1 = the Big Pond's (the whole cell is east of eastX and south of the mouth + its blend), 2 = the Small Pond's, 0 = in the blend (bedAt decides): most of the water is one of the two constants
+  const bedK = new Uint8Array(nx * shore.nz);
+  for (let c = 0; c < bedK.length; c++) { const a = c % nx, j = (c - a) / nx, cx0 = bx0 + a * C, cz0 = bz0 + j * C; bedK[c] = (cz0 >= SP.mouthZ + SP.blendZ && cx0 >= SP.eastX) ? 1 : (cz0 + C <= SP.mouthZ || cx0 + C <= SP.eastX - SP.blendX) ? 2 : 0; }
+  // The hot path is written out by hand (no call of slopeAt / landH / waterH / smooth: a function call costs 100+ ns in the interpreter, and layout.heightAt runs this over the whole map at start-up; the
+  // arithmetic is the SAME expressions in the same order as pondProfile(), which tools/tauride/pond-test.mjs checks bit for bit on 60,000 points).
+  const N = P.SLOPE_NOISE, SMIN = P.SLOPE_MIN, SSPAN = P.SLOPE_MAX - P.SLOPE_MIN, kx = N.kx, px = N.px, kz = N.kz, pz = N.pz, T = P.BANK_TOP, W0 = P.WATER_Y, F = P.CREST_FALL, RUN = 2 * (T - W0), E = P.BED_KNEE;
   function terrainHeight(x, z) {
     if (x >= bx0 && x < bx1 && z >= bz0 && z < bz1) {
       const c = (((z - bz0) * inv) | 0) * nx + (((x - bx0) * inv) | 0);
-      if (start[c] === start[c + 1]) { if (far[c] === 1) return bedAt(x, z); }
+      if (start[c] === start[c + 1]) { if (far[c] === 1) { const k = bedK[c]; return k === 1 ? BIGBED : k === 2 ? SMALLBED : bedAt(x, z); } }
       else {
         const d = dist(x, z);
-        if (d < 0) return d < -deepWater ? bedAt(x, z) : waterH(-d, slopeAt(x, z), bedAt(x, z));
+        if (d < 0) {
+          const k = bedK[c], bed = k === 1 ? BIGBED : k === 2 ? SMALLBED : bedAt(x, z);
+          if (d < -deepWater) return bed;
+          const depth = W0 - bed, u = -d;
+          if (!(depth > 0)) return W0 - u / slopeAt(x, z) < bed ? bed : W0 - u / slopeAt(x, z);
+          const q = u / (depth * (SMIN + SSPAN * (0.5 + 0.5 * Math.sin(x * kx + px) * Math.sin(z * kz + pz)))), e1 = q - (1 - E);
+          return W0 - depth * (q <= 1 - E ? q : q < 1 + E ? q - e1 * e1 / (4 * E) : 1);
+        }
         const g = gate[c]; if (g === 2 || (g === 1 && !inGarden(x, z))) return relief(x, z);       // outside the garden polygon the ground is the street's (flat), not a bank
-        const b = landH(d, slopeAt(x, z)), r = relief(x, z);
-        const h = r === null ? b : b + r;
+        const D = RUN * (SMIN + SSPAN * (0.5 + 0.5 * Math.sin(x * kx + px) * Math.sin(z * kz + pz)));
+        let b;
+        if (d < D) { const t = 1 - d / D; b = W0 + (T - W0) * (1 - t * t); }
+        else if (d < D + F) { const w = (d - D) / (D + F - D); b = T * (1 - w * w * (3 - 2 * w)); }
+        else b = 0;
+        const r = relief(x, z), h = r === null ? b : b + r;
         return h === 0 ? null : h;
       }
     }
     return relief(x, z);
   }
+  // prime the type feedback of every branch (far land, near land, near water, the two beds and the blend, the relief) with a coarse lattice, so that the first real pass (layout.heightAt over the map at start-up) does not deoptimise
+  for (let j = 0; j < 12; j++) for (let i = 0; i < 12; i++) terrainHeight(bx0 + (i + 0.5) * (bx1 - bx0) / 12, bz0 + (j + 0.5) * (bz1 - bz0) / 12);
   terrainHeight.shore = shore; terrainHeight.relief = relief; terrainHeight.profile = prof; terrainHeight.reach = reach; terrainHeight.ponds = P;
   return terrainHeight;
 }
