@@ -5,7 +5,8 @@
 // apron of up to 16 m of flat triangles round every hill (T2 fix round 1: the apron was the straight-edged "pad" of the aerial views), and a leaf next to a leaf of half its size gets that neighbour's midpoint as a
 // vertex (no T-junction cracks, also across the 64 m chunk borders: both chunks hold the same vertices there).
 // Triangles go to the 64 m chunk of their leaf (one mesh and one draw per chunk that has any). NO COLLIDERS: the player and the pedestrians follow heightAt (the HEIGHT_PATCH is the same function).
-// The material is a PLACEHOLDER: a toon vertex-coloured grass (darker on slopes, with a little earth where it is steep); T3 replaces it with the painted ground of the garden.
+// The material is the GROUND'S OWN shader when the environment's ground exists (terrainMaterial: the same program, the colour a function of the world (x, z), so the hills show the lawn and the way paint of the
+// flat ground at the same place and no seam along the contour; T2 fix round 2); otherwise (a headless test of the builder alone) a PLACEHOLDER, a toon vertex-coloured grass (darker on slopes, a little earth where it is steep).
 import * as THREE from 'three';
 import { registerLOD } from '../../core/spatial.js';
 import { gardenHeight, RELIEF_BOX } from './height.js';
@@ -138,20 +139,44 @@ function makeColor() {
   };
 }
 
-/** The meshes of a plan: one Mesh per chunk (`tauride-terrain-<cx>_<cz>`), noBatch + registerLOD(Infinity) like the chunks of environment/ground.js, no colliders. Returns { group, triangles, draws }. */
+/** The material of the environment's ground (the painterly world-space shader of environment/ground.js: its meshes are named 'env-ground' in the group 'env' of ctx.staticRoot, built before this module), or null. */
+export function groundMaterial(ctx) {
+  const env = ctx.staticRoot && ctx.staticRoot.children ? ctx.staticRoot.children.find((o) => o.name === 'env') : null;
+  const grp = env && env.getObjectByName ? env.getObjectByName('env-ground') : null;
+  const mesh = grp && grp.children ? grp.children.find((o) => o.isMesh && o.material && typeof o.material.onBeforeCompile === 'function') : null;
+  return mesh ? mesh.material : null;
+}
+
+/**
+ * The material of the relief. THE GROUND'S OWN SHADER when the environment's ground exists: its colour is a function of the world position (x, z) alone (the class mask of the OSM data, the noise tile, the
+ * lawn / gravel / earth patches), so a hill painted with the same program shows exactly what the flat ground shows at the same (x, z): no seam along the contour, the grey way paint stays visible on the
+ * hill. The copy is a second `ctx.mat.toon` material that takes the ground's onBeforeCompile and customProgramCacheKey (the same compiled program, the same shared uniform objects) WITHOUT its
+ * polygonOffset: the ground is pushed back by 2 depth units so that everything above it wins, and the relief (2 cm and more above the ground) must keep winning over it. No ground (a headless test of the
+ * builder alone) -> the vertex-coloured placeholder grass of makeColor().
+ */
+export function terrainMaterial(ctx) {
+  const gm = groundMaterial(ctx);
+  if (!gm) return { mat: ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0.02, name: 'tauride-terrain' }), shared: false };
+  const mat = ctx.mat.toon('#ffffff', { paint: 0.02, name: 'tauride-terrain-ground' });
+  mat.onBeforeCompile = gm.onBeforeCompile; mat.customProgramCacheKey = gm.customProgramCacheKey;
+  return { mat, shared: true };
+}
+
+/** The meshes of a plan: one Mesh per chunk (`tauride-terrain-<cx>_<cz>`), noBatch + registerLOD(Infinity) like the chunks of environment/ground.js, no colliders. Returns { group, triangles, draws, shared (the ground's own shader) }. */
 export function buildTerrain(ctx, parent, plan) {
   const group = new THREE.Group(); group.name = 'tauride-terrain';
-  const mat = ctx.mat.toon('#ffffff', { vertexColors: true, paint: 0.02, name: 'tauride-terrain' });
+  const { mat, shared } = terrainMaterial(ctx);
   for (const c of plan.chunks) {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(c.pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(c.nrm, 3)); g.setAttribute('color', new THREE.BufferAttribute(c.col, 3));
+    g.setAttribute('position', new THREE.BufferAttribute(c.pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(c.nrm, 3)); if (!shared) g.setAttribute('color', new THREE.BufferAttribute(c.col, 3));
     g.setIndex(new THREE.BufferAttribute(c.idx, 1)); g.computeBoundingBox(); g.computeBoundingSphere();
     const m = new THREE.Mesh(g, mat); m.name = `tauride-terrain-${c.cx}_${c.cz}`; m.receiveShadow = true; m.castShadow = false;
+    if (shared) m.renderOrder = -1;      // the painterly shader is dear: drawn BEFORE the ground (three sorts opaque meshes by renderOrder first, then by material id = creation order, the ground first), so the ground fragments under a hill fail the early depth test instead of being shaded twice
     ctx.noBatch(m); group.add(m);
   }
   parent.add(group); group.updateMatrixWorld(true);
   for (const m of group.children) registerLOD(m, Infinity);
-  return { group, triangles: plan.tris, draws: plan.chunks.length };
+  return { group, triangles: plan.tris, draws: plan.chunks.length, shared };
 }
 
 /** The distance between the planned mesh and `gh`: rasterises every triangle on a `step` m lattice and compares the interpolated height with gh. { maxErr, at, samples, uncovered (samples at or above the plan's `drop` that no triangle covers), boundaryHigh (the highest point of an open edge), nonManifold, padArea (m2 of the footprint of all triangles), apronArea (m2 of the triangles with no corner above `drop`), liftedArea (m2 of the lattice points at or above `drop`) } */
