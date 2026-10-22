@@ -6,8 +6,8 @@
 // and that a context without a ground still gets the placeholder. The same checks run against four copies of terrain-mesh.js with one line cut (the proof can fail). The picture itself needs a GPU look.
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-const ROOT = process.cwd();
+import { pathToFileURL, fileURLToPath } from 'node:url';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');      // the repository root, wherever the tool is started from
 const imp = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 let failed = 0, total = 0;
 const ok = (name, cond, detail = '') => { total++; if (!cond) failed++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}${detail ? ' - ' + detail : ''}`); };

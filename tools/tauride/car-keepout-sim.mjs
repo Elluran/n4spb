@@ -9,8 +9,8 @@
 // (an in-memory copy loaded through a data: URL; the cut is asserted to have found its text) and must breach: M1 = without the undo of the push, M2 = without the keep-out term of the embedded rule.
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-const ROOT = process.cwd();
+import { pathToFileURL, fileURLToPath } from 'node:url';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');      // the repository root, wherever the tool is started from
 const imp = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 const args = process.argv.slice(2), QUICK = args.includes('--quick'), FULL = args.includes('--full'), NO_WORLD = args.includes('--no-world');
 let failed = 0, total = 0;
