@@ -93,7 +93,7 @@ export function moduleText(header, exportsObj, spread = []) {
   const out = [header.trim().split('\n').map((l) => (l.startsWith('//') ? l : '// ' + l)).join('\n'), ''];
   for (const [name, v] of Object.entries(exportsObj)) {
     if (Array.isArray(v) && v.length > 1 && v.every((e) => typeof e === 'object' && e !== null)) out.push(`export const ${name} = [\n${v.map((e) => '  ' + one(e)).join(',\n')}\n];`);
-    else if (spread.includes(name) && v && typeof v === 'object' && !Array.isArray(v)) out.push(`export const ${name} = {\n${Object.entries(v).map(([k, e]) => `  ${/^[A-Za-z_$][\w$]*$/.test(k) ? k : JSON.stringify(k)}: ${one(e)}`).join(',\n')}\n};`);
+    else if (spread.includes(name) && v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length) out.push(`export const ${name} = {\n${Object.entries(v).map(([k, e]) => `  ${/^[A-Za-z_$][\w$]*$/.test(k) ? k : JSON.stringify(k)}: ${one(e)}`).join(',\n')}\n};`);
     else out.push(`export const ${name} = ${one(v)};`);
     out.push('');
   }

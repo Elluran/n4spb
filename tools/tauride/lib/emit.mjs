@@ -1,6 +1,6 @@
 // Turns the derived records (derived.json + union.json of the pipeline) into the text of the pure-data modules src/world/landmarksTauride/data/{water,bridges,paths,furniture,footprints}.js.
 // Pure and deterministic: the same inputs give the same bytes (data-test.mjs runs the whole pipeline twice and compares).
-import { moduleText, PROVENANCE, inPoly, inPolys, inRing, polyLen, bbox, r1, r3, polyArea } from './common.mjs';
+import { moduleText, PROVENANCE, inPoly, inPolys, inRing, ringDist, polyLen, bbox, r1, r3, polyArea } from './common.mjs';
 import { CANAL_WIDTHS, CANAL_JOIN, CANAL_DRY_RULE, BRIDGE_SITES, BRIDGE_DECK_WIDTH, BRIDGE_EXTEND, PATH_CLASS_RULE, PATH_CLASS_OVERRIDES, FENCE_RULES, LAKE_ID, WEST_POND_ID } from './tables.mjs';
 import { bridgeDecks, crossSection } from './derive.mjs';
 
@@ -49,6 +49,22 @@ const wetMetres = (pts, U) => {
     for (let t = 0; t < sl; t += 0.25) if (inPolys(pts[i] + (pts[i + 2] - pts[i]) * t / sl, pts[i + 1] + (pts[i + 3] - pts[i + 1]) * t / sl, U)) wet += 0.25;
   }
   return Math.round(wet * 10) / 10;
+};
+
+/** a polyline against the water union: metres inside by more than 5 cm (wetM), metres inside within 5 cm of the outline (edgeM: the line IS the shore) and the deepest point */
+const wetProfile = (pts, U) => {
+  let wet = 0, edge = 0, max = 0;
+  for (let i = 0; i + 3 < pts.length; i += 2) {
+    const sl = Math.hypot(pts[i + 2] - pts[i], pts[i + 3] - pts[i + 1]);
+    for (let t = 0; t < sl; t += 0.25) {
+      const x = pts[i] + (pts[i + 2] - pts[i]) * t / sl, z = pts[i + 1] + (pts[i + 3] - pts[i + 1]) * t / sl;
+      if (!inPolys(x, z, U)) continue;
+      const d = Math.min(...U.flatMap((q) => [q.o, ...q.h]).map((r) => ringDist(x, z, r)));
+      if (d > 0.05) wet += 0.25; else edge += 0.25;
+      if (d > max) max = d;
+    }
+  }
+  return { wetM: Math.round(wet * 10) / 10, edgeM: Math.round(edge * 10) / 10, maxDepthM: Math.round(max * 100) / 100 };
 };
 
 /** every module of the data folder as { 'water.js': text, ... } */
@@ -119,7 +135,7 @@ export function buildModules(d, union, F) {
   for (const c of Object.values(cls)) c.lenM = Math.round(c.lenM);
   out['paths.js'] = moduleText(head('the garden ways of the OSM data (highway footway / path / pedestrian / steps with a vertex inside the garden polygon) with a width class',
     ['CLASS RULE (tools/tauride/lib/derive.mjs classOf; no OSM width tag exists on any of these ways, so the class is derived from highway, surface, lit, bridge and length): steps = highway steps; bridge = bridge yes; trail = highway path (1.4 m); main = footway and (length >= 150 m, or lit and length >= 30 m): width 3.5 + min(length, 300) / 300 m = 3.5 .. 4.5 m; side = every other footway (2.4 m).',
-      `PATHS_IN_WATER lists the non-bridge ways that run through the water union (the estimated 12 m canal strips overlap them): the garden team must route them over a bridge / ford or shift the strip. The class and width are a heuristic of this repository (a starting point the garden team may override in tools/tauride/lib/tables.mjs PATH_CLASS_OVERRIDES), not a survey. facadeW is the width the engine's streets module draws today (the class default of the facade). ${NOT_IN_LEGACY_TERRAIN.length} ways (NOT_IN_LEGACY_TERRAIN) are newer than the source repository's terrain.js (which had 118): all 118 old ids are present.`]), {
+      `PATHS_IN_WATER lists the non-bridge ways that run through the water union: empty by construction, because the canal width USED is lowered until no mapped way lies under the strip (water.js CANALS[].estimate / wetAtEstimateM say what the estimate would have drowned). The class and width are a heuristic of this repository (a starting point the garden team may override in tools/tauride/lib/tables.mjs PATH_CLASS_OVERRIDES), not a survey. facadeW is the width the engine's streets module draws today (the class default of the facade). ${NOT_IN_LEGACY_TERRAIN.length} ways (NOT_IN_LEGACY_TERRAIN) are newer than the source repository's terrain.js (which had 118): all 118 old ids are present.`]), {
     PATH_CLASS_RULE,
     PATH_CLASS_OVERRIDES,
     PATH_CLASS_STATS: cls,
@@ -132,7 +148,7 @@ export function buildModules(d, union, F) {
   // ------------------------------------------------------------ furniture.js
   const fu = d.furniture, fenceLen = d.barriers.reduce((s, f) => s + f.len, 0);
   out['furniture.js'] = moduleText(head('furniture, trees, monuments, fences and gates of the garden',
-    [`Ids are the OSM ids of the facade records (props/osm.js draws every FURNITURE bench / waste_basket node today: the remake claims them by id). FENCE_OPENINGS reproduce the rule of the old garden.js (a 2.7 m panel is left out within ${FENCE_RULES.gateClear} m of a gate node or ${FENCE_RULES.pathClear} m of a path); FENCE_GAPS are stretches of the garden outline longer than ${FENCE_RULES.gapMin} m with no mapped fence within ${FENCE_RULES.perimeterNear} m.`,
+    [`Ids are the OSM ids of the facade records (props/osm.js draws every FURNITURE bench / waste_basket node today: the remake claims them by id). FENCE_OPENINGS reproduce the rule of the old garden.js (a 2.7 m panel is left out within ${FENCE_RULES.gateClear} m of a gate node or ${FENCE_RULES.pathClear} m of a path); FENCES_IN_WATER: fence ways that coincide with the water outline (edgeM, the fence IS the shore: the north shore of the lake) or stand in the water (wetM, maxDepthM). FENCE_GAPS are stretches of the garden outline longer than ${FENCE_RULES.gapMin} m with no mapped fence within ${FENCE_RULES.perimeterNear} m.`,
       'CARS: the mapped fence is open at FENCE_OPENINGS (gate-only and path crossings) and at FENCE_GAPS, and SERVICE_LANE runs into the garden from the west gate: a car keep-out POLYGON (the garden outline, see footprints.js GARDEN), not gate bollards, is what keeps cars out.']), {
     BENCHES: fu.benches,
     BINS: fu.bins,
@@ -143,7 +159,7 @@ export function buildModules(d, union, F) {
     LAMPS_IN_GARDEN: fu.lamps,
     FENCES: d.barriers.map((f) => ({ id: f.id, closed: f.closed, lenM: f.len, pts: f.pts })),
     FENCE_STATS: { ways: d.barriers.length, lenM: Math.round(fenceLen), panelM: FENCE_RULES.panel, panels: Math.round(d.barriers.reduce((s, f) => s + Math.ceil(f.len / FENCE_RULES.panel), 0)), perimeterM: d.unfenced.perimeterM, perimeterFencedM: d.unfenced.coveredM },
-    FENCES_IN_WATER: d.barriers.map((f) => ({ id: f.id, wetM: wetMetres(f.pts, U) })).filter((f) => f.wetM > 0.5),
+    FENCES_IN_WATER: d.barriers.map((f) => ({ id: f.id, ...wetProfile(f.pts, U) })).filter((f) => f.wetM > 0.5 || f.edgeM > 0.5),
     FENCE_OPENINGS: d.openings,
     FENCE_GAPS: d.unfenced.gaps,
     GATES: d.gates,
