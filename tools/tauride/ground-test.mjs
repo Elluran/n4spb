@@ -97,6 +97,13 @@ console.log('2. the hole in the environment ground (HOOKS.groundHoles, HOOKS.gro
   const garden = [...HG.GARDEN_WAY_IDS];
   ok('the 120 ways the ground does not paint are exactly the garden ways that the module claims', garden.length === 120 && garden.every((id) => claimed.has(id)) && page.groundWayReject({ id: 'w81524425' }) === true && page.groundWayReject({ id: 'w1' }) === false);
   ok('the area-tables validator knows both keys: a non-function value is dropped with a warning that names it', (() => { const w = []; const o = AT.checkHooks({ groundHoles: 5, groundWayReject: 'x', carKeepOut: () => 1 }, (m) => w.push(m)); return !('groundHoles' in o) && !('groundWayReject' in o) && typeof o.carKeepOut === 'function' && w.length === 2 && /groundHoles/.test(w[0]) && /groundWayReject/.test(w[1]); })());
+  { // the junction with the Palace court and the Paradny podium: the floor does not touch them
+    const P = await imp('src/areas/north/hooks/paradny.js'), pal = FAC.BUILDINGS.find((b) => b.id === 'r3801092'), podium = P.PARADNY_PODIUM.o;
+    const dist = (r) => { let m = Infinity; for (let i = 0; i < r.length; i += 2) m = Math.min(m, C.ringDist(r[i], r[i + 1], RING)); return m; };
+    const inside = (r) => { for (let i = 0; i < r.length; i += 2) if (C.inRing(r[i], r[i + 1], RING)) return true; return false; };
+    const dPal = Math.min(...pal.polys.map((q) => dist(q.o))), dPod = dist(podium);
+    ok('the floor does not reach the Palace (its footprint is 18 m from the outline) or the Paradny podium (69 m): no vertex of either lies inside the garden polygon, so there is no seam, no overlap and no z-fight to show there; the environment ground between them is untouched', dPal > 15 && dPod > 60 && !pal.polys.some((q) => inside(q.o)) && !inside(podium), `Palace ${dPal.toFixed(1)} m, podium ${dPod.toFixed(1)} m`);
+  }
   // the engine call sites (text): the strip's HOOKS is {} so both are falsy there
   const gtxt = fs.readFileSync(path.join(ROOT, 'src/world/environment/ground.js'), 'utf8'), ftxt = fs.readFileSync(path.join(ROOT, 'src/world/environment/field.js'), 'utf8');
   ok('the engine reads both through lib/area-tables.js behind a falsy test (the strip changes nothing)', /import \{ HOOKS \} from '\.\.\/lib\/area-tables\.js'/.test(gtxt) && /HOOKS\.groundHoles \? HOOKS\.groundHoles\(\) : null/.test(gtxt) && /import \{ ZONES, HOOKS \} from '\.\.\/lib\/area-tables\.js'/.test(ftxt) && /const wayReject = HOOKS\.groundWayReject;/.test(ftxt) && /if \(wayReject && wayReject\(r\)\) continue;/.test(ftxt));
