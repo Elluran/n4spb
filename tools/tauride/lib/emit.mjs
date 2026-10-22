@@ -121,7 +121,7 @@ export function buildModules(d, union, F) {
       'the other point of the plan text lies 19.4 m away, in the middle of the estimated strip end; (1273.8,-1655.1) is where the canal centre line meets the lake outline (mouthOnLake), the natural place for the weir SILL if the water level steps there'].join('; '),
   };
   out['bridges.js'] = moduleText(head('the eight mapped bridge ways, grouped into the six crossing sites (five numbered bridges and the dam)',
-    [`Mapping of OSM ways to the historical numbers: BRIDGE_SITES[].confidence 'plan' = the plan (section 5) gives the site, 'inferred' = by the order along the water, 'data' = from the geometry (the plan names no OSM way). DECK = the way after the old garden.js extension (a free end standing in the water moves along its axis until dry, +${BRIDGE_EXTEND.abutment} m of abutment): the bridge ends reach dry land.`,
+    [`Mapping of OSM ways to the historical numbers: BRIDGE_SITES[].confidence 'confirmed' = the plan (section 5) gives the site and the public monument page citywalls.ru/house31112.html describes the bridge (span, which parts of the park it joins), 'inferred' = by the order along the water, 'data' = from the geometry (the plan names no OSM way). DECK = the way after the old garden.js extension (a free end standing in the water moves along its axis until dry, +${BRIDGE_EXTEND.abutment} m of abutment): the bridge ends reach dry land.`,
       `deckW 3 m is a DESIGN value (the facade has 2.4 m = the highway=footway class default). wetSpanM = the metres of the OSM axis that lie inside the water union (derived).`]), {
     BRIDGE_DECK_WIDTH: BRIDGE_DECK_WIDTH,
     BRIDGE_SITES: sites,
