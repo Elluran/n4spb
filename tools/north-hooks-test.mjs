@@ -192,9 +192,9 @@ await guard('strip child', async () => {
 
 // ================================================================ contract
 section('contract');
-const KEYS = ['treeCleared', 'treeReject', 'tuftReject', 'propReject', 'pedestrianOnly', 'parkingReject', 'inGarden', 'deckServices'];
+const KEYS = ['treeCleared', 'treeReject', 'tuftReject', 'propReject', 'pedestrianOnly', 'parkingReject', 'carKeepOut', 'inGarden', 'deckServices'];
 const HK = T.HOOKS;
-check('north: HOOKS has exactly the eight keys of the contract', eq(Object.keys(HK).sort(), [...KEYS].sort()), Object.keys(HK).join());
+check('north: HOOKS has exactly the nine keys of the contract (T2 added carKeepOut)', eq(Object.keys(HK).sort(), [...KEYS].sort()), Object.keys(HK).join());
 check('north: area-tables HOOKS is the area module HOOKS (same keys)', eq(Object.keys(HK).sort(), Object.keys(A.HOOKS).sort()));
 for (const k of FACTORIES) check(`north: HOOKS.${k} is a factory (function of ctx)`, typeof HK[k] === 'function' && HK[k].length <= 1, typeof HK[k] + '/' + (HK[k] && HK[k].length));
 check('north: HOOKS.inGarden is a function of (x, z)', typeof HK.inGarden === 'function' && HK.inGarden.length === 2, typeof HK.inGarden + '/' + (HK.inGarden && HK.inGarden.length));
@@ -226,10 +226,11 @@ for (const k of FACTORIES) {
 }
 check('parkingReject is gated by MODULES: makeHooks([landmarksTauride]) has a function, makeHooks(OTHER) has none', typeof H.makeHooks([...OTHER, TAURIDE]).parkingReject === 'function' && H.makeHooks(OTHER).parkingReject === undefined,
   typeof H.makeHooks([...OTHER, TAURIDE]).parkingReject + ' / ' + typeof H.makeHooks(OTHER).parkingReject);
-check('makeHooks always has the eight keys (a gated parkingReject is a key with the value undefined)', eq(Object.keys(H.makeHooks(OTHER)).sort(), [...KEYS].sort()) && eq(Object.keys(H.makeHooks([...OTHER, TAURIDE])).sort(), [...KEYS].sort()));
+check('carKeepOut (T2) is gated by MODULES: a function with landmarksTauride, undefined without; it is the garden ring (inGarden) with no exception: true inside the outline, false outside, on 40,000 probes of the garden box + 40 m', (() => { const on = H.makeHooks([...OTHER, TAURIDE]).carKeepOut, off = H.makeHooks(OTHER).carKeepOut, off2 = H.makeHooks(undefined).carKeepOut; if (typeof on !== 'function' || off !== undefined || off2 !== undefined) return false; let bad = 0; for (let i = 0; i < 40000; i++) { const x = 877 + ((i * 7919) % 200) * 3.3, z = -1830 + (Math.floor(i / 200)) * 2.6; if (on(x, z) !== HK.inGarden(x, z)) bad++; } return bad === 0 && on(1226, -1268.5) === true && on(1226, -1260) === false && on(NaN, 0) === false; })(), typeof H.makeHooks([...OTHER, TAURIDE]).carKeepOut + ' / ' + typeof H.makeHooks(OTHER).carKeepOut);
+check('makeHooks always has the nine keys (a gated parkingReject / carKeepOut is a key with the value undefined)', eq(Object.keys(H.makeHooks(OTHER)).sort(), [...KEYS].sort()) && eq(Object.keys(H.makeHooks([...OTHER, TAURIDE])).sort(), [...KEYS].sort()));
 check('makeHeightPatches is gated by MODULES: [] without landmarksTauride, [paradny, garden] with it (T2)', H.makeHeightPatches(OTHER).length === 0 && H.makeHeightPatches([...OTHER, TAURIDE]).length === 2 && H.makeHeightPatches([...OTHER, TAURIDE]).map((p) => p.id).join() === 'paradny,garden',
   H.makeHeightPatches(OTHER).length + ' / ' + H.makeHeightPatches([...OTHER, TAURIDE]).length);
-check('makeHooks does not change the other keys with the module list (only parkingReject)', (() => { const a = H.makeHooks(OTHER), b = H.makeHooks([...OTHER, TAURIDE]); return Object.keys(a).filter((k) => k !== 'parkingReject').every((k) => a[k] === b[k] || (Array.isArray(a[k]) && eq(a[k], b[k]))); })());
+check('makeHooks does not change the other keys with the module list (only parkingReject and carKeepOut)', (() => { const a = H.makeHooks(OTHER), b = H.makeHooks([...OTHER, TAURIDE]); return Object.keys(a).filter((k) => k !== 'parkingReject' && k !== 'carKeepOut').every((k) => a[k] === b[k] || (Array.isArray(a[k]) && eq(a[k], b[k]))); })());
 
 // ================================================================ probes
 section('probes');
@@ -434,10 +435,10 @@ section('tables');
   check('north: lib/area-tables.js hands out the area module\'s own HOOKS and HEIGHT_PATCHES (a well-formed table is not copied)', T.HOOKS === A.HOOKS && T.HEIGHT_PATCHES === A.HEIGHT_PATCHES);
   check('checkHooks / checkPatches: the tables of the North pass as they are, without a warning', (() => { const h = H.makeHooks(MODULES), p = H.makeHeightPatches([...MODULES, TAURIDE]); return T.checkHooks(h, warn) === h && T.checkPatches(p, warn) === p && W.length === 0; })(), flush().join(' | '));
   // HOOKS: every known key must be a function (undefined / null = none), deckServices an array of strings
-  const bad = { treeCleared: false, treeReject: 'yes', tuftReject: 0, propReject: {}, pedestrianOnly: [], parkingReject: true, inGarden: 'garden', deckServices: 'landmarksTauride' };
+  const bad = { treeCleared: false, treeReject: 'yes', tuftReject: 0, propReject: {}, pedestrianOnly: [], parkingReject: true, carKeepOut: 'closed', inGarden: 'garden', deckServices: 'landmarksTauride' };
   let r = tryit(() => T.checkHooks(bad, warn)), ws = flush();
-  check('checkHooks: a table of the wrong kinds (false, string, 0, object, array, true, string; deckServices a string) does not throw and drops all eight keys, the input stays as it was', !r.threw && eq(Object.keys(r.v || { x: 1 }), []) && Object.keys(bad).length === 8 && bad.treeCleared === false, r.threw || Object.keys(r.v).join());
-  check('checkHooks: one warning per dropped key, each names its key', ws.length === 8 && Object.keys(bad).every((k) => named(ws, 'HOOKS.' + k + ' ') === 1), ws.join(' | '));
+  check('checkHooks: a table of the wrong kinds (false, string, 0, object, array, true, string; deckServices a string) does not throw and drops all nine keys (carKeepOut: a string), the input stays as it was', !r.threw && eq(Object.keys(r.v || { x: 1 }), []) && Object.keys(bad).length === 9 && bad.treeCleared === false, r.threw || Object.keys(r.v).join());
+  check('checkHooks: one warning per dropped key, each names its key', ws.length === 9 && Object.keys(bad).every((k) => named(ws, 'HOOKS.' + k + ' ') === 1), ws.join(' | '));
   const f = () => null, mix = { treeCleared: f, inGarden: undefined, parkingReject: null, deckServices: ['a', 3], futureHook: 5 };
   r = tryit(() => T.checkHooks(mix, warn)); ws = flush();
   check('checkHooks: a function stays, undefined / null mean none (no warning), a list with a non-string is dropped (one warning naming deckServices), an unknown key passes', !r.threw && r.v.treeCleared === f && 'inGarden' in r.v && r.v.parkingReject === null && !('deckServices' in r.v) && r.v.futureHook === 5 && ws.length === 1 && named(ws, 'HOOKS.deckServices') === 1 && Array.isArray(mix.deckServices), r.threw || ws.join(' | '));
@@ -471,7 +472,7 @@ section('tools');
 // ================================================================ static
 section('static');
 {                                                                  // TEXT checks only (a regex over the engine files): they notice a hook that is no longer read through lib/area-tables.js, not a call site that misbehaves (that is `npm run hooks:all`)
-  const WIRING = { 'src/world/layout.js': ['HEIGHT_PATCHES'], 'src/world/drive/handling.js': ['deckServices'], 'src/world/environment/trees.js': ['treeCleared', 'treeReject'], 'src/world/environment/lawns.js': ['tuftReject'],
+  const WIRING = { 'src/world/layout.js': ['HEIGHT_PATCHES'], 'src/world/drive/handling.js': ['deckServices', 'carKeepOut'], 'src/world/environment/trees.js': ['treeCleared', 'treeReject'], 'src/world/environment/lawns.js': ['tuftReject'],
     'src/world/props/world.js': ['propReject'], 'src/world/streets.js': ['pedestrianOnly'], 'src/world/streets/parking.js': ['parkingReject'], 'src/world/people/nav.js': ['inGarden', 'deckServices'] };
   const strip = stripComments;
   for (const [file, keys] of Object.entries(WIRING)) {

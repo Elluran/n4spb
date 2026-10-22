@@ -92,13 +92,13 @@ export const STATION = { x: 612, z: 300, facadeBearing: 348, trackBearing: 167, 
 
 // ---------------------------------------------------------------- landmark groups
 /** The landmark claims of the North (M5, docs/AREAS.md section 8): module name -> sub-groups { key, name, nameEn, ids, osm, at }. `city` / `environment` / `streets` skip what a group claims (src/world/lib/claims.js).
- *  T1 of the Tauride remake added landmarksTauride: the Palace and the Paradny quarter (the garden is not claimed yet, so the generic North still draws it). */
+ *  T1 of the Tauride remake added landmarksTauride: the Palace and the Paradny quarter; T2 added its third sub-group, the garden (the park, 23 woods, the 120 ways, 132 benches, 167 bins: the generic North stops drawing them). */
 export const GROUPS = {};
 GROUPS.landmarksNorthFull = G_NORTHFULL;
 GROUPS.landmarksSmolny = G_SMOLNY;
 GROUPS.landmarksSuvorov = G_SUVOROV;
 GROUPS.landmarksKirochnaya = G_KIROCHNAYA;
-GROUPS.landmarksTauride = G_TAURIDE;      // T1: the Tauride Palace r3801092 and the Paradny quarter (11 buildings + the two fountain waters)
+GROUPS.landmarksTauride = G_TAURIDE;      // T1: the Tauride Palace r3801092 and the Paradny quarter (11 buildings + the two fountain waters); T2: the garden (osm ids only: park, woods, ways, benches, bins)
 GROUPS.landmarksD = [LIBRARY_GROUP];      // the strip's landmarksD claims four sub-groups; only the National Library / Mariinsky block lies in the band (landmarksD/groups.js)
 GROUPS.landmarksOktyabrsky = G_OKTYABRSKY;      // the concert hall w30324279 (797, -347), shared with the strip
 
@@ -211,6 +211,8 @@ export const TEST = {
     { id: 'r1452259', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'r1967088', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'r3304715', by: 'landmarksTauride', group: 'paradny-quarter' },
     { id: 'r3304716', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w102153007', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w134638076', by: 'landmarksTauride', group: 'paradny-quarter' },
     { id: 'w134638078', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w134638079', by: 'landmarksTauride', group: 'paradny-quarter' },      // the 11 buildings of the Paradny quarter
+    { id: 'r1582734', by: 'landmarksTauride', group: 'tauride-garden' }, { id: 'w1458068121', by: 'landmarksTauride', group: 'tauride-garden' }, { id: 'w425188838', by: 'landmarksTauride', group: 'tauride-garden' },
+    { id: 'w112880645', by: 'landmarksTauride', group: 'tauride-garden' }, { id: 'n4244934439', by: 'landmarksTauride', group: 'tauride-garden' }, { id: 'n4302305839', by: 'landmarksTauride', group: 'tauride-garden' },      // T2: the park, a wood, a way, the dam way, a bench and a bin of the garden
   ],      // M5: one row per landmark module and sub-group (the vestibule, the cathedrals, Dom Muruzi, the bookstore, the band houses, the Suvorov Museum, the clinical institute, the library, the Oktyabrsky hall)
   viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Place.oktyabrsky'],
   mustHaveAreas: [

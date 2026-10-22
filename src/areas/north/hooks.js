@@ -14,6 +14,7 @@
 //      propReject(ctx)      -> ((cx, cz) => boolean) | null                                        H05  no bench / bin / kiosk stamped
 //      pedestrianOnly(ctx)  -> ((way) => boolean) | null                                           H06  way.rank, way.x[], way.z[]
 //      parkingReject        -> ((x, z) => boolean) | undefined                                     H07  a plain function: planParking has no ctx, so makeHooks(MODULES) gates it
+//      carKeepOut           -> ((x, z) => boolean) | undefined                                     T2a  the garden outline is closed to cars (drive/handling.js solidBlocked); undefined unless MODULES has 'landmarksTauride'
 //      inGarden             -> ((x, z) => boolean) | undefined                                     H08  the Tauride Garden polygon, for the people crowd cap (the North always gives a function; the strip: absent)
 //      deckServices         -> ['landmarksTauride']                                                H09  names of ctx.services whose deckY(x, z) is consulted FIRST (cars, pedestrians)
 //    }
@@ -23,7 +24,7 @@
 //  hooks that serve landmark modules are therefore DORMANT until the module is in MODULES: the Smolny, Suvorov and campus keep-outs are active in the North since M5, the Paradny ones wait for
 //  'landmarksTauride' (the Tauride remake). A factory has no access to the service of a landmark module (environment builds first): the coordinates are static.
 // ============================================================================
-import { treeCleared, treeReject, tuftReject, propReject, pedestrianOnly, makeParkingReject } from './hooks/keep-out.js';
+import { treeCleared, treeReject, tuftReject, propReject, pedestrianOnly, makeParkingReject, makeCarKeepOut } from './hooks/keep-out.js';
 import { makeHeightPatches as terrainPatches } from './hooks/height.js';
 import { inGarden } from './hooks/people.js';
 
@@ -35,6 +36,7 @@ export function makeHooks(MODULES) {
   return {
     treeCleared, treeReject, tuftReject, propReject, pedestrianOnly,      // factories of (ctx): evaluated once per build, null when their modules are not built
     parkingReject: makeParkingReject(MODULES),      // no ctx in planParking: gated by the module list here
+    carKeepOut: makeCarKeepOut(MODULES),            // T2: the garden is closed to cars (a plain function, gated by the module list like parkingReject)
     inGarden,
     deckServices: DECK_SERVICES,
   };

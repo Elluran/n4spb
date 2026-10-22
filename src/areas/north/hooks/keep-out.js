@@ -15,11 +15,13 @@
 //                              points in the podium).  Serves landmarksTauride
 //  and one plain function, because streets/parking.js planParking(net) has NO ctx: it is gated by the page's module list when hooks.js runs makeHooks(MODULES):
 //    makeParkingReject(MODULES) -> ((x, z) => boolean) | undefined    H07  streets/parking.js: no parked-car slot / line (the source: inParadny, unconditional).  undefined unless MODULES has landmarksTauride
+//    makeCarKeepOut(MODULES)    -> ((x, z) => boolean) | undefined    T2a  drive/handling.js solidBlocked (T2 of the Tauride remake): the garden is CLOSED to cars, the polygon is the garden outline (hooks/people.js inGarden), no exception for the service lane.  undefined unless MODULES has landmarksTauride
 //
 //  The Smolny, Suvorov and campus keep-outs are ACTIVE in the North since M5 (their modules are built); the Paradny ones are DORMANT until the Tauride remake adds 'landmarksTauride' to the MODULES.
 //  Port of the source (102_3d_piter @ 0568f7af): environment/trees.js :185-188 and :261-263, environment/lawns.js :366-368, props/world.js :185-186, streets.js :106-107, streets/parking.js :74-75.
 // ============================================================================
 import { inParadny } from './paradny.js';
+import { inGarden } from './people.js';
 
 const built = (ctx, name) => !!(ctx && ctx.buildList && ctx.buildList.includes(name));
 /** strictly inside the box [x0, x1, z0, z1] (the open rectangles of the source) */
@@ -83,4 +85,9 @@ export function pedestrianOnly(ctx) {
 /** H07: no parked-car slot or bay line on the podium; planParking has no ctx, so the module list gates it (the source filters unconditionally). */
 export function makeParkingReject(MODULES) {
   return Array.isArray(MODULES) && MODULES.includes('landmarksTauride') ? (x, z) => inParadny(x, z) : undefined;
+}
+
+/** T2a: the Tauride Garden is closed to cars. A plain function like parkingReject (the handling reads it once per car, no ctx needed), gated by the page's module list: the polygon is the garden outline (inGarden: strict bbox first, then the ring), the same as the people cap; the service lane through the west gate is NOT an exception. 11 gate bollards would leave 13 openings, 4 unfenced stretches and the service lane open (docs/TAURIDE-REMAKE.md 6.5). */
+export function makeCarKeepOut(MODULES) {
+  return Array.isArray(MODULES) && MODULES.includes('landmarksTauride') ? (x, z) => inGarden(x, z) : undefined;
 }

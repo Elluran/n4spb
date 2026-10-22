@@ -37,6 +37,7 @@ export function createHandling(ctx, tuning = null) {
   const L = ctx.L, ph = ctx.physics;
   const T = tuning ? { ...COUPE_TUNING, ...tuning } : COUPE_TUNING, SPEC = T.spec || COUPE_SPEC, GEAR = T.gearTop;
   const collide = createCarCollisions(ph, SPEC);
+  const KEEP_OUT = HOOKS.carKeepOut;      // the area's own closed ground (the Tauride Garden, T2): a plain (x, z) => boolean, absent for the strip
   const DS = HOOKS.deckServices || [];      // the area's own deck services (a podium, stairs): their deckY comes before the bridge decks (docs/AREAS.md section 9)
   const oldDeckY = (x, z) => ctx.services.landmarksC?.bridge?.deckY?.(x, z) ?? ctx.services.bridges?.deckY(x, z) ?? null;      // the chain of before M6: this is all the strip runs (no deck service)
   const deckY = () => (DS.length ? (x, z) => {
@@ -54,6 +55,7 @@ export function createHandling(ctx, tuning = null) {
   }
   /** terrain the car may not enter: the river (the bridge deck is a floor), an escalator shaft, a building footprint */
   function solidBlocked(x, z) {
+    if (KEEP_OUT && KEEP_OUT(x, z)) return true;
     if (!(deck && deck(x, z) !== null) && L.heightAt(x, z) < -1) return true;
     if (ph.inHole(x, z, 0.2)) return true;
     return L.insideBuilding(x, z);

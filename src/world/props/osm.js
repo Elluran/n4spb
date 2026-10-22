@@ -51,6 +51,7 @@ export function placeOsm(S) {
   };
   for (let f of FURNITURE) {
     if (!W.inArea(f.x, f.z)) continue;
+    if ((f.kind === 'bench' || f.kind === 'waste_basket') && L.isClaimed(f.id)) continue;          // a landmark module furnishes it itself (the Tauride garden claims its benches and bins, T2); no claim of the strip is a FURNITURE node, so the strip is unchanged
     if (f.kind === 'bench') {
       if (!okPoint(f)) { cnt.skipped++; continue; }
       if (S.lmBench.some((b) => Math.abs(b[0] - f.x) < 0.8 && Math.abs(b[1] - f.z) < 0.8 && Math.hypot(b[0] - f.x, b[1] - f.z) < 0.8)) { cnt.dupBench++; continue; }          // a landmark module drew this bench itself
