@@ -6,7 +6,7 @@
 //  PURE DATA + PURE FUNCTIONS: no three.js, no import of layout.js, no data facade (tools/areas-test.mjs loads the area module without the import-map remap and would get the strip's facade).
 //  The bodies live in hooks/keep-out.js (cluster B), hooks/height.js (cluster A), hooks/people.js (cluster C) and the shared geometry in hooks/paradny.js.
 //
-//  THE CONTRACT (frozen by the foundation commit; the H.. ids are the items of the M6 inventory):
+//  THE CONTRACT (frozen by the foundation commit; the H.. ids are the items of the table in docs/AREAS.md 9.5):
 //    HOOKS = {
 //      treeCleared(ctx)     -> ((x, z) => boolean) | null                                          H02  soft tree clearing (cleared() runs only under !o.force; no caller forces, so mapped OSM trees are cleared too)
 //      treeReject(ctx)      -> ((x, z) => 'paradny' | 'campus' | 'suvorov' | null) | null          H03  hard reject, mapped trees included; the string is the debug reason
