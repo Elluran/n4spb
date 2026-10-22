@@ -6,7 +6,7 @@
 //   2. hooks/height.js: [] unless the page lists landmarksTauride, else the Paradny patch first (box = PARADNY_BOX, at = paradnyDeckY); a fresh array per call, so the Tauride remake can append after it;
 //   3. the Paradny patch, ACTIVATED here by pushing makeHeightPatches(['landmarksTauride']) into the live HEIGHT_PATCHES array (area-tables.js hands the area module's own array out, layout.js reads it at
 //      call time): 3.3 m on the podium, the source's answer inside the box, the old line outside it, a monotone ramp along every stair (the nine STEPS ways = eight stairs), and the real Player walks every stair
-//      up and down (walking, running, 20 fps): no stuck, no fall; the Digit4 pose (915, -1010) stands on the podium and stays walkable;
+//      up and down (walking, running, 20 fps): no stuck, no fall; the M6 podium pose (915, -1010, the former Digit4) stands on the podium and stays walkable, and (T1) no pose of the page's VIEWS stands on the deck;
 //   4. drive/handling.js: HOOKS.deckServices names the services whose deckY comes before the bridge decks; an absent key / service / deckY is the old chain; the car rides the deck and climbs the stairs only through it.
 // The activation is undone at the end (and on exit): the other checks of the process see the North as the page builds it.
 import fs from 'node:fs';
@@ -51,7 +51,10 @@ section('1. the registry');
   ok(HEIGHT_PATCHES === A.HEIGHT_PATCHES, 'area-tables hands out the area module\'s own array (a test activates a patch by pushing into it)');
   ok(!('HEIGHT_PATCHES' in L) && !('HOOKS' in L), 'layout.js gains no export for the registry (tools/layout-golden.mjs lists every export)');
   const mod = A.MODULES.includes('landmarksTauride');
-  ok(mod ? SAVED[0] && SAVED[0].id === 'paradny' : SAVED.length === 0, `the page's list (${mod ? 'with' : 'without'} landmarksTauride) gives ${mod ? 'the Paradny patch first' : 'no patch'}: [${SAVED.map((p) => p.id)}]`);
+  // TRIPWIRE FLIPPED in T1 of the Tauride remake: the check used to accept either state ("with the module: the Paradny patch first, without: no patch"); the module is in MODULES now and the patch must be there. A page that
+  // drops the module on purpose must restore the second branch here.
+  ok(mod, 'landmarksTauride is not in the North MODULES: T1 of the Tauride remake put it there (this test documents the flip)');
+  ok(SAVED[0] && SAVED[0].id === 'paradny', `the page's list (with landmarksTauride) gives the Paradny patch first: [${SAVED.map((p) => p.id)}]`);
   ok(same(makeHeightPatches(A.MODULES).map((p) => p.id), SAVED.map((p) => p.id)), 'hooks.js makeHeightPatches(MODULES) equals what area.js exported');
   // hooks/height.js is the Paradny terrain (exactly one patch); hooks.js may append the patches of the Tauride remake (the pond bed) AFTER it
   for (const [name, list, exact] of [['hooks/height.js', terrainPatches, true], ['hooks.js', makeHeightPatches, false]]) {
@@ -105,8 +108,7 @@ section('3. no patch: heightAt is the old line');
   for (const [x, z] of lattice(BOX[0] - 30, BOX[1] + 30, BOX[2] - 30, BOX[3] + 30, 1)) { n++; if (L.heightAt(x, z) !== OLD(x, z)) { bad++; first = first || [x, z]; } }
   ok(bad === 0, `heightAt equals the waterway-bed / GROUND_Y line on ${n} lattice points of the North and the whole podium box (differs at ${bad}${first ? ', first ' + JSON.stringify(first) : ''})`);
   say(`  ${n} points identical`);
-  const d4 = L.VIEWS.find((v) => v.key === 'Digit4');
-  ok(L.heightAt(d4.x, d4.z) === 0, 'dormant: Digit4 (915, -1010) is street level (the generic city draws the quarter)');
+  ok(L.heightAt(915, -1010) === 0, 'dormant (patch list empty): the M6 pose (915, -1010) is street level (the generic city draws the quarter); T1 moved VIEWS Digit4 away from it, section 7');
   restore();
 }
 
@@ -244,7 +246,11 @@ section('7. the Digit4 pose (915, -1010)');
 {
   // the pose as M6 found it (VIEWS Digit4, yaw -60, pitch 18): fixed here, so that moving the view later does not turn this check into a tripwire
   const ph = new Physics(L.heightAt), v = { x: 915, z: -1010, yaw: -60, pitch: 18 }, d4 = L.VIEWS.find((q) => q.key === 'Digit4');
-  if (!d4 || d4.x !== v.x || d4.z !== v.z) say(`  note: VIEWS Digit4 is (${d4 && d4.x}, ${d4 && d4.z}) now, no longer the M6 pose`);
+  // TRIPWIRE FLIPPED in T1 of the Tauride remake: VIEWS Digit4 moved to street level (900, -852) because the page's height patch (landmarksTauride is in MODULES) makes (915, -1010) a 3.3 m deck that tools/views-check.mjs refuses
+  // (ground band -0.5 .. 1.5). This section still walks the M6 podium pose, a literal. The new assertion: with the page's real patch list, NO pose of VIEWS / HERO stands on the podium or its stairs (what views-check enforces).
+  ok(!!d4 && !(d4.x === v.x && d4.z === v.z), `VIEWS Digit4 is no longer the M6 podium pose (it is (${d4 && d4.x}, ${d4 && d4.z}))`);
+  ok(SAVED.length > 0 && same(SAVED.map((p) => p.id), ['paradny']), `the page's own patch list holds the Paradny patch (T1: landmarksTauride is in MODULES): [${SAVED.map((p) => p.id)}]`);
+  { const live = HEIGHT_PATCHES.slice(); setPatches(SAVED); const bad = [L.HERO, ...L.VIEWS].filter((q) => !(L.heightAt(q.x, q.z) >= -0.5 && L.heightAt(q.x, q.z) <= 1.5)).map((q) => `${q.key || 'HERO'} ${L.heightAt(q.x, q.z).toFixed(2)}`); setPatches(live); ok(bad.length === 0, `with the page's real patch list every pose of HERO / VIEWS stands on ground of -0.5 .. 1.5 m (views-check): ${bad.join(', ') || 'none out of band'}`); }
   ok(P.inParadny(v.x, v.z), 'the pose stands inside the podium polygon');
   const p = mkPlayer(ph); p.setPose(v.x, v.z, v.yaw, v.pitch);
   near(p.pos.y, 3.3, 1e-9, 'the pose stands on the podium (feet)'); near(p.camera.position.y, 3.3 + p.eye, 0.05, 'the eye is 1.52 m over the podium');
