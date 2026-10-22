@@ -14,6 +14,9 @@ const VIEWS = {
   'hill-N-from-S': [1150, 22, -1600, 0, -8], 'hill-N-low': [1190, 3, -1650, 25, 6], 'plateau': [1368, 16, -1415, 0, -22],
   'ground-alley': [1160, 1.7, -1330, 5, -2], 'junction-close': [1128, 6, -1452, 30, -30], 'steps-memorial': [1366, 5, -1432, 0, -16],
   'hill-N-top': [1153, 170, -1694, 0, -90], 'hills-oblique': [1180, 70, -1560, 8, -34], 'aerial-mid': [1200, 260, -1330, 0, -62], 'shore-lake': [1330, 6, -1560, 80, -14], 'meadow-se': [1400, 10, -1300, -30, -24], 'path-edge-close': [1190, 1.3, -1322, 0, -38],
+  // T3 fix round 2: the poses of the GPU QA at which the hills were "soft dark smudges" (250-480 m), and the pads that read well (<= 120 m); hill-legibility.mjs is the number side of the same views
+  'aerial-S-250': [1207, 255, -1250, 0, -45], 'aerial-E-250': [1480, 255, -1524, 90, -45], 'aerial-N-250': [1207, 255, -1794, 180, -45], 'aerial-W-250': [935, 255, -1524, -90, -45],
+  'top-300': [1207, 300, -1524, 0, -90], 'top-480': [1207, 480, -1524, 0, -90], 'pad-hillN-80-SW': [1093, 80, -1634, -45, -40], 'pad-hillN-45-S': [1153, 45, -1630, 0, -30], 'pad-hillN-top-120': [1153, 120, -1694, 0, -90],
 };
 const views = { ...VIEWS };
 if (args.views) for (const v of String(args.views).split(';')) { const [n, c] = v.split(':'); views[n] = c.split(',').map(Number); }

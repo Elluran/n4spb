@@ -298,7 +298,7 @@ console.log('6. the look of the ground (ground-material.js: the shader text, the
   const cOld = worst(field(0, false)), cNew = worst(field(GM.LOOK.jitter, true)), cMut = worst(field(0, true));
   ok('the fleck mark does not repeat with the tile: its correlation with itself shifted by the period of the tile (0.53 m, three directions) is below 0.2 (the first version, a threshold of the fine field alone: 1.000)', cOld > 0.99 && cNew < 0.2, `first version ${cOld.toFixed(3)}, shipped ${cNew.toFixed(3)}`);
   ok('mutant: the rotated read without the jitter (jitter 0) leaves a lattice (correlation above 0.2): the jitter is needed', cMut > 0.2, `${cMut.toFixed(3)}`);
-  const gmNoJit = await variant('ground-material.js', /jitter: 0\.8 \}/, 'jitter: 0.0 }'), jit0 = /vec4 n5 = gz\(P \+ \(n4\.rg - 0\.5\) \* ([0-9.]+), /.exec(fragOf(gmNoJit));
+  const gmNoJit = await variant('ground-material.js', /jitter: 0\.8,/, 'jitter: 0.0,'), jit0 = /vec4 n5 = gz\(P \+ \(n4\.rg - 0\.5\) \* ([0-9.]+), /.exec(fragOf(gmNoJit));
   ok('mutant: a ground-material.js with jitter 0 carries 0.00 in its shader text (the text check sees it)', !!jit0 && Number(jit0[1]) === 0 && Number(jit0[1]) !== GM.LOOK.jitter, jit0 ? jit0[1] : 'no match');
   // ---- the colours: the litter is a shade of the lawn, not a different dirt (QA: roughly 40-50 % of the lawn was dark brown-olive camouflage, bare mud at eye level)
   const lin = (c) => { const k = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); const h = c.replace('#', ''); return 0.2126 * k(parseInt(h.slice(0, 2), 16) / 255) + 0.7152 * k(parseInt(h.slice(2, 4), 16) / 255) + 0.0722 * k(parseInt(h.slice(4, 6), 16) / 255); };
@@ -307,12 +307,51 @@ console.log('6. the look of the ground (ground-material.js: the shader text, the
   ok("the litter is a shade of the lawn, not another dirt: the CIE lightness of its two tones is 75-95 % of the lawn's (the first version: " + oldRatio.toFixed(2) + ')', ratio > 0.75 && ratio < 0.95 && oldRatio < 0.70, `litter / lawn = ${ratio.toFixed(2)} (linear luminance ${(lit / lawn).toFixed(2)})`);
   const lm = /smoothstep\(([0-9.]+), ([0-9.]+), cw\)/.exec(frag), noiseMax = 0.45 / 2 + 0.12 / 2, beltTop = DG.CANOPY_BELT.k + noiseMax;
   ok('the litter starts inside a wood (the threshold of the canopy weight is at least 0.6: the edge of a wood is 0.5) and the authored belt, with the strongest noise of the shader, stays below it: the belt is shade, never litter blotches', !!lm && Number(lm[1]) >= 0.6 && beltTop < Number(lm[1]), `litter ${lm && lm[1]} .. ${lm && lm[2]}, belt k ${DG.CANOPY_BELT.k} + noise ${noiseMax.toFixed(3)} = ${beltTop.toFixed(3)}`);
-  // ---- the relief read from above: the light and shade side of a hill of 4 m (the gradient of its flank 0.14, a slope of 1:7) differ by at least 1.5 times; the first version 1.13
-  const gain = num(/dot\(gr, uLight\) \* ([0-9.]+), -1\.0, 1\.0\)/), amp = num(/col \*= 1\.0 \+ ([0-9.]+) \* hs;/);
-  const ratioAt = (a, g, grad) => { const h = Math.min(1, grad * g); return (1 + a * h) / (1 - a * h); };
-  ok('the shader follows the gradient of the height (not 1 - normal.y) and the lit side of a 1:7 flank is at least 1.5 times as bright as the shade side (QA: the hills did not read from above)', !!(gain && amp) && /vec2 gr = nW\.xz \/ max\(nW\.y, 0\.2\);/.test(frag) && ratioAt(amp[0], gain[0], 0.14) >= 1.5, `lit / shade = ${gain && amp ? ratioAt(amp[0], gain[0], 0.14).toFixed(2) : '?'} (gain ${gain && gain[0]}, amplitude ${amp && amp[0]})`);
-  const gmFlat = await variant('ground-material.js', /shadeAmp: 0\.42/, 'shadeAmp: 0.05'), ampF = /col \*= 1\.0 \+ ([0-9.]+) \* hs;/.exec(fragOf(gmFlat));
-  ok('mutant: a ground-material.js with a shade amplitude of 0.05 gives a ratio below 1.5 (the check sees it)', !!ampF && !!gain && ratioAt(Number(ampF[1]), gain[0], 0.14) < 1.5, ampF ? ampF[1] : 'no match');
+  // ---- the relief read from above (QA round 1: the hills did not read; QA round 2: at 250-480 m they were soft dark smudges). The shader text is read, then a JS port of the relief term (GM.reliefTone, LOOK is the
+  //      only source of both) is evaluated on the REAL hills (data/relief.js FEATURES, gardenHeight) at 120 .. 480 m against the first version of the shader (NW painter's light, one soft term, melted away with the patchwork)
+  const LAY = await imp('src/world/layout.js'), sunL = Math.hypot(LAY.SUN_DIR[0], LAY.SUN_DIR[2]), SUN = [LAY.SUN_DIR[0] / sunL, LAY.SUN_DIR[2] / sunL];
+  const hsLine = /float hs = clamp\((-?)dot\(gr, uLight\) \* mix\(([0-9.]+), ([0-9.]+), farK\), -1\.0, 1\.0\);/.exec(frag), ampLine = /col \*= 1\.0 \+ mix\(([0-9.]+), ([0-9.]+), farK\) \* hsc;/.exec(frag);
+  const celLine = /float lvl = smoothstep\(-([0-9.]+), -([0-9.]+), hs\) \+ smoothstep\(([0-9.]+), ([0-9.]+), hs\) - 1\.0;\s+float hsc = mix\(hs, lvl, farK \* ([0-9.]+)\);/.exec(frag), farLine = /float farK = smoothstep\(([0-9.]+), ([0-9.]+), dist\);/.exec(frag);
+  const L0 = GM.LOOK, LK = [L0.shadeGain, L0.gainFar, L0.shadeAmp, L0.farAmp, L0.celHi, L0.celLo, L0.celLo, L0.celHi].map((v) => v.toFixed(2)).concat(L0.cel.toFixed(2));
+  ok('the shader follows the direction the surface faces (the horizontal part of the normal over its y), +dot with the light (toward the sun), not 1 - normal.y; the numbers of the shader text are the numbers of LOOK',
+    /vec2 gr = nW\.xz \/ max\(nW\.y, 0\.2\);/.test(frag) && !!(hsLine && ampLine && celLine && farLine) && hsLine[1] === '' && [hsLine[2], hsLine[3], ampLine[1], ampLine[2], ...celLine.slice(1)].join(' ') === LK.join(' ') && Number(farLine[1]) === L0.farA && Number(farLine[2]) === L0.farB,
+    hsLine && ampLine && celLine && farLine ? `gain ${hsLine[2]} -> ${hsLine[3]}, amplitude ${ampLine[1]} -> ${ampLine[2]}, cel ${celLine[5]}, far ${farLine[1]} .. ${farLine[2]}` : 'no match');
+  // the light is the engine's sun: LOOK.sun is layout.SUN_DIR (x, z), the uniform follows ctx.sunDir, the lit side of a hill is the side that faces the sun
+  const sunNorm = Math.hypot(...L0.sun), uSun = GM.sunXZ({ sunDir: { x: LAY.SUN_DIR[0], y: LAY.SUN_DIR[1], z: LAY.SUN_DIR[2] } }), uNone = GM.sunXZ(bare6);
+  ok("the light of the relief is the real sun: LOOK.sun and the uniform equal layout.SUN_DIR on the ground plane (the painter's light of the first version came from the NW, the shadows of the buildings fall to the NE)",
+    Math.abs(L0.sun[0] / sunNorm - SUN[0]) < 2e-3 && Math.abs(L0.sun[1] / sunNorm - SUN[1]) < 2e-3 && Math.hypot(uSun.x - SUN[0], uSun.y - SUN[1]) < 1e-9 && Math.hypot(uNone.x - SUN[0], uNone.y - SUN[1]) < 2e-3, `to the sun (${SUN[0].toFixed(3)}, ${SUN[1].toFixed(3)}); uniform (${uSun.x.toFixed(3)}, ${uSun.y.toFixed(3)})`);
+  const litN = GM.reliefTone(0.1 * SUN[0], 0.1 * SUN[1], 60, SUN), shadeN = GM.reliefTone(-0.1 * SUN[0], -0.1 * SUN[1], 60, SUN), litF = GM.reliefTone(0.1 * SUN[0], 0.1 * SUN[1], 400, SUN), shadeF = GM.reliefTone(-0.1 * SUN[0], -0.1 * SUN[1], 400, SUN);
+  ok('a flank that faces the sun is brighter than flat ground and one that faces away is darker, near (60 m) and far (400 m), and the far cel tones are the steps (lit +1, shade -1)', litN.tone > 1.12 && shadeN.tone < 0.88 && litF.tone > 1.3 && shadeF.tone < 0.7 && litF.lvl > 0.99 && shadeF.lvl < -0.99, `60 m ${shadeN.tone.toFixed(2)} / ${litN.tone.toFixed(2)}, 400 m ${shadeF.tone.toFixed(2)} / ${litF.tone.toFixed(2)}`);
+  // the hills: tone of the lit half over the tone of the shade half of each hill (cells above 0.12 m, flanks within 0.03 of the sun axis excluded), and the share of the hill that differs from flat ground by more than 12 %
+  const hOf = (x, z) => GH.gardenHeight(x, z) ?? 0, REL = await imp('src/world/landmarksTauride/data/relief.js');
+  const OLD = { ...L0, farAmp: 0.42, gainFar: 5, cel: 0, flankFar: 0, warm: [0, 0, 0], cool: [0, 0, 0] }, OLDLIGHT = [-0.55 / Math.hypot(-0.55, -0.83), -0.83 / Math.hypot(-0.55, -0.83)];
+  const hillStats = (mod, f, dist, light, Lk, melt) => {
+    const r = Math.max(f.rx, f.rz) * 1.15; let nl = 0, ns = 0, sl = 0, ss = 0, vis = 0, n = 0;
+    for (let x = f.x - r; x <= f.x + r; x += 1) for (let z = f.z - r; z <= f.z + r; z += 1) {
+      if (hOf(x, z) < 0.12) continue;
+      const fx = -(hOf(x + 0.5, z) - hOf(x - 0.5, z)), fz = -(hOf(x, z + 0.5) - hOf(x, z - 0.5)), s = fx * light[0] + fz * light[1];
+      let { tone } = mod.reliefTone(fx, fz, dist, light, Lk); if (melt) tone = 1 + (tone - 1) * (1 - sstep(160, 1100, dist) * 0.8);
+      n++; if (Math.abs(tone - 1) > 0.12) vis++;
+      if (s > 0.03) { sl += tone; nl++; } else if (s < -0.03) { ss += tone; ns++; }
+    }
+    return { ratio: (sl / nl) / (ss / ns), vis: vis / n };
+  };
+  const worstHill = (mod, light, Lk, melt, dist) => { let ratio = Infinity, vis = Infinity, rk = '', vk = ''; for (const f of REL.FEATURES) { const h = hillStats(mod, f, dist, light, Lk, melt); if (h.ratio < ratio) { ratio = h.ratio; rk = f.key; } if (h.vis < vis) { vis = h.vis; vk = f.key; } } return { ratio, vis, rk, vk }; };
+  const sh = { 120: worstHill(GM, SUN, GM.LOOK, false, 120), 300: worstHill(GM, SUN, GM.LOOK, false, 300), 480: worstHill(GM, SUN, GM.LOOK, false, 480) }, o480 = worstHill(GM, OLDLIGHT, OLD, true, 480), o300 = worstHill(GM, OLDLIGHT, OLD, true, 300);
+  ok('every one of the 9 hills reads from the aerials: the lit half is at least 2.0 times as bright as the shade half at 300 m and at 480 m (the first version at 480 m: below 1.5) and at least 1.45 at 120 m (unchanged: the near look was approved)',
+    sh[300].ratio >= 2.0 && sh[480].ratio >= 2.0 && sh[120].ratio >= 1.45 && o480.ratio < 1.5, `worst hill: 120 m ${sh[120].ratio.toFixed(2)} (${sh[120].rk}), 300 m ${sh[300].ratio.toFixed(2)} (${sh[300].rk}), 480 m ${sh[480].ratio.toFixed(2)} (${sh[480].rk}); first version ${o300.ratio.toFixed(2)} / ${o480.ratio.toFixed(2)} at 300 / 480 m`);
+  ok('and more of each hill is visible at 300 m and 480 m than in the first version (the share of its cells that differ from flat ground by more than 12 %: 12 points more at 300 m, 20 at 480 m on the worst hill, the memorial tip with its plateau)',
+    sh[300].vis >= o300.vis + 0.12 && sh[480].vis >= o480.vis + 0.2 && sh[480].vis >= 0.69, `worst: 300 m ${(sh[300].vis * 100).toFixed(0)} % (${sh[300].vk}) against ${(o300.vis * 100).toFixed(0)} %, 480 m ${(sh[480].vis * 100).toFixed(0)} % (${sh[480].vk}) against ${(o480.vis * 100).toFixed(0)} %`);
+  ok('the patchwork melts BEFORE the relief is applied (the relief used to melt with it) and the contour bands are faded by their width on the screen (fwidth), not by the distance of the fine detail',
+    frag.indexOf('col = mix(col, mean,') > 0 && frag.indexOf('col = mix(col, mean,') < frag.indexOf('vec3 nW = normalize(vNW);') && /fwidth\(vPWorld\.y\)/.test(frag) && !/\* sl \* patF;/.test(frag), `melt at ${frag.indexOf('col = mix(col, mean,')}, relief at ${frag.indexOf('vec3 nW = normalize(vNW);')}`);
+  // mutants: the far numbers of the first version (no boost, no cel), the sign of the light turned, a far range that never starts
+  const gmOld = await variant('ground-material.js', /gainFar: 10\.0, cel: 0\.45, celLo: 0\.10, celHi: 0\.45, farAmp: 0\.40,/, 'gainFar: 5.0, cel: 0.0, celLo: 0.10, celHi: 0.45, farAmp: 0.42,');
+  const m480 = worstHill(gmOld, SUN, gmOld.LOOK, false, 480);
+  ok('mutant: a ground-material.js with the far numbers of the first version (gain 5, no cel, amplitude 0.42) gives a worst lit / shade ratio below 2.0 at 480 m (the check sees it)', m480.ratio < 2.0, `${m480.ratio.toFixed(2)}`);
+  const gmFlip = await variant('ground-material.js', /float hs = clamp\(dot\(gr, uLight\)/, 'float hs = clamp(-dot(gr, uLight)'), flipLine = /float hs = clamp\((-?)dot\(gr, uLight\)/.exec(fragOf(gmFlip));
+  ok('mutant: a shader with the sign of the light turned (the lit side away from the sun) has the minus in its text (the text check sees it)', !!flipLine && flipLine[1] === '-' && !!hsLine && hsLine[1] === '', flipLine ? `'${flipLine[1]}'` : 'no match');
+  const gmNoFar = await variant('ground-material.js', /farA: 90, farB: 280,/, 'farA: 9000, farB: 9001,'), farM = /float farK = smoothstep\(([0-9.]+), ([0-9.]+), dist\);/.exec(fragOf(gmNoFar)), noFar = worstHill(gmNoFar, SUN, gmNoFar.LOOK, false, 480);
+  ok('mutant: a ground-material.js whose far range never starts (farA 9000 m) gives a worst ratio below 2.0 at 480 m and a text that differs from the shipped file', noFar.ratio < 2.0 && !!farM && Number(farM[1]) !== L0.farA, `${noFar.ratio.toFixed(2)}`);
 }
 console.log(failed ? `RESULT: FAIL (${failed} of ${total} checks)` : `RESULT: OK (${total} checks)`);
 process.exit(failed ? 1 : 0);

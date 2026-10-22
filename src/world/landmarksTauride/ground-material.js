@@ -9,7 +9,9 @@
 //                                (bilinear for R, G, B; the code is read NEAREST with texelFetch: it is categorical).
 //   gardenGroundMaterial(ctx, ..)  the toon material with its own onBeforeCompile (the pattern of environment/ground.js: ONE category per pixel from noise fields, cel-hard edges, no repeating
 //                                  texture, no blur): lawn (the ground's own four greens, clover patches, mown stripes), litter under the canopy, mud and the wet band at the shore, worn and packed earth, and the
-//                                  RELIEF read from the vertex normal and the height: darker and greener on the flanks, lit side / shade side, drier crowns, a faint contour tone. polygonOffset +2 like the environment's ground
+//                                  RELIEF read from the vertex normal and the height: darker and greener on the flanks, lit side / shade side (the REAL sun; from 90 to 280 m the soft term turns into three cel tones with a
+//                                  warm lit and a cool shade side so that the hills read from the aerials: reliefTone is the JS port the tests use), drier crowns, a contour tone drawn at any distance while a band
+//                                  is at least ~6 px wide. polygonOffset +2 like the environment's ground
 //                                  (everything above the ground at 0.02 .. 0.12 m keeps winning over it), no vertex colour, the far fog of the environment (FAR_FOG) and the melt to the mean colour at distance.
 // The garden terrain (terrain-mesh.js) covers the WHOLE garden polygon and the environment ground is cut out there (HOOKS.groundHoles), so this is the only ground inside the fence.
 import * as THREE from 'three';
@@ -19,8 +21,16 @@ import { MEADOWS, CANOPY_BELT, WORN_SPOTS, WORN_GREEN_IDS, GROUND_TUNING } from 
 export const GROUND = Object.freeze({ res: 1, pad: 3, shoreLevels: 12, maxStripeBlocks: 8, noiseSize: 128 });
 /** The look numbers that the shader text carries as constants (DESIGN values; QA round 1 of T3 moved them): where the litter starts in the canopy weight (litA .. litB: it used to start at the edge of a wood, 0.48 .. 0.58,
  *  and the noise of the belt tipped it into litter), the dim of the shade fringe, the opacity of worn earth, the gain and amplitude of the hill's light and shade side, the crown tone and the contour tone. */
-export const LOOK = Object.freeze({ litA: 0.62, litB: 0.78, shadeDim: 0.88, wornOpacity: 0.78, shadeGain: 5.0, shadeAmp: 0.42, crown: 0.38, contour: 0.09, jitter: 0.8 });
+export const LOOK = Object.freeze({
+  litA: 0.62, litB: 0.78, shadeDim: 0.88, wornOpacity: 0.78, shadeGain: 5.0, shadeAmp: 0.42, crown: 0.38, contour: 0.09, jitter: 0.8,
+  // QA round 2 of T3 (the hills at 250-480 m were soft dark smudges): the relief is read with the REAL sun (sun = layout.SUN_DIR, x and z, to the light; ctx.sunDir replaces it) and from farA to farB metres the
+  // soft shading turns into three cel tones (shade / flat / lit, the engine's own crisp light-and-shadow split) whose steps are celLo..celHi in the shading term, with the amplitude farAmp, the warm lit side and the
+  // cool shade side (warm / cool), a crown lifted by farCrown, the lawn's own patchwork calmed by the melt (meltA..meltB, meltK: the hills must not compete with it) before the relief is applied.
+  sun: Object.freeze([-0.473, 0.526]), farA: 90, farB: 280, gainFar: 10.0, cel: 0.45, celLo: 0.10, celHi: 0.45, farAmp: 0.40, farCrown: 0.9, flankFar: 0.7, farContour: 0.3,
+  warm: Object.freeze([0.06, 0.04, -0.07]), cool: Object.freeze([-0.07, -0.02, 0.06]), meltA: 100, meltB: 520, meltK: 0.45,
+});
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const V3 = (a) => 'vec3(' + a.map((v) => v.toFixed(2)).join(', ') + ')';
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 /** integer cell hash -> [0, 1) (deterministic) */
 function hash2(ix, iz, seed = 0) { let h = (Math.imul(ix, 374761393) + Math.imul(iz, 668265263) + Math.imul(seed, 1274126177)) | 0; h = Math.imul(h ^ (h >>> 13), 1103515245); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
@@ -222,6 +232,20 @@ export function makeMaskTexture(mask) {
   return tex;
 }
 
+// ------------------------------------------------------------------------------------------------ the relief tone (JS port of the shader's relief term, for the tests)
+/** the shader's relief term for a surface that FACES (fx, fz) (the horizontal part of the normal over its y = minus the gradient of the height; its length is the slope) seen from `dist` metres, as a luminance factor
+ *  and the cel level: { tone, lvl, hs, farK }. The same numbers as the GLSL below (LOOK is the only source of both; tools/tauride/ground-test.mjs reads the shader text and compares). `light` = the x, z direction to the sun. */
+export function reliefTone(fx, fz, dist, light = null, L = LOOK) {
+  const lx = light ? light[0] : L.sun[0] / Math.hypot(...L.sun), lz = light ? light[1] : L.sun[1] / Math.hypot(...L.sun);
+  const farK = sstep(L.farA, L.farB, dist), sl = sstep(0.010, 0.080, Math.hypot(fx, fz));
+  const hs = clamp((fx * lx + fz * lz) * (L.shadeGain + (L.gainFar - L.shadeGain) * farK), -1, 1);
+  const lvl = sstep(-L.celHi, -L.celLo, hs) + sstep(L.celLo, L.celHi, hs) - 1, hsc = hs + (lvl - hs) * farK * L.cel;
+  const lum = (v) => 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  const flank = 1 + (lum([0.90, 0.95, 0.86]) - 1) * sl * 0.7 * (1 - L.flankFar * farK);
+  const tint = 1 + farK * (lum(L.warm) * Math.max(lvl, 0) + lum(L.cool) * Math.max(-lvl, 0));
+  return { tone: flank * (1 + (L.shadeAmp + (L.farAmp - L.shadeAmp) * farK) * hsc) * tint, lvl, hs, farK };
+}
+
 // ------------------------------------------------------------------------------------------------ the shader
 const PRE = /* glsl */`
 uniform sampler2D uMask; uniform sampler2D uNoise;
@@ -298,23 +322,31 @@ const BODY = /* glsl */`
   vec3 earth = mix(uWA, uWB, smoothstep(0.35, 0.65, n3.g)) * (0.94 + 0.12 * nf) * mix(1.0, 0.88, litK);
   col = mix(col, earth, wornK * ${LOOK.wornOpacity.toFixed(3)});
   col = mix(col, mix(earth, uWC, 0.5), packK * 0.85);
-  // ---- the relief, read from above: darker and greener on the flanks, the lit side and the shade side, drier crowns, a faint contour tone (a painter's light from the north-west, not the sun)
-  // (QA: the hills did not read from above, under the litter least of all. The light and shade term now follows the GRADIENT of the height (0.25 = a slope of 1:4), not 1 - normal.y, which is only 0.01 at
-  //  1:7 and so left a hill of 4 m with a few percent of shading; it multiplies the colour AFTER the litter and the wear, so a hill under a wood reads like a hill under a meadow.)
+  // ---- far away the patchwork melts into its mean colour (atmospheric perspective, no shimmer). It melts BEFORE the relief is applied (QA round 2: the relief used to melt with it, and the lawn's own
+  //      blotches, the lighter meadows and the darker patches, were as strong as a hill from 250 m up)
+  float dist = length(vViewPosition);
+  vec3 mean = mix(uGA * 0.97, uLA * 1.05, M.r);
+  col = mix(col, mean, max(smoothstep(160.0, 1100.0, dist) * 0.8, smoothstep(${LOOK.meltA.toFixed(1)}, ${LOOK.meltB.toFixed(1)}, dist) * ${LOOK.meltK.toFixed(2)}));
+  // ---- the relief, read from above: darker and greener on the flanks, the lit side and the shade side, drier crowns, a faint contour tone
+  // (QA round 1: the hills did not read from above, under the litter least of all. The light and shade term follows the SLOPE (0.25 = a slope of 1:4), not 1 - normal.y, which is only 0.01 at
+  //  1:7 and so left a hill of 4 m with a few percent of shading; it multiplies the colour AFTER the litter and the wear, so a hill under a wood reads like a hill under a meadow.
+  //  QA round 2: the light was a painter's light from the north-west, not the sun (SW: layout.SUN_DIR, which draws the shadows of the buildings), and at 250-480 m the smooth term was a soft dark smudge.
+  //  The term now faces the real sun (uLight = to the sun, x z) and from farA to farB it steps into three cel tones, the engine's own crisp light / shade split, with a warm lit and a cool shade side.
+  //  gr is the horizontal part of the normal over its y = the direction the surface FACES (minus the gradient of the height), its length the slope: 0.25 = 1:4; + hs = facing the light.)
   vec3 nW = normalize(vNW);
   vec2 gr = nW.xz / max(nW.y, 0.2);
+  float farK = smoothstep(${LOOK.farA.toFixed(1)}, ${LOOK.farB.toFixed(1)}, dist);
   float sl = smoothstep(0.010, 0.080, length(gr));
-  float hs = clamp(dot(gr, uLight) * ${LOOK.shadeGain.toFixed(2)}, -1.0, 1.0);
-  col *= mix(vec3(1.0), vec3(0.90, 0.95, 0.86), sl * 0.7);
-  col *= 1.0 + ${LOOK.shadeAmp.toFixed(2)} * hs;
+  float hs = clamp(dot(gr, uLight) * mix(${LOOK.shadeGain.toFixed(2)}, ${LOOK.gainFar.toFixed(2)}, farK), -1.0, 1.0);
+  float lvl = smoothstep(-${LOOK.celHi.toFixed(2)}, -${LOOK.celLo.toFixed(2)}, hs) + smoothstep(${LOOK.celLo.toFixed(2)}, ${LOOK.celHi.toFixed(2)}, hs) - 1.0;
+  float hsc = mix(hs, lvl, farK * ${LOOK.cel.toFixed(2)});
+  col *= mix(vec3(1.0), vec3(0.90, 0.95, 0.86), sl * 0.7 * (1.0 - ${LOOK.flankFar.toFixed(2)} * farK));
+  col *= 1.0 + mix(${LOOK.shadeAmp.toFixed(2)}, ${LOOK.farAmp.toFixed(2)}, farK) * hsc;
+  col *= 1.0 + farK * (${V3(LOOK.warm)} * max(lvl, 0.0) + ${V3(LOOK.cool)} * max(-lvl, 0.0));
   float crown = smoothstep(0.5, 3.0, vPWorld.y);
-  col = mix(col, col * vec3(1.10, 1.09, 0.93) + vec3(0.03, 0.03, 0.0), crown * ${LOOK.crown.toFixed(2)} * (1.0 - wornK));
-  col *= 1.0 - ${LOOK.contour.toFixed(2)} * smoothstep(0.50, 0.58, fract(vPWorld.y * 1.4 + n3.g * 0.12)) * sl * patF;
-  // ---- far away the patchwork melts into its mean colour (atmospheric perspective, no shimmer)
-  #ifdef USE_FOG
-  vec3 mean = mix(uGA * 0.97, uLA * 1.05, M.r);
-  col = mix(col, mean, smoothstep(160.0, 1100.0, vFogDepth) * 0.8);
-  #endif
+  col = mix(col, col * vec3(1.10, 1.09, 0.93) + vec3(0.03, 0.03, 0.0), crown * ${LOOK.crown.toFixed(2)} * (1.0 + ${LOOK.farCrown.toFixed(2)} * farK) * (1.0 - wornK));
+  float cf = 1.0 - smoothstep(0.10, 0.30, fwidth(vPWorld.y) * 1.4);                       // a band is drawn while it is at least ~6 px wide (no moire), at any distance
+  col *= 1.0 - ${LOOK.contour.toFixed(2)} * (1.0 + ${LOOK.farContour.toFixed(2)} * farK) * smoothstep(0.50, 0.58, fract(vPWorld.y * 1.4 + n3.g * 0.12)) * sl * cf;
   diffuseColor.rgb = col;
 }
 `;
@@ -333,6 +365,12 @@ export const GROUND_COLORS = Object.freeze({
   uLA: '#5c7832', uLB: '#6a6e3a', uLC: '#4b6a2c', uLD: '#8b8048',
   uMA: '#6c5b42', uMB2: '#564630', uBed: '#5b5a3f', uWA: '#988462', uWB: '#a69370', uWC: '#b4a686',
 });
+
+/** the direction TO the sun on the ground plane (x, z), normalised: the engine's own sun (ctx.sunDir = layout.SUN_DIR at the day preset), LOOK.sun when the context has none */
+export function sunXZ(ctx) {
+  const d = ctx && ctx.sunDir, x = d && Number.isFinite(d.x) ? d.x : LOOK.sun[0], z = d && Number.isFinite(d.z) ? d.z : LOOK.sun[1], l = Math.hypot(x, z) || 1;
+  return new THREE.Vector2(x / l, z / l);
+}
 
 /** the stripe table of the shader: [normal x, normal z, period, phase] per block (the normal is across the stripes) */
 export function stripeTable(meadows = MEADOWS) {
@@ -357,7 +395,7 @@ export function gardenGroundMaterial(ctx, mask, noise = null, meadows = MEADOWS)
   const U = {
     uMask: { value: maskTexture }, uNoise: { value: noiseTexture },
     uMB: { value: new THREE.Vector4(b.x0, b.z0, 1 / (b.W * b.res), 1 / (b.H * b.res)) }, uMS: { value: new THREE.Vector2(b.W, b.H) },
-    uStripe: { value: stripeTable(meadows) }, uLight: { value: new THREE.Vector2(-0.55, -0.83).normalize() },
+    uStripe: { value: stripeTable(meadows) }, uLight: { value: sunXZ(ctx) },
     uFogK: { value: new THREE.Vector2(FAR_FOG.D0, FAR_FOG.K) },
   };
   for (const [k, hex] of Object.entries(GROUND_COLORS)) U[k] = { value: new THREE.Color(hex) };
@@ -372,7 +410,7 @@ export function gardenGroundMaterial(ctx, mask, noise = null, meadows = MEADOWS)
       .replace('#include <map_fragment>', '#include <map_fragment>\n' + BODY)
       .replace('#include <fog_fragment>', FOG);
   };
-  mat.customProgramCacheKey = () => 'paint|tauride-ground-t3';
+  mat.customProgramCacheKey = () => 'paint|tauride-ground-t3-r2';
   mat.userData.tauride = 'ground';
   return { mat, uniforms: U, maskTexture, noiseTexture };
 }
