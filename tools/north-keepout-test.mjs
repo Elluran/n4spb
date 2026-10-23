@@ -199,9 +199,12 @@ const evaluate = (list) => {
   return { cleared: KO.treeCleared(ctx), reject: KO.treeReject(ctx), tuft: KO.tuftReject(ctx), prop: KO.propReject(ctx), ped: KO.pedestrianOnly(ctx), parking: KO.makeParkingReject(list) };
 };
 /** what the declared regions say at (x, z) for the built set */
+/** the garden outline as the independent oracle of the T5 'garden' reason: a winding-number test on the facade's own GREEN record r1582734 (not hooks/people.js inGarden) */
+const GARDEN_PARK = (await imp('src/areas/north/data/city.js')).GREEN.find((q) => q.id === 'r1582734').polys[0].o;
+const inGardenRef = (x, z) => { if (!(x > 915 && x < 1500 && z > -1800 && z < -1250)) return false; let w = 0; const o = GARDEN_PARK; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const x0 = o[j], z0 = o[j + 1], x1 = o[i], z1 = o[i + 1], cr = (x1 - x0) * (z - z0) - (x - x0) * (z1 - z0); if (z0 <= z) { if (z1 > z && cr > 0) w++; } else if (z1 <= z && cr < 0) w--; } return w !== 0; };
 const expected = (built, x, z) => ({
   cleared: built.has(MODS.smolny) && (SMOLNY[0](x, z) || SMOLNY[1](x, z)),
-  reject: built.has(MODS.tauride) && inPodium(x, z) ? 'paradny' : built.has(MODS.kirochnaya) && inCampusRef(x, z) ? 'campus' : built.has(MODS.suvorov) && SUVOROV(x, z) ? 'suvorov' : null,
+  reject: built.has(MODS.tauride) && inPodium(x, z) ? 'paradny' : built.has(MODS.tauride) && inGardenRef(x, z) ? 'garden' : built.has(MODS.kirochnaya) && inCampusRef(x, z) ? 'campus' : built.has(MODS.suvorov) && SUVOROV(x, z) ? 'suvorov' : null,      // T5: 'garden' inside the Tauride Garden outline (the garden plants its own trees)
   tuft: (built.has(MODS.tauride) && inPodium(x, z)) || (built.has(MODS.kirochnaya) && inCampusRef(x, z)),
   prop: built.has(MODS.tauride) && inPodium(x, z),
   parking: built.has(MODS.tauride) && inPodium(x, z),
