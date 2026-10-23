@@ -11,7 +11,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((a, s, i, all) => (
 const GM = await imp('src/world/landmarksTauride/ground-material.js'), GH = await imp('src/world/landmarksTauride/height.js'), REL = await imp('src/world/landmarksTauride/data/relief.js');
 const dists = String(args.dist || '60,120,300,480').split(',').map(Number);
 const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-const h = (x, z) => GH.gardenHeight(x, z) ?? 0;
+const h = (x, z) => GH.reliefHeight(x, z) ?? 0;
 const L0 = GM.LOOK, sl = Math.hypot(...L0.sun), SUN = [L0.sun[0] / sl, L0.sun[1] / sl];
 const OLD = { ...L0, farAmp: 0.42, gainFar: 5, cel: 0, flankFar: 0, warm: [0, 0, 0], cool: [0, 0, 0] }, OLDLIGHT = [-0.55 / Math.hypot(-0.55, -0.83), -0.83 / Math.hypot(-0.55, -0.83)];
 function stats(f, dist, light, L, melt) {

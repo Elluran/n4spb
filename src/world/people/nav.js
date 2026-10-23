@@ -655,7 +655,7 @@ export function buildNav(ctx, cfg = {}) {
     if (dy != null && Number.isFinite(dy)) { if (x < WEST_X) { const wd = westDeck(x, z); if (wd) return wd.y + (wd.foot ? 0 : WLIFT[wd.kind] || 0); } return dy + 0.12; }
     if (onDeck(x, z, 0.3)) { const h = ctx.physics.groundHeight(x, z, 2.0, false); return Number.isFinite(h) ? h + 0.12 : y; }
     // T2: where the area lifts the terrain (a height patch: the relief of the Tauride Garden) a walker stands ON it, uphill and downhill (the physics lookup below only sees terrain within feet + 2.45 m and never lowers y); the strip has no patch
-    if (HEIGHT_PATCHES.length) { const th = L.heightAt(x, z); if (th > 0.06) return th + 0.02; }
+    if (HEIGHT_PATCHES.length) { const th = L.heightAt(x, z); if (th > 0.06 || (th < -0.06 && HOOKS.inGarden && HOOKS.inGarden(x, z))) return th + 0.02; }      // T4a: and on the bank of a garden pond (the ground sinks to the waterline, -0.45 m): the walker stands on it, the physics lookup below never lowers y
     const h = ctx.physics.groundHeight(x, z, 2.0, false);
     return Number.isFinite(h) && h > 0.06 && h > y - 0.05 ? h + 0.02 : y;
   };

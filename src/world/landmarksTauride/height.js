@@ -1,4 +1,6 @@
 // landmarksTauride/height.js - the land relief of the Tauride Garden as a PURE function (docs/TAURIDE-REMAKE.md, phase T2).
+// T4a: the same file also holds the TERRAIN = the pond bowls and banks + the relief (makeShore: the exact signed distance to the water outline, pondProfile: the profile of data/ponds.js, makeTerrainHeight, and the exported gardenHeight).
+// `reliefHeight` below is the T2 function (the hills alone); `gardenHeight` at the end of the file is what the HEIGHT_PATCH 'garden', the floor mesh, the paths and the ground mask read. Pure data imports only (relief, water, footprints, ponds).
 //   gardenHeight(x, z) -> number | null    the terrain height in metres above the street level (y = 0), or null where the garden has no relief (the old line of layout.heightAt answers: the waterway bed or 0)
 // The function is the body of the second HEIGHT_PATCH of the North (src/areas/north/hooks/height.js, box RELIEF_HULL: the box of the hills, not the garden's). layout.heightAt is evaluated for every map point at start-up
 // (82,500 calls on the garden box), so: the patch box is the tight hull of the features (62 % of the garden box: no call at all for the rest), the function rejects its own box FIRST, the features are prepared ONCE into
@@ -9,8 +11,11 @@
 // of the radius; q = the elliptical radius (0 at the centre, 1 at the foot): height = h for q <= top, h * s(1 - ...) smoothstep to 0 at q = 1 (zero slope at the top and at the foot, so no crease at the foot).
 // Where features overlap the HIGHER one wins (max), so the steepest slope of the field is the steepest slope of one feature: h * 1.5 / (the foot width of the shortest axis).
 import { FEATURES, RELIEF_BOX } from './data/relief.js';
+import { WATER_UNION } from './data/water.js';
+import { GARDEN } from './data/footprints.js';
+import * as PONDS from './data/ponds.js';
 
-export { RELIEF_BOX, FEATURES };
+export { RELIEF_BOX, FEATURES, PONDS };
 
 /** The box of the relief itself: the bounding box of the feature ellipses (rotation included) rounded OUT to whole metres plus `margin` m. [x0, x1, z0, z1]. gardenHeight answers null outside it, so it is the box of the
  *  HEIGHT_PATCH (the engine's heightAt skips the call outside it); RELIEF_BOX stays the box of the garden for the tools (mesh grid, lattices of the tests).
@@ -69,4 +74,215 @@ export function makeGardenHeight(features = FEATURES, box = RELIEF_BOX) {
   };
 }
 
-export const gardenHeight = makeGardenHeight();
+// ============================================================================ T4a: the ponds (data/ponds.js is the ONE datum table; data/water.js the outline)
+// gardenHeight is now the TERRAIN: the pond bowls and banks + the relief. The relief alone stays available (`reliefHeight`, `makeGardenHeight`: the tools and the mutants of the relief rules use it).
+// The shore is the union outline of data/water.js (136 vertices + 3 islands): the signed distance to it (+ land, - water) is the input of the profile. It is computed ONCE at module load into a compact structure and
+// answered EXACTLY (not interpolated): a 2 m cell grid; a cell farther from the outline than the reach of the profile is 'land' or 'water' (one byte), a cell near the outline holds the list of the segments
+// within reach of it (CSR arrays). The distance is the nearest segment; the SIGN comes from the pseudo-normal of the nearest feature (the normal of the segment, or the angle-weighted normal of the vertex), which is
+// exact for a simple polygon. Pure, deterministic, no allocation per call; a point outside every near cell costs one byte read.
+
+const smooth = (a, b, x) => { const t = x <= a ? 0 : x >= b ? 1 : (x - a) / (b - a); return t * t * (3 - 2 * t); };
+
+/** The reach of the pond profile (m): how far from the outline, on land and in the water, the table's profile differs from the lawn / the flat bed. */
+export function pondReach(P = PONDS) {
+  const land = 2 * (P.BANK_TOP - P.WATER_Y) * P.SLOPE_MAX + P.CREST_FALL, water = (P.WATER_Y - Math.min(P.BED_BIG, P.BED_SMALL)) * P.SLOPE_MAX * (1 + P.BED_KNEE);
+  return { land, water, max: Math.max(land, water) };
+}
+
+/** The profile functions of a datum table `P` (data/ponds.js or a copy with one number changed): { slopeAt(x, z), bedAt(x, z), landH(d, s), waterH(u, s, bed) } where d >= 0 is the distance on the land side, u >= 0 in the water. */
+export function pondProfile(P = PONDS) {
+  const N = P.SLOPE_NOISE, S = P.SMALL_POND, e = P.BED_KNEE, T = P.BANK_TOP, W0 = P.WATER_Y, F = P.CREST_FALL, R = 2 * (T - W0);      // R s = the run of the quadratic ease: its slope at the waterline is exactly 1 : s
+  const slopeAt = (x, z) => P.SLOPE_MIN + (P.SLOPE_MAX - P.SLOPE_MIN) * (0.5 + 0.5 * Math.sin(x * N.kx + N.px) * Math.sin(z * N.kz + N.pz));
+  const bedAt = (x, z) => { const big = smooth(S.mouthZ, S.mouthZ + S.blendZ, z) * smooth(S.eastX - S.blendX, S.eastX, x); return P.BED_SMALL + (P.BED_BIG - P.BED_SMALL) * big; };
+  const landH = (d, s) => {
+    const D = R * s;
+    if (d < D) { const t = 1 - d / D; return W0 + (T - W0) * (1 - t * t); }
+    return d < D + F ? T * (1 - smooth(D, D + F, d)) : 0;
+  };
+  const waterH = (u, s, bed) => {
+    const depth = W0 - bed; if (!(depth > 0)) return W0 - u / s < bed ? bed : W0 - u / s;
+    const q = u / (depth * s), g = q <= 1 - e ? q : q < 1 + e ? q - (q - (1 - e)) * (q - (1 - e)) / (4 * e) : 1;
+    return W0 - depth * g;
+  };
+  return { slopeAt, bedAt, landH, waterH };
+}
+
+/** The rings of a union ([{ o, h: [ring, ...] }]) as the segment table of the shore: { n, ax, az, ex, ez, inv2, nx, nz (the unit normal to the LAND), pax, paz, pbx, pbz (the pseudo-normals of the start and the end vertex) }.
+ *  A segment shorter than 1e-6 m is dropped. */
+export function shoreSegments(union) {
+  const rings = [];
+  for (const p of union) { rings.push({ r: p.o, hole: false }); for (const h of p.h || []) rings.push({ r: h, hole: true }); }
+  const A = [], pts = [];
+  for (const { r, hole } of rings) {
+    const v = []; for (let i = 0; i < r.length; i += 2) { const q = v[v.length - 1]; if (!q || Math.hypot(r[i] - q[0], r[i + 1] - q[1]) > 1e-6) v.push([r[i], r[i + 1]]); }
+    if (v.length > 1 && Math.hypot(v[0][0] - v[v.length - 1][0], v[0][1] - v[v.length - 1][1]) <= 1e-6) v.pop();
+    let area = 0; for (let i = 0; i < v.length; i++) { const a = v[i], b = v[(i + 1) % v.length]; area += a[0] * b[1] - b[0] * a[1]; }
+    const sg = (area > 0 ? 1 : -1) * (hole ? 1 : -1);                       // the interior of a ring of positive shoelace area lies to the rotate(+90) side of an edge: (-ez, ex); the land is outside an outer ring and inside a hole
+    const m = v.length, nrm = [];
+    for (let i = 0; i < m; i++) { const a = v[i], b = v[(i + 1) % m], ex = b[0] - a[0], ez = b[1] - a[1], l = Math.hypot(ex, ez); nrm.push([-ez / l * sg, ex / l * sg]); }
+    for (let i = 0; i < m; i++) {
+      const a = v[i], b = v[(i + 1) % m], n = nrm[i], np = nrm[(i + m - 1) % m], nn = nrm[(i + 1) % m];
+      const pa = [np[0] + n[0], np[1] + n[1]], pb = [n[0] + nn[0], n[1] + nn[1]], la = Math.hypot(pa[0], pa[1]), lb = Math.hypot(pb[0], pb[1]);
+      A.push({ ax: a[0], az: a[1], ex: b[0] - a[0], ez: b[1] - a[1], nx: n[0], nz: n[1], pax: la > 1e-9 ? pa[0] / la : n[0], paz: la > 1e-9 ? pa[1] / la : n[1], pbx: lb > 1e-9 ? pb[0] / lb : n[0], pbz: lb > 1e-9 ? pb[1] / lb : n[1] });
+      pts.push(a[0], a[1]);
+    }
+  }
+  const n = A.length, f = (k) => Float64Array.from(A, (s) => s[k]);
+  const out = { n, ax: f('ax'), az: f('az'), ex: f('ex'), ez: f('ez'), nx: f('nx'), nz: f('nz'), pax: f('pax'), paz: f('paz'), pbx: f('pbx'), pbz: f('pbz'), inv2: new Float64Array(n) };
+  for (let i = 0; i < n; i++) out.inv2[i] = 1 / (out.ex[i] * out.ex[i] + out.ez[i] * out.ez[i]);
+  return out;
+}
+
+/** The signed-distance structure of a union outline: shore.dist(x, z) -> metres, + on land, - in the water, EXACT where the point lies within `reach` m of the outline (a near cell), else the sign times (reach + cell)
+ *  (a stand-in: the profile is flat there); shore.box = the grid box. Brute-force reference: `shoreDistBrute` (the tests compare the two). */
+export function makeShore(union = WATER_UNION, reach = pondReach().max, CELL = 2, garden = GARDEN.o) {
+  const S = shoreSegments(union), n = S.n;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (let i = 0; i < n; i++) { x0 = Math.min(x0, S.ax[i]); x1 = Math.max(x1, S.ax[i]); z0 = Math.min(z0, S.az[i]); z1 = Math.max(z1, S.az[i]); }
+  const pad = reach + 2 * CELL; x0 = Math.floor((x0 - pad) / CELL) * CELL; z0 = Math.floor((z0 - pad) / CELL) * CELL;
+  const nx = Math.ceil((x1 + pad - x0) / CELL), nz = Math.ceil((z1 + pad - z0) / CELL), inv = 1 / CELL, rr = reach + CELL * Math.SQRT1_2 + 1e-6;
+  const segDist2 = (i, px, pz) => { const wx = px - S.ax[i], wz = pz - S.az[i]; let t = (wx * S.ex[i] + wz * S.ez[i]) * S.inv2[i]; t = t < 0 ? 0 : t > 1 ? 1 : t; const dx = wx - t * S.ex[i], dz = wz - t * S.ez[i]; return dx * dx + dz * dz; };
+  const start = new Int32Array(nx * nz + 1);
+  const cells = (i, fn) => {                                              // the cells whose centre lies within rr of segment i
+    const ax = S.ax[i], az = S.az[i], bx = ax + S.ex[i], bz = az + S.ez[i];
+    const ia = Math.max(0, Math.floor((Math.min(ax, bx) - rr - x0) * inv)), ib = Math.min(nx - 1, Math.floor((Math.max(ax, bx) + rr - x0) * inv));
+    const ja = Math.max(0, Math.floor((Math.min(az, bz) - rr - z0) * inv)), jb = Math.min(nz - 1, Math.floor((Math.max(az, bz) + rr - z0) * inv));
+    for (let j = ja; j <= jb; j++) for (let a = ia; a <= ib; a++) if (segDist2(i, x0 + (a + 0.5) * CELL, z0 + (j + 0.5) * CELL) <= rr * rr) fn(j * nx + a);
+  };
+  for (let i = 0; i < n; i++) cells(i, (c) => { start[c + 1]++; });
+  for (let c = 0; c < nx * nz; c++) start[c + 1] += start[c];
+  const list = new Int32Array(start[nx * nz]), fillAt = start.slice(0, nx * nz);
+  for (let i = 0; i < n; i++) cells(i, (c) => { list[fillAt[c]++] = i; });
+  // inside / outside of the far cells: the even-odd count of the outline crossings left of each cell centre (a scanline per row)
+  const far = new Uint8Array(nx * nz);
+  for (let j = 0; j < nz; j++) {
+    const zc = z0 + (j + 0.5) * CELL, xs = [];
+    for (let i = 0; i < n; i++) { const za = S.az[i], zb = za + S.ez[i]; if ((za > zc) !== (zb > zc)) xs.push(S.ax[i] + (zc - za) / S.ez[i] * S.ex[i]); }
+    xs.sort((a, b) => a - b);
+    for (let a = 0, k = 0; a < nx; a++) { const xc = x0 + (a + 0.5) * CELL; while (k < xs.length && xs[k] < xc) k++; far[j * nx + a] = k & 1; }       // an odd count of crossings to the left = inside the outer ring and outside every hole = WATER
+  }
+  // the garden gate: the banks exist only INSIDE the garden polygon (outside it the ground is the street: flat y = 0, drawn by the environment). gate per cell: 0 = every point of the cell is inside the garden,
+  // 2 = every point is outside, 1 = the outline of the garden crosses the cell (the exact ring test decides). Water points are never gated (the union lies inside the garden; it touches the outline along the north shore).
+  const gate = new Uint8Array(nx * nz), gn = garden.length / 2;
+  // `inGarden`: the even-odd ring test, OR within 5 cm of the outline (the north shore of the lake IS the outline: a point of the floor's cut edge must not flip to the street's 0 by rounding)
+  const inGarden = (x, z) => {
+    let c = false, near = false;
+    for (let i = 0, j = gn - 1; i < gn; j = i++) {
+      const xi = garden[2 * i], zi = garden[2 * i + 1], xj = garden[2 * j], zj = garden[2 * j + 1];
+      if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c;
+      const ex = xi - xj, ez = zi - zj, l2 = ex * ex + ez * ez, t = l2 ? Math.max(0, Math.min(1, ((x - xj) * ex + (z - zj) * ez) / l2)) : 0, dx = x - xj - t * ex, dz = z - zj - t * ez;
+      if (dx * dx + dz * dz < 0.0025) near = true;
+    }
+    return c || near;
+  };
+  const parity = (x, z) => { let c = false; for (let i = 0, j = gn - 1; i < gn; j = i++) { const zi = garden[2 * i + 1], zj = garden[2 * j + 1]; if ((zi > z) !== (zj > z) && x < (garden[2 * j] - garden[2 * i]) * (z - zi) / (zj - zi) + garden[2 * i]) c = !c; } return c; };
+  const gx0 = new Float64Array(gn), gx1 = new Float64Array(gn), gz0 = new Float64Array(gn), gz1 = new Float64Array(gn);
+  for (let i = 0; i < gn; i++) { const k = (i + 1) % gn; gx0[i] = Math.min(garden[2 * i], garden[2 * k]) - 0.06; gx1[i] = Math.max(garden[2 * i], garden[2 * k]) + 0.06; gz0[i] = Math.min(garden[2 * i + 1], garden[2 * k + 1]) - 0.06; gz1[i] = Math.max(garden[2 * i + 1], garden[2 * k + 1]) + 0.06; }
+  for (let c = 0; c < nx * nz; c++) {
+    if (start[c] === start[c + 1]) continue;                               // only the near cells are ever asked (a far cell is water or the relief's)
+    const a = c % nx, j = (c - a) / nx, cx0 = x0 + a * CELL, cz0 = z0 + j * CELL, cx1 = cx0 + CELL, cz1 = cz0 + CELL; let cross = false;
+    for (let i = 0; i < gn && !cross; i++) {                                // does the garden edge i come within 6 cm of the square? (bbox first, then the four corners against the edge's line)
+      if (gx1[i] < cx0 || gx0[i] > cx1 || gz1[i] < cz0 || gz0[i] > cz1) continue;
+      const k = (i + 1) % gn, ax = garden[2 * i], az = garden[2 * i + 1], ex = garden[2 * k] - ax, ez = garden[2 * k + 1] - az, l = Math.hypot(ex, ez) || 1;
+      const v0 = (ex * (cz0 - az) - ez * (cx0 - ax)) / l, v1 = (ex * (cz0 - az) - ez * (cx1 - ax)) / l, v2 = (ex * (cz1 - az) - ez * (cx0 - ax)) / l, v3 = (ex * (cz1 - az) - ez * (cx1 - ax)) / l;
+      if (Math.min(v0, v1, v2, v3) < 0.06 && Math.max(v0, v1, v2, v3) > -0.06) cross = true;
+    }
+    gate[c] = cross ? 1 : (parity(cx0 + CELL / 2, cz0 + CELL / 2) ? 0 : 2);
+  }
+  const dist = (x, z) => {
+    if (!(x >= x0 && x < x0 + nx * CELL && z >= z0 && z < z0 + nz * CELL)) return reach + CELL;
+    const c = (((z - z0) * inv) | 0) * nx + (((x - x0) * inv) | 0), a = start[c], b = start[c + 1];
+    if (a === b) return far[c] ? -(reach + CELL) : reach + CELL;
+    let best = Infinity, sg = 1;
+    for (let k = a; k < b; k++) {
+      const i = list[k], wx = x - S.ax[i], wz = z - S.az[i], t = (wx * S.ex[i] + wz * S.ez[i]) * S.inv2[i];
+      let d2, s;
+      if (t <= 0) { d2 = wx * wx + wz * wz; s = wx * S.pax[i] + wz * S.paz[i]; }
+      else if (t >= 1) { const ux = wx - S.ex[i], uz = wz - S.ez[i]; d2 = ux * ux + uz * uz; s = ux * S.pbx[i] + uz * S.pbz[i]; }
+      else { const ux = wx - t * S.ex[i], uz = wz - t * S.ez[i]; d2 = ux * ux + uz * uz; s = ux * S.nx[i] + uz * S.nz[i]; }
+      if (d2 < best) { best = d2; sg = s >= 0 ? 1 : -1; }
+    }
+    return sg * Math.sqrt(best);
+  };
+  return { dist, gate, inGarden, box: [x0, x0 + nx * CELL, z0, z0 + nz * CELL], cell: CELL, reach, segments: n, nearCells: (() => { let q = 0; for (let c = 0; c < nx * nz; c++) if (start[c + 1] > start[c]) q++; return q; })(), listEntries: list.length, nx, nz, far, start, bytes: far.byteLength + gate.byteLength + start.byteLength + list.byteLength + 11 * 8 * n };
+}
+
+/** the exact signed distance to the union by looking at EVERY segment and the even-odd rule over all rings (the reference of the tests; slow) */
+export function shoreDistBrute(union, x, z) {
+  let best = Infinity, inside = false;
+  for (const p of union) for (const ring of [p.o, ...(p.h || [])]) {
+    for (let i = 0, j = ring.length - 2; i < ring.length; j = i, i += 2) {
+      const ax = ring[j], az = ring[j + 1], bx = ring[i], bz = ring[i + 1], ex = bx - ax, ez = bz - az, l2 = ex * ex + ez * ez;
+      const t = l2 ? Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / l2)) : 0;
+      best = Math.min(best, Math.hypot(x - ax - t * ex, z - az - t * ez));
+      if ((az > z) !== (bz > z) && x < ex * (z - az) / ez + ax) inside = !inside;
+    }
+  }
+  return inside ? -best : best;
+}
+
+/** The box (with `margin`, whole metres + .5 like reliefHull) of everything the terrain function answers for: the hills and the shore band of the ponds. This is the box of the HEIGHT_PATCH 'garden'. */
+export function terrainHull(features = FEATURES, union = WATER_UNION, P = PONDS, margin = 0.5) {
+  const h = reliefHull(features, margin), r = pondReach(P).max;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const p of union) for (let i = 0; i < p.o.length; i += 2) { x0 = Math.min(x0, p.o[i]); x1 = Math.max(x1, p.o[i]); z0 = Math.min(z0, p.o[i + 1]); z1 = Math.max(z1, p.o[i + 1]); }
+  return [Math.min(h[0], Math.floor(x0 - r) - margin), Math.max(h[1], Math.ceil(x1 + r) + margin), Math.min(h[2], Math.floor(z0 - r) - margin), Math.max(h[3], Math.ceil(z1 + r) + margin)];
+}
+
+/**
+ * The TERRAIN height function: the bowls and the banks of the ponds plus the relief. Returns (x, z) => number | null (null where nothing lifts or sinks the ground: the old line answers).
+ *   in the water    the bed: the table's profile from the shore (flat bed, rounded knee), the bed height by position (Big / Small Pond)
+ *   on land         the bank profile (up to its reach from the shore) + the relief (zero near the water by the relief rules)
+ * o = { features, union, ponds (a datum table), box (the relief box), shore (a prebuilt makeShore) } for the tests and the mutants.
+ */
+export function makeTerrainHeight(o = {}) {
+  const P = o.ponds || PONDS, union = o.union || WATER_UNION, relief = makeGardenHeight(o.features || FEATURES, o.box || RELIEF_BOX);
+  const prof = pondProfile(P), reach = pondReach(P), shore = o.shore || makeShore(union, reach.max), slopeAt = prof.slopeAt, bedAt = prof.bedAt, landH = prof.landH, waterH = prof.waterH;
+  const [bx0, bx1, bz0, bz1] = shore.box, C = shore.cell, inv = 1 / C, nx = shore.nx, far = shore.far, start = shore.start, dist = shore.dist, gate = shore.gate, inGarden = shore.inGarden;
+  const deepWater = reach.water, SP = P.SMALL_POND, BIGBED = P.BED_BIG, SMALLBED = P.BED_SMALL;
+  // which bed a cell has: 1 = the Big Pond's (the whole cell is east of eastX and south of the mouth + its blend), 2 = the Small Pond's, 0 = in the blend (bedAt decides): most of the water is one of the two constants
+  const bedK = new Uint8Array(nx * shore.nz);
+  for (let c = 0; c < bedK.length; c++) { const a = c % nx, j = (c - a) / nx, cx0 = bx0 + a * C, cz0 = bz0 + j * C; bedK[c] = (cz0 >= SP.mouthZ + SP.blendZ && cx0 >= SP.eastX) ? 1 : (cz0 + C <= SP.mouthZ || cx0 + C <= SP.eastX - SP.blendX) ? 2 : 0; }
+  // The hot path is written out by hand (no call of slopeAt / landH / waterH / smooth: a function call costs 100+ ns in the interpreter, and layout.heightAt runs this over the whole map at start-up; the
+  // arithmetic is the SAME expressions in the same order as pondProfile(), which tools/tauride/pond-test.mjs checks bit for bit on 60,000 points).
+  const N = P.SLOPE_NOISE, SMIN = P.SLOPE_MIN, SSPAN = P.SLOPE_MAX - P.SLOPE_MIN, kx = N.kx, px = N.px, kz = N.kz, pz = N.pz, T = P.BANK_TOP, W0 = P.WATER_Y, F = P.CREST_FALL, RUN = 2 * (T - W0), E = P.BED_KNEE;
+  function terrainHeight(x, z) {
+    if (x >= bx0 && x < bx1 && z >= bz0 && z < bz1) {
+      const c = (((z - bz0) * inv) | 0) * nx + (((x - bx0) * inv) | 0);
+      if (start[c] === start[c + 1]) { if (far[c] === 1) { const k = bedK[c]; return k === 1 ? BIGBED : k === 2 ? SMALLBED : bedAt(x, z); } }
+      else {
+        const d = dist(x, z);
+        if (d < 0) {
+          const k = bedK[c], bed = k === 1 ? BIGBED : k === 2 ? SMALLBED : bedAt(x, z);
+          if (d < -deepWater) return bed;
+          const depth = W0 - bed, u = -d;
+          if (!(depth > 0)) return W0 - u / slopeAt(x, z) < bed ? bed : W0 - u / slopeAt(x, z);
+          const q = u / (depth * (SMIN + SSPAN * (0.5 + 0.5 * Math.sin(x * kx + px) * Math.sin(z * kz + pz)))), e1 = q - (1 - E);
+          return W0 - depth * (q <= 1 - E ? q : q < 1 + E ? q - e1 * e1 / (4 * E) : 1);
+        }
+        const g = gate[c]; if (g === 2 || (g === 1 && !inGarden(x, z))) return relief(x, z);       // outside the garden polygon the ground is the street's (flat), not a bank
+        const D = RUN * (SMIN + SSPAN * (0.5 + 0.5 * Math.sin(x * kx + px) * Math.sin(z * kz + pz)));
+        let b;
+        if (d < D) { const t = 1 - d / D; b = W0 + (T - W0) * (1 - t * t); }
+        else if (d < D + F) { const w = (d - D) / (D + F - D); b = T * (1 - w * w * (3 - 2 * w)); }
+        else b = 0;
+        const r = relief(x, z), h = r === null ? b : b + r;
+        return h === 0 ? null : h;
+      }
+    }
+    return relief(x, z);
+  }
+  // prime the type feedback of every branch (far land, near land, near water, the two beds and the blend, the relief) with a coarse lattice, so that the first real pass (layout.heightAt over the map at start-up) does not deoptimise
+  for (let j = 0; j < 12; j++) for (let i = 0; i < 12; i++) terrainHeight(bx0 + (i + 0.5) * (bx1 - bx0) / 12, bz0 + (j + 0.5) * (bz1 - bz0) / 12);
+  terrainHeight.shore = shore; terrainHeight.relief = relief; terrainHeight.profile = prof; terrainHeight.reach = reach; terrainHeight.ponds = P;
+  return terrainHeight;
+}
+
+/** the land relief alone (the hills of data/relief.js; null where no hill lifts the ground) */
+export const reliefHeight = makeGardenHeight();
+/** the box of the HEIGHT_PATCH 'garden': the hills AND the shore band of the ponds */
+export const TERRAIN_HULL = terrainHull();
+/** the terrain: ponds + relief (the second HEIGHT_PATCH of the North, src/areas/north/hooks/height.js; the floor mesh, the paths, the ground mask and the tests read this) */
+export const gardenHeight = makeTerrainHeight();
+/** the shared signed-distance structure of the module's own height function (the water surface, the colliders and the ground mask use the same one) */
+export const GARDEN_SHORE = gardenHeight.shore;

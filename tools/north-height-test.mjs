@@ -66,7 +66,7 @@ section('1. the registry');
     ok(list(undefined).length === 0, `${name}: an absent module list gives no patch (and does not throw)`);
     const pt = list(['environment', 'landmarksTauride', 'streets']);
     ok(pt.length >= 2 && (!exact || pt.length === 2) && pt[0].id === 'paradny' && same(pt[0].box, BOX) && pt[0].at === P.paradnyDeckY, `${name}: landmarksTauride gives the Paradny patch FIRST (box = PARADNY_BOX, at = paradnyDeckY)`);
-    ok(pt[1] && pt[1].id === 'garden' && same(pt[1].box, GH.RELIEF_HULL) && pt[1].at === GH.gardenHeight && pt[1].box !== GH.RELIEF_HULL, `${name}: then the garden relief patch (box = RELIEF_HULL copy, at = gardenHeight of landmarksTauride/height.js)`);
+    ok(pt[1] && pt[1].id === 'garden' && same(pt[1].box, GH.TERRAIN_HULL) && pt[1].at === GH.gardenHeight && pt[1].box !== GH.TERRAIN_HULL, `${name}: then the garden terrain patch (box = TERRAIN_HULL copy, the hills and the shore band of the ponds, at = gardenHeight of landmarksTauride/height.js)`);
     ok(pt !== list(['landmarksTauride']) && pt[0].box !== BOX, `${name}: a fresh array and a fresh box on every call (the remake appends to it)`);
   }
   ok(same(BOX, [741, 1058.51, -1205, -873]), `PARADNY_BOX is [741, 1058.51, -1205, -873]: ${JSON.stringify(BOX)}`);

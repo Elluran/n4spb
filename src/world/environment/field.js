@@ -304,6 +304,7 @@ export function buildField(ctx, owned, baked = null) {
   for (const g of GREEN) if (L.isClaimed(g.id)) for (const p of g.polys) fillPoly(dg, claim, p, 1);                 // the landmark owners' lawn beds: they plant them
   for (const b of BUILDINGS) if (isOwned(owned, b.id)) for (const p of b.polys) for (const h of p.h) fillPoly(dg, claim, { o: h, h: [] }, 1);   // courtyards of owned buildings (Great Courtyard of the Winter Palace): the owner lays the floor
   for (const w of waterPolys()) fillPoly(dg, wat, { o: w.o, h: w.h }, 1);
+  for (const w of (HOOKS.waterBodies ? HOOKS.waterBodies() : [])) fillPoly(dg, wat, { o: w.o, h: w.h }, 1);                // HOOKS.waterBodies (docs/AREAS.md 9.1): the ponds of a landmark module (the Tauride Garden): in the water mask, so env.waterAt / shoreDist / the distance atlas of the water shader know them
   for (const ring of extraClaimRings(ctx)) fillPoly(dg, claim, { o: ring, h: [] }, 1);                                 // the Kapodistrias promenade of landmarksOktyabrsky (the module paves it)
   for (const sq of slopeQuads()) fillPoly(dg, claim, { o: sq.q.flat(), h: [] }, 1);                                  // grass slopes of the Swan Canal / Moika (quay.js draws them): no trunks, hedges, beds or tufts
   for (const g of GREEN) if (g.kind === 'pitch' || g.kind === 'playground' || g.kind === 'garden' || g.kind === 'flowerbed' || g.kind === 'fitness_station') for (const p of g.polys) fillPoly(dg, hard, p, 1);

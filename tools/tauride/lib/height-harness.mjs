@@ -125,12 +125,12 @@ export function slopeReport(S, heightAt, BANK = 3) {
   const stat = (a) => { const s2 = a.slice().sort((x, y) => x - y); return { n: s2.length, max: s2.length ? +s2[s2.length - 1].toFixed(4) : 0, p95: s2.length ? +s2[Math.floor(s2.length * 0.95)].toFixed(4) : 0 }; };
   return { land: stat(grid), bank: stat(bank), ways: stat(ways), waysBank: stat(waysBank) };
 }
-/** flight landing over the water: the share of water cells where the real predicate (groundHeight < -1) refuses ('water') */
-export function landingReport(world, S) {
-  let n = 0, refused = 0, bad = 0;
+/** flight landing over the water: the share of water cells where the real predicate (groundHeight < -1, or the page's HOOKS.noLanding when given) refuses ('water'); `byEngine` = refused by the engine's own test alone */
+export function landingReport(world, S, noLanding = null) {
+  let n = 0, refused = 0, bad = 0, byEngine = 0;
   for (const p of S.U) { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < p.o.length; i += 2) { x0 = Math.min(x0, p.o[i]); x1 = Math.max(x1, p.o[i]); z0 = Math.min(z0, p.o[i + 1]); z1 = Math.max(z1, p.o[i + 1]); }
-    for (let x = x0; x <= x1; x += 4) for (let z = z0; z <= z1; z += 4) { if (S.waterDist(x, z) > -1.5) continue; if (!world.model.inWater(x, z)) continue; n++; const g = world.ph.groundHeight(x, z, 60); if (g < -1) refused++; else if (world.model.waterLevel - g > world.model.wadeDepth) bad++; } }
-  return { cells: n, refused, landableDeep: bad };
+    for (let x = x0; x <= x1; x += 4) for (let z = z0; z <= z1; z += 4) { if (S.waterDist(x, z) > -1.5) continue; if (!world.model.inWater(x, z)) continue; n++; const g = world.ph.groundHeight(x, z, 60); if (g < -1) { refused++; byEngine++; } else if (noLanding && noLanding(x, z)) refused++; else if (world.model.waterLevel - g > world.model.wadeDepth) bad++; } }
+  return { cells: n, refused, byEngine, landableDeep: bad };
 }
 /** The car keep-out: sample the garden outline every metre; a breach = a straight line from 3 m outside to 3 m inside that no car-blocked point interrupts. Returns { samples, breachM, stretches } */
 export function carBreach(S, carBlocked) {
@@ -146,4 +146,80 @@ export function carBreach(S, carBlocked) {
     }
   }
   return { samples, breachM: Math.round(breachM), perimeterM: Math.round(samples), stretches: stretches.map((s) => ({ ...s, lenM: Math.round(s.lenM) })) };
+}
+
+// ---------------------------------------------------------------- T4a: the ring of shore probes (the acceptance of "ponds are impassable")
+/**
+ * A DENSE RING of wading probes on the REAL shore. `segs` = the shore segments of height.js shoreSegments() (start a, edge e, unit normal n to the LAND), `shore` = the signed-distance structure (+ land).
+ * Every `spacing` m along every segment a walker starts `inland` m from the shore and pushes TOWARDS the water for `ticks` 60 Hz steps, at each angle (degrees away from the perpendicular) and in each mode:
+ *   walk | sprint (ShiftLeft) | jump (a hop every time the feet are on the ground: vy 4.2 = the engine's jump, apex 0.73 m).
+ * A start that is not a clean standing place (closer than 2.5 m to a shore, in a building, inside a collider) is skipped (counted). A run `entered` the water when the feet got more than 2 cm past the outline
+ * (shore distance < -0.02) or below the waterline; `minD` = the closest the feet came to the outline (negative = past it). Entered runs then walk back for 10 s: `exited` = back on land.
+ * Returns { runs, skipped, entered, trapped, minD, p01, byMode: { mode: { runs, entered, minD } }, worst: [{ x, z, angle, mode, minD }] }
+ */
+export function wadeRing(world, shore, segs, { spacing = 3, inland = 4, angles = [0, 30, -30, 60, -60, 80, -80], modes = ['walk', 'sprint', 'jump'], ticks = 360, waterY = -0.45, limit = Infinity, offset = 0.5 } = {}) {
+  const { ph } = world, res = { runs: 0, skipped: 0, entered: 0, trapped: 0, minD: Infinity, byMode: {}, worst: [], samples: [] };
+  for (const m of modes) res.byMode[m] = { runs: 0, entered: 0, minD: Infinity };
+  let started = 0;
+  for (let i = 0; i < segs.n; i++) {
+    const len = Math.hypot(segs.ex[i], segs.ez[i]), k = Math.max(1, Math.floor(len / spacing));
+    for (let q = 0; q < k; q++) {
+      if (started++ >= limit) return finish(res);
+      const t = (q + offset) / k, px = segs.ax[i] + segs.ex[i] * t, pz = segs.az[i] + segs.ez[i] * t, nx = segs.nx[i], nz = segs.nz[i];
+      const sx = px + nx * inland, sz = pz + nz * inland;
+      if (shore.dist(sx, sz) < 2.5 || world.L.insideBuilding(sx, sz, 1.5)) { res.skipped++; continue; }
+      const h0 = world.heightAt(sx, sz);
+      if (ph.columnBlocked(sx, sz, 0.3, h0 + 0.45, h0 + 1.7)) { res.skipped++; continue; }
+      for (const a of angles) {
+        const c = Math.cos(a * Math.PI / 180), s = Math.sin(a * Math.PI / 180), dx = -(nx * c - nz * s), dz = -(nx * s + nz * c);       // -n turned by a
+        for (const mode of modes) {
+          const p = world.player();
+          p.setPose(sx, sz, 0, 0, null, { stand: true });
+          let minD = Infinity, entered = false, still = 0, bx = p.pos.x, bz = p.pos.z;
+          for (let tk = 0; tk < ticks; tk++) {
+            p.yaw = Math.atan2(-dx, -dz); p.keys.add('KeyW'); if (mode === 'sprint') p.keys.add('ShiftLeft');
+            if (mode === 'jump' && p.onGround) p.vy = 4.2;
+            p.update(1 / 60);
+            const d = shore.dist(p.pos.x, p.pos.z); if (d < minD) minD = d;
+            if (d < -0.02 || (d < 0 && p.pos.y < waterY - 0.02)) entered = true;
+            if (tk % 30 === 29) { if (Math.hypot(p.pos.x - bx, p.pos.z - bz) < 0.01 && tk > 120) { still++; if (still >= 2) break; } else still = 0; bx = p.pos.x; bz = p.pos.z; }
+          }
+          p.keys.delete('KeyW'); p.keys.delete('ShiftLeft');
+          res.runs++; const bm = res.byMode[mode]; bm.runs++; if (minD < bm.minD) bm.minD = minD; if (minD < res.minD) res.minD = minD;
+          res.samples.push(minD);
+          if (entered) {
+            res.entered++; bm.entered++;
+            for (let tk = 0; tk < 600; tk++) { p.yaw = Math.atan2(dx, dz); p.keys.add('KeyW'); p.update(1 / 60); } p.keys.delete('KeyW');
+            if (!(shore.dist(p.pos.x, p.pos.z) > 0)) res.trapped++;
+            if (res.worst.length < 8) res.worst.push({ x: +px.toFixed(1), z: +pz.toFixed(1), angle: a, mode, minD: +minD.toFixed(2) });
+          }
+        }
+      }
+    }
+  }
+  return finish(res);
+  function finish(r) { const s = r.samples.slice().sort((u, v) => u - v); r.p01 = s.length ? s[Math.floor(s.length * 0.01)] : 0; r.p50 = s.length ? s[Math.floor(s.length / 2)] : 0; delete r.samples; return r; }
+}
+
+/**
+ * FLIGHT LANDING on the real Player (T4a fix round 1): for each point { x, z } over the water the player hovers at 12 m, presses F (toggleFly(false)) and the landing is refused ('water') or happens; a landed player then walks toward the nearest point of
+ * the shore for 25 s and 3 m beyond it (the climb out): `escaped` = standing on the land side of the shore colliders (shore distance >= 1.0 m: a walker coming from land is stopped 1.2 m from the waterline, the box stands 0.45 .. 0.85 m inland of it) at the end. `noLanding` is what the page's main.js hands to the Player (HOOKS.noLanding), null = the engine's own refusal only (ground < -1).
+ * Returns { n, refused, landed, escaped, trapped, rows: [{ x, z, ground, result, escaped, end }] } (a landing that cannot walk out is a TRAP: the shore colliders stand between the flyer and the land).
+ */
+export function flightLanding(world, shore, segs, pts, { noLanding = null, ticks = 1500 } = {}) {
+  const res = { n: 0, refused: 0, landed: 0, escaped: 0, trapped: 0, rows: [] };
+  const nearest = (x, z) => { let bd = Infinity, bx = 0, bz = 0; for (let i = 0; i < segs.n; i++) { const wx = x - segs.ax[i], wz = z - segs.az[i]; let t = (wx * segs.ex[i] + wz * segs.ez[i]) * segs.inv2[i]; t = t < 0 ? 0 : t > 1 ? 1 : t; const px = segs.ax[i] + t * segs.ex[i], pz = segs.az[i] + t * segs.ez[i], d = Math.hypot(x - px, z - pz); if (d < bd) { bd = d; bx = px; bz = pz; } } return { d: bd, x: bx, z: bz }; };
+  for (const q of pts) {
+    const p = world.player(); p.noLanding = noLanding; p.setPose(q.x, q.z, 0, 0, 12); res.n++;
+    const r = p.toggleFly(false), row = { x: q.x, z: q.z, ground: +world.ph.groundHeight(q.x, q.z, 60).toFixed(2), result: r, escaped: null, end: null };
+    if (r === 'water' || r === 'blocked') { res.refused++; res.rows.push(row); continue; }
+    for (let t = 0; t < 900 && !(p.onGround && !p.descent); t++) p.update(1 / 60);
+    res.landed++;
+    const nr = nearest(p.pos.x, p.pos.z), dx = nr.x - p.pos.x, dz = nr.z - p.pos.z, l = Math.hypot(dx, dz) || 1, tx = nr.x + dx / l * 3, tz = nr.z + dz / l * 3;
+    walkToward(p, tx, tz, ticks);
+    const end = shore.dist(p.pos.x, p.pos.z); row.escaped = end >= 1.0; row.end = [+p.pos.x.toFixed(2), +p.pos.z.toFixed(2), +p.pos.y.toFixed(2), +end.toFixed(2)];
+    if (row.escaped) res.escaped++; else res.trapped++;
+    res.rows.push(row);
+  }
+  return res;
 }

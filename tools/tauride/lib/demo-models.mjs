@@ -4,7 +4,9 @@
 //   wadeDepth     the deepest water a walker may stand in (m); the design rule is "no wading": colliders keep the walker out of anything deeper
 //   addColliders  adds the collider set of the model to a core/physics.js Physics (shore blocks, bridge decks, ...)
 //   carBlocked    the predicate the drive code would use for the keep-out (default: the engine's today: heightAt < -1 or inside a building)
-// 'north' is the generic North of today (no ponds, no hills: the height is the engine's flat ground). 'demo-trap', 'demo-contour' and 'demo-wade' are SYNTHETIC models on the real water outline of the
+// 'north' is the generic North of today (no ponds, no hills: the height is the engine's flat ground). T4a fix round 1: the SYNTHETIC models stand on their OWN flat ground (`base`, the old line of layout.heightAt: 0 under the garden),
+// not on the page's layout.heightAt, which now carries the REAL bowls and banks of the garden (HEIGHT_PATCHES): a model that is labelled 'flat ground, no ponds' must not inherit them, or the self-check of the harness (a trap must fail) turns green into red. The real
+// terrain is reached with --model north --build landmarksTauride (tauride-height-test.mjs puts the engine's heightAt on the model there). 'demo-trap', 'demo-contour' and 'demo-wade' are SYNTHETIC models on the real water outline of the
 // garden: they exist to prove that the harness tells a trap from a fix (the design numbers of the plan: water -0.45, bed -1.2, bank 1:3; the old module: bed -1.4 with a 0.22 m shore box).
 // A garden team model is an ES module `export const model = { ... }` (or `export default`) given with --model <file>.
 import { inPolys, ringDist, bbox } from './common.mjs';
@@ -36,7 +38,7 @@ export function builtinModels(S, L) {
   const U = S.U, Br = S.Br;
   const wet = (x, z) => inPolys(x, z, U) && !nearDeck(Br, x, z, DECK.w / 2 + 0.2);
   const water = { waterLevel: -0.45, wadeDepth: 0.3, inWater: wet };
-  const bed = -1.2;
+  const bed = -1.2, base = () => 0;                 // the ground of the generic North under the garden: the old line of layout.heightAt (no waterway there), no patch
   /** signed distance to the shore: > 0 land, < 0 water (the union outline) */
   const sd = (x, z) => S.waterDist(x, z);
   const bank = (x, z) => {                         // the design profile: bank top +0.1 -> 1:3 -> waterline -0.45 at the outline -> 1:3 -> bed -1.2
@@ -45,10 +47,10 @@ export function builtinModels(S, L) {
     return Math.max(bed, -0.45 + d / 3);
   };
   return {
-    north: { name: 'north (the generic North of today: flat ground, no ponds, no hills)', heightAt: (x, z) => L.heightAt(x, z), waterLevel: 0, wadeDepth: 0.3, inWater: wet, addColliders() {} },
+    north: { name: 'north (the generic North of today: flat ground, no ponds, no hills)', heightAt: base, waterLevel: 0, wadeDepth: 0.3, inWater: wet, addColliders() {} },
     'demo-trap': {
       name: 'demo-trap (synthetic copy of the old module: bed -1.4 inside the water outline, shore blocks y -1.5 .. 0.22, decks)', ...water, waterLevel: -0.55,
-      heightAt: (x, z) => (wet(x, z) ? -1.4 : L.heightAt(x, z)),
+      heightAt: (x, z) => (wet(x, z) ? -1.4 : base(x, z)),
       addColliders(ph) {
         for (const s of shoreSegments(U, (x, z) => inPolys(x, z, U))) { const n = Math.max(1, Math.ceil(s.len / 4)); for (let k = 0; k < n; k++) { const f = (k + 0.5) / n - 0.5; const x = s.x + Math.sin(s.rot) * s.len * f, z = s.z + Math.cos(s.rot) * s.len * f; if (nearDeck(Br, x, z, DECK.w / 2 + 1.2)) continue; ph.addBox(x, z, 0.64, s.len / n + 0.02, s.rot, -1.5, 0.22); } }
         bridgeBoxes(ph, Br);

@@ -18,7 +18,7 @@ import { createContext } from '/src/core/ctx.js';
 import * as L from '/src/world/layout.js';
 import { GREEN } from '/src/world/data/city.js';
 import { gardenHeight, RELIEF_BOX } from '/src/world/landmarksTauride/height.js';
-import { planTerrain, buildTerrain, gardenPieces, makeMeshHeight } from '/src/world/landmarksTauride/terrain-mesh.js';
+import { planTerrain, buildTerrain, gardenPieces, floorOptions, makeMeshHeight } from '/src/world/landmarksTauride/terrain-mesh.js';
 import { planGroundMask, gardenGroundMaterial, collectGroundInputs, makeNoiseTexture } from '/src/world/landmarksTauride/ground-material.js';
 import { planPaths, buildPaths } from '/src/world/landmarksTauride/paths-draped.js';
 import * as DG from '/src/world/landmarksTauride/data/footprints.js';
@@ -37,7 +37,7 @@ scene.background = new THREE.Color('#a9c4e0'); scene.fog = new THREE.FogExp2('#b
 const sun = new THREE.DirectionalLight('#fff2dc', 2.6); sun.position.copy(sunDir.clone().multiplyScalar(500)); scene.add(sun, new THREE.HemisphereLight('#cfe3ff', '#7a8a60', 1.1));
 const ctx = createContext({ scene, camera, renderer, audio: null, quality: { name: 'medium', pixelRatio: 1, msaa: 4, shadowMap: 2048, shadowSize: 70, petals: 0.6 }, sunDir });
 const T = {}; const t0 = performance.now(); const lap = (n) => { T[n] = +(performance.now() - t0).toFixed(0); };
-const tplan = planTerrain(gardenHeight, RELIEF_BOX, { cover: gardenPieces() }); lap('terrainPlan');
+const tplan = planTerrain(gardenHeight, RELIEF_BOX, floorOptions()); lap('terrainPlan');
 const mask = planGroundMask(collectGroundInputs({ GARDEN: DG.GARDEN, GARDEN_GREEN: DG.GARDEN_GREEN, FOOTPRINTS: DG.FOOTPRINTS, WATER_UNION: DW.WATER_UNION, PATHS: DP.PATHS, BENCHES: DF.BENCHES, GATES: DF.GATES, MONUMENTS: DF.MONUMENTS, FOUNTAINS: DF.FOUNTAINS }, GREEN, gardenHeight)); lap('mask');
 const noise = makeNoiseTexture(), ground = gardenGroundMaterial(ctx, mask, noise);
 const root = new THREE.Group(); scene.add(root);
