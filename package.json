@@ -32,6 +32,8 @@
     "areaboot:north": "node tools/area-boot-test.mjs --page north.html",
     "areahop": "node tools/areas-hop-test.mjs",
     "garage": "node tools/each-area.mjs tools/area-garage-check.mjs",
+    "crossplaces": "node tools/each-area.mjs tools/cross-places-test.mjs",
+    "northknock": "node tools/area.mjs north tools/north-knock-test.mjs",
     "claims-draw": "node tools/each-area.mjs tools/claims-draw-audit.mjs",
     "claims-draw:north": "node tools/area.mjs north tools/claims-draw-audit.mjs",
     "navequiv": "node tools/nav-bake-equiv.mjs",

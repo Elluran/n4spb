@@ -299,10 +299,11 @@ export const GARAGE = {
 };
 
 // ---------------------------------------------------------------- the rest
-/** environment.js: the services whose `entrances` clear the trees from the doors of the buildings they list: the generic `city` and the M5 landmark services that publish an `entrances` array
- *  (landmarksSmolny, landmarksSuvorov, landmarksKirochnaya; landmarksD publishes an array that is empty in the North, as in the strip's list). landmarksNorthFull and landmarksOktyabrsky publish none
- *  (the strip's table does not list them either). */
-export const PRUNE_SERVICES = ['city', 'landmarksSmolny', 'landmarksSuvorov', 'landmarksKirochnaya', 'landmarksD'];
+/** environment.js: the services whose `entrances` clear the trees from the doors of the buildings they list: the generic `city` and every landmark service of this page that publishes an `entrances`
+ *  array (landmarksSmolny, landmarksSuvorov, landmarksKirochnaya; landmarksD publishes an array that is empty in the North, as in the strip's list; since M7 (docs/AREAS.md section 10) landmarksNorthFull
+ *  publishes the door points of its 17 claimed buildings (landmarksNorthFull/doors.js: the vestibule's door of the G3 gate among them, which must stay clear) and landmarksOktyabrsky the hall's 9
+ *  (in the North only; in the strip its list is empty, so the strip's table need not list it). landmarksBelinskyNorth and landmarksTauride publish none. */
+export const PRUNE_SERVICES = ['city', 'landmarksNorthFull', 'landmarksSmolny', 'landmarksSuvorov', 'landmarksKirochnaya', 'landmarksD', 'landmarksOktyabrsky'];
 // The hook set (milestone M6, docs/AREAS.md section 9): hooks.js builds it from the module list above (a hook that serves a landmark module is dormant until the module is in MODULES).
 import { makeHooks, makeHeightPatches } from './hooks.js';
 /** the hooks of the engine modules (keep-outs of trees / tufts / props / ways / parking, the garden of the crowd cap, the deck services): src/areas/north/hooks.js documents the contract */
