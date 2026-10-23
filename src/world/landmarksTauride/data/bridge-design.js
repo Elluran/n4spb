@@ -24,8 +24,9 @@ export const TYPES = {
   'wood-humped': { headRise: 0.6, crown: 0.45, deckThick: 0.18, railH: 1.0, plank: 0.5, color: { deck: '#8a6446', deck2: '#7a583c', rail: '#6b4a30', beam: '#5e3f28', abutment: '#8b8a84' } },
   /** No.2 and No.5: a flat metal footbridge on granite abutments, short ramps at the ends, simple rails */
   'metal-flat': { headRise: 0.30, rampMin: 2.0, abutmentFace: 0.4, abutmentLen: 1.6, deckThick: 0.16, railH: 1.0, color: { deck: '#5a5e63', rail: '#3a3d40', abutment: '#8b8a84', post: '#d9d6cc' } },
-  /** the dam: a solid stone body across the channel with the walkway on its crest, iron rails, an overflow ledge on the lake face (visual, see DAM below) */
-  weir: { deckThick: 0.0, railH: 1.0, color: { body: '#7f7e78', deck: '#8b8a84', rail: '#3a3d40', abutment: '#8b8a84' } },
+  /** the dam: a solid granite body across the channel, standing proud of the water on both faces up to the walkway on its crest, a coping (the overflow sill) above the deck line on the lake face, iron rails (see DAM below).
+   *  Fix round 1: the body and the coping are a warm light granite, the walkway a dark paving: the stone mass reads against the deck and the rails (the GPU QA saw a flat grey slab like No.2 / No.5 and no stone at all) */
+  weir: { deckThick: 0.0, railH: 1.0, color: { body: '#a39b8e', coping: '#b7b0a3', deck: '#6b6a66', rail: '#3a3d40', abutment: '#a39b8e' } },
 };
 
 /** per-site overrides of the type values (the Big Bridge No.3: the chain of a 6.7 m compacted ramp, the 9.4 m iron span and a 5.7 m ramp stands higher over the water than the Small Bridge: five arches, span 13.15 m) */
@@ -41,8 +42,12 @@ export const RAIL = { postSpacing: 1.5, postW: 0.08, railW: 0.07, midH: 0.55, co
 export const WALK = { rampLen: 1.0, rampThick: 0.6, widthInset: -0.15, pad: 0.45, sample: 0.25 };
 
 /** the dam (data/bridges.js DAM: the authoritative position; the walkway way w112880645): `crest` is the walkway level = the street level at its east end (the garden outline passes 0.3 m east of the way end: the dam's east abutment is the street kerb; data/ponds.js QUAY.top is the same 0).
- *  ONE water level (data/ponds.js WATER_Y: the T4a decision, the union is one polygon): the overflow is a VISUAL: a granite ledge `sillRise` m above the water on the lake (north) face of the body, `sillW` m wide, with a decal sheet of falling water from the ledge to the water and a foam strip `foamW` m wide on the water at its foot. */
-export const DAM = { crest: 0.0, bodyBelowBed: 0.3, sillRise: 0.12, sillW: 0.8, foamW: 0.9, sheet: { color: '#e4eef0', opacity: 0.55 }, foam: { color: '#f2f6f6', opacity: 0.45 } };
+ *  ONE water level (data/ponds.js WATER_Y: the T4a decision, the union is one polygon): the overflow is a VISUAL. Fix round 1 (the GPU QA: "a flat dark-grey footbridge slab, no granite mass visible, the sheet a flat pale plank, the foam a pale rectangle"):
+ *  the stone BODY rises from `bodyBelowBed` m under the bed to the crest (the walkway slab sits IN it: 0.45 m of granite stands above the water on both faces) and runs `bodyOut` m beyond the deck on the channel (south) face;
+ *  on the lake (north) face a granite COPING `copingW` m wide stands `copingRise` m ABOVE the deck line (the sill: visible from the deck and from the lake); the falling water is a NAPPE hanging from the coping lip
+ *  down to the water in two rows bulging `sheet.bulge` m out from the face, one translucent pale tone (`sheet.color`: the granite shows through) with a brighter thread `sheet.streakW` m wide per metre (`sheet.streak`);
+ *  the foam on the water at its foot is `foamW` m wide with a WAVY far edge (`foam.jitter`: the share by which the width varies between the metre marks). The decal material carries one opacity (`opacity`). */
+export const DAM = { crest: 0.0, bodyBelowBed: 0.3, bodyOut: 0.25, copingRise: 0.15, copingW: 0.8, foamW: 0.9, sheet: { bulge: 0.16, streakW: 0.12, color: '#d3e4e3', streak: '#f4f9fa', opacity: 0.65 }, foam: { color: '#e6efee', jitter: 0.45 } };
 
 /** the budgets of the kit (tools/tauride/bridge-test.mjs): triangles of the six sites together (plan C6: ~10 k), draws (the bridges, the dam water), colliders */
 export const BUDGET = { triangles: 10000, draws: 2, colliders: 320 };

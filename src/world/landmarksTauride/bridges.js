@@ -249,20 +249,33 @@ function buildSiteSolids(K, KW, rec, D, P, G, shore) {
     rails(0, L, cols.rail, false);
     abutment(uFaceA - DS.abutmentLen, uFaceA + 0.2, DS.deckThick, cols.abutment); abutment(uFaceB - 0.2, uFaceB + DS.abutmentLen, DS.deckThick, cols.abutment);
     posts(uFaceA, cols.post, 0.3, 0.9); posts(uFaceB, cols.post, 0.3, 0.9);
-  } else {                                                                       // the weir
+  } else {                                                                       // the weir (fix round 1: a granite mass proud of the water on both faces, the coping above the deck line, a nappe in streaks, broken foam)
     const DM = D.DAM, t = 0.25;
-    slab(0, L, 1, hw, t, cols.deck);
+    slab(0, L, 1, hw, t, cols.deck);                                              // the walkway: its sides are inside the stone body (hidden), its top wins over the body top by 1 cm
     rails(0, L, cols.rail, false);
-    // the stone body across the channel under the walkway: from below the bed to the slab underside (one block per polyline segment of the crossing)
-    const u0 = Math.max(0, uFaceA - 0.3), u1 = Math.min(L, uFaceB + 0.3), um = (u0 + u1) / 2, q = at(um);
+    const u0 = Math.max(0, uFaceA - 0.3), u1 = Math.min(L, uFaceB + 0.3), um = (u0 + u1) / 2, q = at(um), p = perp(um), hl = (u1 - u0) / 2;
     let bed = Infinity; for (let u = u0; u <= u1; u += 0.25) { const w = at(u); bed = Math.min(bed, G(w.x, w.z)); }
-    K.obb(q.x, q.z, q.dx, q.dz, (u1 - u0) / 2, hw, bed - DM.bodyBelowBed, h(um) - t + 0.01, cols.body);
-    // the overflow ledge on the LAKE face (the side toward the north, -z) with the water sheet and the foam strip (the water level is one: a visual)
-    const p = perp(um), lakeSide = (q.z + p[1] * 3) < (q.z - p[1] * 3) ? 1 : -1, vIn = hw, vOut = hw + DM.sillW, top = P.WATER_Y + DM.sillRise;
-    K.obb(q.x + p[0] * lakeSide * (vIn + vOut) / 2, q.z + p[1] * lakeSide * (vIn + vOut) / 2, q.dx, q.dz, (u1 - u0) / 2, DM.sillW / 2, bed - DM.bodyBelowBed, top, cols.body);
-    const uS0 = u0 + 0.4, uS1 = u1 - 0.4, cS = col3(DM.sheet.color), cF = col3(DM.foam.color), vF = vOut + 0.01;
-    KW.quad(P3(uS0, lakeSide * vF, top + 0.005), P3(uS1, lakeSide * vF, top + 0.005), P3(uS1, lakeSide * vF, P.WATER_Y - 0.03), P3(uS0, lakeSide * vF, P.WATER_Y - 0.03), cS, p[0] * lakeSide, 0, p[1] * lakeSide);
-    KW.quad(P3(uS0, lakeSide * vF, P.WATER_Y + 0.015), P3(uS1, lakeSide * vF, P.WATER_Y + 0.015), P3(uS1, lakeSide * (vF + DM.foamW), P.WATER_Y + 0.015), P3(uS0, lakeSide * (vF + DM.foamW), P.WATER_Y + 0.015), cF, 0, 1, 0);
+    const lakeSide = (q.z + p[1] * 3) < (q.z - p[1] * 3) ? 1 : -1, base = bed - DM.bodyBelowBed, crest = h(um);
+    // the stone body across the channel: from under the bed up to the crest, the deck width + bodyOut on the channel (south) face: the granite stands crest - WATER_Y above the water, not the slab edge
+    K.obb(q.x - p[0] * lakeSide * DM.bodyOut / 2, q.z - p[1] * lakeSide * DM.bodyOut / 2, q.dx, q.dz, hl, hw + DM.bodyOut / 2, base, crest - 0.01, cols.body);
+    // the coping on the LAKE face (the side toward the north, -z): from under the bed to copingRise ABOVE the crest, copingW beyond the deck edge (overlapping the slab side by 2 cm): the overflow sill, seen from the deck and from the lake
+    const vIn = hw - 0.02, vOut = hw + DM.copingW, lipY = crest + DM.copingRise;
+    K.obb(q.x + p[0] * lakeSide * (vIn + vOut) / 2, q.z + p[1] * lakeSide * (vIn + vOut) / 2, q.dx, q.dz, hl, (vOut - vIn) / 2, base, lipY, cols.coping);
+    // the nappe (the water level is one: a visual): ONE translucent pale tone from the lip down to the water in two rows, bulging `bulge` m out from the face (falling water, not a plank seen edge-on; the granite shows through),
+    // with a narrow brighter thread per metre at a hashed place (the streaks of a sheet: two tones in regular stripes read as a striped curtain on software GL); the foam strip on the water at its foot, its far edge a wavy
+    // polyline (the width at every column boundary from a hash: steps read as a sawtooth)
+    const uS0 = u0 + 0.4, uS1 = u1 - 0.4, nCol = Math.max(2, Math.round(uS1 - uS0)), cS = col3(DM.sheet.color), cK = col3(DM.sheet.streak), cF = col3(DM.foam.color), hash = (k) => ((k * 7919 + 13) % 17) / 16;
+    const vF = vOut + 0.01, yTop = lipY - 0.02, yMid = (lipY + P.WATER_Y) / 2, yBot = P.WATER_Y - 0.03, vMid = vF + DM.sheet.bulge * 0.6, vBot = vF + DM.sheet.bulge, yF = P.WATER_Y + 0.015, nx = p[0] * lakeSide, nz = p[1] * lakeSide;
+    const fw = (k) => DM.foamW * (1 - DM.foam.jitter * hash(k)), o = 0.015;
+    for (let k = 0; k < nCol; k++) {
+      const a = uS0 + (uS1 - uS0) * k / nCol, b = uS0 + (uS1 - uS0) * (k + 1) / nCol;
+      KW.quad(P3(a, lakeSide * vF, yTop), P3(b, lakeSide * vF, yTop), P3(b, lakeSide * vMid, yMid), P3(a, lakeSide * vMid, yMid), cS, nx, 0, nz);
+      KW.quad(P3(a, lakeSide * vMid, yMid), P3(b, lakeSide * vMid, yMid), P3(b, lakeSide * vBot, yBot), P3(a, lakeSide * vBot, yBot), cS, nx, 0, nz);
+      const s0 = a + (b - a - DM.sheet.streakW) * hash(k + 5), s1 = s0 + DM.sheet.streakW;
+      KW.quad(P3(s0, lakeSide * (vF + o), yTop), P3(s1, lakeSide * (vF + o), yTop), P3(s1, lakeSide * (vMid + o), yMid), P3(s0, lakeSide * (vMid + o), yMid), cK, nx, 0, nz);
+      KW.quad(P3(s0, lakeSide * (vMid + o), yMid), P3(s1, lakeSide * (vMid + o), yMid), P3(s1, lakeSide * (vBot + o), yBot), P3(s0, lakeSide * (vBot + o), yBot), cK, nx, 0, nz);
+      KW.quad(P3(a, lakeSide * vF, yF), P3(b, lakeSide * vF, yF), P3(b, lakeSide * (vF + fw(k + 1)), yF), P3(a, lakeSide * (vF + fw(k)), yF), cF, 0, 1, 0);
+    }
     abutment(0, Math.max(0.6, u0), t, cols.abutment); abutment(Math.min(L - 0.6, u1), L, t, cols.abutment);
   }
 }

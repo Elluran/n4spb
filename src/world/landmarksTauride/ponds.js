@@ -221,15 +221,18 @@ export function pondMaterial(ctx, field, P = PONDS, zones = []) {
   m.uniforms.uSmall = { value: new THREE.Vector4(S.mouthZ, S.eastX, S.blendZ, S.blendX) };
   m.uniforms.uDuck = { value: new THREE.Vector2(P.DUCKWEED.band, P.DUCKWEED.cover) };
   m.uniforms.uPondA = { value: new THREE.Vector4(T.shallowBand, T.shallowMix, T.lines, T.glint) };
-  m.uniforms.uPondB = { value: new THREE.Vector2(T.soffit, T.soffitFade) };
+  m.uniforms.uPondB = { value: new THREE.Vector4(T.soffit, T.soffitFade, T.sunSheet, 0) };
+  m.uniforms.uPondC = { value: new THREE.Vector2(T.air[0], T.air[1]) };
   // the deck zones of a footbridge are the deck itself (waterMaterial pads a zone by 1 m across and 6 m along, the size of a street bridge): the deck's own half width + 0.3, the deck length minus the fade
   zones.slice(0, 24).forEach((z, i) => { m.uniforms.uBrS.value[i].set(z.w / 2 + 0.3, Math.max(0.5, z.len / 2 - T.soffitFade / 2)); });
   const fs = m.fragmentShader;
   const patch = (src, from, to) => { if (!src.includes(from)) throw new Error('ponds.js pondMaterial: the fragment shader of environment/water.js changed (cannot find: ' + from.slice(0, 40) + ')'); return src.replace(from, to); };
-  let withUniforms = fs.replace('varying vec3 vW;', 'varying vec3 vW; uniform vec4 uSmall; uniform vec2 uDuck; uniform vec4 uPondA; uniform vec2 uPondB;');
+  let withUniforms = fs.replace('varying vec3 vW;', 'varying vec3 vW; uniform vec4 uSmall; uniform vec2 uDuck; uniform vec4 uPondA; uniform vec4 uPondB; uniform vec2 uPondC;');
   withUniforms = patch(withUniforms, 'col = mix(col, uShallow, (1.0 - smoothstep(0.5, 5.0, dsh)) * 0.45 * inside);', 'col = mix(col, uShallow, (1.0 - smoothstep(0.4, uPondA.x, dsh)) * uPondA.y * inside);');
   withUniforms = patch(withUniforms, 'clamp(lineA * 0.32 + lineB * 0.32, 0.0, 1.0) * (0.2 + 0.4 * fres) * (1.0 - 0.5 * shade));', 'clamp(lineA * 0.32 + lineB * 0.32, 0.0, 1.0) * (0.2 + 0.4 * fres) * (1.0 - 0.5 * shade) * uPondA.z);');
-  withUniforms = patch(withUniforms, 'col += vec3(1.0, 0.93, 0.8) * glint * 1.1 * (1.0 - 0.7 * uNight);', 'col += vec3(1.0, 0.93, 0.8) * glint * 1.1 * (1.0 - 0.7 * uNight) * uPondA.w;');
+  // fix round 1: the two sun terms (the glitter sheet: a warm white added over all the sun-facing water; the glints: the speckles) fade out with the view elevation (POND_LOOK.air): the east aerials saw a pale speckled band
+  withUniforms = patch(withUniforms, 'col += vec3(1.0, 0.88, 0.7) * sheet * 0.26 * (1.0 - uNight) * (1.0 - shade);', 'float pondAir = 1.0 - smoothstep(uPondC.x, uPondC.y, V.y);\n        col += vec3(1.0, 0.88, 0.7) * sheet * 0.26 * (1.0 - uNight) * (1.0 - shade) * uPondB.z * pondAir;');
+  withUniforms = patch(withUniforms, 'col += vec3(1.0, 0.93, 0.8) * glint * 1.1 * (1.0 - 0.7 * uNight);', 'col += vec3(1.0, 0.93, 0.8) * glint * 1.1 * (1.0 - 0.7 * uNight) * uPondA.w * pondAir;');
   withUniforms = patch(withUniforms, 'under = max(under, 1.0 - smoothstep(0.0, 5.0, max(max(da, dp), 0.0)));', 'under = max(under, 1.0 - smoothstep(0.0, uPondB.y, max(max(da, dp), 0.0)));');
   withUniforms = patch(withUniforms, 'col = mix(col, col * vec3(0.16, 0.2, 0.26), under);', 'col = mix(col, col * uPondB.x, under);');
   const mat = `
