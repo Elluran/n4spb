@@ -141,6 +141,11 @@ async function fast() {
     }
     assert.match(fs.readFileSync(path.join(root, 'src/world/people/nav.js'), 'utf8'), /import \{ HOOKS(?:, HEIGHT_PATCHES)? \} from '\.\.\/lib\/area-tables\.js'/);       // T2 added HEIGHT_PATCHES to nav.js (surfaceY on the relief)
   });
+  // T5 (the T4b leftover: the garden branch of nav.surfaceY was unpinned): the text of the branch is pinned here (a copy of nav.js without the term fails this), and --scene asserts its behaviour on the real nav (below)
+  await check('nav.surfaceY has the garden branch of T4a: a point of the terrain BELOW the street (a pond bank, th < -0.06) inside the garden (HOOKS.inGarden) answers th + 0.02', () => {
+    const src = fs.readFileSync(path.join(root, 'src/world/people/nav.js'), 'utf8');
+    assert.match(src, /if \(HEIGHT_PATCHES\.length\) \{ const th = L\.heightAt\(x, z\); if \(th > 0\.06 \|\| \(th < -0\.06 && HOOKS\.inGarden && HOOKS\.inGarden\(x, z\)\)\) return th \+ 0\.02; \}/);
+  });
 }
 
 // ------------------------------------------------------------------ the scene part (a child: people-test.mjs builds the North and hands the context to the default export below)
@@ -195,6 +200,17 @@ export default async function scene(ctx, L, THREE) {
       return `${n} points, ${inside} inside`;
     });
     run('nav.stationFactor is untouched by the garden (the North has no station zone: 1)', () => { assert.equal(B.sim.nav.stationFactor(1226, -1400), 1); assert.equal(B.sim.nav.stationCfg.factor, 1); });
+    // T5 (the T4b leftover): the garden branch of nav.surfaceY on the REAL nav: on the pond banks (the terrain of the North's HEIGHT_PATCHES is 6 .. 45 cm below the street inside the garden) a walker stands on the terrain + 0.02,
+    // not on the street level; the branch is the ONLY way a point below -0.06 gets there (the physics lookup never lowers y), so a nav without it answers the street level: the behavioural pin of the text pin above
+    run('nav.surfaceY on the pond banks of the garden (the terrain below the street, HOOKS.inGarden): the terrain + 0.02 on 100 bank points, the street level stays outside the garden', async () => {
+      const GH = await import(url('src/world/landmarksTauride/height.js')), nav = B.sim.nav, pts = [];
+      for (let x = 1050; x <= 1470 && pts.length < 100; x += 3) for (let z = -1720; z <= -1280 && pts.length < 100; z += 3) { const h = GH.gardenHeight(x, z); if (h !== null && h < -0.08 && h > -0.44 && inGarden(x, z) && GH.GARDEN_SHORE.dist(x, z) > 0) pts.push([x, z, h]); }
+      assert.ok(pts.length === 100, 'bank points: ' + pts.length);
+      let bad = 0; for (const [x, z, h] of pts) if (Math.abs(nav.surfaceY(x, z, 0) - (h + 0.02)) > 1e-9) bad++;
+      assert.equal(bad, 0, bad + ' of 100 bank points not at the terrain + 0.02');
+      assert.ok(Math.abs(nav.surfaceY(1226, -1240, 0) - nav.surfaceY(1226, -1240, 0)) < 1e-9 && nav.surfaceY(1000, -1700, 0) >= 0, 'outside the garden the street level');
+      return `${pts.length} bank points, terrain -0.08 .. -0.44 m`;
+    });
 
     // ---- nav.surfaceY and the deck services of the area
     run('nav.surfaceY asks HOOKS.deckServices first (+0.12), skips an absent service / one without deckY / null / NaN', () => {

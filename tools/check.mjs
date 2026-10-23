@@ -86,7 +86,7 @@ const BUDGET = { environment: 500e3, streets: 500e3, city: 600e3, landmarksA: 40
   // the North's landmark modules (M5, measured 2026-10-21: NorthFull 583 k incl. Dom Muruzi 241 k, Smolny 433 k, Kirochnaya 121 k, Suvorov 47 k, Oktyabrsky 27.5 k)
   landmarksNorthFull: 600e3, landmarksSmolny: 450e3, landmarksKirochnaya: 130e3, landmarksSuvorov: 55e3, landmarksOktyabrsky: 30e3,
   // the Tauride Palace + the Paradny quarter (T1 of docs/TAURIDE-REMAKE.md, measured: 621,713 incl. the courts 29 k and the palace 23 k; the garden is not in it, it comes with the later phases and gets its own allowance)
-  landmarksTauride: 700e3 };
+  landmarksTauride: 760e3 };      // T5 (the Tauride remake): measured 690,375 after the trees (T4b 668,023 + the 1,033 trees at the HERO's LOD3 + their contact shadows), the tripwire = the measure + 10 %
 
 for (const name of names) {
   const before = snapshot();
