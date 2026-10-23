@@ -303,3 +303,18 @@ import { makeHooks, makeHeightPatches } from './hooks.js';
 export const HOOKS = makeHooks(MODULES);
 /** the height patches of layout.heightAt (the first patch that answers wins): the Paradny podium once 'landmarksTauride' is in MODULES (the Tauride remake), none before; the pond bed of the remake appends after it in hooks.js */
 export const HEIGHT_PATCHES = makeHeightPatches(MODULES);
+
+// ---------------------------------------------------------------- the places of the OTHER areas (milestone M7, docs/AREAS.md: core/gates.js, the HUD list "Места · Places")
+/**
+ * CROSS_PLACES: places of the strip the HUD list offers under "Невский проспект"; a pick asks the gate question (core/gates.js offerPlace, via 'place') and the hand-off through g2 lands at this
+ * pose instead of the gate's arrival rectangle (the shape: src/world/area.js CROSS_PLACES). The rows copy src/world/area.js makeViews (yaw to 2 decimals, what ?cam= carries; tools/cross-places-test.mjs
+ * pins them to the strip's VIEWS by `view` and proves every pose with the predicates of views-check on the strip).
+ */
+export const CROSS_PLACES = [
+  { key: 'vosstaniya', label: 'Площадь Восстания · Московский вокзал', area: 'strip', gate: 'g2', view: 'Digit1', x: 560, z: 192, yaw: -138.53, pitch: 8 },
+  { key: 'palace-square', label: 'Дворцовая площадь · Александровская колонна', area: 'strip', gate: 'g2', view: 'Digit0', x: -1985, z: -715, yaw: 31.52, pitch: 6 },
+  { key: 'winter-palace', label: 'Зимний дворец · Дворцовая набережная', area: 'strip', gate: 'g2', view: 'Digit8', x: -2143, z: -1008, yaw: -129.33, pitch: 10 },
+  { key: 'anichkov', label: 'Аничков мост', area: 'strip', gate: 'g2', view: 'Digit5', x: -395, z: -108, yaw: 102.04, pitch: 6 },
+  { key: 'kazan', label: 'Казанский собор', area: 'strip', gate: 'g2', view: 'Digit9', x: -1470, z: -312, yaw: 171.14, pitch: 8 },
+  { key: 'library', label: 'Российская национальная библиотека · Фонтанка', area: 'strip', gate: 'g2', view: 'Place.library', x: -372, z: -300, yaw: -73.86, pitch: 8 },
+];

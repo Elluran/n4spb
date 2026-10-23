@@ -548,3 +548,19 @@ export const PRUNE_SERVICES = ['city', 'landmarksA', 'landmarksB', 'landmarksC',
 export const HOOKS = {};
 /** the height patches of layout.heightAt (milestone M6, docs/AREAS.md section 9: `[{ id, box: [x0, x1, z0, z1], at(x, z) -> number | null }]`, the first non-null answer wins): none in the strip */
 export const HEIGHT_PATCHES = [];
+
+// ---------------------------------------------------------------- the places of the OTHER areas (milestone M7, docs/AREAS.md: core/gates.js, the HUD list "Места · Places")
+/**
+ * CROSS_PLACES: places of another area the HUD list offers under that area's name; a pick asks the gate question (core/gates.js offerPlace, via 'place') and the hand-off lands at this pose
+ * instead of the gate's arrival rectangle. `{ key, label (Russian), area (the registry id), gate (a gate FROM this area TO that area), view (the VIEWS key of that area whose pose this copies:
+ * tools/cross-places-test.mjs pins x, z, yaw, pitch to it and proves the pose with the predicates of views-check in that area), x, z, yaw (deg, 0 = north, 90 = west), pitch }`.
+ * The North's rows copy src/areas/north/area.js makeViews (yaw to 2 decimals: what ?cam= carries). An empty table adds nothing to the list. Not read by any world module (the engine tables of lib/area-tables.js do not know it).
+ */
+export const CROSS_PLACES = [
+  { key: 'smolny-cathedral', label: 'Смольный собор', area: 'north', gate: 'g1', view: 'Digit7', x: 2335, z: -1833, yaw: -90, pitch: 21 },
+  { key: 'smolny-institute', label: 'Смольный институт', area: 'north', gate: 'g1', view: 'Digit8', x: 2461, z: -1471, yaw: -37.98, pitch: 8 },
+  { key: 'tauride-gate', label: 'Таврический сад · южные ворота · Кирочная улица', area: 'north', gate: 'g1', view: 'Digit0', x: 1224, z: -1266, yaw: -173, pitch: 10 },
+  { key: 'chernyshevskaya', label: 'Метро «Чернышевская»', area: 'north', gate: 'g1', view: 'Digit1', x: 444, z: -1351, yaw: -90, pitch: 10 },
+  { key: 'preobrazhensky', label: 'Спасо-Преображенский собор', area: 'north', gate: 'g1', view: 'Digit2', x: 22, z: -1186, yaw: -95, pitch: 18 },
+  { key: 'suvorov', label: 'Музей Суворова · Суворовский проспект', area: 'north', gate: 'g1', view: 'Digit9', x: 1395, z: -1180, yaw: -34.7, pitch: 8 },
+];

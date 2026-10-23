@@ -97,10 +97,38 @@ for (const a of Object.values(REGISTRY)) {
     for (const k of ['makeAreas', 'makeViews']) assert.equal(typeof A[k], 'function', k);
   });
 }
+const isDoor = (g) => g.kind === 'door';
 check('gates connect known areas and are unique', () => {
   const ids = new Set(); for (const g of GATES) { assert(REGISTRY[g.from] && REGISTRY[g.to], `gate ${g.id}: unknown area`); assert(!ids.has(g.id), 'duplicate gate ' + g.id); ids.add(g.id); if (!g.dev) assert.notEqual(g.from, g.to, `gate ${g.id}: a real gate leads to ANOTHER area (only a dev gate loops back)`); }
-  for (const g of GATES) { const len = Math.hypot(g.inward[0], g.inward[1]); assert(Math.abs(len - 1) < 1e-9, `gate ${g.id}: inward is not a unit vector`); assert(g.zone >= 20 && g.zone <= 200, `gate ${g.id}: zone ${g.zone}`); assert(g.arrive.x1 > g.arrive.x0 && g.arrive.z1 > g.arrive.z0, `gate ${g.id}: arrive rect`); if (g.reverse) assert(GATES.some((r) => r.id === g.reverse && r.from === g.to && r.to === g.from), `gate ${g.id}: reverse ${g.reverse} does not lead back`); }
+  for (const g of GATES) {
+    assert(g.kind === undefined || g.kind === 'door', `gate ${g.id}: unknown kind ${g.kind}`);
+    if (isDoor(g)) continue;
+    const len = Math.hypot(g.inward[0], g.inward[1]); assert(Math.abs(len - 1) < 1e-9, `gate ${g.id}: inward is not a unit vector`); assert(g.zone >= 20 && g.zone <= 200, `gate ${g.id}: zone ${g.zone}`); assert(g.arrive.x1 > g.arrive.x0 && g.arrive.z1 > g.arrive.z0, `gate ${g.id}: arrive rect`); if (g.reverse) assert(GATES.some((r) => r.id === g.reverse && r.from === g.to && r.to === g.from), `gate ${g.id}: reverse ${g.reverse} does not lead back`);
+  }
 });
+// a door gate (M7: a ctx.interact item at a door, no border segment): the shape of the row, the door point inside the origin play union, the arrival pose a copy of the destination's VIEWS row
+const num = (v) => typeof v === 'number' && Number.isFinite(v);
+for (const g of GATES.filter(isDoor)) {
+  check(`door ${g.id} (${g.from} -> ${g.to}): the row has at / r / pose / view / prompt and no border fields; the door point lies in the origin play union; reverse is null`, () => {
+    assert(num(g.at?.x) && num(g.at?.z), 'at'); assert(num(g.r) && g.r >= 2 && g.r <= 10, 'r ' + g.r);
+    for (const k of ['x', 'z', 'yaw', 'pitch']) assert(num(g.pose?.[k]), 'pose.' + k);
+    for (const k of ['seg', 'inward', 'zone', 'arrive']) assert(g[k] === undefined, `a door has no ${k}`);
+    assert(typeof g.view === 'string' && g.view, 'view'); assert.equal(g.reverse, null, 'reverse');
+    for (const k of ['label', 'labelEn', 'title', 'sights', 'scene', 'fine']) assert(typeof g.prompt?.[k] === 'string' && g.prompt[k].length > 3, 'prompt.' + k);
+    assert(GG.inUnion(REGISTRY[g.from].play, g.at.x, g.at.z, 0), `the door point (${g.at.x}, ${g.at.z}) is outside the play union of ${g.from}`);
+    assert(GG.inUnion(REGISTRY[g.to].play, g.pose.x, g.pose.z, 25), `the arrival pose (${g.pose.x}, ${g.pose.z}) is not 25 m inside the play union of ${g.to}`);
+  });
+  let v = null, vErr = null;
+  try {      // (this process runs as the strip, so the strip's area module is its real file; another area's comes through the registry remap)
+    const A = g.to === 'strip' ? await import(pathToFileURL(path.join(root, 'src/world/area.js')).href) : (await (await import('./lib/area-hooks.mjs')).areaModules(root, REGISTRY[g.to])).A;
+    const { yawToward } = await import(layoutUrl);
+    v = A.makeViews({ yawToward }).VIEWS.find((q) => q.key === g.view) || null;
+  } catch (e) { vErr = e; }
+  check(`door ${g.id}: the arrival pose is the VIEWS row ${g.view} of ${g.to} (x, z, pitch exact, yaw within 0.01 degrees)`, () => {
+    if (vErr) throw vErr; assert(v, `no VIEWS row ${g.view} in ${g.to}`);
+    assert.equal(g.pose.x, v.x); assert.equal(g.pose.z, v.z); assert.equal(g.pose.pitch, v.pitch); assert(Math.abs(g.pose.yaw - v.yaw) < 0.01, `yaw ${g.pose.yaw} vs ${v.yaw}`);
+  });
+}
 
 // ---------------------------------------------------------------------------------------------- the generated area pages (tools/gen-area-html.mjs)
 console.log('area pages (generator fixtures, page.json data, pages on disk):');
@@ -321,8 +349,8 @@ console.log('band landmark parity fixtures (a landmark of the strip in the band 
 }
 
 // ---------------------------------------------------------------------------------------------- gate geometry of the real gates
-console.log('gates (non-dev; the dev gate g0 loops back to the same page and has no border):');
-const realGates = GATES.filter((g) => !g.dev && (!only || g.from === only || g.to === only));
+console.log('gates (non-dev; the dev gate g0 loops back to the same page and has no border; a door gate has no border geometry: its row is checked above):');
+const realGates = GATES.filter((g) => !g.dev && !isDoor(g) && (!only || g.from === only || g.to === only));
 if (!realGates.length) console.log('  (no real gate in the registry yet: the checks above ran on the fixtures)');
 const bandFile = path.join(root, 'tools/band-parity.mjs');
 for (const g of realGates) {
