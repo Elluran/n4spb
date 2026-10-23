@@ -58,8 +58,10 @@ export const ZONES = {
   meadow: { clear: 15, solitary: [{ x: 1162, z: -1386 }, { x: 1205, z: -1340 }, { x: 1288, z: -1462 }, { x: 1455, z: -1560 }, { x: 1462, z: -1470 }, { x: 1225, z: -1705 }] },
   /** the shore: alder, birch and shrubs on the CREST band of the banks (from the crest of the bank profile, data/ponds.js BANK_TOP, `d` m inland of it: never on the slope below the crest), walked along the shore rings every `spacing` m */
   shore: { d: [0.3, 2.6], spacing: [8.0, 12.0], mix: { alder: 0.4, birch: 0.25, birchB: 0.1, shrub: 0.25 } },
-  /** the 7 mapped OSM trees (data/furniture.js OSM_TREES): old oaks at their exact positions, planted here and NOT by the environment (HOOKS.treeReject answers 'garden' inside the outline) */
-  osm: { species: 'oldOak' },
+  /** the 7 mapped OSM trees (data/furniture.js OSM_TREES): old oaks at their mapped positions, planted here and NOT by the environment (HOOKS.treeReject answers 'garden' inside the outline). Every keep-out applies to them;
+   *  a node that a rule refuses (the perimeter alley w425201986 runs over three of them: a mapped node sits within the mapping error) is nudged to the NEAREST clear spot within `nudge` m (fix round 2: forced through
+   *  the rules, one oak stood on the asphalt of the alley) */
+  osm: { species: 'oldOak', nudge: 4 },
 };
 
 /** The keep-outs (metres; the trunk axis unless said otherwise). Asserted by tools/tauride/vegetation-test.mjs, each with a mutant (the margin set to 0 plants trees there). */

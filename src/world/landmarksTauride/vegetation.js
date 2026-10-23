@@ -2,7 +2,8 @@
 // meadows, the shore planting on the crest of the banks and the 7 mapped OSM trees, planted by the garden itself (the park and the woods are claimed, so the environment plants nothing inside the fence; HOOKS.treeReject
 // answers 'garden' for the mapped trees), drawn with the ENGINE's tree geometry, materials and conventions (environment/treegeo.js, leafmat.js, tree-instances.js: one InstancedMesh per family and level of detail, the sway
 // of the shared uniforms, trunk colliders), so that a garden tree looks like a city tree and costs the same per instance. The larch is a garden-local species row (data/vegetation.js SPECIES_EXTRA).
-//   planVegetation(o)               PURE and DETERMINISTIC (a keyed hash per zone, no Math.random, no ctx): { trees: [{ zone, species, fam, sp, x, z, y, s, sy, yaw, r, h, tr, hex, bright, shrub, old }], canopy: [{ x, z, r }], stats }
+//   planVegetation(o)               PURE and DETERMINISTIC (a keyed hash per zone, no Math.random, no ctx): { trees: [{ zone, species, fam, sp, x, z, y, s, sy, yaw, r, h, tr, hex, bright, shrub, old, node }], canopy: [{ x, z, r }], stats }
+//                                   node = { x, z, d, why } when the tree was nudged off its authored position (the mapped OSM trees: the nearest clear spot within ZONES.osm.nudge m of a node that a keep-out refuses), else null
 //                                   o = { data (data/vegetation.js), gh (gardenHeight), shore (GARDEN_SHORE), garden (the outline ring), paths (data/paths.js), woods / play ([{ o, h }] of the facade), footprints ([ring]), gates, openings, monuments, fountains,
 //                                         osmTrees, lane (SERVICE_LANE), memorial (the relief feature M), bridgeKeepOut (bridges.js plan.keepOut), bridgeHeads ([[x, z]]), reeds ([{ x, z }]), level ('high' | 'medium' | 'low'), species (the engine table) }
 //   buildVegetation(ctx, parent, plan, o)   the meshes (per family: 4 canopy LODs + 2 trunk LODs, instanced; the contact-shadow blobs on flat ground), the trunk colliders on the terrain, the LOD assignment on the camera (hysteresis as
@@ -24,6 +25,9 @@ import { FEATURES } from './data/relief.js';
 import { PATHS_DRAPED } from './paths-draped.js';
 import { shoreRings } from './reeds.js';
 import { gardenHeight, GARDEN_SHORE, PONDS } from './height.js';
+
+/** the nudge search of plant() (fix round 2): rings every NUDGE_STEP m out to opts.nudge, NUDGE_DIRS candidates per ring (15 deg apart); the first clear candidate is the nearest ring's */
+const NUDGE_STEP = 0.25, NUDGE_DIRS = 24;
 
 // ---------------------------------------------------------------- deterministic streams (the engine's mulberry32, seeded by a string: the plan is the same bits in node, in the browser and in the tests)
 function rngOf(seed) {
@@ -129,16 +133,15 @@ export function planVegetation(o = {}) {
   // the placed trees on an 8 m grid (the packing test)
   const list = [], solitaries = [], grid = new Map(), gk = (i, j) => i * 100003 + j, cellOf = (v) => Math.floor(v / 8);
   const near = (x, z) => { const out = []; const ci = cellOf(x), cj = cellOf(z); for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) { const a = grid.get(gk(i, j)); if (a) out.push(...a); } return out; };
-  const stats = { zones: {}, rejected: {}, ms: 0 };
+  const stats = { zones: {}, rejected: {}, nudged: {}, ms: 0 };
   const zs = (zone) => stats.zones[zone] || (stats.zones[zone] = { candidates: 0, placed: 0, species: {} });
 
-  /** why (x, z) may not hold a tree of species `sp` at scale s (the trunk radius tr, the crown radius r, the crown base cb); null = it may. `forced` (the OSM trees) answers only the water. */
-  function reject(x, z, sp, s, sy, zone, forced) {
+  /** why (x, z) may not hold a tree of species `sp` at scale s (the trunk radius tr, the crown radius r, the crown base cb); null = it may. Every zone answers every rule (fix round 2: the mapped OSM trees are no longer forced through). */
+  function reject(x, z, sp, s, sy, zone) {
     const F = sp.F, tr = F.trunk * Math.min(1.1, 0.7 + 0.35 * s), r = F.R * s, cb = sp.base * sy, shrub = !!F.shrub;
     if (!Number.isFinite(x) || !Number.isFinite(z)) return 'nan';
     const d = shore.dist(x, z);
     if (d <= K.water) return 'water';
-    if (forced) return null;
     if (!shore.inGarden(x, z) || ringDist(x, z, garden) < K.outline) return 'outline';
     const crest = crestAt(x, z);
     if (zone === 'shore') { if (d < crest + Z.shore.d[0] - 0.05 || d > crest + Z.shore.d[1] + 0.3) return 'bank'; }
@@ -170,20 +173,30 @@ export function planVegetation(o = {}) {
   function plant(zone, key, x, z, R, opts = {}) {
     const sp = SPT[key]; if (!sp) throw new Error('vegetation: unknown species ' + key);
     const F = sp.F, s = opts.s ?? R.range(sp.scale[0], sp.scale[1]), sy = s * R.range(0.95, 1.1), zst = zs(zone); zst.candidates++;
-    const why = reject(x, z, sp, s, sy, zone, !!opts.forced);
+    let why = reject(x, z, sp, s, sy, zone), node = null;
+    // the nudge (fix round 2; the mapped OSM trees): a position that a rule refuses (not the water) moves to the NEAREST clear spot within opts.nudge m: rings of NUDGE_STEP m, NUDGE_DIRS directions each, the first clear
+    // candidate wins (deterministic: the ring order is the distance, the direction order is fixed); none within the radius = refused with the reason of the node itself
+    if (why && why !== 'water' && why !== 'nan' && opts.nudge > 0) {
+      search: for (let d = NUDGE_STEP; d <= opts.nudge + 1e-9; d += NUDGE_STEP) for (let i = 0; i < NUDGE_DIRS; i++) {
+        const a = i * 2 * Math.PI / NUDGE_DIRS, cx = x + d * Math.cos(a), cz = z + d * Math.sin(a);
+        if (!reject(cx, cz, sp, s, sy, zone)) { node = { x, z, d, why }; x = cx; z = cz; why = null; break search; }
+      }
+    }
     if (why) { const k = zone + ':' + why; stats.rejected[k] = (stats.rejected[k] || 0) + 1; return false; }
     const pal = D.LEAF[sp.leaf] || D.LEAF.lime, hex = pal[Math.floor(R() * pal.length)];
-    const t = { zone, species: key, fam: sp.fam, sp: F.sp, x, z, y: H(x, z), s, sy, yaw: R() * 6.283, r: F.R * s, h: F.H * s, tr: F.trunk * Math.min(1.1, 0.7 + 0.35 * s), hex, bright: R.range(0.93, 1.07), shrub: !!F.shrub, old: !!sp.old, forced: !!opts.forced, keep: hashXZ(x, z, 77) };
+    const t = { zone, species: key, fam: sp.fam, sp: F.sp, x, z, y: H(x, z), s, sy, yaw: R() * 6.283, r: F.R * s, h: F.H * s, tr: F.trunk * Math.min(1.1, 0.7 + 0.35 * s), hex, bright: R.range(0.93, 1.07), shrub: !!F.shrub, old: !!sp.old, node, keep: hashXZ(x, z, 77) };
+    if (node) { zst.nudged = (zst.nudged || 0) + 1; (stats.nudged[zone] || (stats.nudged[zone] = [])).push({ from: [node.x, node.z], to: [x, z], d: node.d, why: node.why }); }
     list.push(t); zst.placed++; zst.species[key] = (zst.species[key] || 0) + 1; if (zone === 'meadow') solitaries.push(t);
     const k = gk(cellOf(x), cellOf(z)); let a = grid.get(k); if (!a) grid.set(k, (a = [])); a.push(t);
     return true;
   }
   const inside = (x, z) => shore.inGarden(x, z);
 
-  // ---- 1. the 7 OSM trees: old oaks at their exact positions (forced: only the water can refuse one)
-  { const R = rngOf('tauride-veg:osm'); for (const q of osmTrees) plant('osm', Z.osm.species, q.x, q.z, R, { forced: true }); }
+  // ---- 1. the 7 OSM trees: old oaks at their mapped positions, every keep-out applied; a node that a rule refuses (the perimeter alley w425201986 runs over three of them: a mapped node sits within the mapping error) is
+  //         nudged to the nearest clear spot within Z.osm.nudge m (fix round 2: the first version forced them through every rule but the water, and one oak stood on the asphalt)
+  { const R = rngOf('tauride-veg:osm'); for (const q of osmTrees) plant('osm', Z.osm.species, q.x, q.z, R, { nudge: Z.osm.nudge || 0 }); }
   // ---- 2. the solitary oaks of the meadows
-  { const R = rngOf('tauride-veg:meadow'); for (const q of Z.meadow.solitary) plant('meadow', 'oldOak', q.x, q.z, R, { forced: false }); }
+  { const R = rngOf('tauride-veg:meadow'); for (const q of Z.meadow.solitary) plant('meadow', 'oldOak', q.x, q.z, R); }
   // ---- 3. the border belt: a jittered lattice over the band inside the fence (inner .. width m from the outline), thinning towards its inner edge
   { const R = rngOf('tauride-veg:belt'), B = Z.belt, gb = bboxOf(garden), st = B.step, j = B.jitter;
     for (let z = Math.floor(gb[2] / st) * st; z < gb[3]; z += st) for (let x = Math.floor(gb[0] / st) * st; x < gb[1]; x += st) {
@@ -221,7 +234,7 @@ export function planVegetation(o = {}) {
       plant('grove', key, px, pz, R);
     }
   });
-  // ---- the tier: a budget per level and a share of the plan (each tree keeps or goes by its own hash: the low tier is a subset of the medium one); the forced trees and the solitary oaks always stay
+  // ---- the tier: a budget per level and a share of the plan (each tree keeps or goes by its own hash: the low tier is a subset of the medium one); the OSM trees and the solitary oaks always stay
   const B = D.BUDGET, cap = B.instances[level] ?? B.instances.medium, share = B.tierFactor[level] ?? 1;
   const fixed = list.filter((t) => t.zone === 'osm' || t.zone === 'meadow'), free = list.filter((t) => !(t.zone === 'osm' || t.zone === 'meadow')).sort((a, b) => a.keep - b.keep || a.x - b.x || a.z - b.z);
   const nKeep = Math.min(free.length, Math.max(0, cap - fixed.length), Math.round(free.length * share));
