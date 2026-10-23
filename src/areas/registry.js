@@ -60,6 +60,9 @@ REGISTRY.north = {
 /**
  * Gates between areas: { id, from, to, seg: [[x,z],[x,z]] (the border segment in the FROM area), inward: [nx,nz] (unit vector pointing from the border into the FROM area), zone (m: depth of the
  * prompt zone, walking), arrive: { x0, x1, z0, z1 } (where the player may land in the TO area), reverse (id of the gate back) }.
+ * A DOOR gate (kind: 'door', milestone M7) is not a stretch of the border but a ctx.interact item (E / USE) for a walker: { id, kind: 'door', from, to, at: { x, z } (the door point in the FROM area),
+ * r (m: the use radius), pose: { x, z, yaw, pitch } (the arrival pose in the TO area, on foot; `view` names the VIEWS row of the TO area it copies, tools/areas-test.mjs pins it), prompt (its texts:
+ * label / labelEn of the chip, title / sights / scene / fine of the question), reverse: null }. The gate machine ignores doors (no chip, no zone, no arrival rectangle); core/gates.js registers them.
  */
 export const GATES = [
   // g1 / g2 - the strip and the North share one border, the line z = -405 .. -205 across Liteyny (x -420 .. 835). The strip ends at z = -405 (its OLD rectangle); the North holds the strip's 200 m band
@@ -74,4 +77,16 @@ export const GATES = [
   // g0 - the dev loop (?devgates=1): a gate across the Nevsky approach to Vosstaniya Square (a vertical segment at x = 470, the strip east of it is the "own area") that leads back to the SAME page at
   // the same pose. It exercises the whole hand-off (prompt, preflight, veil, navigation, arrival, memory) before a second area exists, and stays as a test fixture afterwards.
   { id: 'g0', dev: true, from: 'strip', to: 'strip', seg: [[470, 100], [470, 240]], inward: [1, 0], zone: 30, arrive: { x0: 440, x1: 700, z0: 80, z1: 260 }, reverse: 'g0' },
+  // g3 - the metro door (milestone M7, plan 3.3): the North has no metro hall in v1, so the door of the Chernyshevskaya vestibule (w22999175; `at` is the middle of its west front, the edge
+  // (460.9, -1340.1) - (461.2, -1360.2), where its six doors are) stands in for the 1,560 m / 122 s ride of line 1 to Ploshchad Vosstaniya: a walker within 4 m presses E, the question names the
+  // metro and the page load, and the strip page boots at its VIEWS 'AltDigit1' pose (the rotunda of the Ploshchad Vosstaniya metro; the numbers are that row's, tools/areas-test.mjs pins them),
+  // ON FOOT (no car hold: the car stays at the vestibule). No reverse door: the strip's Chernyshevskaya is a closed generic terminus (src/world/data/metro.js); the way back is the border gate g1.
+  { id: 'g3', kind: 'door', from: 'north', to: 'strip', at: { x: 461.05, z: -1350.15 }, r: 4, pose: { x: 534, z: 125, yaw: 28.61, pitch: 10 }, view: 'AltDigit1', reverse: null,
+    prompt: {
+      label: 'Метро: одна остановка до «Площади Восстания»', labelEn: 'Metro: one stop to Ploshchad Vosstaniya (the Nevsky strip)',
+      title: 'Метро «Чернышевская» → «Площадь Восстания» · Metro: Chernyshevskaya → Ploshchad Vosstaniya',
+      sights: 'Одна остановка по первой линии, 1 560 м, около двух минут · One stop on line 1, 1,560 m, about two minutes',
+      scene: 'Невский проспект — отдельная сцена, около 48 МБ, 25–40 с; страница перезагрузится, и вы выйдете из метро у ротонды на площади Восстания · The Nevsky strip is a separate scene, about 48 MB, 25–40 s; the page reloads and you come out of the metro at the rotunda on Vosstaniya Square',
+      fine: 'Пешком: машина останется здесь; время суток и звук поедут с вами · On foot: the car stays here; time of day and sound come along',
+    } },
 ];

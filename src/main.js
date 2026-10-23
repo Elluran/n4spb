@@ -547,7 +547,14 @@ async function main() {
   const places = $('places');
   if (places) {
     for (const v of L.VIEWS) { const o = document.createElement('option'); o.value=v.key; o.textContent=v.label; places.append(o); }
+    // the places of the other areas (the area module's CROSS_PLACES, docs/AREAS.md M7): one optgroup per area under its registry title; a pick asks the gate question (core/gates.js offerPlace)
+    if (ctx.gates && ctx.gates.places.length) for (const id of [...new Set(ctx.gates.places.map((p) => p.area))]) {
+      const og = document.createElement('optgroup'); og.label = `${REGISTRY[id].title} · ${REGISTRY[id].titleEn}`;
+      for (const p of ctx.gates.places) if (p.area === id) { const o = document.createElement('option'); o.value = 'cross:' + p.key; o.textContent = p.label; og.append(o); }
+      places.append(og);
+    }
     places.addEventListener('change', () => {
+      if (places.value.startsWith('cross:')) { const k = places.value.slice(6); places.value=''; places.blur(); if (ctx.gates) ctx.gates.offerPlace(k); return; }
       const v=VIEWS[places.value]; if (!v) return;
       goToView(v); places.value=''; places.blur();
     });

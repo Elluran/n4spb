@@ -15,6 +15,11 @@ check('round trip: encode -> decode returns an equal object', () => { const r = 
 check('the encoded value is URL-safe and short', () => { const s = H.encodeHo(ho0); assert(/^[A-Za-z0-9_-]+$/.test(s)); assert(s.length < H.MAX_HO_CHARS, String(s.length)); });
 check('Cyrillic inside a field survives (UTF-8)', () => { const o = { ...ho0, gate: 'врата' }; assert.equal(JSON.parse(H.b64uDecode(H.b64uEncode(JSON.stringify(o)))).gate, 'врата'); });
 check('a car-less hand-off is valid', () => assert(H.validateHo(H.makeHo({ from: 'strip', to: 'north' }), { to: 'north' }).ok));
+check('via door (the metro ride, M7) and via place (the HUD list) are valid ways; a door carries no car', () => {
+  const door = H.makeHo({ from: 'north', to: 'strip', via: 'door', gate: 'g3', ret: { x: 458, z: -1350, yaw: -90, pitch: 0 } });
+  assert(H.validateHo(door, { to: 'strip' }).ok); assert.equal(door.car, null); assert.deepEqual(H.decodeHo(H.encodeHo(door), { to: 'strip' }).ho, door);
+  assert(H.validateHo(H.makeHo({ from: 'strip', to: 'north', via: 'place', gate: 'g1', car }), { to: 'north' }).ok);
+});
 check('wrong destination area is rejected', () => assert.equal(H.decodeHo(H.encodeHo(ho0), { to: 'strip' }).ok, false));
 check('unknown version is rejected', () => assert.equal(H.validateHo({ ...ho0, v: 2 }, { to: 'north' }).ok, false));
 check('NaN / Infinity / out-of-range numbers are rejected', () => {
