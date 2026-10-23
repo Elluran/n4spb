@@ -2,7 +2,8 @@
 // rewritten by the later phases (T4-T6). Since T2 the module draws the relief and CLAIMS the garden (the park, 23 woods, 120 ways, 132 benches, 167 bins), so the generic North draws no tree, path ribbon or OSM bench there. Since T3 the terrain mesh is the WHOLE floor of the garden polygon
 // (terrain-mesh.js, cover mode; the environment ground is cut out under it, HOOKS.groundHoles), painted by the garden's own ground material (ground-material.js: a 1 m mask computed from data/ground.js, the relief, the water outline, the woods and the ways), with the 106 alleys draped on it (paths-draped.js:
 // ribbons, discs at the junctions, the 6 stairs). Since T4a: the ponds (the bowls and banks are in the floor: gardenHeight is the terrain, ponds included; the water surface and the impassable shore are ponds.js). Since T4b: the five numbered bridges and the dam
-// (bridges.js: the kit, the deck service for cars and walkers, the walk ramps and rails; the shore ring opens onto the decks), the reed belts (reeds.js), the duck lanes on the ponds (HOOKS.duckPonds). Bare of trees and furniture until T5 / T6.
+// (bridges.js: the kit, the deck service for cars and walkers, the walk ramps and rails; the shore ring opens onto the decks), the reed belts (reeds.js), the duck lanes on the ponds (HOOKS.duckPonds). Since T5: the garden's own trees (vegetation.js: the border belt,
+// the lime avenues, the groves on the OSM woods, the shore planting, the 7 mapped OSM trees, with the engine's tree geometry and materials; the ground mask's litter lies under the planted crowns). Bare of furniture until T6.
 // SOURCE: 102_3d_piter src/world/landmarksTauride.js, commit 0568f7af. The palace() function and the imports of the palace and the quarter are the source's text; changed: the garden import and call are gone and the service is
 // built from the quarter only (the source merged the garden's deckY, entrances, benches and ponds into it: `deckY` here is the Paradny deck alone; the quarter and the palace publish no entrances: they have none).
 import * as THREE from 'three';
@@ -22,6 +23,7 @@ import { planGroundMask, gardenGroundMaterial, collectGroundInputs, makeNoiseTex
 import { planPaths, buildPaths } from './landmarksTauride/paths-draped.js';
 import { planBridges, buildBridges } from './landmarksTauride/bridges.js';
 import { planReeds, buildReeds } from './landmarksTauride/reeds.js';
+import { planVegetation, buildVegetation, collectVegetationInputs } from './landmarksTauride/vegetation.js';
 import { WALK_LIFT } from './landmarksTauride/data/bridge-design.js';
 import * as DG from './landmarksTauride/data/footprints.js';
 import * as DW from './landmarksTauride/data/water.js';
@@ -75,18 +77,27 @@ export function build(ctx) {
   // T2 + T3: the floor of the garden: the pure gardenHeight (hills, mounds, the memorial plateau) over the WHOLE garden polygon, clipped to the outline (cover mode), sampled into <= 16 chunk meshes (no colliders: the player
   // follows heightAt, the same function as the HEIGHT_PATCH 'garden'); the environment ground is cut out under it (HOOKS.groundHoles). Its colour is the garden's own ground material (ground-material.js): a 1 m mask
   // computed here from the authored zones, the relief, the water outline, the woods, the ways, the benches and the gates. The alleys are draped on the planned mesh (paths-draped.js).
+  // T5: the PLANS come first (all pure): the floor, the bridges, the alleys, the ponds, the reeds, then the trees (vegetation.js: the planting keeps off the ribbons, the decks, the reed clumps ...), and only then the ground mask, whose
+  // canopy class is the PLANTED CROWNS (the litter lies under the trees that are there, not under the OSM woods); the meshes are built after the plans.
   const tplan=planTerrain(gardenHeight,RELIEF_BOX,floorOptions());
-  const mask=planGroundMask(collectGroundInputs({GARDEN:DG.GARDEN,GARDEN_GREEN:DG.GARDEN_GREEN,FOOTPRINTS:DG.FOOTPRINTS,WATER_UNION:DW.WATER_UNION,PATHS:DP.PATHS,BENCHES:DF.BENCHES,GATES:DF.GATES,MONUMENTS:DF.MONUMENTS,FOUNTAINS:DF.FOUNTAINS},GREEN,gardenHeight));
-  const noise=makeNoiseTexture(),ground=gardenGroundMaterial(ctx,mask,noise);
-  const terrain=buildTerrain(ctx,root,tplan,{material:ground.mat});
   const meshHeight=makeMeshHeight(tplan);
   // T4b: the bridges and the dam (bridges.js) are planned BEFORE the alleys: a stair of the alleys at a bridge head rises to the deck head (planPaths ground.deckAt), the shore ring of the ponds is cut where a deck crosses it (planPonds decks),
   // the water material darkens under the decks (buildPonds zones), the reeds keep off the decks (planReeds keepOut).
-  const bplan=planBridges({gh:(x,z)=>meshHeight(x,z)??gardenHeight(x,z)}),bridges=buildBridges(ctx,root,bplan);     // the ground at the heads is the FLOOR MESH (the alleys are draped on it), so a deck head meets the ribbon exactly
-  const pplan=planPaths(DP.PATHS,{meshHeight,gh:gardenHeight,deckAt:bplan.deckY}),paths=buildPaths(ctx,root,pplan,noise);
+  const bplan=planBridges({gh:(x,z)=>meshHeight(x,z)??gardenHeight(x,z)});     // the ground at the heads is the FLOOR MESH (the alleys are draped on it), so a deck head meets the ribbon exactly
+  const pplan=planPaths(DP.PATHS,{meshHeight,gh:gardenHeight,deckAt:bplan.deckY});
+  const pondsPlan=planPonds({floor:tplan,decks:bplan.decks});
+  const rplan=planReeds({keepOut:bplan.keepOut});
+  const level=(ctx.quality&&(ctx.quality.level||ctx.quality.name))||'medium';     // the tier of the engine's trees (environment/trees.js: 'low' = the performance tier)
+  const vplan=planVegetation({...collectVegetationInputs(GREEN,bplan,rplan),level:level==='low'?'low':level==='high'?'high':'medium'});
+  const mask=planGroundMask({...collectGroundInputs({GARDEN:DG.GARDEN,GARDEN_GREEN:DG.GARDEN_GREEN,FOOTPRINTS:DG.FOOTPRINTS,WATER_UNION:DW.WATER_UNION,PATHS:DP.PATHS,BENCHES:DF.BENCHES,GATES:DF.GATES,MONUMENTS:DF.MONUMENTS,FOUNTAINS:DF.FOUNTAINS},GREEN,gardenHeight),canopy:vplan.canopy});
+  const noise=makeNoiseTexture(),ground=gardenGroundMaterial(ctx,mask,noise);
+  const terrain=buildTerrain(ctx,root,tplan,{material:ground.mat});
+  const bridges=buildBridges(ctx,root,bplan);
+  const paths=buildPaths(ctx,root,pplan,noise);
   // T4a: the water surface at the one level of data/ponds.js and the impassable shore (the bowls and the banks are the floor above: gardenHeight is the terrain, ponds included); T4a fix round 2: the kerb skirt on the garden outline is stitched to the floor plan.
-  const pondsPlan=planPonds({floor:tplan,decks:bplan.decks}),ponds=buildPonds(ctx,root,pondsPlan,{zones:bplan.zones});
-  const rplan=planReeds({keepOut:bplan.keepOut}),reeds=buildReeds(ctx,root,rplan);
+  const ponds=buildPonds(ctx,root,pondsPlan,{zones:bplan.zones});
+  const reeds=buildReeds(ctx,root,rplan);
+  const trees=buildVegetation(ctx,root,vplan,{at:[L.HERO.x,L.HERO.z],inPlay:L.inPlay});     // the first LOD assignment from the page's HERO, as the environment's trees
   ctx.addStatic(root);
   // The service the engine reads (docs/AREAS.md 9.1 HOOKS.deckServices, docs/TAURIDE-REMAKE.md T1 / T4b): deckY(x, z) = the Paradny podium (3.3 m) and its eight stair ramps, else the walking profile of a garden bridge or the dam (bridges.js:
   // the deck, its approach ramps and the stairs at its heads), else null; cars (drive/handling.js) and walkers (people/nav.js surfaceY) ask it FIRST; the walkers also ask deckLift(x, z): on a garden bridge the feet stand WALK_LIFT above
@@ -97,5 +108,9 @@ export function build(ctx) {
   ctx.services.landmarksTauride={paradny:courts,deckY:(x,z)=>courts.deckY(x,z)??bridgeDeckY(x,z),deckLift:(x,z)=>(courts.deckY(x,z)==null&&bridgeDeckY(x,z)!==null?WALK_LIFT:null),walkways,
     bridges:{deckY:bridgeDeckY,sites:bplan.sites,stats:bplan.stats,triangles:bridges.triangles,draws:bridges.draws,colliders:bridges.colliders,decks:bplan.decks,zones:bplan.zones,keepOut:bplan.keepOut,mesh:bridges.mesh,waterMesh:bridges.waterMesh},
     reeds:{instances:reeds.instances,triangles:reeds.triangles,draws:reeds.draws,stats:rplan.stats,belts:rplan.belts,mesh:reeds.mesh,list:rplan.instances},
-    terrain:{heightAt:gardenHeight,meshHeight,triangles:terrain.triangles,draws:terrain.draws,cover:true},ground:{mask:mask.stats,maskBytes:mask.data.length,material:ground.mat},paths:{triangles:paths.triangles,draws:paths.draws,stats:pplan.stats,stairs:pplan.stairs},ponds:{y:PONDS.WATER_Y,triangles:ponds.triangles,waterTriangles:ponds.waterTriangles,quayTriangles:ponds.quayTriangles,quayLength:pondsPlan.quay.length,draws:ponds.draws,colliders:ponds.colliders,buildMs:ponds.buildMs,stats:pondsPlan.stats,mesh:ponds.mesh,quayMesh:ponds.quayMesh,inWater:(x,z)=>GARDEN_SHORE.dist(x,z)<0,shoreDist:GARDEN_SHORE.dist},kitTriangles:K.tris,triangles:K.tris+terrain.triangles+paths.triangles+ponds.triangles+bridges.triangles+reeds.triangles};
+    // T5: the garden's trees: `list` the plan (every tree with its zone, species, terrain y, crown radius r, trunk radius tr), `treeList` = [{ x, z, y, r, h, tr, sp, shrub? }] in the shape of environment.trees (for the wildlife, which reads
+    // services.<module>.treeList of the landmark gardens it names), the instanced meshes, the LOD numbers (triangles() at the current camera, trianglesWorst = every tree at LOD0), the canopy discs the ground mask was painted with
+    trees:{list:vplan.trees,treeList:trees.treeList,canopy:vplan.canopy,stats:vplan.stats,level:vplan.level,instances:trees.instances,colliders:trees.colliders,blobs:trees.blobs,meshes:trees.meshes,families:trees.families,triangles:trees.triangles,trianglesWorst:trees.trianglesWorst,draws:trees.draws,assign:trees.assign,readBack:trees.readBack},
+    treeList:trees.treeList,
+    terrain:{heightAt:gardenHeight,meshHeight,triangles:terrain.triangles,draws:terrain.draws,cover:true},ground:{mask:mask.stats,maskBytes:mask.data.length,maskBox:mask.box,maskData:mask.data,material:ground.mat},paths:{triangles:paths.triangles,draws:paths.draws,stats:pplan.stats,stairs:pplan.stairs},ponds:{y:PONDS.WATER_Y,triangles:ponds.triangles,waterTriangles:ponds.waterTriangles,quayTriangles:ponds.quayTriangles,quayLength:pondsPlan.quay.length,draws:ponds.draws,colliders:ponds.colliders,buildMs:ponds.buildMs,stats:pondsPlan.stats,mesh:ponds.mesh,quayMesh:ponds.quayMesh,inWater:(x,z)=>GARDEN_SHORE.dist(x,z)<0,shoreDist:GARDEN_SHORE.dist},kitTriangles:K.tris,triangles:K.tris+terrain.triangles+paths.triangles+ponds.triangles+bridges.triangles+reeds.triangles+trees.triangles()};
 }

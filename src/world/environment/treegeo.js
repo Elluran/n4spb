@@ -211,9 +211,9 @@ function addTiers(acc, F, lod) {
   }
 }
 
-/** canopy geometry of a family at a level of detail (0..3) */
-export function canopyGeometry(fam, lod) {
-  const F = SPECIES[fam], acc = new Acc(true);
+/** canopy geometry of a family at a level of detail (0..3). `F` = the species row (default: SPECIES[fam]; a landmark module may pass a row of its own, e.g. the larch of the Tauride Garden, landmarksTauride/data/vegetation.js SPECIES_EXTRA: a 'tiers' row needs no layout) */
+export function canopyGeometry(fam, lod, F = SPECIES[fam]) {
+  const acc = new Acc(true);
   if (F.kind === 'tiers') { addTiers(acc, F, lod); if (lod === 2) addStub(acc, 0, 1.0, 0.14); return acc.geometry(); }
   const lay = layoutOf(fam), seed = fam.length * 13 + fam.charCodeAt(0);
   if (lod === 0) addLobes(acc, lay, lay.L.map((_, i) => i), 1, F.lump, F.blend, seed);
@@ -247,9 +247,9 @@ function addTube(acc, path, seg, vRepeat, uRepeat = 2) {
 }
 const stemPath = (x0, z0, lx, lz, h, r0, r1, flare = 0) => [0, 0.04, 0.2, 0.55, 1].map((t, i) => ({ x: x0 + lx * t * t, y: -0.15 + (h + 0.15) * t, z: z0 + lz * t * t, r: mix(r0, r1, t) * (1 + flare * Math.max(0, 1 - t / 0.07)) }));
 
-/** trunk geometry (lod 0: stems + branches into the crown, lod 1: plain taper stems). Returns null for families without a visible trunk. */
-export function trunkGeometry(fam, lod) {
-  const F = SPECIES[fam]; if (F.shrub) return null;
+/** trunk geometry (lod 0: stems + branches into the crown, lod 1: plain taper stems). Returns null for families without a visible trunk. `F` = the species row (default: SPECIES[fam]; see canopyGeometry) */
+export function trunkGeometry(fam, lod, F = SPECIES[fam]) {
+  if (F.shrub) return null;
   const acc = new Acc(false), lay = F.kind === 'lobes' ? layoutOf(fam) : null;
   let s = 7919 + fam.charCodeAt(0) * 31 + fam.length; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
   const seg = lod === 0 ? 7 : 5;

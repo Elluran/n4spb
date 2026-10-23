@@ -5,8 +5,9 @@
 // Frame: metres from ORIGIN, +X east, +Z south (-Z is north), the frame of the whole project. Rings are flat [x, z, x, z, ...] (not closed).
 
 /** MOWN MEADOWS: the blocks of the open lawn that a gardener mows in bands (the shader draws light and dark stripes of `period` metres across the direction `angle` (degrees, 0 = stripes run east-west, 90 = north-south),
- *  weighted by the openness of the ground: no stripe under a canopy (woods, belts), on a path, on a steep mound or within 2.5 m of the water). The polygons are generous on purpose (the woods cut them back):
- *  the open lawns of the OSM data are the red / green / blue / yellow components of the T3 plan (D:/git2/n4spb-work/tauride/T3/open-lawn.png), 38,323 m2 of them 3 m inside their edge. At most 7 blocks (the shader table). */
+ *  weighted by the openness of the ground: no stripe under a canopy (T5: the planted crowns; the woods and the belt in a mask planned without a planting), on a path, on a steep mound or within 2.5 m of the water). The polygons are
+ *  generous on purpose (the crowns cut them back; T5 keeps them open: at most the solitary oaks of data/vegetation.js ZONES.meadow stand on them): the open lawns of the OSM data are the red / green / blue / yellow components of
+ *  the T3 plan (D:/git2/n4spb-work/tauride/T3/open-lawn.png), 38,323 m2 of them 3 m inside their edge. At most 7 blocks (the shader table). */
 export const MEADOWS = [
   { id: 'sw-lawns',     angle: 14,  period: 3.4, o: [925, -1309, 1211, -1309, 1211, -1595, 925, -1595] },        // the large open lawns of the south-west and the middle (T10 stands here)
   { id: 'se-lobe',      angle: -32, period: 3.6, o: [1325, -1285, 1470, -1285, 1470, -1440, 1325, -1440] },       // the oval lawn between the two arms of the Big pond (the pitch and the sports centre stand on it)
@@ -15,9 +16,11 @@ export const MEADOWS = [
   { id: 'east-strip',   angle: 90,  period: 3.0, o: [1440, -1440, 1495, -1440, 1495, -1590, 1440, -1590] },       // the strip east of the Big pond (T11 looks at the palace from here)
 ];
 
-/** AUTHORED CANOPY on top of the OSM woods (which are the claim list of T5: the ground under them is leaf litter): the belt of old trees along the fence ("old trees at the borders, open lawns in the middle", plan C),
- *  a band of `width` metres inside the outline with the canopy weight `k` (0.30: a shaded-lawn fringe far below the litter threshold of the shader, 0.62 .. 0.78: QA round 1 of T3 found 0.45 + noise tipping it into dark litter blotches; T5 plants it and may raise it), dissolved near gates (`gateClear` m). */
-export const CANOPY_BELT = { width: 8, k: 0.30, feather: 4, gateClear: 9 };
+/** THE FALLBACK CANOPY of a mask planned WITHOUT a planting (tools that call planGroundMask alone, the T3 way): the OSM woods (leaf litter) and this belt of old trees along the fence ("old trees at the borders, open lawns in the middle", plan C),
+ *  a band of `width` metres inside the outline with the canopy weight `k` (0.30: a shaded-lawn fringe far below the litter threshold of the shader, 0.62 .. 0.78: QA round 1 of T3 found 0.45 + noise tipping it into dark litter blotches), dissolved near gates (`gateClear` m).
+ *  T5: the module plants its trees (data/vegetation.js ZONES.belt: the band 1.5 .. 14 m inside the fence, KEEP_OUT.gate 9) and hands the PLANTED CROWNS to the mask (ground-material.js `canopy`): the litter and the shade then lie under the
+ *  trees that are there, and this table is not read by the built module. The width was raised 8 -> 12 to match the belt as planted (the aerial: 8-15 m). */
+export const CANOPY_BELT = { width: 12, k: 0.30, feather: 4, gateClear: 9 };
 
 /** WORN SPOTS: places that feet and benches wear to bare earth besides the ones the generator finds itself (a bench r 2.6 m, a gate r 5.5 m, a junction of three ways r 2.8 m, a monument or the fountain r 7 m,
  *  the apron of a building 2.6 m): x, z, radius r (m), wear k (0..1; 0.34 .. 0.5 is the first trampled patches, above 0.72 packed earth). */
