@@ -31,8 +31,9 @@ const LOOK = {
   moat: ['#1d3a52', '#2d5270', '#4a5c4a', '#3a4432', '#22393f', 1.3],
   'swan-canal': ['#1d3a52', '#2d5270', '#4a5c4a', '#3a4432', '#22393f', 1.2],
   neva: ['#17356e', '#26509a', '#3c6a88', '#3a4a52', '#22404e', 0.55],
-  // the ponds of the Tauride Garden (landmarksTauride/ponds.js, T4a): greenish and slightly turbid, olive near the banks, small chop; the duckweed mat of the Small Pond is patched into this shader by ponds.js
-  'tauride-pond': ['#2c4a38', '#3d6046', '#738248', '#34402c', '#25382f', 1.5],
+  // the ponds of the Tauride Garden (landmarksTauride/ponds.js, T4a): greenish and slightly turbid, olive near the banks, small chop; the duckweed mat of the Small Pond is patched into this shader by ponds.js.
+  // T4b: darker and more teal, a less olive shallow, a calmer chop (the T4a GPU QA read the narrow arms as pale speckled gravel from the air; ponds.js also damps the iso-lines and the glints for this key)
+  'tauride-pond': ['#1e3a33', '#2b4e42', '#5c7246', '#2e3a2a', '#213532', 0.9],
 };
 
 export function waterMaterial(ctx, field, opts = {}) {

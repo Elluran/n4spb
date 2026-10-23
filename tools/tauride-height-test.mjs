@@ -19,6 +19,8 @@
 //            poses, the flat zones; slope <= 1:4 on land, on the 120 ways and on the south gate -> memorial route), the terrain meshes (<= 16 draws, <= 40 k triangles, <= 5 cm, crack-free, no collider, the footprint hugs the relief: no apron), heightAt through the page's patches (the diff against the old
 //            line is confined to the Paradny box and the garden box), the patch box RELIEF_HULL, determinism / purity / edge cases of gardenHeight and its cell masks against brute force, the cars with the real handling (0 m of the outline open; the same harness without the hook: 2,018 m), and 15 mutants that must turn a rule red.
 //            node tools/area.mjs north tools/tauride-height-test.mjs --model north --build landmarksTauride --assert-cars --no-selfcheck
+//   T4a (section PONDS): the ring of shore probes on the real built module (0 entries), the flight-landing hook; T4b (section BRIDGES): the route arrives ON FOOT over the bridge decks (the main model's route check: no wading, the decks and
+//            ramps at most 1:4, no step over STEP_HEIGHT), the DECK RING (starts on every deck and at every head: 0 entries), the mutants (no rails, the ring without the deck cuts).
 // Exit 0 = every expectation met (the main model passes, the self-check models behave as declared, the old trap reproduces).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,7 +29,7 @@ import { ROOT, parseArgs, inPolys } from './tauride/lib/common.mjs';
 import * as S from './tauride/lib/site.mjs';
 import { loadEngine, makeContext, makePlayer, buildModules, engineRoot } from './tauride/lib/stub-env.mjs';
 import { builtinModels } from './tauride/lib/demo-models.mjs';
-import { makeWorld, wadeProbes, wadeSummary, wadeRing, shoreProbes, pathGraph, route, walkRoute, slopeReport, landingReport, flightLanding, carBreach } from './tauride/lib/height-harness.mjs';
+import { makeWorld, wadeProbes, wadeSummary, wadeRing, deckRing, shoreProbes, pathGraph, route, walkRoute, slopeReport, landingReport, flightLanding, carBreach } from './tauride/lib/height-harness.mjs';
 
 const args = parseArgs();
 const WADE = Number(args['wade-depth'] ?? 0.3), PROBES = Number(args.probes ?? 14), MAX_SLOPE = Number(args['max-slope'] ?? 0.25);
@@ -58,11 +60,11 @@ async function evaluate(model, { engine, world, wet, ring, bounds = BOUNDS, labe
     if (!r) { say('  route  : no way route from the south gate to the memorial in the garden ways  -> FAIL'); res.verdict.route = false; }
     else {
       const w = walkRoute(world, r);
-      // T4a: the ponds are impassable and the bridges are T4b (the 8 bridge ways are claimed and not drawn): until they exist the walk MUST stop at a shore, on a bridge way, dry (model.routeToShore)
+      // (T4a: the ponds were impassable and the bridges did not exist: a model with routeToShore was allowed to stop at a shore, on a bridge way, dry. T4b: the real build walks the bridges and must ARRIVE.)
       const bridgeIds = new Set(S.P.PATHS.filter((p) => p.bridge).map((p) => p.id)), atShore = !w.ok && !!w.stuckAt && bridgeIds.has(w.stuckAt.way) && S.waterDist(w.stuckAt.x, w.stuckAt.z) >= 0 && S.waterDist(w.stuckAt.x, w.stuckAt.z) < 3.5;
       const ok = (w.ok || (model.routeToShore && atShore)) && w.maxDepth <= model.wadeDepth;
       res.route = { ways: [...new Set(r.map((q) => q.way).filter(Boolean))].length, ...w, atShore };
-      say(`  route  : south gate -> memorial along ${res.route.ways} ways, ${w.lengthM} m: ${w.ok ? 'arrived' : 'STUCK at ' + JSON.stringify(w.stuckAt)} in ${(w.ticks / 60).toFixed(0)} s, lowest feet ${w.minY} m, deepest water ${w.maxDepth} m  -> ${mark(ok)}${!w.ok && model.routeToShore ? (atShore ? ` (T4a: reachable up to the shore of the water, where the bridge way ${w.stuckAt.way} needs its deck: T4b)` : ' (NOT at a bridge head)') : ''}`);
+      say(`  route  : south gate -> memorial along ${res.route.ways} ways, ${w.lengthM} m: ${w.ok ? 'arrived' : 'STUCK at ' + JSON.stringify(w.stuckAt)} in ${(w.ticks / 60).toFixed(0)} s, lowest feet ${w.minY} m, deepest water ${w.maxDepth} m${model.deckY ? ' (on the bridge decks: no water)' : ''}  -> ${mark(ok)}${!w.ok && model.routeToShore ? (atShore ? ` (reachable up to the shore of the water, where the bridge way ${w.stuckAt.way} has no deck)` : ' (NOT at a bridge head)') : ''}`);
       res.verdict.route = ok;
     }
   }
@@ -88,6 +90,8 @@ async function runModel(model, extra = {}) {
   const { ctx, camera } = makeContext(engine, extra.buildList || []);
   let ph = null;
   if (extra.buildList && extra.buildList.length) { await buildModules(engine, ctx, extra.buildList); ph = ctx.physics; if (model.addColliders) model.addColliders(ph, engine); }
+  // T4b: the built module's bridge decks: a walker ON a deck over the water is not wading (depthAt / wadeRing / walkRoute read model.deckY)
+  if (ctx.services.landmarksTauride?.bridges?.deckY && !model.deckY) model = { ...model, deckY: ctx.services.landmarksTauride.bridges.deckY };
   const world = makeWorld(engine, model, camera, BOUNDS, ph);
   let carBlocked = null;
   if (extra.buildList && extra.buildList.includes('landmarksTauride') && !model.carBlocked) { const { createHandling } = await import(pathToFileURL(path.join(ROOT, 'src/world/drive/handling.js')).href); const car = createHandling({ L: engine.L, physics: ph, services: ctx.services }); carBlocked = (x, z) => car.blocked(x, z); }
@@ -119,7 +123,7 @@ async function reliefSection(ctx, ph, engine) {
   rel(`the terrain is at most ${TM.TERRAIN.drawsMax} meshes and ${TM.TERRAIN.trianglesTarget} triangles, and the service counts them`, meshes.length > 0 && meshes.length <= TM.TERRAIN.drawsMax && tris <= TM.TERRAIN.trianglesTarget && svc.terrain.draws === meshes.length && svc.terrain.triangles === tris, `${meshes.length} meshes, ${tris} triangles`);
   rel('the terrain meshes are noBatch (the garden ground material of T3, no vertex colour, one draw per chunk), carry normals and are inside the garden box', meshes.every((m) => m.userData.noBatch && !m.geometry.attributes.color && m.geometry.attributes.normal && m.material.userData.tauride === 'ground') && meshes.every((m) => { const b = m.geometry.boundingBox; return b.min.x >= GH.RELIEF_BOX[0] - 1 && b.max.x <= GH.RELIEF_BOX[1] + 1 && b.min.z >= GH.RELIEF_BOX[2] - 1 && b.max.z <= GH.RELIEF_BOX[3] + 1 && b.min.y >= GH.PONDS.BED_BIG - 0.01; }), '');
   { const c2 = makeContext(engine, []), n0 = c2.ctx.physics.count; TM.buildTerrain(c2.ctx, new engine.THREE.Group(), TM.planTerrain()); rel('the terrain builder adds no collider (the player follows heightAt)', c2.ctx.physics.count === n0, `${n0} -> ${c2.ctx.physics.count}`); }
-  rel('the module has the colliders of T1 (Paradny and palace: 1,270) and the shore colliders of the ponds (T4a), nothing else', ph.count === 1270 + svc.ponds.colliders && svc.ponds.colliders > 100, `${ph.count} = 1270 + ${svc.ponds.colliders}`);
+  rel('the module has the colliders of T1 (Paradny and palace: 1,270), the shore colliders of the ponds (T4a) and the walk ramps and rails of the bridges (T4b), nothing else', ph.count === 1270 + svc.ponds.colliders + (svc.bridges?.colliders || 0) && svc.ponds.colliders > 100, `${ph.count} = 1270 + ${svc.ponds.colliders} + ${svc.bridges?.colliders}`);
   // ---- the mesh against the height function
   const plan = TM.planTerrain(), M = TM.measurePlan(plan);
   rel(`the planned mesh is within ${TM.TERRAIN.tol * 100} cm of gardenHeight (rasterised on a 0.5 m lattice)`, M.maxErr <= TM.TERRAIN.tol, `max ${(M.maxErr * 100).toFixed(2)} cm at ${JSON.stringify(M.at)}, ${M.samples} samples`);
@@ -258,9 +262,10 @@ async function pondSection(ctx, ph, engine) {
   const real = world(ph, (x, z) => L.heightAt(x, z));
   rel(`the contour collider stands above any feet that can reach it: top ${C.top} m > contour ${C.contourY} + STEP_HEIGHT ${STEP_HEIGHT} + a jump 0.73 m + the crest ${P.BANK_TOP} m, bottom ${C.y0} m below the deepest bed ${Math.min(P.BED_BIG, P.BED_SMALL)} m`, C.top > C.contourY + STEP_HEIGHT && C.top > P.BANK_TOP + 0.73 + STEP_HEIGHT && C.y0 < Math.min(P.BED_BIG, P.BED_SMALL), '');
   rel('the module published its pond service: level, triangles, colliders, build time', svc.ponds && svc.ponds.y === P.WATER_Y && svc.ponds.colliders === svc.ponds.stats.colliders && svc.ponds.colliders > 100, svc.ponds ? `${svc.ponds.colliders} colliders, ${svc.ponds.triangles} water triangles, built in ${svc.ponds.buildMs.toFixed(1)} ms` : 'no service');
-  const t0 = Date.now(), ring = wadeRing(real, shore, segs, { spacing: 3 }), sec = ((Date.now() - t0) / 1000).toFixed(0);
-  rel(`RING: ${ring.runs} runs from ${ring.runs / 21 | 0} starts every 3 m along the 2,666 m of shore (${ring.skipped} starts skipped), 7 angles (0, +-30, +-60, +-80 degrees from the perpendicular) x walk / sprint / jump: 0 entered the water (closest feet to the waterline ${ring.minD.toFixed(2)} m, p1 ${ring.p01.toFixed(2)}, median ${ring.p50.toFixed(2)})`, ring.entered === 0 && ring.trapped === 0 && ring.runs > 12000 && ring.minD > 0, `${ring.entered} entered, ${ring.trapped} trapped, by mode ${JSON.stringify(ring.byMode)}, ${sec} s`);
-  const walkOnly = wadeRing(real, shore, segs, { spacing: 3, angles: [0], modes: ['walk'], limit: 400, offset: 0.1 });
+  const deckY = svc.bridges ? svc.bridges.deckY : null;        // T4b: a walker who went onto a bridge deck has not entered the water
+  const t0 = Date.now(), ring = wadeRing(real, shore, segs, { spacing: 3, deckY }), sec = ((Date.now() - t0) / 1000).toFixed(0);
+  rel(`RING: ${ring.runs} runs from ${ring.runs / 21 | 0} starts every 3 m along the 2,666 m of shore (${ring.skipped} starts skipped), 7 angles (0, +-30, +-60, +-80 degrees from the perpendicular) x walk / sprint / jump: 0 entered the water (closest feet to the waterline ${ring.minD.toFixed(2)} m, p1 ${ring.p01.toFixed(2)}, median ${ring.p50.toFixed(2)}; T4b: the shore ring is open at the bridge heads, ${ring.onDeck} ticks were spent on a deck over the water)`, ring.entered === 0 && ring.trapped === 0 && ring.runs > 12000 && ring.minD > 0, `${ring.entered} entered, ${ring.trapped} trapped, by mode ${JSON.stringify(ring.byMode)}, ${sec} s`);
+  const walkOnly = wadeRing(real, shore, segs, { spacing: 3, angles: [0], modes: ['walk'], limit: 400, offset: 0.1, deckY });
   rel('RING (a second lattice of starts, straight walk): 0 entered', walkOnly.entered === 0 && walkOnly.runs > 300, `${walkOnly.runs} runs, closest ${walkOnly.minD.toFixed(2)} m`);
   // the mutants: the harness must be able to see a trap
   { const bareH = (x, z) => L.heightAt(x, z), bare = new engine.Physics(bareH), n = wadeRing(world(bare, bareH), shore, segs, { spacing: 3, angles: [0], modes: ['walk'], limit: 120, offset: 0.2 });
@@ -296,6 +301,43 @@ async function pondSection(ctx, ph, engine) {
   return bad;
 }
 
+// ---------------------------------------------------------------- T4b: the bridges on the REAL built module: the route on foot through the decks, the deck ring (nobody falls off a deck or slips into the water at a head), the mutants
+/** BRIDGES section: the walk from the south gate to the memorial crosses the water on the bridge decks (asserted in `evaluate` above: the route arrives); here the profile of that route, the DECK RING on the built physics and two mutants. */
+async function bridgeSection(ctx, ph, engine) {
+  const GH = await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/height.js')).href);
+  const PM = await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/ponds.js')).href);
+  const BR = await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/bridges.js')).href);
+  const BD = await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/data/bridge-design.js')).href);
+  const svc = ctx.services.landmarksTauride, L = engine.L, P = GH.PONDS, shore = GH.GARDEN_SHORE, { camera } = makeContext(engine, []);
+  let bad = 0;
+  const rel = (name, ok, detail = '') => { say(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? '  ' + detail : ''}`); out.sections.push({ role: 'bridges', name, ok, detail }); if (!ok) bad++; };
+  say('BRIDGES (T4b): the decks on the real built module');
+  const B = svc.bridges, deckY = B.deckY, sites = B.sites;
+  rel('the module publishes the bridge service: deckY for the eight ways, six sites, the colliders counted', typeof deckY === 'function' && sites.length === 6 && B.colliders > 100, `${B.colliders} colliders, ${B.triangles} triangles`);
+  const world = (physics) => ({ engine, L, ph: physics, model: { waterLevel: P.WATER_Y, inWater: (x, z) => shore.dist(x, z) < 0, deckY }, camera, bounds: BOUNDS, heightAt: (x, z) => L.heightAt(x, z), player: () => makePlayer(engine, camera, physics, BOUNDS) });
+  // the route profile: deckY where there is a deck, the terrain elsewhere; the decks and ramps at most 1:4, no step over STEP_HEIGHT, the water crossed on a deck only
+  { const g = pathGraph(S.P.PATHS), a = g.nearest(S.S_GATE.x, S.S_GATE.z, 12), b = g.nearest(MEMORIAL.x, MEMORIAL.z, 12), r = a && b ? route(g, a, b) : null;
+    let maxSlope = 0, maxStep = 0, wading = 0, onDeck = 0, prev = null, decks = new Set();
+    if (r) for (let i = 0; i + 1 < r.length; i++) { const A = r[i], Bq = r[i + 1], l = Math.hypot(Bq.x - A.x, Bq.z - A.z), n = Math.max(1, Math.ceil(l / 0.5)); for (let k = 0; k <= n; k++) { const x = A.x + (Bq.x - A.x) * k / n, z = A.z + (Bq.z - A.z) * k / n, d = deckY(x, z), h = d !== null ? d : L.heightAt(x, z); if (d !== null) { onDeck++; for (const s of sites) if (Math.abs(polyDistOf(s, x, z)) <= s.hw + s.pad) decks.add(s.site); } if (shore.dist(x, z) < 0 && d === null) wading++;
+      if (prev) { const dh = Math.abs(h - prev.h), ds = Math.hypot(x - prev.x, z - prev.z); if (ds > 1e-6) { if (dh > maxStep) maxStep = dh; const inStair = d !== null && sites.some((s) => { const u = uOf(s, x, z); return u !== null && ((s.ends.a.stair && u <= s.uA + 0.3) || (s.ends.b.stair && u >= s.L - s.uB - 0.3)); }); if (d !== null && !inStair) maxSlope = Math.max(maxSlope, dh / ds); } } prev = { x, z, h }; } }
+    rel(`the south gate -> memorial route crosses the water on the decks only (${[...decks].join(' + ') || 'none'}): ${onDeck} samples of 0.5 m on a deck, 0 in the water; the decks and ramps at most 1:4 per metre, no step over STEP_HEIGHT anywhere on the route`, !!r && wading === 0 && onDeck > 20 && maxSlope <= 0.25 && maxStep <= STEP_HEIGHT_OF(engine), `deck slope max ${maxSlope.toFixed(3)}, largest step ${maxStep.toFixed(3)} m`); }
+  // the deck ring on the built physics
+  { const t0 = Date.now(), ring = deckRing(world(ph), shore, sites, deckY), sec = ((Date.now() - t0) / 1000).toFixed(0);
+    rel(`DECK RING: ${ring.runs} runs from starts ON every deck (every 1 m, three lateral offsets, pushed sideways / at 45 / at 135 degrees) and AT every head (beside the rails, pushed toward the water at 0 / 30 / 60 degrees), walk / sprint / jump: 0 entered the water, 0 trapped`, ring.entered === 0 && ring.trapped === 0 && ring.runs > 3000 && ring.heads > 100, `${ring.entered} entered, ${ring.trapped} trapped, closest ${ring.minD === Infinity ? '-' : ring.minD.toFixed(2)} m, by mode ${JSON.stringify(ring.byMode)}, ${ring.decks} deck + ${ring.heads} head starts, ${sec} s`); }
+  // the mutants: the same plan without the rail boxes; the T4a ring without the deck cuts
+  { const bp = BR.planBridges({ gh: (x, z) => svc.terrain.meshHeight(x, z) ?? GH.gardenHeight(x, z) }), mk = (rails, cut) => { const p2 = new engine.Physics((x, z) => L.heightAt(x, z)); for (const c of bp.colliders) { if (c.kind === 'ramp') p2.addWalkRamp(c.cx, c.cz, c.w, c.d, c.rot, c.yA, c.yB, c.thick); else if (rails) p2.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1); } for (const c of PM.planPonds(cut ? { decks: bp.decks } : {}).colliders) p2.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1); return p2; };
+    let n = 0; for (const s of sites) for (let u = 0; u <= s.L; u += 0.5) { const q = s.at(u); if (Math.abs(bp.deckY(q.x, q.z) - deckY(q.x, q.z)) > 1e-9) n++; }
+    rel('the plan rebuilt from the data equals the built service (deterministic: the mutants below are built from it)', n === 0, `${n} differ`);
+    const noRails = deckRing(world(mk(false, true)), shore, sites, deckY, { modes: ['walk'], angles: [90, -90] });
+    rel('mutant: without the rail boxes the walkers leave the decks sideways into the water (the deck ring can fail)', noRails.entered > noRails.runs * 0.3, `${noRails.entered} of ${noRails.runs} entered`);
+    const g = pathGraph(S.P.PATHS), a = g.nearest(S.S_GATE.x, S.S_GATE.z, 12), b = g.nearest(MEMORIAL.x, MEMORIAL.z, 12), r = route(g, a, b), w = walkRoute(world(mk(true, false)), r);
+    rel('mutant: the T4a shore ring WITHOUT the deck cuts blocks the route at a bridge head (the route can fail)', !w.ok && !!w.stuckAt, w.ok ? 'arrived' : `stuck at ${JSON.stringify(w.stuckAt)}`); }
+  return bad;
+  function polyDistOf(s, x, z) { let m = Infinity; for (let i = 0; i + 1 < s.axis.length; i++) { const ax = s.axis[i][0], az = s.axis[i][1], bx = s.axis[i + 1][0], bz = s.axis[i + 1][1], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz, t = l2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0; m = Math.min(m, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return m; }
+  function uOf(s, x, z) { let best = null, bd = Infinity; for (let i = 0; i + 1 < s.axis.length; i++) { const ax = s.axis[i][0], az = s.axis[i][1], bx = s.axis[i + 1][0], bz = s.axis[i + 1][1], dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz) || 1, u = ((x - ax) * dx + (z - az) * dz) / l, v = Math.abs(((x - ax) * -dz + (z - az) * dx) / l); if (u < -0.05 || u > l + 0.05 || v > s.hw + s.pad || v >= bd) continue; bd = v; best = s.cum[i] + Math.max(0, Math.min(l, u)); } return best; }
+}
+const STEP_HEIGHT_OF = (engine) => engine.STEP_HEIGHT;
+
 // ---------------------------------------------------------------- which runs
 const models = onlySource ? {} : builtinModels(S, engine.L);
 for (const m of Object.values(models)) m.wadeDepth = WADE;
@@ -307,7 +349,7 @@ if (!onlySource) {
     const m = mod.model || mod.default;
     main = { name: path.basename(args.model), waterLevel: -0.45, inWater: (x, z) => inPolys(x, z, S.U), addColliders() {}, ...m, wadeDepth: m.wadeDepth ?? WADE };      // defaults for what a model leaves out
   } else main = models[args.model || 'north'];
-  if (main && main === models.north && buildList.includes('landmarksTauride')) main = { ...main, name: 'north + landmarksTauride (the REAL built module: ponds, banks, shore colliders)', waterLevel: (await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/data/ponds.js')).href)).WATER_Y, routeToShore: true, heightAt: (x, z) => engine.L.heightAt(x, z) };      // the engine's heightAt of the page: the garden patch (bowls, banks, hills) is what is tested
+  if (main && main === models.north && buildList.includes('landmarksTauride')) main = { ...main, name: 'north + landmarksTauride (the REAL built module: ponds, banks, shore colliders, bridges)', waterLevel: (await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/data/ponds.js')).href)).WATER_Y, routeToShore: false, heightAt: (x, z) => engine.L.heightAt(x, z) };      // the engine's heightAt of the page: the garden patch (bowls, banks, hills) is what is tested; T4b: the route must ARRIVE (the bridges exist: routeToShore false)
   if (!main) { console.error(`unknown model ${args.model}`); process.exit(2); }
   say(`TAURIDE HEIGHT TEST (real Player + Physics of ${path.basename(ROOT)})${buildList.length ? ', modules built: ' + buildList.join(', ') : ''}`);
   const ex = { buildList };
@@ -316,7 +358,7 @@ if (!onlySource) {
   if (!r.pass) failed++;
   say(`  => ${main.name.split(' (')[0]}: ${mark(r.pass)}`);
   say();
-  if (buildList.includes('landmarksTauride') && ex.built) { const nb = await reliefSection(ex.built.ctx, ex.built.ph, engine); if (nb) failed++; say(`  => RELIEF (T2): ${nb ? nb + ' check(s) FAILED' : 'every check passed'}`); say(); const np = await pondSection(ex.built.ctx, ex.built.ph, engine); if (np) failed++; say(`  => PONDS (T4a): ${np ? np + ' check(s) FAILED' : 'every check passed'}`); say(); }
+  if (buildList.includes('landmarksTauride') && ex.built) { const nb = await reliefSection(ex.built.ctx, ex.built.ph, engine); if (nb) failed++; say(`  => RELIEF (T2): ${nb ? nb + ' check(s) FAILED' : 'every check passed'}`); say(); const np = await pondSection(ex.built.ctx, ex.built.ph, engine); if (np) failed++; say(`  => PONDS (T4a): ${np ? np + ' check(s) FAILED' : 'every check passed'}`); say(); const nq = await bridgeSection(ex.built.ctx, ex.built.ph, engine); if (nq) failed++; say(`  => BRIDGES (T4b): ${nq ? nq + ' check(s) FAILED' : 'every check passed'}`); say(); }
 }
 
 // the self-check of the harness: a trap must FAIL, a contour fix and a wade model must PASS

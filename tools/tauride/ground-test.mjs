@@ -238,7 +238,7 @@ console.log('5. the built module (landmarksTauride) and the environment ground' 
       ok('mutant: without the claim (module not in the build list) streets draws them: the check turns red', w2.wallIn >= 60 && w2.capIn > 20, `${w2.wallIn} wall triangles, ${w2.capIn} cap triangles`); }
   }
   ok(`the paths are ${pth.length} draws (<= ${PD.PATHS_DRAPED.drawsMax}) and <= ${PD.PATHS_DRAPED.trianglesMax} + 2,500 (T4a) triangles, the ribbons carry colour + aPath, the stairs colour + normals`, pth.length === 2 && pth.length <= PD.PATHS_DRAPED.drawsMax && svc.paths.triangles <= PD.PATHS_DRAPED.trianglesMax + 2500 && !!pth.find((m) => m.name === 'tauride-paths-ribbons').geometry.getAttribute('aPath'), `${svc.paths.triangles} triangles`);
-  ok('the module adds the colliders of the Paradny quarter and the palace (1,270 as before) and the shore colliders of the ponds (T4a), nothing else', nCol === 1270 + ctx.services.landmarksTauride.ponds.colliders, String(nCol));
+  ok('the module adds the colliders of the Paradny quarter and the palace (1,270 as before), the shore colliders of the ponds (T4a) and the walk ramps and rails of the bridges (T4b), nothing else', nCol === 1270 + ctx.services.landmarksTauride.ponds.colliders + (ctx.services.landmarksTauride.bridges?.colliders || 0), String(nCol));
   // the shader text: the program is what the module says it is (balanced, every uniform declared and supplied)
   const FAKE = () => ({ uniforms: {}, vertexShader: '#include <common>\n#include <fog_vertex>', fragmentShader: '#include <common>\n#include <map_fragment>\n#include <fog_fragment>' });
   for (const [what, mat] of [['ground', terr[0].material], ['ribbons', pth.find((m) => m.name === 'tauride-paths-ribbons').material]]) {

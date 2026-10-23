@@ -6,7 +6,8 @@
 // The colliders: physics.js blocks a walker whose feet + STEP_HEIGHT (0.45) is below the top of a box, at every feet height down to the box's bottom: the top (data COLLIDER.top) is far above the contour's feet + 0.45, so a
 // walker (or a jump from the crest: apex +0.73) cannot step or hop over it, and the bottom is below the bed so that nobody can slip under it either. The old module's trap (a 0.22 m box that ignored a walker at y = 0 and
 // blocked one at feet -1.4) is NOT reproduced: the box stands INLAND of the shore on the contour where the bank is at COLLIDER.contourY, so nobody ever stands in the water in the first place.
-// BRIDGES ARE T4b: `gaps` (a list of { x, z, r }) removes the colliders that start within r m of a deck head; T4a passes none, so the 8 bridge ways cross a closed shore until the decks exist.
+// THE BRIDGES (T4b, bridges.js): `decks` (the axis segments of the extended decks with their half width + pad) CUT the shore chords where a deck crosses them (chordOutside), so the ring opens only onto a deck, between its rails;
+// `gaps` (a list of { x, z, r }) is the T4a hook that removes whole chords near a point (kept for the tests). The water material takes the decks as its zones (the soffit shadow) and the look tune of data/ponds.js POND_LOOK.
 import * as THREE from 'three';
 import { waterMaterial } from '../environment/water.js';
 import { WATER_UNION } from './data/water.js';
@@ -139,15 +140,33 @@ export function planQuay(floor, ring = GARDEN.o, Q = PONDS.QUAY, lift = TERRAIN.
   return result();
 }
 
+/** T4b: the parts of the chord a -> b (flat [x, z]) that lie OUTSIDE every deck rectangle of `rects` ([{ ax, az, bx, bz, hw }]: the axis segment a-b of a deck and its half width incl. the pad): [[t0, t1], ...] in the chord's parameter 0 .. 1.
+ *  The shore ring is cut exactly where a deck crosses it, so the gap at a bridge head is the deck between its rails and nothing more (the 2 * COLLIDER.gap extension of the kept pieces reaches into the rectangle, under the rails). */
+export function chordOutside(a, b, rects) {
+  let keep = [[0, 1]];
+  const ex = b[0] - a[0], ez = b[1] - a[1];
+  for (const r of rects) {
+    const dx = r.bx - r.ax, dz = r.bz - r.az, len = Math.hypot(dx, dz) || 1, ux = dx / len, uz = dz / len;
+    const u0 = (a[0] - r.ax) * ux + (a[1] - r.az) * uz, v0 = (a[0] - r.ax) * -uz + (a[1] - r.az) * ux, du = ex * ux + ez * uz, dv = ex * -uz + ez * ux;
+    // the parameter interval where the chord lies inside the slab 0 <= u <= len, then inside |v| <= hw (each a slab: an interval of t)
+    const slab = (p0, d, lo, hi) => { if (Math.abs(d) < 1e-12) return p0 >= lo && p0 <= hi ? [0, 1] : null; let t0 = (lo - p0) / d, t1 = (hi - p0) / d; if (t0 > t1) { const t = t0; t0 = t1; t1 = t; } return t1 < 0 || t0 > 1 ? null : [Math.max(0, t0), Math.min(1, t1)]; };
+    const su = slab(u0, du, 0, len), sv = slab(v0, dv, -r.hw, r.hw); if (!su || !sv) continue;
+    const i0 = Math.max(su[0], sv[0]), i1 = Math.min(su[1], sv[1]); if (i1 <= i0) continue;
+    const next = []; for (const [k0, k1] of keep) { if (i1 <= k0 || i0 >= k1) { next.push([k0, k1]); continue; } if (i0 > k0) next.push([k0, i0]); if (i1 < k1) next.push([i1, k1]); }
+    keep = next;
+  }
+  return keep;
+}
+
 /**
  * The plan of the ponds (pure, deterministic).
- *   o.union (data/water.js WATER_UNION), o.ponds (a datum table), o.gaps ([{ x, z, r }]: no collider starts within r of it; T4b), o.slopeAt (the bank slope function, default the table's)
+ *   o.union (data/water.js WATER_UNION), o.ponds (a datum table), o.gaps ([{ x, z, r }]: no collider starts within r of it; T4b), o.decks ([{ ax, az, bx, bz, hw }]: T4b, the chords are CUT where they cross a deck rectangle, chordOutside), o.slopeAt (the bank slope function, default the table's)
  * water: the surface at P.WATER_Y over the union with its holes (earcut), counter-clockwise seen from above (normal +y); area = the sum of the triangle areas.
  * quay: the kerb skirt that closes the step between the street and the floor on every stretch of the garden outline where there is one (planQuay; o.floor = the plan of the floor (terrain-mesh.js planTerrain); without it there is no skirt; o.garden = the flat ring of the garden outline, o.quay = a table, o.lift = the offset of the floor mesh)
  * colliders: boxes along the contour ring at P.COLLIDER.contourY, inland of the shore, merged (chord tolerance, maximum length), each { cx, cz, w (thickness), d (length), rot, y0, y1, len }.
  */
 export function planPonds(o = {}) {
-  const P = o.ponds || PONDS, union = o.union || WATER_UNION, slopeAt = o.slopeAt || slopeOf(P), C = P.COLLIDER, gaps = o.gaps || [];
+  const P = o.ponds || PONDS, union = o.union || WATER_UNION, slopeAt = o.slopeAt || slopeOf(P), C = P.COLLIDER, gaps = o.gaps || [], decks = o.decks || [];
   // ---- the water surface
   const pos = [], idx = []; let area = 0, holes = 0;
   for (const poly of union) {
@@ -169,31 +188,53 @@ export function planPonds(o = {}) {
   // ---- the kerb skirt (the quay)
   const quay = planQuay(o.floor || null, o.garden || GARDEN.o, o.quay || P.QUAY, o.lift ?? TERRAIN.lift);
   // ---- the colliders
-  const colliders = []; let chords = 0;
+  const colliders = []; let chords = 0, cut = 0, cutM = 0;
   for (const ring of ringsOf(union)) {
     const contour = offsetRing(ring, (x, z) => landOffsetAt(C.contourY, slopeAt(x, z), P)), chain = simplifyClosed(contour, C.chord, C.maxLen), m = chain.length;
     // the land side of the chain: the same land normal as the ring, from the chord itself
     for (let i = 0; i < m; i++) {
-      const a = chain[i], b = chain[(i + 1) % m], ex = b[0] - a[0], ez = b[1] - a[1], len = Math.hypot(ex, ez); if (len < 1e-3) continue;
-      const nx = -ez / len * ring.sg, nz = ex / len * ring.sg;                    // toward the land
-      const mx = (a[0] + b[0]) / 2 + nx * C.thick / 2, mz = (a[1] + b[1]) / 2 + nz * C.thick / 2;
+      const a0 = chain[i], b0 = chain[(i + 1) % m], len0 = Math.hypot(b0[0] - a0[0], b0[1] - a0[1]); if (len0 < 1e-3) continue;
       chords++;
-      if (gaps.some((g) => Math.hypot(a[0] - g.x, a[1] - g.z) < g.r || Math.hypot(b[0] - g.x, b[1] - g.z) < g.r || Math.hypot(mx - g.x, mz - g.z) < g.r)) continue;
-      colliders.push({ cx: mx, cz: mz, w: C.thick, d: len + 2 * C.gap, rot: Math.atan2(ex, ez), y0: C.y0, y1: C.top, len });
+      // T4b: the pieces of the chord outside the deck rectangles (a chord that no deck crosses is one piece, 0 .. 1)
+      const pieces = decks.length ? chordOutside(a0, b0, decks) : [[0, 1]];
+      if (pieces.length !== 1 || pieces[0][0] !== 0 || pieces[0][1] !== 1) { cut++; cutM += len0 * (1 - pieces.reduce((s, q) => s + q[1] - q[0], 0)); }
+      for (const [t0, t1] of pieces) {
+        const a = [a0[0] + (b0[0] - a0[0]) * t0, a0[1] + (b0[1] - a0[1]) * t0], b = [a0[0] + (b0[0] - a0[0]) * t1, a0[1] + (b0[1] - a0[1]) * t1];
+        const ex = b[0] - a[0], ez = b[1] - a[1], len = Math.hypot(ex, ez); if (len < 1e-3) continue;
+        const nx = -ez / len * ring.sg, nz = ex / len * ring.sg;                    // toward the land
+        const mx = (a[0] + b[0]) / 2 + nx * C.thick / 2, mz = (a[1] + b[1]) / 2 + nz * C.thick / 2;
+        if (gaps.some((g) => Math.hypot(a[0] - g.x, a[1] - g.z) < g.r || Math.hypot(b[0] - g.x, b[1] - g.z) < g.r || Math.hypot(mx - g.x, mz - g.z) < g.r)) continue;
+        colliders.push({ cx: mx, cz: mz, w: C.thick, d: len + 2 * C.gap, rot: Math.atan2(ex, ez), y0: C.y0, y1: C.top, len });
+      }
     }
   }
   const shoreM = colliders.reduce((s, c) => s + c.len, 0);
-  return { water, quay, colliders, stats: { waterTriangles: water.triangles, quayTriangles: quay.triangles, quayLength: quay.length, waterArea: water.area, holes, colliders: colliders.length, chords, colliderLengthM: shoreM, y: P.WATER_Y, top: C.top, contourY: C.contourY } };
+  return { water, quay, colliders, stats: { waterTriangles: water.triangles, quayTriangles: quay.triangles, quayLength: quay.length, waterArea: water.area, holes, colliders: colliders.length, chords, chordsCut: cut, cutLengthM: cutM, colliderLengthM: shoreM, y: P.WATER_Y, top: C.top, contourY: C.contourY } };
 }
 
-/** The material of the pond water: waterMaterial of environment/water.js with the LOOK key of the datum table, no wall shadow and no bridge zones, plus the duckweed mat of the Small Pond (a patch of the fragment shader: the key is the only edit of environment/water.js) */
-export function pondMaterial(ctx, field, P = PONDS) {
-  const m = waterMaterial(ctx, field, { key: P.WATER_LOOK_KEY, wallH: 0, cut: false, zones: [] });
-  const S = P.SMALL_POND;
+/** The material of the pond water: waterMaterial of environment/water.js with the LOOK key of the datum table, no wall shadow, the garden bridges as its deck zones (T4b: `zones` = [{ c, axis, w, len }], the soffit shadow under a deck), plus the duckweed mat of the
+ *  Small Pond and the look tune of the ponds (T4b, data/ponds.js POND_LOOK: the T4a GPU QA read the narrow east and south arms as pale speckled gravel from 50 .. 250 m: the olive shallow tint reached 5 m from either bank, the ripple
+ *  iso-lines and the sun glints covered an arm that is 8 .. 12 m wide; the tune narrows the shallow band, damps the lines and the glints and keeps the deck zones to the deck) - patches of the fragment shader: the key is the only edit of environment/water.js */
+export function pondMaterial(ctx, field, P = PONDS, zones = []) {
+  const m = waterMaterial(ctx, field, { key: P.WATER_LOOK_KEY, wallH: 0, cut: false, zones });
+  const S = P.SMALL_POND, T = P.POND_LOOK;
   m.uniforms.uSmall = { value: new THREE.Vector4(S.mouthZ, S.eastX, S.blendZ, S.blendX) };
   m.uniforms.uDuck = { value: new THREE.Vector2(P.DUCKWEED.band, P.DUCKWEED.cover) };
+  m.uniforms.uPondA = { value: new THREE.Vector4(T.shallowBand, T.shallowMix, T.lines, T.glint) };
+  m.uniforms.uPondB = { value: new THREE.Vector4(T.soffit, T.soffitFade, T.sunSheet, 0) };
+  m.uniforms.uPondC = { value: new THREE.Vector2(T.air[0], T.air[1]) };
+  // the deck zones of a footbridge are the deck itself (waterMaterial pads a zone by 1 m across and 6 m along, the size of a street bridge): the deck's own half width + 0.3, the deck length minus the fade
+  zones.slice(0, 24).forEach((z, i) => { m.uniforms.uBrS.value[i].set(z.w / 2 + 0.3, Math.max(0.5, z.len / 2 - T.soffitFade / 2)); });
   const fs = m.fragmentShader;
-  const withUniforms = fs.replace('varying vec3 vW;', 'varying vec3 vW; uniform vec4 uSmall; uniform vec2 uDuck;');
+  const patch = (src, from, to) => { if (!src.includes(from)) throw new Error('ponds.js pondMaterial: the fragment shader of environment/water.js changed (cannot find: ' + from.slice(0, 40) + ')'); return src.replace(from, to); };
+  let withUniforms = fs.replace('varying vec3 vW;', 'varying vec3 vW; uniform vec4 uSmall; uniform vec2 uDuck; uniform vec4 uPondA; uniform vec4 uPondB; uniform vec2 uPondC;');
+  withUniforms = patch(withUniforms, 'col = mix(col, uShallow, (1.0 - smoothstep(0.5, 5.0, dsh)) * 0.45 * inside);', 'col = mix(col, uShallow, (1.0 - smoothstep(0.4, uPondA.x, dsh)) * uPondA.y * inside);');
+  withUniforms = patch(withUniforms, 'clamp(lineA * 0.32 + lineB * 0.32, 0.0, 1.0) * (0.2 + 0.4 * fres) * (1.0 - 0.5 * shade));', 'clamp(lineA * 0.32 + lineB * 0.32, 0.0, 1.0) * (0.2 + 0.4 * fres) * (1.0 - 0.5 * shade) * uPondA.z);');
+  // fix round 1: the two sun terms (the glitter sheet: a warm white added over all the sun-facing water; the glints: the speckles) fade out with the view elevation (POND_LOOK.air): the east aerials saw a pale speckled band
+  withUniforms = patch(withUniforms, 'col += vec3(1.0, 0.88, 0.7) * sheet * 0.26 * (1.0 - uNight) * (1.0 - shade);', 'float pondAir = 1.0 - smoothstep(uPondC.x, uPondC.y, V.y);\n        col += vec3(1.0, 0.88, 0.7) * sheet * 0.26 * (1.0 - uNight) * (1.0 - shade) * uPondB.z * pondAir;');
+  withUniforms = patch(withUniforms, 'col += vec3(1.0, 0.93, 0.8) * glint * 1.1 * (1.0 - 0.7 * uNight);', 'col += vec3(1.0, 0.93, 0.8) * glint * 1.1 * (1.0 - 0.7 * uNight) * uPondA.w * pondAir;');
+  withUniforms = patch(withUniforms, 'under = max(under, 1.0 - smoothstep(0.0, 5.0, max(max(da, dp), 0.0)));', 'under = max(under, 1.0 - smoothstep(0.0, uPondB.y, max(max(da, dp), 0.0)));');
+  withUniforms = patch(withUniforms, 'col = mix(col, col * vec3(0.16, 0.2, 0.26), under);', 'col = mix(col, col * uPondB.x, under);');
   const mat = `
         // the duckweed mat of the Small Pond (T4a): green flecks on the water within uDuck.x metres of the bank (the distance field of the field mask), patchy
         float smallW = 1.0 - smoothstep(uSmall.x, uSmall.x + uSmall.z, vW.z) * smoothstep(uSmall.y - uSmall.w, uSmall.y, vW.x);
@@ -215,7 +256,7 @@ export function buildPonds(ctx, parent, plan, opts = {}) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(W.pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(W.nrm, 3)); g.setIndex(new THREE.BufferAttribute(W.idx, 1));
   g.computeBoundingBox(); g.computeBoundingSphere();
-  const mesh = new THREE.Mesh(g, pondMaterial(ctx, opts.field ?? ctx.services?.environment?.field ?? null, P));
+  const mesh = new THREE.Mesh(g, pondMaterial(ctx, opts.field ?? ctx.services?.environment?.field ?? null, P, opts.zones || []));
   mesh.name = 'tauride-pond-water'; mesh.receiveShadow = false; mesh.castShadow = false; mesh.renderOrder = 1;
   ctx.noBatch(mesh); ctx.noOutline(mesh); parent.add(mesh);
   // the kerb skirt (the quay): one more draw (a granite-grey toon material, the floor's lighting; one-sided, facing the garden where the floor is below the street and the street where it is above)

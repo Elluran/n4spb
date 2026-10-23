@@ -138,7 +138,13 @@ export function buildNav(ctx, cfg = {}) {
   /** in the castle / Mikhailovsky reach (x -1480 .. -600, z < -635): the ground under the point is a trench / the water / a descent (the quay stairs, the canal bank) and it is no bridge deck: no pavement node there */
   const deepGround = (x, z) => { if (x > WEST_X || !(x >= -1480 && z <= -635)) return false;                    // (the pavement strips there run over the Neva quay and the canal descents)
     const h = ctx.physics.groundHeight(x, z, 0.6, false); return Number.isFinite(h) && h < -0.6 && !deckWalk(x, z); };
-  const water = (x, z) => rawWater(x, z) && !westDeck(x, z);
+  // The decks of the services that the area names (HOOKS.deckServices, docs/AREAS.md 9.1: the Paradny podium and the garden bridges of the North's landmarksTauride): asked FIRST by surfaceY (below), as the source does; a service that is not
+  // built / has no deckY / answers null is skipped. T4b: a point on such a deck is NOT water for the pedestrians (the garden bridges cross the ponds, which are in the field's water mask): the strip names no service, so DECKS is empty and nothing is asked.
+  const DECKS = HOOKS.deckServices || [];
+  const serviceDeck = (x, z) => { for (let i = 0; i < DECKS.length; i++) { const d = svc[DECKS[i]]?.deckY?.(x, z); if (d != null) return d; } return null; };
+  const serviceLift = (x, z) => { for (let i = 0; i < DECKS.length; i++) { const l = svc[DECKS[i]]?.deckLift?.(x, z); if (l != null && Number.isFinite(l)) return l; } return 0.12; };     // what the feet stand above the deck: the service may say (a garden bridge: 0.02), else the pavement lift
+  const areaDeck = DECKS.length ? (x, z) => serviceDeck(x, z) != null : () => false;
+  const water = (x, z) => rawWater(x, z) && !westDeck(x, z) && !areaDeck(x, z);
   // the Anichkov Bridge deck covers the river polygon: people walk on its pavements (a rectangle in the bridge frame)
   const bridge = svc.landmarksC && svc.landmarksC.bridge, bfr = bridge && bridge.frame;
   const bth = bfr ? bfr.theta : 14.2 * Math.PI / 180, bcx = bfr ? bfr.cx : -441.5, bcz = bfr ? bfr.cz : -91.8, bcu = Math.cos(bth), bsu = Math.sin(bth);
@@ -403,8 +409,10 @@ export function buildNav(ctx, cfg = {}) {
     }
   }
   nSidewalk = N.x.length;
-  // mapped footways (not steps)
-  for (const s of (st && st.paths) || []) {
+  // mapped footways (not steps); T4b: and the walkways of the area's deck services (the garden bridges of landmarksTauride: streets/paths.js keeps no bridge way in st.paths, and a bridge is the one place
+  // where the mapped alleys cross the water; a service publishes walkways = [{ id, pts: [[x, z], ...] }], the axis of each deck from alley end to alley end; the strip names no service, so the list is empty)
+  const deckWalkways = []; for (let i = 0; i < DECKS.length; i++) for (const w of (svc[DECKS[i]]?.walkways || [])) deckWalkways.push({ hw: 'deck', pts: w.pts });
+  for (const s of [...((st && st.paths) || []), ...deckWalkways]) {
     if (s.hw === 'steps' || !s.pts || s.pts.length < 2) continue;
     const g = groupId++; let prev = -1, accL = 0, lastp = null;
     for (let i = 0; i < s.pts.length; i++) {
@@ -646,13 +654,11 @@ export function buildNav(ctx, cfg = {}) {
   /** the standing height at (x, z): the pavement 0.12 / the given y, or the humped deck of the Anichkov Bridge + 0.12 */
   // feet height from the REAL walkable surface: the humped Anichkov deck (landmarksC.bridge.deckY, + the 0.12 m granite pavement) first, then physics.groundHeight (walk boxes / ramps /
   // steps, roofs excluded) when it is raised above the terrain; otherwise the given y (pavement 0.12, hall 0.03 ...)
-  // The decks of the services that the area names (HOOKS.deckServices: the Paradny podium and the garden bridges of the North's landmarksTauride) are asked before that, as the source does; a service that is not built is skipped
-  const DECKS = HOOKS.deckServices || [];
-  const serviceDeck = (x, z) => { for (let i = 0; i < DECKS.length; i++) { const d = svc[DECKS[i]]?.deckY?.(x, z); if (d != null) return d; } return null; };
+  // The decks of the services that the area names (HOOKS.deckServices: the Paradny podium and the garden bridges of the North's landmarksTauride) are asked before that, as the source does (serviceDeck / serviceLift above, with the water test)
   nav.surfaceY = (x, z, y) => {
     if (longs.length && x < WEST_X) { const wd = westDeck(x, z); if (wd && wd.long) return wd.y + (wd.foot ? 0.02 : WLIFT[wd.kind] || 0); }       // the long Neva bridge: the deck itself
     const dy = serviceDeck(x, z) ?? (bridge && bridge.deckY ? bridge.deckY(x, z) : null);
-    if (dy != null && Number.isFinite(dy)) { if (x < WEST_X) { const wd = westDeck(x, z); if (wd) return wd.y + (wd.foot ? 0 : WLIFT[wd.kind] || 0); } return dy + 0.12; }
+    if (dy != null && Number.isFinite(dy)) { if (x < WEST_X) { const wd = westDeck(x, z); if (wd) return wd.y + (wd.foot ? 0 : WLIFT[wd.kind] || 0); } return dy + serviceLift(x, z); }
     if (onDeck(x, z, 0.3)) { const h = ctx.physics.groundHeight(x, z, 2.0, false); return Number.isFinite(h) ? h + 0.12 : y; }
     // T2: where the area lifts the terrain (a height patch: the relief of the Tauride Garden) a walker stands ON it, uphill and downhill (the physics lookup below only sees terrain within feet + 2.45 m and never lowers y); the strip has no patch
     if (HEIGHT_PATCHES.length) { const th = L.heightAt(x, z); if (th > 0.06 || (th < -0.06 && HOOKS.inGarden && HOOKS.inGarden(x, z))) return th + 0.02; }      // T4a: and on the bank of a garden pond (the ground sinks to the waterline, -0.45 m): the walker stands on it, the physics lookup below never lowers y

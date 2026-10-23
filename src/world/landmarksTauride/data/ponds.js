@@ -52,6 +52,13 @@ export const BED_COLORS = { mud: '#5a5236', silt: '#6c6340', wet: '#625c3c', san
 export const WATER_LOOK_KEY = 'tauride-pond';
 /** the duckweed band of the Small Pond: a green mat on the water that is within `band` m of the bank, `cover` its share at the bank (0 .. 1) */
 export const DUCKWEED = { band: 6, cover: 0.85 };
+/** T4b: the look tune of the pond water (ponds.js pondMaterial patches the engine's water shader with it; the T4a GPU QA read the narrow east and south arms, 8 .. 12 m wide, as pale speckled gravel / cracked ice from 50 .. 250 m: the olive
+ *  shallow tint of the shader reaches 5 m from either bank, its ripple iso-lines and sun glints cover a whole arm): `shallowBand` m from the bank over which the shallow tint fades out, `shallowMix` its strength, `lines` and `glint` the
+ *  factors on the ripple iso-lines and the sun glints (1 = the engine's canals), `soffit` the darkening under a bridge deck (a factor on the colour; the engine: a near-black 0.16 .. 0.26 for a street bridge), `soffitFade` m beyond the deck.
+ *  T4b fix round 1 (the GPU QA: from the EAST aerials at 110 .. 250 m, with the sun ahead, the west canal was still a pale speckled band): `sunSheet` the factor on the engine's low-sun glitter sheet (a warm white ADDED over the whole
+ *  sun-facing water: the pale base of the band; the glints were the speckles on it), `air` [from, to] the view elevation (the up component of the direction to the camera, 0 at eye level, 1 straight down) over which BOTH sun terms
+ *  fade out: at eye level the sun's path on the water stays (judged water by the QA), from the air a pond shows no glitter in the toon look */
+export const POND_LOOK = { shallowBand: 2.4, shallowMix: 0.3, lines: 0.4, glint: 0.3, soffit: 0.45, soffitFade: 1.5, sunSheet: 0.5, air: [0.3, 0.55] };
 
 /** Where the water ends up for the other systems (the water mask / env.waterAt, the pedestrians): the shore distance below which a point counts as water */
 export const MASK_SHORE = 0;

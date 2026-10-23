@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tauride bridge preview (software GL)</title>
+<!-- The harness of tools/tauride/bridge-preview.mjs (T4b fix round 1): builds the garden pieces of landmarksTauride.js in the module's order (floor, ground material, the bridges and the dam, the alleys, the ponds with the patched water shader, the reeds)
+     with the real modules and renders views with the real three.js on software GL. No environment (the water has no field: the shallow band and the soffit zones read as open water), no city, no outline pass. -->
+<script type="importmap">
+{ "imports": {
+  "/src/world/data/city.js": "/src/areas/north/data/city.js",
+  "/src/world/area.js": "/src/areas/north/area.js",
+  "/src/world/city/known-data.js": "/src/areas/north/known-data.js",
+  "three": "/node_modules/three/build/three.module.js",
+  "three/addons/": "/node_modules/three/examples/jsm/"
+} }
+</script>
+<style>html,body{margin:0;background:#888}canvas{display:block}</style></head>
+<body><canvas id="c" width="1280" height="720"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { createContext } from '/src/core/ctx.js';
+import * as L from '/src/world/layout.js';
+import { GREEN } from '/src/world/data/city.js';
+import { gardenHeight, RELIEF_BOX } from '/src/world/landmarksTauride/height.js';
+import { planTerrain, buildTerrain, floorOptions, makeMeshHeight } from '/src/world/landmarksTauride/terrain-mesh.js';
+import { planGroundMask, gardenGroundMaterial, collectGroundInputs, makeNoiseTexture } from '/src/world/landmarksTauride/ground-material.js';
+import { planPaths, buildPaths } from '/src/world/landmarksTauride/paths-draped.js';
+import { planPonds, buildPonds } from '/src/world/landmarksTauride/ponds.js';
+import { planBridges, buildBridges } from '/src/world/landmarksTauride/bridges.js';
+import { planReeds, buildReeds } from '/src/world/landmarksTauride/reeds.js';
+import { POND_LOOK } from '/src/world/landmarksTauride/data/ponds.js';
+import * as DG from '/src/world/landmarksTauride/data/footprints.js';
+import * as DW from '/src/world/landmarksTauride/data/water.js';
+import * as DP from '/src/world/landmarksTauride/data/paths.js';
+import * as DF from '/src/world/landmarksTauride/data/furniture.js';
+const errors = [];
+const origErr = console.error; console.error = (...a) => { errors.push(a.map(String).join(' ').slice(0, 2000)); origErr(...a); };
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(1280, 720, false);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(62, 1280 / 720, 0.25, 3000);
+camera.layers.enable(1);  /* the garden meshes are on LAYER_NO_OUTLINE (colour pass only, core/renderer.js MASK_COLOR) */
+const sunDir = new THREE.Vector3(...L.SUN_DIR).normalize();
+scene.background = new THREE.Color('#a9c4e0'); scene.fog = new THREE.FogExp2('#b7cde6', 0.00045);
+const sun = new THREE.DirectionalLight('#fff2dc', 2.6); sun.position.copy(sunDir.clone().multiplyScalar(500)); scene.add(sun, new THREE.HemisphereLight('#cfe3ff', '#7a8a60', 1.1));
+const ctx = createContext({ scene, camera, renderer, audio: null, quality: { name: 'medium', pixelRatio: 1, msaa: 4, shadowMap: 2048, shadowSize: 70, petals: 0.6 }, sunDir });
+ctx.shared = ctx.shared || {}; ctx.shared.uTime = ctx.shared.uTime || { value: 0 };
+const T = {}; const t0 = performance.now(); const lap = (n) => { T[n] = +(performance.now() - t0).toFixed(0); };
+const tplan = planTerrain(gardenHeight, RELIEF_BOX, floorOptions()); lap('terrainPlan');
+const mask = planGroundMask(collectGroundInputs({ GARDEN: DG.GARDEN, GARDEN_GREEN: DG.GARDEN_GREEN, FOOTPRINTS: DG.FOOTPRINTS, WATER_UNION: DW.WATER_UNION, PATHS: DP.PATHS, BENCHES: DF.BENCHES, GATES: DF.GATES, MONUMENTS: DF.MONUMENTS, FOUNTAINS: DF.FOUNTAINS }, GREEN, gardenHeight)); lap('mask');
+const noise = makeNoiseTexture(), ground = gardenGroundMaterial(ctx, mask, noise);
+const root = new THREE.Group(); scene.add(root);
+const terrain = buildTerrain(ctx, root, tplan, { material: ground.mat }); lap('terrain');
+const meshHeight = makeMeshHeight(tplan);
+const bplan = planBridges({ gh: (x, z) => meshHeight(x, z) ?? gardenHeight(x, z) }), bridges = buildBridges(ctx, root, bplan, { physics: null }); lap('bridges');
+const pplan = planPaths(DP.PATHS, { meshHeight, gh: gardenHeight, deckAt: bplan.deckY }), paths = buildPaths(ctx, root, pplan, noise); lap('paths');
+const pondsPlan = planPonds({ floor: tplan, decks: bplan.decks }), ponds = buildPonds(ctx, root, pondsPlan, { zones: bplan.zones, field: null, physics: null }); lap('ponds');
+const rplan = planReeds({ keepOut: bplan.keepOut }), reeds = buildReeds(ctx, root, rplan); lap('reeds');
+const pm = ponds.mesh.material;
+/* the sun terms of the pond water (fix round 1: POND_LOOK.sunSheet and .air): `old` renders them as T4b shipped them (the full glitter sheet, no fade with the view elevation) for a before / after pair */
+const pondKnobs = (old) => { if (old) { pm.uniforms.uPondB.value.z = 1; pm.uniforms.uPondC.value.set(10, 11); } else { pm.uniforms.uPondB.value.z = POND_LOOK.sunSheet; pm.uniforms.uPondC.value.set(POND_LOOK.air[0], POND_LOOK.air[1]); } };
+const view = (x, y, z, yaw, pitch, old = false) => { pondKnobs(old); camera.position.set(x, y, z); camera.rotation.order = 'YXZ'; camera.rotation.set(THREE.MathUtils.degToRad(pitch), THREE.MathUtils.degToRad(yaw), 0); camera.updateMatrixWorld(true); renderer.info.reset(); renderer.render(scene, camera); window.__last = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }; return canvas.toDataURL('image/png'); };
+window.__api = { view, errors, T, stats: { paths: pplan.stats, terrainTris: terrain.triangles, bridges: { triangles: bridges.triangles, draws: bridges.draws }, ponds: { triangles: ponds.triangles, draws: ponds.draws }, reeds: { instances: reeds.instances } }, programs: () => renderer.info.programs.length };
+window.__done = true;
+</script></body></html>

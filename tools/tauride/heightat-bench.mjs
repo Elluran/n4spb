@@ -13,6 +13,8 @@ import { spawnSync } from 'node:child_process';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i >= 0 ? process.argv[i + 1] : d; };
+/** the T4b gate (docs/TAURIDE-REMAKE.md, the T4a decision of the lead): T4a's cold median over the garden lattice, measured alone on the T4a tree (fix round 2), and the allowed growth from there */
+const T4B_GATE = { t4aColdMs: 31.45, percent: 10 };
 if (arg('repeat', null)) {
   const N = Number(arg('repeat')), north = (process.env.AREA || 'strip') === 'north', modes = north ? ['old', 'paradny', 'full'] : ['full'], res = Object.fromEntries(modes.map((m) => [m, { cold: [], warm: [] }]));
   for (let k = 0; k < N; k++) for (const m of modes) {
@@ -21,7 +23,9 @@ if (arg('repeat', null)) {
   }
   const st = (a) => { const s = a.slice().sort((x, y) => x - y); return { mean: +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2), median: +s[s.length >> 1].toFixed(2), min: +s[0].toFixed(2), max: +s[s.length - 1].toFixed(2) }; };
   const out = { area: process.env.AREA || 'strip', repeat: N, modes: Object.fromEntries(modes.map((m) => [m, { cold: st(res[m].cold), warm: st(res[m].warm) }])) };
-  if (north) { const p = out.modes.paradny, f = out.modes.full, pc = (a, b) => +((a / b - 1) * 100).toFixed(1); out.fullVsParadnyPercent = { coldMean: pc(f.cold.mean, p.cold.mean), coldMedian: pc(f.cold.median, p.cold.median), warmMean: pc(f.warm.mean, p.warm.mean), warmMedian: pc(f.warm.median, p.warm.median), addedColdMs: +(f.cold.median - p.cold.median).toFixed(2), gate: 30 }; out.fullVsParadnyPercent.pass = out.fullVsParadnyPercent.coldMedian <= 30; }      // T4a fix round 1: the verdict is part of the line (the T4a terrain breaches the gate: the garden patch hull is 97 % of the garden box, see docs/TAURIDE-REMAKE.md)
+  if (north) { const p = out.modes.paradny, f = out.modes.full, pc = (a, b) => +((a / b - 1) * 100).toFixed(1); out.fullVsParadnyPercent = { coldMean: pc(f.cold.mean, p.cold.mean), coldMedian: pc(f.cold.median, p.cold.median), warmMean: pc(f.warm.mean, p.warm.mean), warmMedian: pc(f.warm.median, p.warm.median), addedColdMs: +(f.cold.median - p.cold.median).toFixed(2), gate: 30 }; out.fullVsParadnyPercent.pass = out.fullVsParadnyPercent.coldMedian <= 30;      // T4a fix round 1: the verdict is part of the line (the T4a terrain breaches the +30 % gate: the garden patch hull is 97 % of the garden box; ACCEPTED by the lead at T4b, see docs/TAURIDE-REMAKE.md)
+    // T4b (the lead's gate from here on): the cold pass must not grow by more than T4B_GATE.percent over the T4a measure (the bridges are a deck SERVICE, not terrain: deckY must not enter layout.heightAt)
+    out.fullVsT4a = { t4aColdMs: T4B_GATE.t4aColdMs, coldMedian: f.cold.median, percent: pc(f.cold.median, T4B_GATE.t4aColdMs), gate: T4B_GATE.percent, pass: f.cold.median <= T4B_GATE.t4aColdMs * (1 + T4B_GATE.percent / 100) }; }
   console.log(JSON.stringify(out));
   process.exit(0);
 }
