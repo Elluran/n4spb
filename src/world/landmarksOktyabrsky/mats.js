@@ -1,6 +1,6 @@
 // landmarksOktyabrsky/mats.js - materials of the module (ctx.mat.toon / glass only; every name starts with 'lmOkt-').  Colours: docs/research/oktyabrsky.md section 7, oktyabrsky-square.md section 9.
 // M.cutouts = alpha cut-outs (no outline pass), M.decals = sheets that lie 2-6 cm in front of a surface (polygonOffset), M.glassy = transparent sheets (no outline, no shadow).
-import { makeArt, COL } from './art.js';
+import { makeArt, makeMonumentArt, COL } from './art.js';
 
 export const C = { ...COL };
 
@@ -40,5 +40,27 @@ export function makeMats(ctx) {
   M.cutouts = new Set();
   M.decals = new Set([M.posters, M.paving, M.pavingRed, M.glassSide]);
   M.glassy = new Set([M.glass, M.reflect, M.doorGlass]);
+  return M;
+}
+
+/** the materials of the Kapodistrias monument and its setting (the source's makeMats at 0568f7af, block "monument and setting"), added to M only where the area claims the monument
+ *  (landmarksOktyabrsky.js: the strip never calls this, so its textures and materials do not exist there) */
+export function addMonumentMats(ctx, M) {
+  const T = ctx.mat.toon, A = makeMonumentArt(ctx, M.A), C = M.C;
+  const W = '#ffffff';
+  const sheet = (name, map, o = {}) => T(W, { map, name: 'lmOkt-' + name, paint: 0.02, ...o });
+  const flat = (name, col, o = {}) => T(col, { name: 'lmOkt-' + name, paint: 0.03, ...o });
+  Object.assign(M, {
+    // ---- monument and setting
+    verdi: T(W, { map: A.verdi, name: 'lmOkt-verdi', paint: 0.03, emissive: '#0b1c16', emissiveIntensity: 0.3 }),
+    verdiDark: T('#a6bdb4', { map: A.verdi, name: 'lmOkt-verdiDark', paint: 0.03, emissive: '#06120d', emissiveIntensity: 0.2 }),
+    granite: T(W, { map: A.graniteGrain, name: 'lmOkt-granite', paint: 0.04 }), graniteShade: flat('graniteShade', C.graniteShade, { paint: 0.04 }), slope: flat('slope', C.slope, { paint: 0.04 }), slabPlinth: T('#f2eee4', { map: A.graniteGrain, name: 'lmOkt-slabPlinth', paint: 0.04 }),
+    plaque: T(W, { map: A.plaque, name: 'lmOkt-plaque', paint: 0, alphaTest: 0.5, polygonOffset: -2 }), plaqueBody: flat('plaqueBody', '#3f8576', { paint: 0.02 }),
+    back: T(W, { map: A.back, name: 'lmOkt-back', paint: 0, alphaTest: 0.4, polygonOffset: -2 }),
+    begonia: T(W, { map: A.begonia, name: 'lmOkt-begonia', paint: 0.03, polygonOffset: -5 }), board: sheet('board', A.board, { paint: 0 }), boardRim: flat('boardRim', '#1d2220', { paint: 0.01 }),
+    bin: flat('bin', '#25282b', { paint: 0.02 }),
+  });
+  M.cutouts.add(M.plaque).add(M.back);
+  M.decals.add(M.begonia);
   return M;
 }
