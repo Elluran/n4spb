@@ -3,8 +3,8 @@
 import { polyLen } from './common.mjs';
 import { makePlayer, walkDir, walkToward } from './stub-env.mjs';
 
-/** water depth at (x, z) for the model: 0 on land and under a deck, else waterLevel - heightAt (never negative) */
-export const depthAt = (m, x, z) => (m.inWater(x, z) ? Math.max(0, m.waterLevel - m.heightAt(x, z)) : 0);
+/** water depth at (x, z) for the model: 0 on land and on a deck (m.deckY: the bridge kit of T4b, null off the decks), else waterLevel - heightAt (never negative) */
+export const depthAt = (m, x, z) => (m.inWater(x, z) && !(m.deckY && m.deckY(x, z) !== null) ? Math.max(0, m.waterLevel - m.heightAt(x, z)) : 0);
 
 /**
  * Probes along the shore of the water outline `ring` (flat): segments longer than `minLen` with water on one side within 2 m, no building 4 m inland; `count` of them, evenly spread
@@ -157,9 +157,11 @@ export function carBreach(S, carBlocked) {
  * (shore distance < -0.02) or below the waterline; `minD` = the closest the feet came to the outline (negative = past it). Entered runs then walk back for 10 s: `exited` = back on land.
  * Returns { runs, skipped, entered, trapped, minD, p01, byMode: { mode: { runs, entered, minD } }, worst: [{ x, z, angle, mode, minD }] }
  */
-export function wadeRing(world, shore, segs, { spacing = 3, inland = 4, angles = [0, 30, -30, 60, -60, 80, -80], modes = ['walk', 'sprint', 'jump'], ticks = 360, waterY = -0.45, limit = Infinity, offset = 0.5 } = {}) {
-  const { ph } = world, res = { runs: 0, skipped: 0, entered: 0, trapped: 0, minD: Infinity, byMode: {}, worst: [], samples: [] };
+export function wadeRing(world, shore, segs, { spacing = 3, inland = 4, angles = [0, 30, -30, 60, -60, 80, -80], modes = ['walk', 'sprint', 'jump'], ticks = 360, waterY = -0.45, limit = Infinity, offset = 0.5, deckY = null } = {}) {
+  const { ph } = world, res = { runs: 0, skipped: 0, entered: 0, trapped: 0, onDeck: 0, minD: Infinity, byMode: {}, worst: [], samples: [] };
   for (const m of modes) res.byMode[m] = { runs: 0, entered: 0, minD: Infinity };
+  // T4b: a walker who went onto a bridge deck over the water has not entered the water (deckY = the bridge kit's profile, the feet on it within 10 cm)
+  const onDeck = deckY ? (x, z, y) => { const d = deckY(x, z); return d !== null && y >= d - 0.1; } : () => false;
   let started = 0;
   for (let i = 0; i < segs.n; i++) {
     const len = Math.hypot(segs.ex[i], segs.ez[i]), k = Math.max(1, Math.floor(len / spacing));
@@ -180,7 +182,9 @@ export function wadeRing(world, shore, segs, { spacing = 3, inland = 4, angles =
             p.yaw = Math.atan2(-dx, -dz); p.keys.add('KeyW'); if (mode === 'sprint') p.keys.add('ShiftLeft');
             if (mode === 'jump' && p.onGround) p.vy = 4.2;
             p.update(1 / 60);
-            const d = shore.dist(p.pos.x, p.pos.z); if (d < minD) minD = d;
+            const d = shore.dist(p.pos.x, p.pos.z);
+            if (d < 0 && onDeck(p.pos.x, p.pos.z, p.pos.y)) { res.onDeck++; continue; }
+            if (d < minD) minD = d;
             if (d < -0.02 || (d < 0 && p.pos.y < waterY - 0.02)) entered = true;
             if (tk % 30 === 29) { if (Math.hypot(p.pos.x - bx, p.pos.z - bz) < 0.01 && tk > 120) { still++; if (still >= 2) break; } else still = 0; bx = p.pos.x; bz = p.pos.z; }
           }
@@ -199,6 +203,56 @@ export function wadeRing(world, shore, segs, { spacing = 3, inland = 4, angles =
   }
   return finish(res);
   function finish(r) { const s = r.samples.slice().sort((u, v) => u - v); r.p01 = s.length ? s[Math.floor(s.length * 0.01)] : 0; r.p50 = s.length ? s[Math.floor(s.length / 2)] : 0; delete r.samples; return r; }
+}
+
+/**
+ * T4b: the DECK RING: starts ON every bridge deck (every `spacing` m along the axis, at three lateral offsets) and AT every head (beside the rails, on land, `headOut` m from the axis), pushed sideways / at an angle / toward the water
+ * for `ticks` steps at walk / sprint / jump. `sites` = the bridge plan's sites (bridges.js: axis, at(u), hw, L, ends), `deckY` the kit's profile. A run `entered` the water when the feet got past the outline (shore distance < -0.02) and
+ * not on a deck (deckY null there, or the feet 10 cm below it); `left` = the feet ended more than hw + 0.7 m from the axis while over the water. Returns { runs, entered, left, trapped, minD, byMode, worst }.
+ */
+export function deckRing(world, shore, sites, deckY, { spacing = 1, angles = [90, -90, 45, -45, 135, -135], modes = ['walk', 'sprint', 'jump'], ticks = 180, headOut = 0.8 } = {}) {
+  const res = { runs: 0, entered: 0, left: 0, trapped: 0, minD: Infinity, byMode: {}, worst: [], heads: 0, decks: 0 };
+  for (const m of modes) res.byMode[m] = { runs: 0, entered: 0 };
+  const onDeck = (x, z, y) => { const d = deckY(x, z); return d !== null && y >= d - 0.1; };
+  const run = (sx, sz, dx, dz, mode, s, label) => {
+    const p = world.player(); p.setPose(sx, sz, 0, 0, null, { stand: true });
+    let minD = Infinity, entered = false;
+    for (let tk = 0; tk < ticks; tk++) {
+      p.yaw = Math.atan2(-dx, -dz); p.keys.add('KeyW'); if (mode === 'sprint') p.keys.add('ShiftLeft'); if (mode === 'jump' && p.onGround) p.vy = 4.2;
+      p.update(1 / 60);
+      const d = shore.dist(p.pos.x, p.pos.z);
+      if (d < 0 && onDeck(p.pos.x, p.pos.z, p.pos.y)) continue;
+      if (d < minD) minD = d;
+      if (d < -0.02 || (d < 0 && p.pos.y < world.model.waterLevel - 0.02)) entered = true;
+    }
+    p.keys.clear(); res.runs++; res.byMode[mode].runs++; if (minD < res.minD) res.minD = minD;
+    if (entered) {
+      res.entered++; res.byMode[mode].entered++;
+      for (let tk = 0; tk < 600; tk++) { p.yaw = Math.atan2(dx, dz); p.keys.add('KeyW'); p.update(1 / 60); } p.keys.delete('KeyW');
+      if (!(shore.dist(p.pos.x, p.pos.z) > 0 || onDeck(p.pos.x, p.pos.z, p.pos.y))) res.trapped++;
+      if (res.worst.length < 8) res.worst.push({ site: s.site, at: label, mode, minD: +minD.toFixed(2) });
+    }
+  };
+  for (const s of sites) {
+    for (let u = 0.5; u < s.L; u += spacing) {
+      const q = s.at(u), px = -q.dz, pz = q.dx;
+      for (const v of [0, s.hw - 0.4, -(s.hw - 0.4)]) for (const a of angles) for (const mode of modes) {
+        const c = Math.cos(a * Math.PI / 180), si = Math.sin(a * Math.PI / 180), dx = q.dx * c - q.dz * si, dz = q.dx * si + q.dz * c;      // the axis direction turned by a
+        run(q.x + px * v, q.z + pz * v, dx, dz, mode, s, `u${u.toFixed(1)} v${v.toFixed(1)} a${a}`); res.decks++;
+      }
+    }
+    for (const [e, u] of [[s.ends.a, 0], [s.ends.b, s.L]]) {                 // the heads: beside the rails, on land OUTSIDE the shore ring (2 m from the water, as the ring's own starts), pushed toward the water and along the shore
+      const q = s.at(u), px = -q.dz, pz = q.dx, inward = u === 0 ? 1 : -1;
+      for (const side of [-1, 1]) for (const a of [0, 30, -30, 60, -60]) for (const mode of modes) {
+        let sx = q.x + px * side * (s.hw + headOut), sz = q.z + pz * side * (s.hw + headOut), back = 0;
+        while (shore.dist(sx, sz) < 2.0 && back < 5) { sx -= q.dx * inward * 0.5; sz -= q.dz * inward * 0.5; back += 0.5; }       // a head that stands close to the water: start farther inland along the axis
+        if (shore.dist(sx, sz) < 2.0 || world.L.insideBuilding(sx, sz, 1)) continue;
+        const c = Math.cos(a * Math.PI / 180), si = Math.sin(a * Math.PI / 180), bx = q.dx * inward, bz = q.dz * inward, dx = bx * c - bz * si, dz = bx * si + bz * c;
+        run(sx, sz, dx, dz, mode, s, `head${u === 0 ? 'A' : 'B'} side${side} a${a}`); res.heads++;
+      }
+    }
+  }
+  return res;
 }
 
 /**
