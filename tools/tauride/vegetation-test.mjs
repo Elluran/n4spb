@@ -2,6 +2,8 @@
 // Every check runs on the REAL built module (environment + landmarksTauride through the module entry) or on the real planter (vegetation.js planVegetation) fed with the real data; the design values come from
 // src/world/landmarksTauride/data/vegetation.js, and the mutants (a keep-out margin set to 0, a species table with a crown base of 0, a mask planned without the planting) must turn a check red. The keep-outs are measured with
 // the test's OWN geometry against the data modules (not with the planter's functions). --no-env builds the module alone (the environment checks are skipped).
+// Fix round 1 (the reviewers): the zone geometry is pinned directly on the built list with a mutant each (2b); the head-clearance mutant uses a fixture species (3); the larch is pinned to its new row and the engine's spruce
+// to its geometry hash of before (4, 6); the palace parterre clearing (HOOKS.treeCleared) and the T11 sight line are measured on the environment's real trees, with the hook switched off as the mutant (6).
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -28,7 +30,9 @@ const Wd = await imp('src/world/landmarksTauride/data/water.js');
 const CAMS = await imp('tools/tauride-cams.mjs');
 const AT = await imp('src/world/lib/area-tables.js');
 const HP = await imp('src/areas/north/hooks/people.js');
+const KO = await imp('src/areas/north/hooks/keep-out.js');
 const FAC = await imp('src/areas/north/data/city.js');
+const { createHash } = await import('node:crypto');
 const L = eng.L, shore = GH.GARDEN_SHORE, P = GH.PONDS, K = DV.KEEP_OUT, Z = DV.ZONES;
 const segDist = (x, z, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz, t = l2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0; return Math.hypot(x - ax - t * dx, z - az - t * dz); };
 const polyDist = (x, z, pts) => { let m = Infinity; for (let i = 0; i + 3 < pts.length; i += 2) m = Math.min(m, segDist(x, z, pts[i], pts[i + 1], pts[i + 2], pts[i + 3])); return m; };
@@ -123,6 +127,27 @@ console.log('2. the keep-outs (data/vegetation.js KEEP_OUT) measured against the
   // the packing: no two crowns closer than the pack fraction of their radii
   let packBad = 0; for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) { const a = list[i], b = list[j]; if (a.forced || b.forced) continue; const d = Math.hypot(a.x - b.x, a.z - b.z); if (d < 20 && d < (a.r + b.r) * (a.shrub || b.shrub ? Math.min(K.pack, 0.42) : K.pack) - 1e-6) packBad++; }
   ok(`the crowns are packed no closer than ${K.pack} of the sum of their radii (${Math.min(K.pack, 0.42)} with a shrub)`, packBad === 0, `${packBad} pairs`);
+  // ---- 2b. the zone geometry (fix round 1, the lens finding): the zones are pinned directly on the built list, with a mutant each (a planter that ignored the wood polygons, or a belt widened to 40 m, passed the 72 checks of the first round)
+  console.log('2b. the zone geometry on the built list: the groves inside the OSM woods, the belt band, the avenue offset, the shore band, the tier cap idle; a mutant each');
+  ok(`the plan is not thinned by the tier cap at medium: stats.planned ${T.stats.planned} == stats.instances ${T.stats.instances} (< BUDGET.instances.medium ${DV.BUDGET.instances.medium}: the cap must not be the thing that hides a planting that ran wild)`, T.stats.planned === T.stats.instances && T.stats.instances < DV.BUDGET.instances.medium, '');
+  const mains = Pd.PATHS.filter((p) => Z.avenue.classes.includes(p.cls) && p.lenM >= Z.avenue.minLen).map((p) => ({ pts: p.pts, hw: p.w / 2 + PD.PATHS_DRAPED.pad }));
+  const ZV = {
+    grove: (t) => woods.some((p) => inPoly(t.x, t.z, p)),
+    belt: (t) => { const d = ringDist(t.x, t.z, Fo.GARDEN.o); return d >= Z.belt.inner - 1e-6 && d <= Z.belt.width + 1e-6; },
+    avenue: (t) => mains.some((w) => Math.abs(polyDist(t.x, t.z, w.pts) - w.hw - Z.avenue.offset) <= 0.8 + 1e-6),
+    shore: (t) => { const d = shore.dist(t.x, t.z) - crest(t.x, t.z); return d >= Z.shore.d[0] - 0.06 && d <= Z.shore.d[1] + 0.31; },
+  };
+  const zoneBad = (l, zone) => l.filter((t) => t.zone === zone && !ZV[zone](t)).length, zoneN = (zone) => list.filter((t) => t.zone === zone).length;
+  ok(`every 'grove' tree (${zoneN('grove')}) stands INSIDE an OSM wood polygon (GARDEN_GREEN.woods, the facade's rings; the jittered point itself is tested)`, zoneN('grove') > 200 && zoneBad(list, 'grove') === 0, `${zoneBad(list, 'grove')} outside`);
+  ok(`every 'belt' tree (${zoneN('belt')}) stands ${Z.belt.inner} .. ${Z.belt.width} m inside the garden outline`, zoneN('belt') > 100 && zoneBad(list, 'belt') === 0, `${zoneBad(list, 'belt')} off the band`);
+  ok(`every 'avenue' tree (${zoneN('avenue')}) stands ${Z.avenue.offset} m (+- 0.8) off the ribbon edge of a '${Z.avenue.classes.join('/')}' alley of ${Z.avenue.minLen} m or more`, zoneN('avenue') > 100 && zoneBad(list, 'avenue') === 0, `${zoneBad(list, 'avenue')} off the offset`);
+  ok(`every 'shore' tree (${zoneN('shore')}) stands on the crest band of the banks (crest + ${Z.shore.d[0]} .. ${Z.shore.d[1]} m)`, zoneN('shore') > 30 && zoneBad(list, 'shore') === 0, `${zoneBad(list, 'shore')} off the band`);
+  const meadowGrove = list.filter((t) => t.zone === 'grove' && DG.MEADOWS.some((m) => ringHas(m.o, t.x, t.z)) && !woods.some((p) => inPoly(t.x, t.z, p))).length;
+  ok('no tree of the grove zone stands on a MEADOWS block of data/ground.js outside a wood polygon', meadowGrove === 0, `${meadowGrove}`);
+  { const boxes = woods.map((p) => { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < p.o.length; i += 2) { x0 = Math.min(x0, p.o[i]); x1 = Math.max(x1, p.o[i]); z0 = Math.min(z0, p.o[i + 1]); z1 = Math.max(z1, p.o[i + 1]); } return { o: [x0, z0, x1, z0, x1, z1, x0, z1], h: [] }; });
+    const r = VG.planVegetation({ ...inputs, woods: boxes }).trees; ok('mutant: a planter fed the bounding BOXES of the woods instead of their polygons plants grove trees outside the woods (the check can fail)', zoneBad(r, 'grove') > 0, `${zoneBad(r, 'grove')} outside, ${r.length} trees`); }
+  { const r = VG.planVegetation({ ...inputs, zones: { ...Z, belt: { ...Z.belt, width: 40 } } }).trees; ok(`mutant: a belt widened to 40 m plants belt trees beyond the ${Z.belt.width} m band (the check can fail)`, zoneBad(r, 'belt') > 0, `${zoneBad(r, 'belt')} off the band, ${r.length} trees`); }
+  { const r = VG.planVegetation({ ...inputs, zones: { ...Z, avenue: { ...Z.avenue, offset: 6 } } }).trees; ok('mutant: an avenue offset of 6 m plants the limes off the authored offset (the check can fail)', zoneBad(r, 'avenue') > 0, `${zoneBad(r, 'avenue')} off the offset`); }
 }
 
 // =============================================================== 3. the crowns over the alleys: the real geometry
@@ -135,8 +160,13 @@ console.log('3. the crowns: no leaf lower than the walker\'s head over a ribbon 
   const over = (t) => ways.some((w) => polyDist(t.x, t.z, w.pts) < w.hw + t.r), low = (t) => minY[t.species] * t.sy < K.headClear - 1e-6;
   const crowns = list.filter(over), bad = crowns.filter(low);
   ok(`every crown that reaches over a ribbon (${crowns.length} of ${list.length}) has its lowest leaf at least ${K.headClear} m up (the geometry's minimum y x the instance height)`, crowns.length > 100 && bad.length === 0, `${bad.length} low crowns`);
-  const open = VG.planVegetation({ ...inputs, data: { ...DV, GARDEN_SPECIES: Object.fromEntries(Object.entries(DV.GARDEN_SPECIES).map(([k, v]) => [k, { ...v, base: 9 }])) } }).trees;
-  ok('mutant: a species table that claims every crown base at 9 m lets low crowns (shrubs, larches) over the ribbons (the check can fail)', open.filter(over).filter(low).length > 0, `${open.filter(over).filter(low).length}`);
+  // the mutant pair (fix round 1: no real species of the garden has a low AND wide crown any more, the larch's lowest tier is at 3.6 m, a shrub's crown never reaches past the trunk clearance): a FIXTURE species 'low',
+  // a young oak (scale 0.5 .. 0.7: the real crown base 2.99 x 0.5 .. 0.77 = 1.5 .. 2.3 m, r 2.7 .. 3.8 m) planted as the whole grove mix: with its TRUE base the rule keeps every one of its crowns off the ribbons; with a table that claims base 9 the rule is fooled
+  const fixture = (base) => VG.planVegetation({ ...inputs, data: { ...DV, GARDEN_SPECIES: { ...DV.GARDEN_SPECIES, low: { fam: 'oak', scale: [0.5, 0.7], leaf: 'oak', base } }, ZONES: { ...Z, grove: { ...Z.grove, mix: { low: 1 }, shrub: 0 } } } }).trees;
+  const lowF = (t) => (t.species === 'low' ? minY.oak : minY[t.species]) * t.sy < K.headClear - 1e-6;
+  const fooled = fixture(9), honest = fixture(minY.oak), lowOver = (l) => l.filter((t) => t.species === 'low').filter(over).filter(lowF).length;
+  ok(`mutant: a species table that claims the fixture's crown base at 9 m lets its low crowns over the ribbons (the check can fail): ${lowOver(fooled)} of ${fooled.filter((t) => t.species === 'low').length} young oaks`, lowOver(fooled) > 0, '');
+  ok(`... and with its true base (${minY.oak.toFixed(2)} m) the rule keeps every one of the ${honest.filter((t) => t.species === 'low').length} young oaks' low crowns off the ribbons (${honest.filter((t) => t.species === 'low').filter(over).length} reach over, 0 low)`, honest.filter((t) => t.species === 'low').length > 100 && lowOver(honest) === 0, `${lowOver(honest)}`);
 }
 
 // =============================================================== 4. the build: on the terrain, the engine's meshes and materials, the colliders, the budgets
@@ -156,8 +186,12 @@ console.log('4. the build (vegetation.js buildVegetation): every tree on the ter
   if (!noEnv) { const envTrunk = []; ctx.staticRoot.traverse((o) => { if (o.isInstancedMesh && /^env-trunk-oak-0$/.test(o.name)) envTrunk.push(o); }); const mine = trunk.find((m) => m.name === 'tauride-trunk-oak-0'); ok('the bark textures are the environment\'s (the texture cache: the same painter under the same key draws nothing twice)', !!mine && envTrunk.length === 1 && mine.material.map === envTrunk[0].material.map, ''); }
   const envOak = envCanopy.find((m) => m.name === 'env-tree-oak-0'), myOak = canopy.find((m) => m.name === 'tauride-tree-oak-0'), tris = (g) => (g.index ? g.index.count : g.attributes.position.count) / 3;
   ok('the geometry per instance is the engine\'s: the garden\'s oak LOD0 has the triangle count of treegeo.canopyGeometry(\'oak\', 0)' + (noEnv ? '' : ' and of the environment\'s oak LOD0 mesh'), !!myOak && tris(myOak.geometry) === tris(TG.canopyGeometry('oak', 0)) && (noEnv || (envOak && tris(envOak.geometry) === tris(myOak.geometry))), myOak ? `${tris(myOak.geometry)} triangles` : 'no oak mesh');
-  const larch = canopy.filter((m) => /larch/.test(m.name)), larchTris = larch.map((m) => tris(m.geometry));
-  ok(`the larch (SPECIES_EXTRA, an open 'tiers' cone 20 m / 3.4 m) has its four LODs of ${larchTris.join(' / ')} triangles, lighter than a spruce's crown count and the LOD2 / 3 of the tiers kind`, larch.length === 4 && larchTris[0] > larchTris[1] && larchTris[1] > larchTris[2] && larchTris[2] >= larchTris[3] && larchTris[0] <= 400, '');
+  const larch = canopy.filter((m) => /larch/.test(m.name)), larchTris = larch.map((m) => tris(m.geometry)), LX = DV.SPECIES_EXTRA.larch;
+  const lg = TG.canopyGeometry('larch', 0, LX); lg.computeBoundingBox(); const lt = TG.trunkGeometry('larch', 0, LX); lt.computeBoundingBox(); const lb = lg.boundingBox, tb = lt.boundingBox;
+  ok(`the larch (SPECIES_EXTRA, fix round 1: a narrow 'tiers' cone H ${LX.H} / R ${LX.R} on a clear stem; was H 20 / R 3.4 from 0.9 m up without an underside, a paper tent at 12 m) has its four LODs of ${larchTris.join(' / ')} triangles (LOD0 / 1 = tiers x segments x 2: the underside is kept), the lowest tier at y0 ${LX.y0} m = GARDEN_SPECIES.larch.base, the stem ${LX.stem[0]} m tall reaching into the lowest tier, R 2.0 .. 2.4`, larch.length === 4 && larchTris[0] === LX.tiers[0] * LX.seg[0] * 2 && larchTris[1] === LX.tiers[1] * LX.seg[1] * 2 && larchTris[1] > larchTris[2] && larchTris[2] >= larchTris[3] && larchTris[0] <= 400 && Math.abs(lb.min.y - LX.y0) < 0.01 && Math.abs(lb.min.y - DV.GARDEN_SPECIES.larch.base) < 0.01 && LX.y0 >= 3 && LX.y0 <= 4 && LX.R >= 2 && LX.R <= 2.4 && LX.under === true && LX.open === true && tb.max.y > LX.y0 + 0.5 && tb.max.y < LX.y0 + 1.5 && Math.max(lb.max.x, -lb.min.x) <= LX.R + 1e-6, `y ${lb.min.y.toFixed(2)} .. ${lb.max.y.toFixed(2)}, r ${Math.max(lb.max.x, -lb.min.x).toFixed(2)}, stem to ${tb.max.y.toFixed(2)}`);
+  const hsl = (hex) => { const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b); return { s: mx === mn ? 0 : (mx - mn) / (mx + mn), l: (mx + mn) / 2 }; };
+  const limeL = Math.max(...DV.LEAF.lime.map((h) => hsl(h).l));
+  ok(`LEAF.larch is a lighter green than every lime hex (L ${DV.LEAF.larch.map((h) => hsl(h).l.toFixed(2)).join(' / ')} > ${limeL.toFixed(2)}) and less saturated than the first round's lime green (S < 0.42: ${DV.LEAF.larch.map((h) => hsl(h).s.toFixed(2)).join(' / ')})`, DV.LEAF.larch.length >= 3 && DV.LEAF.larch.every((h) => hsl(h).l > limeL && hsl(h).s < 0.42), '');
   // the colliders: a cylinder per tree in the play area, from the street level (lower on a bank) to the crown base over the terrain; the real Player is stopped by one
   const cyls = ctx.physics.items.filter((it) => it.type === 'cyl' && it.cx > 900 && it.cx < 1510 && it.cz > -1800 && it.cz < -1250 && HP.inGarden(it.cx, it.cz));
   const inPlay = list.filter((t) => L.inPlay(t.x, t.z, -5)), byCyl = new Map(cyls.map((c) => [c.cx.toFixed(3) + ',' + c.cz.toFixed(3), c]));
@@ -210,8 +244,33 @@ console.log('6. the couplings: HOOKS.treeReject answers \'garden\', the clearing
   ok(`data/vegetation.js LOD_D ${DV.LOD_D.join(' / ')} equals the engine's LOD_D of environment/trees.js (${m && m.slice(1).join(' / ')})`, !!m && m.slice(1).map(Number).join() === DV.LOD_D.join(), '');
   const geo = fs.readFileSync(path.join(ROOT, 'src/world/environment/treegeo.js'), 'utf8');
   ok('the engine edit of T5 is a default parameter: canopyGeometry(fam, lod, F = SPECIES[fam]) and trunkGeometry(fam, lod, F = SPECIES[fam]) (the strip\'s calls are unchanged)', /export function canopyGeometry\(fam, lod, F = SPECIES\[fam\]\)/.test(geo) && /export function trunkGeometry\(fam, lod, F = SPECIES\[fam\]\)/.test(geo) && !/larch/i.test(geo.split('export const SPECIES')[1].split('export const FAMILIES')[0]), '');
+  ok("the engine edit of fix round 1 (the tiers keys y0 / under / stem) defaults to the engine's own constants (0.9 open / 0.55, the underside of closed tiers, the stub 1.0 m at LOD2, the stem [2.2, 0.16, 0.07]): a row without the keys is drawn as before", /const y0 = F\.y0 \?\? \(open \? 0\.9 : 0\.55\), span = H - y0, under = F\.under \?\? !open;/.test(geo) && /if \(lod <= 1 && under\)/.test(geo) && /addStub\(acc, 0, F\.y0 \?\? 1\.0, 0\.14\)/.test(geo) && /const st = F\.stem \|\| \[2\.2, 0\.16, 0\.07\];/.test(geo) && Object.values(TG.SPECIES).every((F) => !('y0' in F) && !('under' in F) && !('stem' in F)), '');
+  const sha = (g) => { const H = createHash('sha256'); for (const k of Object.keys(g.attributes).sort()) { H.update(k); H.update(Buffer.from(g.attributes[k].array.buffer)); } if (g.index) H.update(Buffer.from(g.index.array.buffer)); return H.digest('hex').slice(0, 16); };
+  const spruce = { c0: sha(TG.canopyGeometry('spruceA', 0)), c1: sha(TG.canopyGeometry('spruceA', 1)), c2: sha(TG.canopyGeometry('spruceA', 2)), t0: sha(TG.trunkGeometry('spruceA', 0)), b0: sha(TG.canopyGeometry('spruceB', 0)) };
+  ok("the engine's spruces (the strip's tiers family) are bit-identical to their geometry before the fix-round-1 edit (sha256 of the LOD0 / 1 / 2 canopies and the LOD0 trunk of spruceA, the LOD0 canopy of spruceB, taken at 1b5eb1e)", spruce.c0 === '38655c66e3c50606' && spruce.c1 === 'a928c57db000b7a9' && spruce.c2 === '95e1a26221b08129' && spruce.t0 === '7688d5c6997357fc' && spruce.b0 === '381ea0b05b02d7f3', JSON.stringify(spruce));
   const stripArea = await imp('src/world/area.js');
   ok('the hook is the North\'s: the strip\'s area module exports HOOKS without treeReject (nothing changes there)', !stripArea.HOOKS || !stripArea.HOOKS.treeReject || process.env.AREA === 'north', '');
+  // the palace parterre (fix round 1, the QA-gate blocker "the T11 pose shows the palace front"): the lake's north shore IS the garden outline and the palace side is the OSM wood w1274934137, which the engine planted at wood density up to
+  // the facade (6 crowns on the T11 sight line; the frame with the garden's trees hidden was identical). HOOKS.treeCleared clears PALACE_PARTERRE (the lawn in front of the palace's central bow) when landmarksTauride is built.
+  { const PB = KO.PALACE_PARTERRE, c11 = CAMS.CAMS.find((c) => c.id === 'T11'), tc = KO.treeCleared({ buildList: ['landmarksTauride'] }), inPB = (x, z) => x > PB[0] && x < PB[1] && z > PB[2] && z < PB[3];
+    ok(`HOOKS.treeCleared with landmarksTauride built answers true in PALACE_PARTERRE [${PB.join(', ')}] and false outside it, null when neither landmarksTauride nor landmarksSmolny is built`, typeof tc === 'function' && tc(1380, -1630) === true && tc(1400, -1612) === true && tc(1420, -1630) === false && tc(1340, -1630) === false && tc(1380, -1600) === false && KO.treeCleared({ buildList: ['environment', 'landmarksKirochnaya'] }) === null, '');
+    const pal = FAC.BUILDINGS.find((b) => b.id === 'r3801092'), bow = []; for (const p of pal.polys) for (let i = 0; i < p.o.length; i += 2) if (p.o[i + 1] > -1660 && p.o[i] >= PB[0] && p.o[i] <= PB[1]) bow.push([p.o[i], p.o[i + 1]]);
+    const bx0 = Math.min(...bow.map((q) => q[0])), bx1 = Math.max(...bow.map((q) => q[0])), bz = Math.max(...bow.map((q) => q[1]));
+    const dx0 = c11.target.x - c11.x, dz0 = c11.target.z - c11.z, L11 = Math.hypot(dx0, dz0), dx = dx0 / L11, dz = dz0 / L11;
+    let u0 = null; for (let u = 0; u < L11; u += 0.25) if (!HP.inGarden(c11.x + dx * u, c11.z + dz * u)) { u0 = u; break; }
+    let lineOut = 0; for (let u = u0; u <= L11; u += 0.25) if (!inPB(c11.x + dx * u, c11.z + dz * u)) lineOut++;
+    ok(`the parterre box holds the palace's garden-front bow (${bow.length} footprint vertices of r3801092 at z > -1660, x ${bx0.toFixed(1)} .. ${bx1.toFixed(1)}, the facade at z ${bz.toFixed(1)}) with 4 .. 10 m to spare on each side, and the T11 sight line from where it leaves the garden (${u0 && u0.toFixed(1)} m) to the target (${L11.toFixed(1)} m) lies inside the box`, bow.length >= 8 && bx0 - PB[0] >= 3 && bx0 - PB[0] <= 10 && PB[1] - bx1 >= 3 && PB[1] - bx1 <= 10 && bz > -1645 && bz < -1640 && u0 !== null && u0 > 60 && lineOut === 0, `${lineOut} samples outside`);
+    const screens = (trees) => trees.filter((t) => !t.shrub && t.h > 4).map((t) => { const px = t.x - c11.x, pz = t.z - c11.z, u = px * dx + pz * dz, v = Math.abs(px * dz - pz * dx); return { t, u, v }; }).filter((h) => h.u > 30 && h.u < L11 + 2 && h.v < h.t.r + 0.5);
+    if (!noEnv) {
+      const s0 = screens(env.trees), side = env.trees.filter((t) => t.x > 1280 && t.x < 1470 && t.z > -1700 && t.z < -1600 && !inPB(t.x, t.z)).length, inside = env.trees.filter((t) => inPB(t.x, t.z)).length;
+      ok(`no crown of the environment's trees stands on the T11 sight line (within r + 0.5 m of the line between 30 m and the facade): ${s0.length}; the environment plants nothing in the parterre (${inside}), the wood keeps its trees on both sides of it (${side} in x 1280 .. 1470, z -1700 .. -1600 outside the box), the counter 'wood:cleared' ${env.treeStats.rej['wood:cleared']} >= 8`, s0.length === 0 && inside === 0 && side > 60 && env.treeStats.rej['wood:cleared'] >= 8, s0.map((h) => `${h.t.sp} (${h.t.x.toFixed(1)}, ${h.t.z.toFixed(1)}) r ${h.t.r.toFixed(1)} off ${h.v.toFixed(1)} at ${h.u.toFixed(0)} m`).join('; '));
+      // the mutant: the environment built again with the clearing hook switched off (the table of area-tables.js is a plain object; restored right after)
+      const saved = AT.HOOKS.treeCleared; AT.HOOKS.treeCleared = null; let m = null;
+      try { const c2 = SE.makeContext(eng, ['environment']); await SE.buildModules(eng, c2.ctx, ['environment']); m = c2.ctx.services.environment; } finally { AT.HOOKS.treeCleared = saved; }
+      const s1 = m ? screens(m.trees) : [];
+      ok(`mutant: the environment built without HOOKS.treeCleared stands ${s1.length} crowns on the T11 sight line and ${m ? m.trees.filter((t) => inPB(t.x, t.z)).length : '?'} trees in the parterre (the check can fail)`, !!m && s1.length >= 3 && m.trees.filter((t) => inPB(t.x, t.z)).length > 10, s1.map((h) => `${h.t.sp} off ${h.v.toFixed(1)} at ${h.u.toFixed(0)} m`).join('; '));
+    }
+  }
   const tl = T.treeList[0];
   ok('treeList rows have the shape of environment.trees ({ x, z, r, h, tr, sp, shrub? } + y): what wildlife/world.js reads from a landmark garden\'s treeList', tl && ['x', 'z', 'y', 'r', 'h', 'tr', 'sp'].every((k) => Number.isFinite(tl[k]) || k === 'sp') && typeof tl.sp === 'string', JSON.stringify(tl));
 }

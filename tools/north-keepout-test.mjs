@@ -50,6 +50,7 @@ const MODS = { smolny: 'landmarksSmolny', suvorov: 'landmarksSuvorov', kirochnay
 const rect = (x0, x1, z0, z1) => (x, z) => x > x0 && x < x1 && z > z0 && z < z1;       // open rectangles, as the source
 const SMOLNY = [rect(2320, 2440, -1847, -1820), rect(2400, 2520, -1553, -1533)];
 const SUVOROV = rect(1384, 1442, -1226, -1208);
+const PARTERRE = rect(1356, 1404, -1660, -1606);      // the palace parterre (T5 fix round 1 of the Tauride remake: hooks/keep-out.js PALACE_PARTERRE, the soft clearing in front of the Tauride Palace's garden front)
 /** a polygon test by the winding number (the hooks use the even-odd ray cast of the source): ring = [[x, z], ...] */
 const winding = (ring, x, z) => {
   let w = 0;
@@ -203,7 +204,7 @@ const evaluate = (list) => {
 const GARDEN_PARK = (await imp('src/areas/north/data/city.js')).GREEN.find((q) => q.id === 'r1582734').polys[0].o;
 const inGardenRef = (x, z) => { if (!(x > 915 && x < 1500 && z > -1800 && z < -1250)) return false; let w = 0; const o = GARDEN_PARK; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const x0 = o[j], z0 = o[j + 1], x1 = o[i], z1 = o[i + 1], cr = (x1 - x0) * (z - z0) - (x - x0) * (z1 - z0); if (z0 <= z) { if (z1 > z && cr > 0) w++; } else if (z1 <= z && cr < 0) w--; } return w !== 0; };
 const expected = (built, x, z) => ({
-  cleared: built.has(MODS.smolny) && (SMOLNY[0](x, z) || SMOLNY[1](x, z)),
+  cleared: (built.has(MODS.smolny) && (SMOLNY[0](x, z) || SMOLNY[1](x, z))) || (built.has(MODS.tauride) && PARTERRE(x, z)),      // T5 fix round 1: the parterre with landmarksTauride
   reject: built.has(MODS.tauride) && inPodium(x, z) ? 'paradny' : built.has(MODS.tauride) && inGardenRef(x, z) ? 'garden' : built.has(MODS.kirochnaya) && inCampusRef(x, z) ? 'campus' : built.has(MODS.suvorov) && SUVOROV(x, z) ? 'suvorov' : null,      // T5: 'garden' inside the Tauride Garden outline (the garden plants its own trees)
   tuft: (built.has(MODS.tauride) && inPodium(x, z)) || (built.has(MODS.kirochnaya) && inCampusRef(x, z)),
   prop: built.has(MODS.tauride) && inPodium(x, z),
@@ -217,7 +218,7 @@ check('every (ctx) factory is null while none of its modules is built (no ctx, n
   ok(KO.makeParkingReject(undefined) === undefined && KO.makeParkingReject([]) === undefined && KO.makeParkingReject(MODULES.filter((m) => m !== MODS.tauride)) === undefined, 'makeParkingReject gives a function without landmarksTauride');
 });
 check('each factory serves exactly the modules of its contract', () => {
-  const serves = { treeCleared: [MODS.smolny], treeReject: [MODS.tauride, MODS.kirochnaya, MODS.suvorov], tuftReject: [MODS.tauride, MODS.kirochnaya], propReject: [MODS.tauride], pedestrianOnly: [MODS.tauride] };
+  const serves = { treeCleared: [MODS.smolny, MODS.tauride], treeReject: [MODS.tauride, MODS.kirochnaya, MODS.suvorov], tuftReject: [MODS.tauride, MODS.kirochnaya], propReject: [MODS.tauride], pedestrianOnly: [MODS.tauride] };
   for (const f of FAC) for (const m of Object.values(MODS)) ok((KO[f]({ buildList: [m] }) !== null) === serves[f].includes(m), `${f} with only ${m}: ${KO[f]({ buildList: [m] }) !== null}`);
   ok(typeof KO.makeParkingReject([MODS.tauride]) === 'function', 'makeParkingReject with landmarksTauride is no function');
   for (const m of [MODS.smolny, MODS.suvorov, MODS.kirochnaya]) ok(KO.makeParkingReject([m]) === undefined, 'parking gated by ' + m);
@@ -238,6 +239,7 @@ const PROBES = [
   { name: 'Suvorov (1413, -1217)', at: [1413, -1217], module: MODS.suvorov, fires: { reject: 'suvorov' } },
   { name: 'Smolny (2380, -1833)', at: [2380, -1833], module: MODS.smolny, fires: { cleared: true } },
   { name: 'Smolny (2460, -1543)', at: [2460, -1543], module: MODS.smolny, fires: { cleared: true } },
+  { name: 'parterre (1380, -1630)', at: [1380, -1630], module: MODS.tauride, fires: { cleared: true } },      // T5 fix round 1: outside the garden outline (the quay is at z -1622 there), in front of the palace
 ];
 const NOTHING = { cleared: false, reject: null, tuft: false, prop: false, parking: false };
 check('the fixed probes fire exactly the hooks of their region with exactly their module built, and nothing without it', () => {
@@ -261,6 +263,8 @@ check('the Paradny hooks are ACTIVE in the page\'s own list (T1: landmarksTaurid
   eq(got(h, 1413, -1217), { ...NOTHING, reject: 'suvorov' }, 'Suvorov probe on the page\'s list');
   eq(got(h, 2380, -1833), { ...NOTHING, cleared: true }, 'Smolny 1 probe on the page\'s list');
   eq(got(h, 2460, -1543), { ...NOTHING, cleared: true }, 'Smolny 2 probe on the page\'s list');
+  eq(got(h, 1380, -1630), { ...NOTHING, cleared: true }, 'parterre probe on the page\'s list');
+  eq(got(evaluate(MODULES.filter((m) => m !== MODS.tauride)), 1380, -1630), NOTHING, 'parterre probe on the page\'s list WITHOUT landmarksTauride');
 });
 check('pedestrianOnly: rank 0 and MORE than 60 % of the points in the podium (fixture ways)', () => {
   const f = KO.pedestrianOnly({ buildList: [MODS.tauride] });
@@ -296,7 +300,7 @@ const LISTS = (() => {
 check(`a hook fires iff the point lies in the declared region of a built module: lattice of 7 m over the North + 300,000 random points round the regions, ${LISTS.length} module lists`, () => {
   const lattice = []; for (let x = -600.37; x < 2700; x += 7) for (let z = -2300.61; z < 100; z += 7) lattice.push([x, z]);
   let s = 777; const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
-  const near = []; const boxes = [[2316, 2444, -1851, -1816], [2396, 2524, -1557, -1529], [1380, 1446, -1230, -1204], [1106, 1347, -1246, -1043], [737, 1062, -1209, -869]];
+  const near = []; const boxes = [[2316, 2444, -1851, -1816], [2396, 2524, -1557, -1529], [1380, 1446, -1230, -1204], [1106, 1347, -1246, -1043], [737, 1062, -1209, -869], [1352, 1408, -1664, -1602]];
   for (const b of boxes) for (let i = 0; i < 60000; i++) near.push([b[0] + rnd() * (b[1] - b[0]), b[2] + rnd() * (b[3] - b[2])]);
   const hits = { cleared: 0, reject: 0, tuft: 0, prop: 0, parking: 0 };
   for (const [name, list] of LISTS) {
@@ -354,6 +358,7 @@ const regionRings = (built, only) => {
   if (built.has(MODS.suvorov) && only.suvorov) rings.push(box2ring([1384, 1442, -1226, -1208]));
   if (built.has(MODS.kirochnaya) && only.campus) rings.push(KO.CAMPUS.flat());
   if (built.has(MODS.tauride) && only.podium) rings.push(PD.PARADNY_PODIUM.o.slice());
+  if (built.has(MODS.tauride) && only.parterre) rings.push(box2ring([1356, 1404, -1660, -1606]));      // T5 fix round 1: the palace parterre (the wood w1274934137 overlaps it: its stream re-rolls)
   return rings;
 };
 /** Trees of one GREEN polygon / one courtyard (building hole) are drawn from one stream (trees.js seed()): a candidate that a hook rejects shifts the rest of ITS record, so a difference outside
@@ -427,7 +432,7 @@ check('trees: `real` has no tree in any declared region (the podium too); a diff
   ok(offIn.length > 0, 'vacuous: `off` has no tree in the podium');
   // T4a: HOOKS.waterBodies puts the garden ponds into the field's water mask in `real` (the hook is deleted in `off`): a tree that stood in the water is gone, and the trees of the same random stream (the record
   // that overlaps the ponds) re-roll. Such a difference is legitimate when the tree lies within 4 m of the shore or in a record that overlaps the water outline.
-  const rings = regionRings(built, { smolny: 1, suvorov: 1, campus: 1, podium: 1 }), zones = touchedRecords(rings), pondZones = (() => { const zs = [], near = (o) => { for (let i = 0; i < o.length; i += 2) { const j = (i + 2) % o.length, l = Math.hypot(o[j] - o[i], o[j + 1] - o[i + 1]), n = Math.max(1, Math.ceil(l / 2)); for (let k = 0; k < n; k++) if (GHm.GARDEN_SHORE.dist(o[i] + (o[j] - o[i]) * k / n, o[i + 1] + (o[j + 1] - o[i + 1]) * k / n) < 7) return true; } return false; }; for (const g of D.GREEN) for (const q of g.polys) if (near(q.o)) zs.push({ what: 'GREEN ' + g.id + ':' + g.kind + ' (within 7 m of the ponds)', o: q.o, h: q.h || [] }); for (const bb of D.BUILDINGS) for (const q of bb.polys) for (const h of q.h || []) if (near(h)) zs.push({ what: 'courtyard of ' + bb.id, o: h, h: [] }); return zs; })(), stray = [];
+  const rings = regionRings(built, { smolny: 1, suvorov: 1, campus: 1, podium: 1, parterre: 1 }), zones = touchedRecords(rings), pondZones = (() => { const zs = [], near = (o) => { for (let i = 0; i < o.length; i += 2) { const j = (i + 2) % o.length, l = Math.hypot(o[j] - o[i], o[j + 1] - o[i + 1]), n = Math.max(1, Math.ceil(l / 2)); for (let k = 0; k < n; k++) if (GHm.GARDEN_SHORE.dist(o[i] + (o[j] - o[i]) * k / n, o[i + 1] + (o[j + 1] - o[i + 1]) * k / n) < 7) return true; } return false; }; for (const g of D.GREEN) for (const q of g.polys) if (near(q.o)) zs.push({ what: 'GREEN ' + g.id + ':' + g.kind + ' (within 7 m of the ponds)', o: q.o, h: q.h || [] }); for (const bb of D.BUILDINGS) for (const q of bb.polys) for (const h of q.h || []) if (near(h)) zs.push({ what: 'courtyard of ' + bb.id, o: h, h: [] }); return zs; })(), stray = [];
   for (const t of [...gone, ...came]) if (!recordOf(zones, rings, t[0], t[1]) && !(GHm.GARDEN_SHORE.dist(t[0], t[1]) < 4) && !recordOf(pondZones, [], t[0], t[1])) stray.push(t);
   console.log(`       off ${S.off.trees.length} trees, real ${S.real.trees.length}: ${offIn.length} stood in the podium, ${gone.length - offIn.length} more gone and ${came.length} came in records that overlap a region; rejections by reason: ${JSON.stringify(reasons(S.real))}`);
   ok(stray.length === 0, `${stray.length} tree differences outside every region and every record that overlaps one: ${describe(stray)}`);

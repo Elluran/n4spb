@@ -184,10 +184,11 @@ function addStub(acc, x, h, r) {                                                
     acc.tri(v[0], v[1], v[2]); acc.tri(v[0], v[2], v[3]);
   }
 }
-/** stacked jagged cone tiers (spruce; larch = narrow, open, lighter) */
+/** stacked jagged cone tiers (spruce; larch = narrow, open, lighter). A row may give `y0` (the height of the lowest tier; default 0.9 open / 0.55) and `under` (the dark underside; default: closed tiers only):
+ *  the engine's rows give neither, so their geometry is the one of before (the larch of the Tauride Garden, landmarksTauride/data/vegetation.js SPECIES_EXTRA, stands on a clear stem and keeps the underside) */
 function addTiers(acc, F, lod) {
   const H = F.H, R = F.R, tiers = F.tiers[lod], seg = F.seg[lod], open = !!F.open;
-  const y0 = open ? 0.9 : 0.55, span = H - y0;
+  const y0 = F.y0 ?? (open ? 0.9 : 0.55), span = H - y0, under = F.under ?? !open;
   for (let k = 0; k < tiers; k++) {
     const t0 = k / tiers, t1 = (k + (open ? 1.2 : 1.55)) / tiers;
     const yb = y0 + span * t0 * 0.93, yt = Math.min(H, y0 + span * Math.min(1, t1));
@@ -203,7 +204,7 @@ function addTiers(acc, F, lod) {
     }
     const tip = acc.vert(0, yt, 0, 0, 1, 0, 1.05, 1.05, 0.98);                // bright tips
     for (let s = 0; s < seg; s++) acc.tri(ring[s], ring[(s + 1) % seg], tip);
-    if (lod <= 1 && !open) {                                                  // dark underside
+    if (lod <= 1 && under) {                                                  // dark underside
       const under = acc.vert(0, yb + 0.4, 0, 0, -1, 0, 0.42, 0.46, 0.55), rr2 = [];
       for (let s = 0; s < seg; s++) { const p = ring[s]; rr2.push(acc.vert(acc.p[p * 3], acc.p[p * 3 + 1], acc.p[p * 3 + 2], 0, -1, 0, 0.42, 0.46, 0.55)); }
       for (let s = 0; s < seg; s++) acc.tri(rr2[s], rr2[(s + 1) % seg], under);
@@ -214,7 +215,7 @@ function addTiers(acc, F, lod) {
 /** canopy geometry of a family at a level of detail (0..3). `F` = the species row (default: SPECIES[fam]; a landmark module may pass a row of its own, e.g. the larch of the Tauride Garden, landmarksTauride/data/vegetation.js SPECIES_EXTRA: a 'tiers' row needs no layout) */
 export function canopyGeometry(fam, lod, F = SPECIES[fam]) {
   const acc = new Acc(true);
-  if (F.kind === 'tiers') { addTiers(acc, F, lod); if (lod === 2) addStub(acc, 0, 1.0, 0.14); return acc.geometry(); }
+  if (F.kind === 'tiers') { addTiers(acc, F, lod); if (lod === 2) addStub(acc, 0, F.y0 ?? 1.0, 0.14); return acc.geometry(); }
   const lay = layoutOf(fam), seed = fam.length * 13 + fam.charCodeAt(0);
   if (lod === 0) addLobes(acc, lay, lay.L.map((_, i) => i), 1, F.lump, F.blend, seed);
   else if (lod === 1) addLobes(acc, { env: lay.env, L: lay.L1 }, lay.L1.map((_, i) => i), 1, F.lump * 0.5, F.blend + 0.1, seed);
@@ -287,8 +288,9 @@ export function trunkGeometry(fam, lod, F = SPECIES[fam]) {
   } else if (F.sp === 'rowan') {
     const k = F.H / 3.2;
     for (let q = 0; q < 3; q++) { const a = rnd() * 6.28 + q * 2.1; addTube(acc, stemPath(Math.cos(a) * 0.1, Math.sin(a) * 0.1, Math.cos(a) * 0.5 * k, Math.sin(a) * 0.5 * k, 2.5 * k, 0.06 * k, 0.03 * k), seg, 2); }
-  } else {                                                                      // spruce: the stub that shows below the lowest tier
-    addTube(acc, stemPath(0, 0, 0, 0, 2.2, 0.16, 0.07, 0.6), seg, 2.5);
+  } else {                                                                      // spruce: the stub that shows below the lowest tier (a tiers row may give its own `stem` [height, foot radius, top radius]: the larch's clear stem)
+    const st = F.stem || [2.2, 0.16, 0.07];
+    addTube(acc, stemPath(0, 0, 0, 0, st[0], st[1], st[2], 0.6), seg, 2.5);
   }
   return acc.count ? acc.geometry() : null;
 }

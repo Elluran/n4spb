@@ -13,7 +13,7 @@ export const GARDEN_SPECIES = {
   oldOak: { fam: 'oak',    scale: [1.2, 1.4],  leaf: 'oak',   base: 2.99, old: true },      // the 7 OSM trees and the solitary oaks of the meadows (plan: scale 1.2-1.4)
   lime:   { fam: 'limeA',  scale: [0.9, 1.2],  leaf: 'lime',  base: 4.04, old: true },
   limeB:  { fam: 'limeB',  scale: [0.9, 1.15], leaf: 'lime',  base: 4.04, old: true },      // the twin-stem variant (every third avenue lime)
-  larch:  { fam: 'larch',  scale: [0.85, 1.15], leaf: 'larch', base: 0.9, old: true },     // SPECIES_EXTRA: an open cone from 0.9 m up: the whole crown keeps off the ribbons
+  larch:  { fam: 'larch',  scale: [0.85, 1.15], leaf: 'larch', base: 3.6, old: true },     // SPECIES_EXTRA: a narrow cone on a clear stem of 3.6 m (fix round 1: was an open tent from 0.9 m up)
   ash:    { fam: 'ash',    scale: [0.85, 1.1], leaf: 'ash',   base: 4.58 },
   maple:  { fam: 'mapleA', scale: [0.9, 1.15], leaf: 'maple', base: 3.32 },
   elm:    { fam: 'elm',    scale: [0.85, 1.1], leaf: 'elm',   base: 5.98 },
@@ -23,10 +23,12 @@ export const GARDEN_SPECIES = {
   shrub:  { fam: 'shrub',  scale: [0.9, 1.4],  leaf: 'shrub', base: 0.13 },
 };
 
-/** The garden-local species rows (merged with the engine's SPECIES for the garden only; the strip's buildTrees never sees them): the larch of the border belt, a tall soft open cone, lighter green (the engine's 'tiers' kind
- *  with `open`: the tiers start at 0.9 m and the drooping underside is left out; H 20 / R 3.4 is the plan's "H 18-22, R 3-4"). trunk = the collision radius at the stem. */
+/** The garden-local species rows (merged with the engine's SPECIES for the garden only; the strip's buildTrees never sees them): the larch of the border belt, a TALL NARROW cone on a CLEAR STEM, lighter green (the engine's
+ *  'tiers' kind with `open` (thin tiers, a fuller cone), `y0` the height of the lowest tier (3.6 m: a walker passes under it, the stem shows), `under` keeps the dark underside of every tier (the tiers read as volumes, not as
+ *  paper cut-outs), `stem` the visible trunk [height, foot radius, top radius]. Fix round 1 of T5: the first larch (H 20 / R 3.4, tiers from 0.9 m, no underside) read as a flat tent at 12 m and as a lime-green spruce at 25 m;
+ *  the GPU QA asked for a narrower base (R 2.0 .. 2.4), a clear stem of 3 .. 4 m, the underside kept and a less saturated green. trunk = the collision radius at the stem. */
 export const SPECIES_EXTRA = {
-  larch: { sp: 'larch', H: 20.0, R: 3.4, trunk: 0.45, bark: 'brown', kind: 'tiers', open: true, tiers: [8, 6, 4, 2], seg: [10, 8, 6, 5] },
+  larch: { sp: 'larch', H: 21.0, R: 2.4, trunk: 0.45, bark: 'brown', kind: 'tiers', open: true, y0: 3.6, under: true, stem: [4.3, 0.27, 0.16], tiers: [7, 5, 3, 2], seg: [10, 8, 6, 5] },
 };
 
 /** leaf colours (sRGB, the per-instance colour; the engine's LEAF table of environment/trees.js is private, these are the same greens for the shared species, plus the larch and the alder) */
@@ -37,7 +39,7 @@ export const LEAF = {
   ash: ['#5a8a38', '#639240', '#4e7e30', '#6a9a44'],
   oak: ['#4a6e2c', '#53773a', '#42642a', '#5a7e3a'],
   birch: ['#668f3a', '#5e9a35', '#729a42', '#628a38', '#6b9440'],
-  larch: ['#7fa842', '#86ad48', '#74a03c', '#8db24e'],       // a lighter, fresher green than the broad-leaved crowns (the larch in July)
+  larch: ['#6f9a44', '#769f4a', '#68923e', '#7aa44f'],       // lighter and fresher than the broad-leaved crowns (the larch in July), less saturated than the first round's lime green (fix round 1)
   alder: ['#3f6a30', '#466f36', '#3a6230', '#4a7238'],       // dark glossy green
   shrub: ['#52763a', '#5f8641', '#456b32', '#6a9248', '#4e7a3a'],
 };
