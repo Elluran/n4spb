@@ -134,5 +134,8 @@ export function build(ctx){
   arch(K,stone,0,2.3,1.6,.38,2.4);P.box(stone,-3.2,3.2,4.3,4.8,0,3.0);
   K.fascia(-2.7,2.7,4.92,5.46,'МУЗЕЙ А. В. СУВОРОВА',{bg:'#4a544d',fg:'#ddd4ba',z:.3,w:1024,h:100,size:.66});
   P.pop();P.pop();
-  K.flush(root,'suvorov');ctx.addStatic(root);ctx.services.landmarksSuvorov={triangles:K.tris,entrances:[{x:1412.9,z:-1225.2,clearance:4,bldg:rec.id}]};
+  K.flush(root,'suvorov');ctx.addStatic(root);
+  // M7: the merge into the shared landmark services as the strip's modules do (landmarksD.js:41); the museum publishes no monument / photo spot today, so the merge adds nothing yet
+  const S=(ctx.services.landmarks||={});S.monuments=(S.monuments||[]).concat(K.svc.monuments);S.photoSpots=(S.photoSpots||[]).concat(K.svc.photoSpots);
+  ctx.services.landmarksSuvorov={triangles:K.tris,entrances:[{x:1412.9,z:-1225.2,clearance:4,bldg:rec.id}],monuments:K.svc.monuments,photoSpots:K.svc.photoSpots};
 }

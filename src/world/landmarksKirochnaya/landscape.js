@@ -2,6 +2,27 @@ import * as THREE from 'three';
 import * as L from '../layout.js';
 import { CAMPUS,CAMPUS_ROADS,inCampus } from './groups.js';
 
+// M7 (docs/AREAS.md 8.7, the M5 GPU QA finding 1): the two gate stubs across Kirochnaya's pavement (w515895295 / w515895296) ran to the centreline of the street, so 1-3 m of their asphalt lay on the
+// carriageway. The asphalt of a campus lane is now clipped where it enters a carriageway that is NOT a campus lane: the longest stretch of the segment whose two edges (+-w/2) stay KERB_CLEAR m off every
+// other drivable road of the data (L.roadsNear). streets is built after this module, so the data's half width (w/2) is the only kerb this module can read; streets widens Kirochnaya by its parking
+// pockets (measured with net.cover at the two stubs: 4.31 m and 3.82 m of asphalt from the centreline against w/2 = 3.6), hence the 1 m margin: the stub ends 0.3-0.8 m before the drawn kerb.
+// Proof: tools/north-knock-test.mjs (no vertex of the lmK-asphalt mesh on the asphalt of streets, measured with net.cover).
+const CAMPUS_SET=new Set(CAMPUS_ROADS), KERB_CLEAR=1.0;
+const onOtherRoad=(x,z,r)=>L.roadsNear(x,z,KERB_CLEAR,{drivable:true}).some((h)=>h.road!==r&&!CAMPUS_SET.has(h.road));
+/** [u0, u1] along the segment (x, z) -> (bx, bz) of way r (u = 0 at the middle) of the longest stretch whose two edges stay clear of every other non-campus carriageway; the whole segment when nothing is near */
+export function clipToKerb(x,z,bx,bz,len,w,r) {
+  const dx=(bx-x)/len,dz=(bz-z)/len,nx=-dz,nz=dx,mx=(x+bx)/2,mz=(z+bz)/2,step=0.1,n=Math.max(1,Math.ceil(len/step));
+  const clear=(u)=>![-1,1].some((s)=>onOtherRoad(mx+dx*u+nx*s*w/2,mz+dz*u+nz*s*w/2,r));
+  if(clear(-len/2)&&clear(0)&&clear(len/2))return [-len/2,len/2];
+  let best=[0,0],run=null;
+  for(let i=0;i<=n;i++){
+    const u=-len/2+len*i/n;
+    if(clear(u)){if(run===null)run=u;if(i===n&&u-run>best[1]-best[0])best=[run,u];}
+    else if(run!==null){const u1=u-len/n;if(u1-run>best[1]-best[0])best=[run,u1];run=null;}
+  }
+  return best;
+}
+
 export function campusLandscape(K) {
   const P=K.P,M=K.mats,ctx=K.ctx;
   const grass=ctx.mat.toon('#7c935a',{paint:0.025}), paving=ctx.mat.toon('#aaa79d',{paint:0.025}),road=ctx.mat.toon('#697174',{paint:0.015,name:'lmK-asphalt'});
@@ -24,7 +45,8 @@ export function campusLandscape(K) {
       if([-1,0,1].some((f)=>[-0.4,0.4].some((e)=>L.roadsNear(cx+dx*f*(u1-u0)/2+nx*e,cz+dz*f*(u1-u0)/2+nz*e,0.9,{drivable:true}).some((h)=>h.road!==r))))continue;
       P.box(paving,sd<0?-w/2-1.35:w/2+0.7,sd<0?-w/2-0.7:w/2+1.35,0.04,0.05,u0,u1);
     }
-    P.box(road,-w/2,w/2,0.051,0.055,-len/2,len/2);P.pop();
+    const [u0,u1]=clipToKerb(x,z,bx,bz,len,w,r);                             // M7: no asphalt on Kirochnaya's carriageway (the gate stubs), see clipToKerb
+    if(u1-u0>0.2)P.box(road,-w/2,w/2,0.051,0.055,u0,u1);P.pop();
   }
   // Photographs show a mature garden with open circulation, not a parking lot.
   // Exact trunk locations are interpretations; collision and road clearances are real.

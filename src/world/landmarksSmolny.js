@@ -53,6 +53,11 @@ export function build(ctx) {
   K.begin(); cathedral(K); K.flush(root, 'smolny-cathedral');
   K.begin(); ensemble(K); K.flush(root, 'smolny-ensemble');
   ctx.addStatic(root);
-  ctx.services.landmarksSmolny = { triangles: K.tris, entrances: [{ x: 2425, z: -1833, clearance: 12, bldg: 'r2864743' }],
-    photoSpots: [{ x: 2335, z: -1833, yaw: -90, name: 'Смольный собор' }] };
+  const photoSpots = [{ x: 2335, z: -1833, yaw: -90, name: 'Смольный собор' }];
+  // M7 (docs/AREAS.md 8.7 "not merged, verbatim copy"): the photo spot and the monuments are merged into the shared ctx.services.landmarks as the strip's modules do (landmarksD.js:41),
+  // so that a pedestrian stops to photograph the cathedral (people/nav.js reads ctx.services.landmarks.photoSpots) and props keeps the monuments free
+  const S = (ctx.services.landmarks ||= {});
+  S.monuments = (S.monuments || []).concat(K.svc.monuments);
+  S.photoSpots = (S.photoSpots || []).concat(photoSpots);
+  ctx.services.landmarksSmolny = { triangles: K.tris, entrances: [{ x: 2425, z: -1833, clearance: 12, bldg: 'r2864743' }], photoSpots, monuments: K.svc.monuments };
 }
