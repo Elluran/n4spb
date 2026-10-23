@@ -1,8 +1,8 @@
 // landmarksTauride/ponds.js - the WATER of the Tauride Garden (docs/TAURIDE-REMAKE.md, phase T4a): the water surface at the one level of the datum table, the impassable shore (colliders) and the numbers the tests read.
 // Everything is DERIVED from data/ponds.js (the single datum table: water level, beds, bank top, collider tops and contour) and data/water.js (the union outline of the two ponds and the canals, 3 island holes).
 // The bowls and the banks themselves are not built here: they are the ground (height.js is the profile, terrain-mesh.js samples it into the garden floor, ground-material.js paints the wet band and the bed).
-//   planPonds(o)    PURE: { water: { pos, idx, nrm, area, triangles, holes }, colliders: [{ cx, cz, w, d, rot, y0, y1, len }], stats }
-//   buildPonds(ctx, parent, plan, opts)  the water mesh (waterMaterial of environment/water.js, LOOK key 'tauride-pond', one draw, never batched, out of the outline pass) + the shore colliders on ctx.physics
+//   planPonds(o)    PURE: { water: { pos, idx, nrm, area, triangles, holes }, quay: { pos, nrm, idx, triangles, length, runs }, colliders: [{ cx, cz, w, d, rot, y0, y1, len }], stats }
+//   buildPonds(ctx, parent, plan, opts)  the water mesh (waterMaterial of environment/water.js, LOOK key 'tauride-pond', one draw, never batched, out of the outline pass) + the quay wall (T4a fix round 1: one more draw) + the shore colliders on ctx.physics
 // The colliders: physics.js blocks a walker whose feet + STEP_HEIGHT (0.45) is below the top of a box, at every feet height down to the box's bottom: the top (data COLLIDER.top) is far above the contour's feet + 0.45, so a
 // walker (or a jump from the crest: apex +0.73) cannot step or hop over it, and the bottom is below the bed so that nobody can slip under it either. The old module's trap (a 0.22 m box that ignored a walker at y = 0 and
 // blocked one at feet -1.4) is NOT reproduced: the box stands INLAND of the shore on the contour where the bank is at COLLIDER.contourY, so nobody ever stands in the water in the first place.
@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { waterMaterial } from '../environment/water.js';
 import { WATER_UNION } from './data/water.js';
 import * as PONDS from './data/ponds.js';
+import { GARDEN } from './data/footprints.js';
 import { pondProfile } from './height.js';
 
 /** the bank slope (1 : s) at a point, from the table */
@@ -65,9 +66,46 @@ function simplifyClosed(pts, tol, maxLen) {
 }
 
 /**
+ * The quay wall (T4a fix round 1). Where the water outline lies on the outline of the garden (`garden`, a flat ring) there is no bank: the street (y 0, the environment's) ends at the outline, the floor stops there and the water ends there, with a
+ * step of -WATER_Y m between that nothing closed (the sky showed through it). A vertical quad from Q.top to Q.bottom on every stretch of the water outline within Q.tol m of the garden outline (sampled every 0.25 m; runs shorter than Q.minRun are
+ * skipped), facing the WATER (the side the viewer stands on); one-sided, so the street side never sees it. Returns { pos, nrm, idx, triangles, length (m of wall), runs }.
+ */
+export function planQuay(union, garden, Q = PONDS.QUAY) {
+  const gn = garden.length / 2;
+  const dG = (x, z) => { let m = Infinity; for (let i = 0, j = gn - 1; i < gn; j = i++) { const ex = garden[2 * i] - garden[2 * j], ez = garden[2 * i + 1] - garden[2 * j + 1], l2 = ex * ex + ez * ez, t = l2 ? Math.max(0, Math.min(1, ((x - garden[2 * j]) * ex + (z - garden[2 * j + 1]) * ez) / l2)) : 0; m = Math.min(m, Math.hypot(x - garden[2 * j] - t * ex, z - garden[2 * j + 1] - t * ez)); } return m; };
+  const pos = [], nrm = [], idx = []; let length = 0, runs = 0;
+  const wall = (ax, az, bx, bz, wx, wz) => {                                       // the quad A-B (top .. bottom), facing (wx, wz)
+    const base = pos.length / 3, dx = bx - ax, dz = bz - az;
+    pos.push(ax, Q.top, az, bx, Q.top, bz, bx, Q.bottom, bz, ax, Q.bottom, az);
+    for (let k = 0; k < 4; k++) nrm.push(wx, 0, wz);
+    // (A top, B top, B bottom) has the normal (dz, 0, -dx) (the cross product of the edges): flip the winding when that points away from the water
+    if (dz * wx - dx * wz > 0) idx.push(base, base + 1, base + 2, base, base + 2, base + 3); else idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+    length += Math.hypot(dx, dz); runs++;
+  };
+  for (const ring of ringsOf(union)) {
+    const { v, sg } = ring, m = v.length;
+    for (let i = 0; i < m; i++) {
+      const a = v[i], b = v[(i + 1) % m], ex = b[0] - a[0], ez = b[1] - a[1], L = Math.hypot(ex, ez); if (L < 1e-3) continue;
+      const n = Math.max(1, Math.ceil(L / 0.25)), wx = ez / L * sg, wz = -ex / L * sg;       // (wx, wz): the unit normal toward the WATER (the land normal of shoreSegments, turned round)
+      let t0 = null;
+      for (let k = 0; k <= n; k++) {
+        const t = k / n, on = dG(a[0] + ex * t, a[1] + ez * t) <= Q.tol;
+        if (on && t0 === null) t0 = t;
+        if (t0 !== null && (!on || k === n)) {
+          const t1 = on ? t : (k - 1) / n, s0 = t0; t0 = null;
+          if ((t1 - s0) * L >= Q.minRun) wall(a[0] + ex * s0, a[1] + ez * s0, a[0] + ex * t1, a[1] + ez * t1, wx, wz);
+        }
+      }
+    }
+  }
+  return { pos: Float32Array.from(pos), nrm: Float32Array.from(nrm), idx: Uint32Array.from(idx), triangles: idx.length / 3, length, runs, top: Q.top, bottom: Q.bottom };
+}
+
+/**
  * The plan of the ponds (pure, deterministic).
  *   o.union (data/water.js WATER_UNION), o.ponds (a datum table), o.gaps ([{ x, z, r }]: no collider starts within r of it; T4b), o.slopeAt (the bank slope function, default the table's)
  * water: the surface at P.WATER_Y over the union with its holes (earcut), counter-clockwise seen from above (normal +y); area = the sum of the triangle areas.
+ * quay: the wall that closes the step between the street and the water where the water outline lies on the garden outline (planQuay; o.garden = the flat ring of the garden outline, o.quay = a table)
  * colliders: boxes along the contour ring at P.COLLIDER.contourY, inland of the shore, merged (chord tolerance, maximum length), each { cx, cz, w (thickness), d (length), rot, y0, y1, len }.
  */
 export function planPonds(o = {}) {
@@ -90,6 +128,8 @@ export function planPonds(o = {}) {
   }
   const nrm = new Float32Array(pos.length); for (let i = 1; i < nrm.length; i += 3) nrm[i] = 1;
   const water = { pos: Float32Array.from(pos), nrm, idx: Uint32Array.from(idx), area, triangles: idx.length / 3, holes, y: P.WATER_Y };
+  // ---- the quay wall
+  const quay = planQuay(union, o.garden || GARDEN.o, o.quay || P.QUAY);
   // ---- the colliders
   const colliders = []; let chords = 0;
   for (const ring of ringsOf(union)) {
@@ -105,7 +145,7 @@ export function planPonds(o = {}) {
     }
   }
   const shoreM = colliders.reduce((s, c) => s + c.len, 0);
-  return { water, colliders, stats: { waterTriangles: water.triangles, waterArea: water.area, holes, colliders: colliders.length, chords, colliderLengthM: shoreM, y: P.WATER_Y, top: C.top, contourY: C.contourY } };
+  return { water, quay, colliders, stats: { waterTriangles: water.triangles, quayTriangles: quay.triangles, quayLength: quay.length, waterArea: water.area, holes, colliders: colliders.length, chords, colliderLengthM: shoreM, y: P.WATER_Y, top: C.top, contourY: C.contourY } };
 }
 
 /** The material of the pond water: waterMaterial of environment/water.js with the LOOK key of the datum table, no wall shadow and no bridge zones, plus the duckweed mat of the Small Pond (a patch of the fragment shader: the key is the only edit of environment/water.js) */
@@ -140,7 +180,17 @@ export function buildPonds(ctx, parent, plan, opts = {}) {
   const mesh = new THREE.Mesh(g, pondMaterial(ctx, opts.field ?? ctx.services?.environment?.field ?? null, P));
   mesh.name = 'tauride-pond-water'; mesh.receiveShadow = false; mesh.castShadow = false; mesh.renderOrder = 1;
   ctx.noBatch(mesh); ctx.noOutline(mesh); parent.add(mesh);
+  // the quay wall: one more draw (a granite-grey toon material, the floor's lighting; one-sided, facing the water)
+  let quayMesh = null; const Qd = plan.quay;
+  if (Qd && Qd.triangles > 0) {
+    const qg = new THREE.BufferGeometry();
+    qg.setAttribute('position', new THREE.BufferAttribute(Qd.pos, 3)); qg.setAttribute('normal', new THREE.BufferAttribute(Qd.nrm, 3)); qg.setIndex(new THREE.BufferAttribute(Qd.idx, 1));
+    qg.computeBoundingBox(); qg.computeBoundingSphere();
+    quayMesh = new THREE.Mesh(qg, ctx.mat.toon(P.QUAY.color, { paint: 0.03, name: 'tauride-quay' }));
+    quayMesh.name = 'tauride-quay'; quayMesh.receiveShadow = true; quayMesh.castShadow = false;
+    ctx.noBatch(quayMesh); parent.add(quayMesh);
+  }
   const ph = opts.physics || ctx.physics; let n = 0;
   if (ph) for (const c of plan.colliders) { ph.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1); n++; }
-  return { mesh, triangles: W.triangles, draws: 1, colliders: n, buildMs: performance.now() - t0 };
+  return { mesh, quayMesh, triangles: W.triangles + (quayMesh ? Qd.triangles : 0), waterTriangles: W.triangles, quayTriangles: quayMesh ? Qd.triangles : 0, draws: 1 + (quayMesh ? 1 : 0), colliders: n, buildMs: performance.now() - t0 };
 }

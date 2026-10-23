@@ -16,6 +16,7 @@ import { registerLOD } from '../../core/spatial.js';
 import { clipHalf, area2, triangulateRing, boxOfPoly } from '../environment/clip.js';
 import { reliefHeight, RELIEF_BOX } from './height.js';
 import { GARDEN } from './data/footprints.js';
+import * as PONDS from './data/ponds.js';
 
 export const TERRAIN = Object.freeze({
   chunk: 64,            // metres: the chunk grid of the meshes (aligned to multiples of 64 on the project frame)
@@ -26,8 +27,23 @@ export const TERRAIN = Object.freeze({
   edge: 2,              // metres: (relief-only mode) the smallest leaf that may still straddle the foot of the relief (lifted and flat samples in one leaf): the mesh follows the 2 cm contour within this
   drawsMax: 16,
   trianglesTarget: 40000,
+  cornerMax: 4,         // metres: (cover mode) the largest leaf across the outline that holds a corner of the outline (see planTerrain: the clip of a big triangle over a reflex corner is not one simple polygon)
   lift: 0.005,          // metres: the garden's own floor is drawn this much above the environment ground (a mesh offset, the plan and heightAt are exact): where the two overlap (the 6 cm round the outline, HOOKS.groundHoles) the floor wins by geometry, not by a tie of the depth bias
 });
+
+/**
+ * T4a fix round 1 (the budget of the ponds: +15 k triangles for the bowls, the banks and the water): the floor of the garden WITH the ponds is planned with a looser split and a tolerance that follows what is seen.
+ *   split 0.06 (the base tolerance of everything above the water; TERRAIN.split 0.04 is the tolerance of the hills of the relief-only plan): the floor was 32,142 triangles at 0.04 (+23.1 k over T3), 22.1 k with this
+ *     (+13.1 k): the curvature of the banks (0.04 .. 0.10 per m2 along 2.7 km of shore) needs 1 m leaves at 4 cm and 2 m leaves at 6 cm. Above the water the mesh stays within 5 cm for 99.9 % of a 0.5 m lattice (mean 0.27 cm), the
+ *     worst 10 cm stay where they were (the cusps of the canals).
+ *   sub: under the water the bed is hidden by the opaque surface, so a sample that lies `from` m or more below the waterline may be off by `a` x its depth - `b` (at most `cap`): the mesh must only stay under the water.
+ * Tests and tools plan the floor with floorOptions() so that they measure the mesh that is built.
+ */
+export const FLOOR_TUNING = Object.freeze({ split: 0.06, sub: Object.freeze({ a: 1.0, b: 0.03, cap: 0.25, from: 0.10 }) });
+/** the per-sample tolerance of the floor (o.tolAt of planTerrain): (x, z, h) => the metres this sample may be off (planTerrain never goes below the split) */
+export function pondTolAt(P = PONDS, S = FLOOR_TUNING.sub) { const w0 = P.WATER_Y; return (x, z, h) => (h < w0 - S.from ? Math.min(S.cap, Math.max(0, S.a * (w0 - h) - S.b)) : 0); }
+/** the options of the floor plan of the garden (cover mode with the ponds): planTerrain(gardenHeight, RELIEF_BOX, floorOptions()) is what the page builds; `o` overrides */
+export function floorOptions(o = {}) { return { cover: gardenPieces(), split: FLOOR_TUNING.split, tolAt: pondTolAt(), ...o }; }
 
 const hOf = (gh, x, z) => gh(x, z) ?? 0;
 /** distance of the point p to the segment a-b (all [x, z]) */
@@ -65,7 +81,7 @@ export function gardenPieces(ring = GARDEN.o) { return mergeConvex(triangulateRi
 /** The plan of the terrain meshes for a height function `gh` over `box` ([x0, x1, z0, z1]): { chunks: [{ cx, cz, x0, z0, pos, nrm, col, idx, tris }], tris, leaves, splits, stats }. Pure and deterministic.
  *  o.cover = the convex pieces of the garden outline (gardenPieces()) -> the whole floor of the garden, clipped to the outline `o.ring` (default: the garden outline); absent -> the relief only (T2). */
 export function planTerrain(gh = reliefHeight, box = RELIEF_BOX, o = {}) {
-  const T = { ...TERRAIN, ...o }, CH = T.chunk, TOL = T.split, pieces = o.cover || null;
+  const T = { ...TERRAIN, ...o }, CH = T.chunk, TOL = T.split, pieces = o.cover || null, tolAt = typeof o.tolAt === 'function' ? o.tolAt : null;
   const ringFlat = o.ring || GARDEN.o, ringPts = []; for (let i = 0; i < ringFlat.length; i += 2) ringPts.push([ringFlat[i], ringFlat[i + 1]]);
   let fallbacks = 0;
   // COVER mode: the lattice is shifted by a dyadic fraction of a metre (152/4096, 211/4096 m: exact in float32 and in every sum and average of the quadtree) so that no vertex of the outline, which OSM rounds to 0.1 m,
@@ -100,7 +116,9 @@ export function planTerrain(gh = reliefHeight, box = RELIEF_BOX, o = {}) {
       const u = a / n, v = b / n, h = row[b * (n + 1) + a];
       const d0 = u >= v ? h00 + (h10 - h00) * u + (h11 - h10) * v : h00 + (h11 - h01) * u + (h01 - h00) * v;                 // diagonal (i0,j0)-(i1,j1)
       const d1 = u + v <= 1 ? h00 + (h10 - h00) * u + (h01 - h00) * v : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);   // diagonal (i1,j0)-(i0,j1)
-      e0 = Math.max(e0, Math.abs(h - d0)); e1 = Math.max(e1, Math.abs(h - d1));
+      // o.tolAt(x, z, h): the metres this sample may be off; the error is measured in units of it (never stricter than the split), so a hidden bed splits later than a visible bank
+      const w = tolAt ? TOL / Math.max(TOL, tolAt(I0 + SX + i + a * st, J0 + SZ + j + b * st, h)) : 1;
+      e0 = Math.max(e0, Math.abs(h - d0) * w); e1 = Math.max(e1, Math.abs(h - d1) * w);
     }
     return e0 <= e1 ? { max, min, err: e0, diag: 0 } : { max, min, err: e1, diag: 1 };
   }
@@ -112,12 +130,15 @@ export function planTerrain(gh = reliefHeight, box = RELIEF_BOX, o = {}) {
   }
   // 2. the adaptive split
   const out = [];
+  // T4a fix round 1: a leaf across the outline that holds a CORNER of the outline splits down to `cornerMax` m. The clip of a big triangle that spans a reflex corner or a narrow neck of the outline (the north gate strip,
+  // 1122.6, -1737.2) is not one simple polygon: the earcut check failed and the fallback left 10 open edges when a looser split let a 16 m leaf stand there; at 4 m the clip is a simple polygon.
+  const hasCorner = (x, z, s) => { for (let q = 0; q < ringPts.length; q++) if (ringPts[q][0] > x && ringPts[q][0] < x + s && ringPts[q][1] > z && ringPts[q][1] < z + s) return true; return false; };
   const queue = leaves; leaves = [];
   const child = (lf, a, b, h) => { const c = { i: lf.i + a, j: lf.j + b, s: h }; if (pieces) { c.cov = covered(I0 + SX + c.i, J0 + SZ + c.j, h); if (c.cov <= 1e-9) return null; } return c; };
   while (queue.length) {
     const lf = queue.pop(), m = measure(lf.i, lf.j, lf.s);
     if (!pieces && m.max < T.drop) continue;                       // all flat: no triangles (relief only)
-    if ((m.err > TOL || (!pieces && m.min < T.drop && lf.s > T.edge)) && lf.s > 1) { const h = lf.s / 2; splits++; for (const [a, b] of [[0, 0], [h, 0], [0, h], [h, h]]) { const c = child(lf, a, b, h); if (c) queue.push(c); } continue; }
+    if ((m.err > TOL || (!pieces && m.min < T.drop && lf.s > T.edge) || (pieces && lf.s > T.cornerMax && lf.cov < 1 - 1e-9 && hasCorner(I0 + SX + lf.i, J0 + SZ + lf.j, lf.s))) && lf.s > 1) { const h = lf.s / 2; splits++; for (const [a, b] of [[0, 0], [h, 0], [0, h], [h, h]]) { const c = child(lf, a, b, h); if (c) queue.push(c); } continue; }
     lf.diag = m.diag; out.push(lf);
   }
   leaves = out;
@@ -299,8 +320,11 @@ export function makeMeshHeight(plan, cell = 8) {
 
 /** The distance between the planned mesh and `gh`: rasterises every triangle on a `step` m lattice and compares the interpolated height with gh. { maxErr, at, samples, uncovered (samples at or above the plan's `drop` that no triangle covers), boundaryHigh (the highest point of an open edge), nonManifold, padArea (m2 of the footprint of all triangles), apronArea (m2 of the triangles with no corner above `drop`), liftedArea (m2 of the lattice points at or above `drop`) }.
  *  With `ring` (the garden outline, flat): also { ringArea, polyUncovered (lattice points inside the ring that no triangle covers), polyTotal, vertsOutside (the farthest a triangle corner lies outside the ring, m), trianglesOutside (triangles whose centroid is outside) } for the cover mode. */
-export function measurePlan(plan, gh = reliefHeight, step = 0.5, ring = null) {
+export function measurePlan(plan, gh = reliefHeight, step = 0.5, ring = null, opts = {}) {
   let maxErr = 0, at = null, samples = 0, padArea = 0, apronArea = 0, over5 = 0;
+  // opts.waterY (T4a fix round 1): the samples are split into the ones ABOVE the water (the ground is not more than 2 cm under the surface: the visible floor) and the SUBMERGED ones (hidden by the opaque water: the floor
+  // may be off by FLOOR_TUNING.sub there but must stay under the surface): { above: { n, max, over5 }, sub: { n, max, pokes (mesh above the surface), pokeMax (m above it) } }
+  const W = opts.waterY, ab = { n: 0, max: 0, over5: 0, sum: 0 }, sb = { n: 0, max: 0, pokes: 0, pokeMax: 0 };
   const seen = new Map(), drop = plan.drop ?? TERRAIN.drop;
   for (const c of plan.chunks) {
     const p = c.pos, ix = c.idx;
@@ -317,6 +341,7 @@ export function measurePlan(plan, gh = reliefHeight, step = 0.5, ring = null) {
         const y = l1 * p[a + 1] + l2 * p[b + 1] + l3 * p[d + 1], e = Math.abs(y - hOf(gh, x, z)); samples++;
         if (e > maxErr) { maxErr = e; at = { x, z, mesh: +y.toFixed(4), want: +hOf(gh, x, z).toFixed(4) }; }
         if (e > 0.05) over5++;
+        if (W !== undefined) { const h = hOf(gh, x, z); if (h < W - 0.02) { sb.n++; if (e > sb.max) sb.max = e; if (y > W) { sb.pokes++; if (y - W > sb.pokeMax) sb.pokeMax = y - W; } } else { ab.n++; ab.sum += e; if (e > ab.max) ab.max = e; if (e > 0.05) ab.over5++; } }
         seen.set(Math.round(x / step) * 100000 + Math.round(z / step), 1);
       }
     }
@@ -332,7 +357,7 @@ export function measurePlan(plan, gh = reliefHeight, step = 0.5, ring = null) {
   }
   let boundaryHigh = 0, nonManifold = 0;
   for (const r of em.values()) { if (r.n === 1 && r.h > boundaryHigh) boundaryHigh = r.h; if (r.n > 2) nonManifold++; }
-  const res = { maxErr, at, over5, samples, lifted, uncovered, boundaryHigh, nonManifold, padArea, apronArea, liftedArea: lifted * step * step };
+  const res = { maxErr, at, over5, samples, ...(W !== undefined ? { above: { n: ab.n, max: ab.max, over5: ab.over5, mean: ab.n ? ab.sum / ab.n : 0 }, sub: sb } : {}), lifted, uncovered, boundaryHigh, nonManifold, padArea, apronArea, liftedArea: lifted * step * step };
   if (ring) {
     const inR = (x, z) => { let c = false; for (let i = 0, j = ring.length - 2; i < ring.length; j = i, i += 2) if ((ring[i + 1] > z) !== (ring[j + 1] > z) && x < (ring[j] - ring[i]) * (z - ring[i + 1]) / (ring[j + 1] - ring[i + 1]) + ring[i]) c = !c; return c; };
     const dR = (x, z) => { let m = Infinity; for (let i = 0; i < ring.length; i += 2) { const k = (i + 2) % ring.length, ax = ring[i], az = ring[i + 1], dx = ring[k] - ax, dz = ring[k + 1] - az, l2 = dx * dx + dz * dz, t = l2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0; m = Math.min(m, Math.hypot(x - ax - t * dx, z - az - t * dz)); } return m; };

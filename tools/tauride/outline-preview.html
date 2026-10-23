@@ -20,7 +20,7 @@ import { createRenderPipeline } from '/src/core/renderer.js';
 import * as L from '/src/world/layout.js';
 import { GREEN } from '/src/world/data/city.js';
 import { gardenHeight, RELIEF_BOX } from '/src/world/landmarksTauride/height.js';
-import { planTerrain, buildTerrain, gardenPieces, makeMeshHeight } from '/src/world/landmarksTauride/terrain-mesh.js';
+import { planTerrain, buildTerrain, gardenPieces, floorOptions, makeMeshHeight } from '/src/world/landmarksTauride/terrain-mesh.js';
 import { planGroundMask, gardenGroundMaterial, collectGroundInputs, makeNoiseTexture } from '/src/world/landmarksTauride/ground-material.js';
 import { planPaths, buildPaths } from '/src/world/landmarksTauride/paths-draped.js';
 import { insetRing, GROUND_HOLE_INSET } from '/src/areas/north/hooks/ground.js';
@@ -42,7 +42,7 @@ const ctx = createContext({ scene, camera, renderer, audio: null, quality: { nam
 const pipeline = createRenderPipeline(renderer, { name: 'medium', pixelRatio: 1, msaa: 0 }); pipeline.setSize(W, H, 1);
 const root = new THREE.Group(); scene.add(root);
 // ---- the garden: the real modules
-const tplan = planTerrain(gardenHeight, RELIEF_BOX, { cover: gardenPieces() });
+const tplan = planTerrain(gardenHeight, RELIEF_BOX, floorOptions());
 const mask = planGroundMask(collectGroundInputs({ GARDEN: DG.GARDEN, GARDEN_GREEN: DG.GARDEN_GREEN, FOOTPRINTS: DG.FOOTPRINTS, WATER_UNION: DW.WATER_UNION, PATHS: DP.PATHS, BENCHES: DF.BENCHES, GATES: DF.GATES, MONUMENTS: DF.MONUMENTS, FOUNTAINS: DF.FOUNTAINS }, GREEN, gardenHeight));
 const noise = makeNoiseTexture(), ground = gardenGroundMaterial(ctx, mask, noise);
 buildTerrain(ctx, root, tplan, { material: ground.mat, noOutline: floorMode === 'old' });

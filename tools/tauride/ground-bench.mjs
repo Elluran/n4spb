@@ -20,9 +20,9 @@ const timed = (f) => { const t = process.hrtime.bigint(); const c0 = calls; cons
 const heap = () => { if (global.gc) { global.gc(); global.gc(); } const m = process.memoryUsage(); return { heap: m.heapUsed, buf: m.arrayBuffers }; };
 const inputs = (g) => GM.collectGroundInputs({ GARDEN: Fo.GARDEN, GARDEN_GREEN: Fo.GARDEN_GREEN, FOOTPRINTS: Fo.FOOTPRINTS, WATER_UNION: Wd.WATER_UNION, PATHS: Pd.PATHS, BENCHES: Fu.BENCHES, GATES: Fu.GATES, MONUMENTS: Fu.MONUMENTS, FOUNTAINS: Fu.FOUNTAINS }, FAC.GREEN, g);
 // warm-up (JIT), not counted
-TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { cover: TM.gardenPieces() }); GM.planGroundMask(inputs(GH.gardenHeight));
+TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, TM.floorOptions()); GM.planGroundMask(inputs(GH.gardenHeight));
 const h0 = heap();
-const [plan, tMs, tCalls] = timed(() => TM.planTerrain(gh, GH.RELIEF_BOX, { cover: TM.gardenPieces() }));
+const [plan, tMs, tCalls] = timed(() => TM.planTerrain(gh, GH.RELIEF_BOX, TM.floorOptions()));
 const [mask, mMs, mCalls] = timed(() => GM.planGroundMask(inputs(gh)));
 const [mesh, hMs] = timed(() => TM.makeMeshHeight(plan));
 const [pp, pMs, pCalls] = timed(() => PD.planPaths(Pd.PATHS, { meshHeight: mesh, gh }));

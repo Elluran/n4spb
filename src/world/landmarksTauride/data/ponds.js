@@ -35,6 +35,11 @@ export const SMALL_POND = { mouthZ: -1655.3, eastX: 1250, blendZ: 4, blendX: 8 }
  *  bed (-1.2) lies above y0. Segments are merged while the chord stays within `chord` m of the contour and shorter than `maxLen`; `gap` m is added at both ends (no wedge between neighbours). */
 export const COLLIDER = { contourY: -0.3, top: 1.8, y0: -2.5, thick: 0.4, chord: 0.12, maxLen: 14, gap: 0.3 };
 
+/** The quay (ponds.js, T4a fix round 1): where the water outline lies ON the outline of the garden (the north shore of the lake, 170 m: the fence stands on the shore and outside is the street at y = 0, drawn by the environment) there is no bank,
+ *  only a step of -WATER_Y m between the street and the water, and nothing closed it: the environment ground is cut at the outline, the floor stops there and the water ends there, so a viewer on the water saw the sky through the 0.45 m slit.
+ *  A wall from `top` to `bottom` on every stretch of the water outline within `tol` m of the garden outline (runs shorter than `minRun` m are skipped), facing the water, closes it; the part below the surface is hidden by the water. */
+export const QUAY = { top: 0.0, bottom: -0.7, color: '#8b8a84', tol: 0.1, minRun: 0.5 };
+
 /** The ground material (ground-material.js): the wet band at the waterline and the colours of the bed, from the mask's signed shore distance (+ land) */
 export const WET_BAND = 0.5;            // metres of darker, wet ground on the land side of the waterline
 export const SHORE_SAND = 0.9;          // metres: the narrow pale sand / silt strip above the wet band (the shore line of a pond)

@@ -16,7 +16,7 @@ import { GREEN } from './data/city.js';
 import { gardenHeight, RELIEF_BOX, GARDEN_SHORE } from './landmarksTauride/height.js';
 import { planPonds, buildPonds } from './landmarksTauride/ponds.js';
 import * as PONDS from './landmarksTauride/data/ponds.js';
-import { planTerrain, buildTerrain, gardenPieces, makeMeshHeight } from './landmarksTauride/terrain-mesh.js';
+import { planTerrain, buildTerrain, floorOptions, makeMeshHeight } from './landmarksTauride/terrain-mesh.js';
 import { planGroundMask, gardenGroundMaterial, collectGroundInputs, makeNoiseTexture } from './landmarksTauride/ground-material.js';
 import { planPaths, buildPaths } from './landmarksTauride/paths-draped.js';
 import * as DG from './landmarksTauride/data/footprints.js';
@@ -71,7 +71,7 @@ export function build(ctx) {
   // T2 + T3: the floor of the garden: the pure gardenHeight (hills, mounds, the memorial plateau) over the WHOLE garden polygon, clipped to the outline (cover mode), sampled into <= 16 chunk meshes (no colliders: the player
   // follows heightAt, the same function as the HEIGHT_PATCH 'garden'); the environment ground is cut out under it (HOOKS.groundHoles). Its colour is the garden's own ground material (ground-material.js): a 1 m mask
   // computed here from the authored zones, the relief, the water outline, the woods, the ways, the benches and the gates. The alleys are draped on the planned mesh (paths-draped.js).
-  const tplan=planTerrain(gardenHeight,RELIEF_BOX,{cover:gardenPieces()});
+  const tplan=planTerrain(gardenHeight,RELIEF_BOX,floorOptions());
   const mask=planGroundMask(collectGroundInputs({GARDEN:DG.GARDEN,GARDEN_GREEN:DG.GARDEN_GREEN,FOOTPRINTS:DG.FOOTPRINTS,WATER_UNION:DW.WATER_UNION,PATHS:DP.PATHS,BENCHES:DF.BENCHES,GATES:DF.GATES,MONUMENTS:DF.MONUMENTS,FOUNTAINS:DF.FOUNTAINS},GREEN,gardenHeight));
   const noise=makeNoiseTexture(),ground=gardenGroundMaterial(ctx,mask,noise);
   const terrain=buildTerrain(ctx,root,tplan,{material:ground.mat});
@@ -81,5 +81,5 @@ export function build(ctx) {
   ctx.addStatic(root);
   // The service the engine reads (docs/AREAS.md 9.1 HOOKS.deckServices, docs/TAURIDE-REMAKE.md T1): deckY(x, z) = the Paradny podium (3.3 m) and its eight stair ramps, else null; cars (drive/handling.js)
   // and walkers (people/nav.js surfaceY) ask it FIRST. The later phases compose the garden bridges into it (`courts.deckY(x,z) ?? bridgesDeckY(x,z)`). No `entrances`: PRUNE_SERVICES does not list this module.
-  ctx.services.landmarksTauride={paradny:courts,deckY:(x,z)=>courts.deckY(x,z),terrain:{heightAt:gardenHeight,meshHeight,triangles:terrain.triangles,draws:terrain.draws,cover:true},ground:{mask:mask.stats,maskBytes:mask.data.length,material:ground.mat},paths:{triangles:paths.triangles,draws:paths.draws,stats:pplan.stats,stairs:pplan.stairs},ponds:{y:PONDS.WATER_Y,triangles:ponds.triangles,draws:ponds.draws,colliders:ponds.colliders,buildMs:ponds.buildMs,stats:pondsPlan.stats,mesh:ponds.mesh,inWater:(x,z)=>GARDEN_SHORE.dist(x,z)<0,shoreDist:GARDEN_SHORE.dist},kitTriangles:K.tris,triangles:K.tris+terrain.triangles+paths.triangles+ponds.triangles};
+  ctx.services.landmarksTauride={paradny:courts,deckY:(x,z)=>courts.deckY(x,z),terrain:{heightAt:gardenHeight,meshHeight,triangles:terrain.triangles,draws:terrain.draws,cover:true},ground:{mask:mask.stats,maskBytes:mask.data.length,material:ground.mat},paths:{triangles:paths.triangles,draws:paths.draws,stats:pplan.stats,stairs:pplan.stairs},ponds:{y:PONDS.WATER_Y,triangles:ponds.triangles,waterTriangles:ponds.waterTriangles,quayTriangles:ponds.quayTriangles,quayLength:pondsPlan.quay.length,draws:ponds.draws,colliders:ponds.colliders,buildMs:ponds.buildMs,stats:pondsPlan.stats,mesh:ponds.mesh,quayMesh:ponds.quayMesh,inWater:(x,z)=>GARDEN_SHORE.dist(x,z)<0,shoreDist:GARDEN_SHORE.dist},kitTriangles:K.tris,triangles:K.tris+terrain.triangles+paths.triangles+ponds.triangles};
 }

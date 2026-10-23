@@ -49,21 +49,21 @@ const floorChecks = (plan, M, label) => {
   R('every lattice point inside the polygon is covered (0.5 m lattice)', M.polyUncovered === 0, `${M.polyUncovered} of ${M.polyTotal} uncovered`);
   R('nothing lies outside the polygon: no triangle centroid outside, no corner more than 0.3 mm outside', M.trianglesOutside === 0 && M.vertsOutside < 3e-4, `${M.trianglesOutside} triangles outside, farthest corner ${M.vertsOutside.toExponential(2)} m`);
   R('watertight in the exact float32 positions: no edge in more than two triangles, no open edge except on the outline (no T-junction crack)', M.nonManifoldExact === 0 && M.openInterior === 0, `non-manifold ${M.nonManifoldExact}, open inside ${M.openInterior}, open on the outline ${M.openBoundary}`);
-  R('the terrain is carried (T4a: bowls and banks included): within 5 cm of gardenHeight on a 0.5 m lattice except 0.15 % of the samples (the cusps of the canals, 1 m is the smallest leaf; worst 11 cm), every point lifted by 2 cm or more covered (but a few on the outline itself)', M.over5 <= 0.0015 * M.samples && M.maxErr <= 0.11 && M.uncovered <= 20, `max ${(M.maxErr * 100).toFixed(2)} cm, ${M.over5} of ${M.samples} over 5 cm, uncovered ${M.uncovered} of ${M.lifted}`);
+  R('the terrain is carried (T4a: bowls and banks included; fix round 1: the floor is planned with floorOptions()): ABOVE the water within 5 cm of gardenHeight on a 0.5 m lattice except 0.15 % of the samples (worst 11 cm, the cusps of the canals), UNDER the water (hidden by the opaque surface) off by at most the tolerance of the hidden bed (FLOOR_TUNING.sub, 25 cm) and never more than the base tolerance of the floor (FLOOR_TUNING.split, 6 cm) above the surface, every point lifted by 2 cm or more covered (but a few on the outline itself)', M.above.over5 <= 0.0015 * M.above.n && M.above.max <= 0.11 && M.sub.max <= TM.FLOOR_TUNING.sub.cap + 0.01 && M.sub.pokeMax <= TM.FLOOR_TUNING.split && M.uncovered <= 20, `above: max ${(M.above.max * 100).toFixed(2)} cm, ${M.above.over5} of ${M.above.n} over 5 cm; under the water: max ${(M.sub.max * 100).toFixed(1)} cm, ${M.sub.pokes} of ${M.sub.n} above the surface by at most ${(M.sub.pokeMax * 100).toFixed(1)} cm; uncovered ${M.uncovered} of ${M.lifted}`);
   R(`at most ${TM.TERRAIN.drawsMax} draws and ${TM.TERRAIN.trianglesTarget} triangles, no clip fallback`, plan.chunks.length <= TM.TERRAIN.drawsMax && plan.tris <= TM.TERRAIN.trianglesTarget && plan.clipFallbacks === 0, `${plan.tris} triangles, ${plan.chunks.length} draws, ${plan.clipFallbacks} fallbacks`);
   return rows;
 };
-const measure = (plan) => TM.measurePlan(plan, GH.gardenHeight, 0.5, RING);
-const plan = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { cover: pieces });
+const measure = (plan) => TM.measurePlan(plan, GH.gardenHeight, 0.5, RING, { waterY: GH.PONDS.WATER_Y });
+const plan = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, TM.floorOptions({ cover: pieces }));
 const M0 = measure(plan);
 for (const [n, c, d] of floorChecks(plan, M0)) ok(n, c, d);
-const plan2 = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { cover: TM.gardenPieces() });
+const plan2 = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, TM.floorOptions());
 ok('deterministic: two plans have the same bytes', hashOf(...plan.chunks.flatMap((c) => [c.pos, c.idx])) === hashOf(...plan2.chunks.flatMap((c) => [c.pos, c.idx])));
 ok('the convex pieces are convex, counter-clockwise, interior-disjoint and add up to the polygon', pieces.every((p) => p.every((_, i) => { const a = p[i], b = p[(i + 1) % p.length], c = p[(i + 2) % p.length]; return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) >= -1e-9; })) && Math.abs(pieces.reduce((s, p) => s + p.reduce((q, v, i) => q + v[0] * p[(i + 1) % p.length][1] - p[(i + 1) % p.length][0] * v[1], 0) / 2, 0) - ringArea(RING)) < 1e-3, `${pieces.length} pieces`);
 { // mutants of the floor
-  const noShift = measure(TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { cover: pieces, shift: [0, 0] }));
+  const noShift = measure(TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, TM.floorOptions({ cover: pieces, shift: [0, 0] })));
   ok('mutant: the lattice without its dyadic shift (outline vertices exactly on lattice lines) cracks the floor (open edges inside) - the shift is needed', noShift.openInterior > 0, `${noShift.openInterior} open edges inside`);
-  const small = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { cover: pieces, ring: HG.insetRing(RING, 3) });
+  const small = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, TM.floorOptions({ cover: pieces, ring: HG.insetRing(RING, 3) }));
   const ms = measure(small);
   ok('mutant: a floor clipped to a polygon 3 m smaller than the outline leaves holes (the coverage check turns red)', ms.polyUncovered > 1000, `${ms.polyUncovered} uncovered`);
   const bad = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { cover: pieces, split: 0.4 }); const mb = measure(bad);
@@ -72,8 +72,8 @@ ok('the convex pieces are convex, counter-clockwise, interior-disjoint and add u
 { // the height of the planned mesh (what the ribbons are draped on)
   const mh = TM.makeMeshHeight(plan);
   let n = 0, bad = 0, maxd = 0, miss = 0;
-  for (let x = 915; x < 1500; x += 3.7) for (let z = -1790; z < -1259; z += 3.9) if (C.inRing(x, z, RING) && C.ringDist(x, z, RING) > 0.05) { n++; const h = mh(x, z); if (h === null) { miss++; continue; } const e = Math.abs(h - (GH.gardenHeight(x, z) ?? 0)); maxd = Math.max(maxd, e); if (e > TM.TERRAIN.tol) bad++; }
-  ok('makeMeshHeight answers every sampled point of the polygon and agrees with gardenHeight within 11 cm (T4a: 5 cm but at the cusps of the canals)', n > 5000 && miss === 0 && maxd <= 0.11, `${n} points, ${miss} without a triangle, max ${(maxd * 100).toFixed(2)} cm`);
+  for (let x = 915; x < 1500; x += 3.7) for (let z = -1790; z < -1259; z += 3.9) if (C.inRing(x, z, RING) && C.ringDist(x, z, RING) > 0.05) { n++; const h = mh(x, z); if (h === null) { miss++; continue; } const g0 = GH.gardenHeight(x, z) ?? 0, e = Math.abs(h - g0), allow = Math.max(0.11, TM.pondTolAt()(x, z, g0) + 0.02); maxd = Math.max(maxd, e); if (e > allow) bad++; }
+  ok('makeMeshHeight answers every sampled point of the polygon and agrees with gardenHeight within 11 cm (T4a: 5 cm but at the cusps of the canals; fix round 1: the hidden bed within its own tolerance FLOOR_TUNING.sub + 2 cm)', n > 5000 && miss === 0 && bad === 0, `${n} points, ${miss} without a triangle, ${bad} beyond their tolerance, max ${(maxd * 100).toFixed(2)} cm`);
 }
 
 // =============================================================== 2. the hole in the environment ground
@@ -165,16 +165,16 @@ const pathChecks = (P, label, planned, build = true) => {
     else worstOff = Math.max(worstOff, dC - hwG);
     const gm = mesh(x, z), g = GH.gardenHeight(x, z) ?? 0, off = (gm ?? g) + (P.offset ?? 0.03);
     if (gm !== null) { const e = y - gm; if (e < SPEC.offset - 1e-4) dip++; if (e > SPEC.offset + 0.0061) offHigh++; }
-    const e2 = y - g; if (Math.abs(e2 - SPEC.offset) > TM.TERRAIN.tol + 0.0061) hover++;
+    const e2 = y - g; if (Math.abs(e2 - SPEC.offset) > TM.FLOOR_TUNING.split + 0.0061) hover++;
     if (across === -1) widthOf.set(v, hwG);
   }
   for (const w of ways) { rows3 += w.rows; }
   for (let v = 0; v < nv; v++) if (rb.wayOf[v] >= 0 && rb.path[3 * v] === -1) { const way = ways[rb.wayOf[v]], hwN = rb.path[3 * v + 2] - SPEC.pad, nom = way.w / 2; if (hwN < nom * (1 - SPEC.widthVar) - 1e-6 || hwN > nom * (1 + SPEC.widthVar) + 1e-6) badWidth++; }
   let chordLo = 0, chordHi = 0; for (let k = 0; k < rb.idx.length; k += 3) { const a = rb.idx[k] * 3, b = rb.idx[k + 1] * 3, c = rb.idx[k + 2] * 3, cx = (rb.pos[a] + rb.pos[b] + rb.pos[c]) / 3, cz = (rb.pos[a + 2] + rb.pos[b + 2] + rb.pos[c + 2]) / 3, cy = (rb.pos[a + 1] + rb.pos[b + 1] + rb.pos[c + 1]) / 3, m = mesh(cx, cz); if (m !== null) { chordLo = Math.min(chordLo, cy - m - SPEC.offset); chordHi = Math.max(chordHi, cy - m - SPEC.offset); } }
-  R('the ribbon surface BETWEEN the vertices stays on the mesh too: at every triangle centroid it is at most 3 mm under the mesh and at most 4.5 cm higher than the mesh + the offset (the chord rule: never under the mesh, hovering a little over a hollow)', chordLo >= -0.035 && chordHi <= 0.045, `lowest ${(chordLo * 100).toFixed(2)} cm, highest ${(chordHi * 100).toFixed(2)} cm`);
+  R('the ribbon surface BETWEEN the vertices stays on the mesh too: at every triangle centroid it is at most 4 cm under the mesh + the offset and at most 5.5 cm higher (the chord rule: never under the mesh, hovering a little over a hollow; T4a fix round 1: the 6 cm tolerance of the floor moved the T3 / T4a limits 3.5 / 4.5 cm by 0.5 / 1 cm)', chordLo >= -0.040 && chordHi <= 0.055, `lowest ${(chordLo * 100).toFixed(2)} cm, highest ${(chordHi * 100).toFixed(2)} cm`);
   R('every ribbon centre vertex lies within 1.2 m of the way it was built from (the corner cutting moves it by at most 0.9 m; circular: the data is compared with itself, the overlay against an image is T7)', worstCentre <= 1.2, `worst ${worstCentre.toFixed(2)} m over ${rows3} rows of ${ways.length} ways`);
   R('every edge vertex is within the geometric half width (+ the corner cutting) of the way: no ribbon strays', worstOff <= 1.0 + 0.0, `worst ${worstOff.toFixed(2)} m beyond the half width`);
-  R('the ribbon is ON the terrain: every vertex is the planned mesh + the offset (+ the class bias, < 6 mm), and within 5 cm + the offset of gardenHeight (ON the terrain; T4a: 3 vertices at the cusps of the shore may be off)', dip === 0 && offHigh === 0 && hover <= 3, `under the mesh ${dip}, too high ${offHigh}, off gardenHeight ${hover} of ${nv}`);
+  R('the ribbon is ON the terrain: every vertex is the planned mesh + the offset (+ the class bias, < 6 mm), and within the tolerance of the floor (FLOOR_TUNING.split, 6 cm) + the offset of gardenHeight (ON the terrain; T4a: 3 vertices at the cusps of the shore may be off)', dip === 0 && offHigh === 0 && hover <= 3, `under the mesh ${dip}, too high ${offHigh}, off gardenHeight ${hover} of ${nv}`);
   R('widths per class: main 3.5 .. 4.5 m, side 2.4 m, trail 1.4 m, each within +-8 % of the data width (the shader cuts the edge inside the 0.28 m pad)', badWidth === 0 && ways.filter((w) => w.cls === 'main').every((w) => w.w >= 3.5 && w.w <= 4.5) && ways.filter((w) => w.cls === 'side').every((w) => w.w === 2.4) && ways.filter((w) => w.cls === 'trail').every((w) => w.w === 1.4), `${ways.filter((w) => w.cls === 'main').length} main, ${ways.filter((w) => w.cls === 'side').length} side, ${ways.filter((w) => w.cls === 'trail').length} trail`);
   R('no ribbon centre in the water (but the end of a way that the data runs 0.3 m into the shore, up to 0.5 m) or on a building footprint', inWater === 0 && onFoot === 0, `${inWater} in the water, ${onFoot} on a footprint`);
   let down = 0; for (let k = 0; k < rb.idx.length; k += 3) { const a = rb.idx[k] * 3, b = rb.idx[k + 1] * 3, c = rb.idx[k + 2] * 3; if ((rb.pos[b + 2] - rb.pos[a + 2]) * (rb.pos[c] - rb.pos[a]) - (rb.pos[b] - rb.pos[a]) * (rb.pos[c + 2] - rb.pos[a + 2]) <= 0) down++; }
@@ -248,7 +248,7 @@ console.log('5. the built module (landmarksTauride) and the environment ground' 
     ok(`the ${what} shader text: braces and parentheses balance, every declared uniform is supplied, the varyings agree, the world position and the far fog are used`, bal(f) && bal(v) && extra.length === 0 && /vPWorld/.test(f) && /uFogK/.test(f) && (what === 'ground' ? /varying vec3 vNW/.test(v) && /varying vec3 vNW/.test(f) && /texelFetch\(uMask/.test(f) : /varying vec3 vPath/.test(v) && /varying vec3 vPath/.test(f) && /discard;/.test(f)), `${f.length} characters, ${declared.length} uniforms`);
   }
   // mutants of the build (a copy of terrain-mesh.js with one line cut)
-  const bare = SE.makeContext(eng, []).ctx, planBare = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { cover: pieces });
+  const bare = SE.makeContext(eng, []).ctx, planBare = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, TM.floorOptions({ cover: pieces }));
   const fake = { mat: ctx.mat.toon('#ffffff', { paint: 0, polygonOffset: 2, name: 'x' }) };
   const tm1 = await variant('terrain-mesh.js', /    if \(own\) m\.position\.y = TERRAIN\.lift;\n/, ''), tm2 = await variant('terrain-mesh.js', /const noOutline = opts\.noOutline \?\? false;/, 'const noOutline = opts.noOutline ?? true;');
   const lift = (mod) => mod.buildTerrain(bare, new eng.THREE.Group(), planBare, { material: fake.mat }).meshes.every((m) => m.position.y === TM.TERRAIN.lift);
