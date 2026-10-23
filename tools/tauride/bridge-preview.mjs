@@ -1,7 +1,7 @@
 // bridge-preview.mjs - T4b fix round 1: renders the bridges, the dam, the pond water and the reeds of the Tauride Garden (with the floor and the alleys under them) with the REAL modules and the real three.js on SOFTWARE GL
 // (SwiftShader through headless Edge: the CPU, no GPU), and reports the shader compile errors (the patched pond water shader of ponds.js pondMaterial among them).
 //   node tools/tauride/bridge-preview.mjs [--out D:/git2/n4spb-work/tauride/T4b/preview] [--views "name:x,y,z,yaw,pitch;..."] [--only name,name] [--old]
-// The views are the GPU QA's dam poses (round 1) and the east aerials of the narrow arms; --old renders the pond's sun terms as T4b shipped them (no fade with the view elevation, the full glitter sheet) next to the fixed ones.
+// The views are the GPU QA's dam poses (round 1) and the east aerials of the narrow arms (fix round 2: the dam views are NAMED by the face they see: 'dam-north-*' = the spill face (the Small Pond side: the sill and the nappe), 'dam-lake-5m' = the lake / channel (south) face: the plain body); --old renders the pond's sun terms as T4b shipped them (no fade with the view elevation, the full glitter sheet) next to the fixed ones.
 // A CPU stand-in for a GPU look: no environment (the water has no field), no city, no post-processing, no outline pass, a plain hemisphere + sun light.
 import fs from 'node:fs';
 import http from 'node:http';
@@ -13,8 +13,8 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((a, s, i, all) => (
 const OUT = path.resolve(String(args.out || 'D:/git2/n4spb-work/tauride/T4b/preview'));
 // yaw 0 looks north (-z), 90 west (-x), 180 south, -90 east; pitch negative = down
 const VIEWS = {
-  'dam-lake-low': [1270, 0.3, -1682, 180, 2], 'dam-lake-5m': [1272, 1.6, -1680, 180, -8], 'dam-lake-10m': [1272, 2.5, -1686, 180, -10], 'dam-nw-34': [1262, 3, -1684, 150, -14],
-  'dam-channel-5m': [1272, 1.6, -1668, 0, -8], 'dam-walkway': [1265.5, 1.7, -1671.7, -69, -12], 'dam-aerial-20m': [1272, 20, -1674, 0, -90],
+  'dam-north-low': [1270, 0.3, -1682, 180, 2], 'dam-north-5m': [1272, 1.6, -1680, 180, -8], 'dam-north-10m': [1272, 2.5, -1686, 180, -10], 'dam-nw-34': [1262, 3, -1684, 150, -14],
+  'dam-lake-5m': [1272, 1.6, -1668, 0, -8], 'dam-walkway': [1265.5, 1.7, -1671.7, -69, -12], 'dam-aerial-20m': [1272, 20, -1674, 0, -90],
   'aerial-E-250': [1480, 255, -1524, 90, -45], 'east-arm-110': [1560, 110, -1380, 100, -32], 'east-arm-50': [1400, 50, -1480, 100, -35], 'west-canal-eye': [1160, 1.7, -1520, -60, -8], 'lake-N-low': [1330, 1.7, -1600, 170, -6],
 };
 const views = { ...VIEWS };
