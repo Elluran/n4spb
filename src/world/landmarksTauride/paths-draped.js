@@ -8,10 +8,13 @@
 //   deterministic winner). The ribbon is wider than the way by PAD (0.28 m each side): the SHADER cuts the ragged edge (a noise of the world position, +-0.17 m, no texture) and paints three tonal bands (a darker worn
 //   centre line, lighter edges) that fade out within 2.5 m of a junction, so two ribbons that overlap there show the same colour (nothing darkens). The width varies along the way by +-8 % (a 1-D noise of the arc length,
 //   settling to the nominal width at the ends). A JUNCTION (a vertex that two or more ways share) gets a disc of 8 triangles under the ends, in the colour of its widest way, so that a bend or a Y leaves no wedge.
-//   No kerbs on the ribbons: kerbs are only at the stairs and (T4) the bridges. The 8 BRIDGE ways are NOT drawn here: the decks are T4.
+//   No kerbs on the ribbons: kerbs are only at the stairs and the bridges. The 8 BRIDGE ways are NOT drawn here: the decks are bridges.js (T4b).
+//   T4b (the bank-zone pass): a row has five vertices across only where IT needs them (the T3 rule made a whole way five wide when one of its rows did: 30 of 106 ways, 8,560 of 13,768 triangles), two rows of different
+//   width are zipped, and a triangle that would fold over (a sharp bend of a wide ribbon at a way end: the 2 .. 4 slivers the T4a log counted) is dropped: the neighbouring triangles overlap there anyway.
 // STAIRS (the steps ways): the treads and risers follow the terrain: n = round(drop / 0.15) steps between the two ends (at least 2; the ends are the height of the mesh + the ribbon offset), the tread tops equal steps of the
-//   drop (never under the mesh), the risers reach down to the mesh, a kerb (0.2 m wide, the tread + 0.16 m) on both sides. A stair at a bridge head (the way ends on a bridge way, the terrain is level there) rises 0.6 m
-//   (4 x 0.15) towards the deck: the deck height of T4 must be 0.6 m above the lawn at the bridge ends (the steps of the wooden bridge, docs/TAURIDE-REMAKE.md 7.1).
+//   drop (never under the mesh), the risers reach down to the mesh, a kerb (0.2 m wide, the tread + 0.16 m) on both sides. A stair at a bridge head (the way ends on a bridge way) rises from the ground at its foot to the DECK
+//   HEAD (`ground.deckAt(x, z)`, the bridge kit's walking profile, T4b: the wooden bridge No.1 stands 0.6 m above the lawn at its heads, data/bridge-design.js; the foot of w420650661 is on the lawn and its head on the bank
+//   foot, so the stair stands on a plinth over the bank); without a deck function the stair rises the tag's count of risers (4 x 0.15).
 import * as THREE from 'three';
 import { registerLOD } from '../../core/spatial.js';
 import { FAR_FOG } from '../environment/farconf.js';
@@ -26,7 +29,7 @@ export const PATHS_DRAPED = Object.freeze({
   cut: 0.25, cutMax: 4,          // corner cutting: the ratio of the adjacent segment and its cap in metres
   widthVar: 0.08,                // +-: the width variation along a way
   endFade: 2.5,                  // m: the tonal bands fade out this close to a junction
-  riser: 0.15, bridgeRise: 0.6, kerbW: 0.2, kerbH: 0.16,
+  riser: 0.15, kerbW: 0.2, kerbH: 0.16,       // (T4b: the rise of a bridge-head stair comes from the deck: ground.deckAt; bridgeRise is gone)
   discSegments: 8,
   trianglesMax: 12000, drawsMax: 4,
 });
@@ -76,7 +79,7 @@ export function planPaths(paths, ground, P = PATHS_DRAPED) {
   const junctionKey = new Set(junctions.map((e) => keyOf(e.x, e.z)));
   // ---- the ribbons
   const pos = [], nrm = [], col = [], pth = [], idx = [], wayOf = [], outWays = [];
-  let rowsTotal = 0;
+  let rowsTotal = 0, foldedDropped = 0;
   const colOf = (p) => col3(PATH_COLORS[p.surfaceClass] || PATH_COLORS.gravel);
   const push = (x, y, z, c, a, e, hw, w) => { pos.push(x, y, z); nrm.push(0, 1, 0); col.push(c[0], c[1], c[2]); pth.push(a, e, hw); wayOf.push(w); return pos.length / 3 - 1; };
   ways.forEach((p, wi) => {
@@ -122,22 +125,31 @@ export function planPaths(paths, ground, P = PATHS_DRAPED) {
     }
     // the end fade of the tonal bands: only at a junction end
     const fadeA = junctionKey.has(keyOf(raw[0][0], raw[0][1])), fadeB = junctionKey.has(keyOf(raw[raw.length - 1][0], raw[raw.length - 1][1]));
-    // three vertices across (left, centre, right); five where the terrain is curved ACROSS the ribbon (a way over a crest or along a flank: the chord of three would dip under the mesh by more than the chord rule)
-    let wide = false;
-    for (const r of rows) { const mL = H((r.lx + r.x) / 2, (r.lz + r.z) / 2), mR = H((r.rx + r.x) / 2, (r.rz + r.z) / 2); if (Math.abs(mL - (r.h[0] + r.h[1]) / 2) > P.chord || Math.abs(mR - (r.h[2] + r.h[1]) / 2) > P.chord) { wide = true; break; } }
-    const across = wide ? [-1, -0.5, 0, 0.5, 1] : [-1, 0, 1];
-    let prev = null;
-    for (const r of rows) {
-      const ef = Math.min(fadeA ? clamp(r.s / P.endFade, 0, 1) : 1, fadeB ? clamp((L - r.s) / P.endFade, 0, 1) : 1);
+    // three vertices across (left, centre, right); five where the terrain is curved ACROSS the ribbon at THIS row (a crest or a flank, the bank of a pond: the chord of three would dip under the mesh by more than the chord rule).
+    // T4b: per row (T3 made the whole way wide); two rows of different width are zipped; a triangle that folds over (clockwise seen from above) is dropped.
+    const WIDE = [-1, -0.5, 0, 0.5, 1], NARROW = [-1, 0, 1];
+    let prev = null, prevU = null, wideRows = 0;
+    const ccw = (a, b, c) => (pos[3 * b + 2] - pos[3 * a + 2]) * (pos[3 * c] - pos[3 * a]) - (pos[3 * b] - pos[3 * a]) * (pos[3 * c + 2] - pos[3 * a + 2]) > 1e-9;
+    const tri = (a, b, c) => { if (ccw(a, b, c)) idx.push(a, b, c); else foldedDropped++; };
+    const curved = rows.map((r) => { const mL = H((r.lx + r.x) / 2, (r.lz + r.z) / 2), mR = H((r.rx + r.x) / 2, (r.rz + r.z) / 2); return Math.abs(mL - (r.h[0] + r.h[1]) / 2) > P.chord || Math.abs(mR - (r.h[2] + r.h[1]) / 2) > P.chord; });
+    for (let ri = 0; ri < rows.length; ri++) {
+      const r = rows[ri], ef = Math.min(fadeA ? clamp(r.s / P.endFade, 0, 1) : 1, fadeB ? clamp((L - r.s) / P.endFade, 0, 1) : 1);
+      const wide = curved[ri] || (ri > 0 && curved[ri - 1]) || (ri + 1 < rows.length && curved[ri + 1]), across = wide ? WIDE : NARROW; if (wide) wideRows++;     // (a row beside a curved one is wide too: the zip of a 3- and a 5-row then happens where the terrain is flat across)
       const row = across.map((u) => {
         const t = Math.abs(u), side = u < 0 ? [r.lx, r.lz] : [r.rx, r.rz], x = r.x + (side[0] - r.x) * t, z = r.z + (side[1] - r.z) * t;
         const y = (t === 1 ? r.h[u < 0 ? 0 : 2] : t === 0 ? r.h[1] : H(x, z)) + P.offset + bias;
         return push(x, y, z, base, u, ef, r.hw, wi);
       });
-      if (prev) for (let k = 0; k + 1 < row.length; k++) { idx.push(prev[k], row[k], prev[k + 1]); idx.push(prev[k + 1], row[k], row[k + 1]); }          // counter-clockwise seen from above (the left edge is on the +n side, n = (-tz, tx))
-      prev = row; rowsTotal++;
+      if (prev) {                                                     // zip the two rows by their across parameter (-1 .. 1): counter-clockwise seen from above (the left edge is on the +n side, n = (-tz, tx))
+        let i = 0, j = 0;
+        while (i + 1 < prev.length || j + 1 < row.length) {
+          const advPrev = j + 1 >= row.length || (i + 1 < prev.length && prevU[i + 1] <= across[j + 1]);
+          if (advPrev) { tri(prev[i], row[j], prev[i + 1]); i++; } else { tri(prev[i], row[j], row[j + 1]); j++; }
+        }
+      }
+      prev = row; prevU = across; rowsTotal++;
     }
-    outWays.push({ id: p.id, cls: p.cls, surfaceClass: p.surfaceClass, w: p.w, rows: rows.length, across: across.length, length: L, from: [line[0][0], line[0][1]], to: [line[line.length - 1][0], line[line.length - 1][1]], index: wi, seed });
+    outWays.push({ id: p.id, cls: p.cls, surfaceClass: p.surfaceClass, w: p.w, rows: rows.length, wideRows, across: wideRows ? 5 : 3, length: L, from: [line[0][0], line[0][1]], to: [line[line.length - 1][0], line[line.length - 1][1]], index: wi, seed });
   });
   // ---- the discs under the junctions
   let discTris = 0;
@@ -153,6 +165,7 @@ export function planPaths(paths, ground, P = PATHS_DRAPED) {
   const S = { pos: [], nrm: [], col: [], idx: [] }, stairInfo = [];
   const bridgeEnds = []; for (const b of bridges) { const q = b.pts; bridgeEnds.push([q[0], q[1]], [q[q.length - 2], q[q.length - 1]]); }
   const nearBridge = (x, z) => bridgeEnds.some((e) => Math.hypot(e[0] - x, e[1] - z) < 1.2);
+  const deckAt = typeof ground.deckAt === 'function' ? ground.deckAt : null;        // T4b: the walking profile of the bridge kit at a bridge head (bridges.js deckY), null = no deck there
   const quad = (a, b, c, d, nx, ny, nz, color) => {            // a, b, c, d around the face; the face is wound to look to the side the normal (nx, ny, nz) points to (the order is flipped when it does not)
     const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
     const gx = e1[1] * e2[2] - e1[2] * e2[1], gy = e1[2] * e2[0] - e1[0] * e2[2], gz = e1[0] * e2[1] - e1[1] * e2[0];
@@ -166,10 +179,14 @@ export function planPaths(paths, ground, P = PATHS_DRAPED) {
     const q = flat(p.pts), A = q[0], B = q[q.length - 1], len = Math.hypot(B[0] - A[0], B[1] - A[1]); if (len < 0.3) continue;
     const hA = H(A[0], A[1]) + P.offset, hB = H(B[0], B[1]) + P.offset, drop = hB - hA;
     let lowEnd = A, highEnd = B, hLow = hA, hHigh = hB, n, bridgeHead = false;
-    if (Math.abs(drop) < 0.1) {                                  // level ground: a stair at a bridge head rises to the deck (T4), else the tag's count at the ordinary riser
-      const bA = nearBridge(A[0], A[1]), bB = nearBridge(B[0], B[1]);
-      n = Math.max(2, p.steps || Math.round(P.bridgeRise / P.riser));
-      if (bA || bB) { bridgeHead = true; if (bA) { lowEnd = B; highEnd = A; hLow = hB; } hHigh = hLow + n * P.riser; } else { n = Math.max(2, p.steps || 2); hHigh = hLow + n * P.riser; }
+    const bA = nearBridge(A[0], A[1]), bB = nearBridge(B[0], B[1]);
+    if (bA || bB) {                                              // a stair at a bridge head: from the ground at its foot up to the deck head (T4b: ground.deckAt), whatever the terrain does under it
+      bridgeHead = true; if (bA) { lowEnd = B; highEnd = A; hLow = hB; }
+      const dh = deckAt ? deckAt(highEnd[0], highEnd[1]) : null;
+      if (dh !== null && dh !== undefined && Number.isFinite(dh)) { hHigh = dh; n = Math.max(2, p.steps || Math.round(Math.abs(hHigh - hLow) / P.riser)); }
+      else { n = Math.max(2, p.steps || 4); hHigh = hLow + n * P.riser; }
+    } else if (Math.abs(drop) < 0.1) {                           // level ground: the tag's count at the ordinary riser
+      n = Math.max(2, p.steps || 2); hHigh = hLow + n * P.riser;
     } else {
       if (drop < 0) { lowEnd = B; highEnd = A; hLow = hB; hHigh = hA; }
       n = Math.max(2, Math.round(Math.abs(drop) / P.riser));
@@ -204,7 +221,7 @@ export function planPaths(paths, ground, P = PATHS_DRAPED) {
   R.idx = pos.length / 3 > 65535 ? Uint32Array.from(idx) : Uint16Array.from(idx);
   const stairs3 = { pos: Float32Array.from(S.pos), nrm: Float32Array.from(S.nrm), col: Float32Array.from(S.col) };
   stairs3.idx = S.pos.length / 3 > 65535 ? Uint32Array.from(S.idx) : Uint16Array.from(S.idx);
-  const stats = { ways: outWays.length, rows: rowsTotal, ribbonTriangles: R.idx.length / 3, discTriangles: discTris, stairTriangles: stairs3.idx.length / 3, stairs: stairInfo.length, junctions: junctions.length, bridgesSkipped: bridges.length, vertices: R.pos.length / 3 + stairs3.pos.length / 3, ms: Date.now() - t0 };
+  const stats = { ways: outWays.length, rows: rowsTotal, wideRows: outWays.reduce((s, w) => s + w.wideRows, 0), foldedDropped, ribbonTriangles: R.idx.length / 3, discTriangles: discTris, stairTriangles: stairs3.idx.length / 3, stairs: stairInfo.length, bridgeHeadStairs: stairInfo.filter((s) => s.bridgeHead).length, junctions: junctions.length, bridgesSkipped: bridges.length, vertices: R.pos.length / 3 + stairs3.pos.length / 3, ms: Date.now() - t0 };
   return { ribbons: R, steps: stairs3, ways: outWays, stairs: stairInfo, junctions, stats };
 }
 
