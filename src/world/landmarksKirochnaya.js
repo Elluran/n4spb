@@ -77,5 +77,7 @@ export function build(ctx) {
   for(const b of recs){K.begin();house(K,b);K.flush(root,'clinical-'+b.id);}
   K.begin();mainCrown(K);chapelRoof(K);K.flush(root,'clinical-crowns');
   K.begin();campusLandscape(K);K.flush(root,'clinical-garden');ctx.addStatic(root);
-  ctx.services.landmarksKirochnaya={triangles:K.tris,entrances:[{x:1230,z:-1244,clearance:5},{x:1312,z:-1238,clearance:5}],campus:true};
+  // M7: the merge into the shared landmark services as the strip's modules do (landmarksD.js:41); the campus publishes no monument / photo spot today, so the merge adds nothing yet
+  const S=(ctx.services.landmarks||={});S.monuments=(S.monuments||[]).concat(K.svc.monuments);S.photoSpots=(S.photoSpots||[]).concat(K.svc.photoSpots);
+  ctx.services.landmarksKirochnaya={triangles:K.tris,entrances:[{x:1230,z:-1244,clearance:5},{x:1312,z:-1238,clearance:5}],campus:true,monuments:K.svc.monuments,photoSpots:K.svc.photoSpots};
 }

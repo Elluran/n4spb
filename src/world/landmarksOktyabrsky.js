@@ -17,6 +17,8 @@ import * as L from './layout.js';
 import { Parts } from './landmarksOktyabrsky/kit.js';
 import { makeMats } from './landmarksOktyabrsky/mats.js';
 import { GROUPS_LIST } from './landmarksOktyabrsky/groups.js';
+import * as A from './area.js';                                       // the area id (the page's import map remaps this to its area module, docs/AREAS.md section 2)
+import { doorPoints } from './landmarksNorthFull/doors.js';
 
 const PARTS = [
   ['hall', 'oktyabrsky-hall', () => import('./landmarksOktyabrsky/hall.js')],
@@ -47,6 +49,9 @@ export async function build(ctx) {
     svc.triangles += tris; svc.parts[name] = { tris, ms: Math.round(performance.now() - t1) };
   }
   ctx.addStatic(root);
+  // M7 (docs/AREAS.md 8.7): in another area the hall publishes the door points of its claimed outline (landmarksNorthFull/doors.js: the mapped OSM entrance nodes of w30324279, 0.6 m out, as city/shops.js
+  // would) for the door clearings and the services census; the strip keeps the empty list it always published (gated by the area id: the strip's services, check counts and bake must not move)
+  if (A.ID !== 'strip' && claimed.has('oktyabrsky-hall')) svc.entrances.push(...doorPoints(L.groupMembers('oktyabrsky-hall')));
   if (ctx.shared && ctx.shared.uNight && ctx.onUpdate) ctx.onUpdate(() => { M.reflect.opacity = 0.36 * (1 - 0.85 * Math.min(1, ctx.shared.uNight.value)); });
   const S = (ctx.services.landmarks ||= {});
   S.monuments = (S.monuments || []).concat(svc.monuments);
@@ -54,5 +59,4 @@ export async function build(ctx) {
   ctx.services.landmarksOktyabrsky = { ...svc, buildMs: Math.round(performance.now() - t0) };
   if (typeof process !== 'undefined' && process.env && process.env.OKT_DEBUG) console.log('[landmarksOktyabrsky] parts', JSON.stringify(svc.parts));
   if (failed.length) throw new Error('landmarksOktyabrsky parts failed:\n' + failed.join('\n'));
-  void L;
 }

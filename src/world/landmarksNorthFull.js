@@ -5,6 +5,9 @@
 // must not drift, and the cathedral, the vestibule and Dom Muruzi are far outside the strip. The functions corridor() and bookstore() are the same text in both modules (the 200 m
 // band of the North looks like the strip); the group KEYS and ids are the same too, so a claim is the same in both areas. Research and approximation limits in
 // docs/research/north-corridor.md. All custom solids have closed geometry. Renamed from the source: the import paths (./landmarksNorthFull/...), root.name and the ctx.services key.
+// M7 (docs/AREAS.md section 10): the captured-cannon fence of the cathedral is knockable (landmarksNorthFull/fence.js: piers and chain spans as ctx.knock instances with colliders, the strip's
+// pattern), the three signs of the vestibule glow at night (litFascia: the sign texture as its emissive map on the kit's uNight list, like the strip's lit signs), the module publishes the door
+// points of its claimed buildings (landmarksNorthFull/doors.js, from the facade's entrance nodes) and merges its monuments / photo spots into ctx.services.landmarks like the strip's modules.
 import * as THREE from 'three';
 import * as L from './layout.js';
 import { makeKit } from './landmarksD/common.js';
@@ -13,6 +16,8 @@ import { bookstore } from './landmarksNorthFull/bookstore.js';
 import { muruzi } from './landmarksNorthFull/muruzi.js';
 import { dome, drum, cross, ringWindows, roundCornice, portico } from './landmarksD/parts.js';
 import { CORRIDOR_ADDRESSES, GROUPS_LIST } from './landmarksNorthFull/groups.js';
+import { cannonFence } from './landmarksNorthFull/fence.js';
+import { doorPoints } from './landmarksNorthFull/doors.js';
 export const OWNS_GROUPS = true;
 
 function cathedral(K) {
@@ -65,23 +70,19 @@ function cathedral(K) {
   }
   // Captured-cannon fence: each pier is three bronze barrels, joined by chains.
   // Leave the four approach paths open. No broad coplanar paving is added.
-  const bronze=K.wall('#3c4c43');
-  for(let side=0;side<4;side++){
-    P.push(0,0,0,side*Math.PI/2);
-    for(let i=-4;i<=4;i++){
-      if(i===0)continue; const x=i*8.4;
-      P.box(M.graniteWarm,x-1.05,x+1.05,.13,.56,35.2,37.0);
-      for(let k=-1;k<=1;k++){
-        P.cyl(bronze,[x+k*.45,.56,36],[x+k*.45,2.25,36],.16,.25,10,true);
-        P.cyl(M.brass,[x+k*.45,2.22,36],[x+k*.45,2.34,36],.26,.26,10,true);
-      }
-      if(i!==-1&&i!==4)for(const y of [1.05,1.75]){
-        let prev;for(let j=0;j<=12;j++){const t=j/12,q=[x+.65+t*7.1,y-.34*Math.sin(Math.PI*t),36];if(prev)P.cyl(bronze,prev,q,.04,.04,5,true);prev=q;}
-      }
-    }
-    P.pop();
-  }
+  // M7: the 32 piers and the 24 chain spans (48 strands) are knockable instances with colliders (landmarksNorthFull/fence.js), the same geometry the merged part drew before.
+  K.extraTris+=cannonFence(K,cx,cz);
   P.pop();
+}
+
+/** a sign fascia whose plate GLOWS at night (M7, the M5 GPU QA finding 5: the vestibule signs stayed dark): the sign texture is its own emissive map and the material follows ctx.shared.uNight through the
+ *  kit's night list (K.nightMats, landmarksD/common.js), the pattern of the strip's lit signs (landmarksA/tickets.js, landmarksA/mall.js signMat: emissiveMap = map). By day it is K.fascia: the same texture
+ *  key (lmD-sign|text|...), the same plane, no transparency. */
+function litFascia(K,x0,x1,y0,y1,text,o={}){
+  const map=K.signTex(text,{w:o.w||512,h:o.h||96,bg:o.bg,fg:o.fg,font:o.font,weight:o.weight,size:o.size,align:o.align,fill:o.fill});
+  const mat=K.ctx.mat.toon('#ffffff',{map,name:'lmD-sign-lit'});
+  mat.emissive=new THREE.Color('#ffffff');mat.emissiveMap=map;mat.emissiveIntensity=0;K.nightMats.push(mat);
+  K.plane(mat,x0,x1,y0,y1,o.z??0.1);
 }
 
 
@@ -107,9 +108,9 @@ function metro(K){
           K.P.push(0,0,.35);K.window({x,y:1.2,w:.86,h:1.55,sw:.06,d:.1,frame:'brown'});K.P.pop();
           P.box(M.brass,x+.41,x+.44,.9,1.5,.21,.27);
         }
-        K.fascia(center-4.8,center+4.8,7.85,8.4,'ЧЕРНЫШЕВСКАЯ',{bg:'#c4b7a2',fg:'#454a45',size:.7,z:.2});
-        K.fascia(center-3,center+3,8.48,8.82,'МЕТРОПОЛИТЕН',{bg:'#c4b7a2',fg:'#454a45',size:.55,z:.2});
-        K.fascia(center-.65,center+.65,9.55,10.8,'М',{w:128,h:128,bg:'#d4d2c4',fg:'#1889bd',size:.86,z:.22});
+        litFascia(K,center-4.8,center+4.8,7.85,8.4,'ЧЕРНЫШЕВСКАЯ',{bg:'#c4b7a2',fg:'#454a45',size:.7,z:.2});
+        litFascia(K,center-3,center+3,8.48,8.82,'МЕТРОПОЛИТЕН',{bg:'#c4b7a2',fg:'#454a45',size:.55,z:.2});
+        litFascia(K,center-.65,center+.65,9.55,10.8,'М',{w:128,h:128,bg:'#d4d2c4',fg:'#1889bd',size:.86,z:.22});
       }else{
         const n=Math.floor(len/4);for(let i=0;i<n;i++)K.window({x:(i+.5)*len/n,y:3,w:1.8,h:3.8,sw:.12,frame:'brown'});
       }
@@ -146,7 +147,13 @@ function corridor(K){
 
 export function build(ctx){
   const K=makeKit(ctx),root=new THREE.Group();root.name='landmarksNorthFull';
-  K.svc={houses:[],entrances:[],monuments:[],photoSpots:[]};
+  K.svc={houses:[],entrances:[],monuments:[],photoSpots:[]};K.extraTris=0;
   for(const [name,fn] of [['preobrazhensky',cathedral],['podpisnye',bookstore],['chernyshevskaya',metro],['corridor',corridor],['muruzi',muruzi]]){K.begin();fn(K);K.flush(root,'north-'+name);}
-  ctx.addStatic(root);ctx.services.landmarksNorthFull={triangles:K.tris,groups:GROUPS_LIST.map(g=>g.key)};
+  ctx.addStatic(root);
+  // M7: the door points of every claimed building (landmarksNorthFull/doors.js: the facade's entrance nodes, else the city's parade-door rule) and the merge into the shared landmark services,
+  // as the strip's modules do (landmarksD.js:41); the service also lists the instanced triangles of the knockable fence (extraTris) as it listed the merged one
+  K.svc.entrances.push(...doorPoints(GROUPS_LIST.flatMap((g)=>L.groupMembers(g.key))));
+  const S=(ctx.services.landmarks||={});
+  S.monuments=(S.monuments||[]).concat(K.svc.monuments);S.photoSpots=(S.photoSpots||[]).concat(K.svc.photoSpots);
+  ctx.services.landmarksNorthFull={triangles:K.tris+K.extraTris,groups:GROUPS_LIST.map(g=>g.key),houses:K.svc.houses,entrances:K.svc.entrances,monuments:K.svc.monuments,photoSpots:K.svc.photoSpots};
 }
