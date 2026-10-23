@@ -43,7 +43,7 @@ export const QUAY = { top: 0.0, bottom: -0.7, color: '#8b8a84', tol: 0.1, minRun
 /** The ground material (ground-material.js): the wet band at the waterline and the colours of the bed, from the mask's signed shore distance (+ land) */
 export const WET_BAND = 0.5;            // metres of darker, wet ground on the land side of the waterline
 export const SHORE_SAND = 0.9;          // metres: the narrow pale sand / silt strip above the wet band (the shore line of a pond)
-export const BED_COLORS = { mud: '#3b3a26', silt: '#5a5232', wet: '#4a4a30', sand: '#8a7f5a' };
+export const BED_COLORS = { mud: '#5a5236', silt: '#6c6340', wet: '#625c3c', sand: '#9a8f68' };      // T4a fix round 1: lighter and browner (the GPU QA: one near-black strip); mud is the colour of the blotches at the waterline too (ground-material.js uMA / uMB2 are the mud of the pond edge)
 
 /** The water surface (ponds.js) and its material (environment/water.js LOOK key `tauride-pond`) */
 export const WATER_LOOK_KEY = 'tauride-pond';

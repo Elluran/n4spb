@@ -309,13 +309,20 @@ const BODY = /* glsl */`
   // ---- the shore (T4a: the ponds are cut into the floor, data/ponds.js): the mud band, the pale sand / silt strip above the wet band, the wet band of the waterline (WET_BAND m) and the bed under the water (mud / silt)
   float d = (M.g * 255.0 - 128.0) / ${GROUND.shoreLevels.toFixed(1)};
   float dn = d + (n3.r - 0.5) * 1.8 + (n6.g - 0.5) * 0.35;
+  // T4a fix round 1 (the GPU QA: the bank read as ONE flat dark olive-brown strip with a ruled edge to the grass and an equally hard edge to the water, a mud cut, not turf running down to the water): the bank is now damp TURF (the
+  // grass itself, darkened and yellowed toward the water over ~3 m, so its edge to the lawn has no line), the mud is BLOTCHES at the waterline (a threshold of the clump fields, lighter and browner than before, never a continuous band), the pale
+  // sand strip is patchy and the wet band is a soft multiply, not a replacement colour; the edges are jittered by the slow fields (n3, n4: +-0.9 m) so that the polygon facets of the shore do not print as ruled lines.
   vec3 mud = mix(uMA, uMB2, smoothstep(0.35, 0.65, n3.g)) * (0.94 + 0.12 * nf);
-  float mudK = (1.0 - smoothstep(0.9, 2.6, dn)) * (0.88 - 0.30 * smoothstep(1.2, 2.4, dn));
+  float damp = 1.0 - smoothstep(0.1, 3.4, dn + (n2.g - 0.5) * 1.2);
+  col = mix(col, col * vec3(0.80, 0.85, 0.62), damp * 0.9);
+  float mudN = smoothstep(0.36, 0.66, 0.55 * n2.g + 0.45 * n3.g + (nf - 0.5) * 0.3);
+  float mudK = (1.0 - smoothstep(0.4, 2.1, dn)) * mudN * 0.8;
   col = mix(col, mud, mudK);
-  float wetK = 1.0 - smoothstep(${(PONDS.WET_BAND - 0.32).toFixed(3)}, ${(PONDS.WET_BAND + 0.12).toFixed(3)}, d + (n4.g - 0.5) * 0.3);       // the wet band along the waterline: darker, bluish, WET_BAND m wide
-  float sandK = (1.0 - smoothstep(${PONDS.WET_BAND.toFixed(3)}, ${(PONDS.WET_BAND + PONDS.SHORE_SAND).toFixed(3)}, d + (n4.g - 0.5) * 0.45)) * (1.0 - wetK) * (0.45 + 0.35 * n3.g);
+  float wetK = 1.0 - smoothstep(${(PONDS.WET_BAND - 0.32).toFixed(3)}, ${(PONDS.WET_BAND + 0.12).toFixed(3)}, d + (n4.g - 0.5) * 0.5 + (n3.g - 0.5) * 0.3);       // the wet band along the waterline: darker, WET_BAND m wide, a soft multiply with a jittered edge
+  float sandK = (1.0 - smoothstep(${PONDS.WET_BAND.toFixed(3)}, ${(PONDS.WET_BAND + PONDS.SHORE_SAND).toFixed(3)}, d + (n4.g - 0.5) * 0.7 + (n3.g - 0.5) * 0.3)) * (1.0 - wetK) * smoothstep(0.30, 0.62, n2.r + (n4.g - 0.5) * 0.5) * (0.40 + 0.35 * n3.g);
   col = mix(col, uSand * (0.94 + 0.12 * nf), sandK);
-  col = mix(col, uWet * (0.92 + 0.16 * n3.g), wetK * 0.9);
+  col = mix(col, col * 0.78, wetK * 0.55);
+  col = mix(col, uWet * (0.92 + 0.16 * n3.g), wetK * 0.45);
   float inW = 1.0 - smoothstep(-0.35, 0.0, d + (n4.g - 0.5) * 0.25);
   col = mix(col, mix(uBed, uSilt, smoothstep(0.30, 0.70, n3.g)) * (0.90 + 0.20 * n3.g), inW);
   // ---- worn ground: trampled patches, then packed earth (benches, gates, junctions, plazas, the verge of the paths)
@@ -338,6 +345,7 @@ const BODY = /* glsl */`
   //  gr is the horizontal part of the normal over its y = the direction the surface FACES (minus the gradient of the height), its length the slope: 0.25 = 1:4; + hs = facing the light.)
   vec3 nW = normalize(vNW);
   vec2 gr = nW.xz / max(nW.y, 0.2);
+  gr *= 1.0 - 0.55 * (1.0 - smoothstep(1.0, 5.0, d));                                       // T4a fix round 1: the banks (1:3 .. 1:5, the steepest ground of the garden) are turf, not hills: little flank shade within 5 m of the water
   float farK = smoothstep(${LOOK.farA.toFixed(1)}, ${LOOK.farB.toFixed(1)}, dist);
   float sl = smoothstep(0.010, 0.080, length(gr));
   float hs = clamp(dot(gr, uLight) * mix(${LOOK.shadeGain.toFixed(2)}, ${LOOK.gainFar.toFixed(2)}, farK), -1.0, 1.0);
