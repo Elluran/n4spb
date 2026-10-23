@@ -35,10 +35,13 @@ export const SMALL_POND = { mouthZ: -1655.3, eastX: 1250, blendZ: 4, blendX: 8 }
  *  bed (-1.2) lies above y0. Segments are merged while the chord stays within `chord` m of the contour and shorter than `maxLen`; `gap` m is added at both ends (no wedge between neighbours). */
 export const COLLIDER = { contourY: -0.3, top: 1.8, y0: -2.5, thick: 0.4, chord: 0.12, maxLen: 14, gap: 0.3 };
 
-/** The quay (ponds.js, T4a fix round 1): where the water outline lies ON the outline of the garden (the north shore of the lake, 170 m: the fence stands on the shore and outside is the street at y = 0, drawn by the environment) there is no bank,
- *  only a step of -WATER_Y m between the street and the water, and nothing closed it: the environment ground is cut at the outline, the floor stops there and the water ends there, so a viewer on the water saw the sky through the 0.45 m slit.
- *  A wall from `top` to `bottom` on every stretch of the water outline within `tol` m of the garden outline (runs shorter than `minRun` m are skipped), facing the water, closes it; the part below the surface is hidden by the water. */
-export const QUAY = { top: 0.0, bottom: -0.7, color: '#8b8a84', tol: 0.1, minRun: 0.5 };
+/** The kerb skirt (ponds.js planQuay; the "quay" of T4a fix round 1, generalised in fix round 2): outside the garden outline is the street at `top` (y 0, drawn by the environment, which is cut at the outline); inside, the floor stands at the height of the
+ *  terrain, which is NOT 0 along the banks: along the north shore of the lake the water lies on the outline (the floor is at the waterline, 0.45 m below the street: the quay), and wherever the bank has only partly risen to the street (the water 1 .. 3 m
+ *  off the outline) the floor is a few cm .. 27 cm below it, and where the crest (+0.1) reaches the outline it is above it. Every such step showed the sky through a slit (the first quay of fix round 1 covered only the stretches where the WATER lay on
+ *  the outline: 170 of 265 m). The skirt is a vertical wall on the outline, stitched to the actual edge of the floor mesh (the open edges of the plan that lie on the outline) from the floor edge to the street level, on every edge whose step is more than
+ *  `drop` m: a floor BELOW the street gets a wall facing the garden (the viewer on the water), a floor ABOVE it a wall facing the street (the viewer on the pavement). `under` m: the wall reaches that far below the floor edge (below the street on the
+ *  other side), hidden by the surface it meets, so that no crack opens between the two. `tol` m: how far an edge may lie off the outline to count as on it. `merge` m: consecutive floor edges become one wall quad while the vertices between stay within this of the chord. */
+export const QUAY = { top: 0.0, color: '#8b8a84', drop: 0.02, under: 0.03, tol: 0.002, merge: 0.003 };
 
 /** The ground material (ground-material.js): the wet band at the waterline and the colours of the bed, from the mask's signed shore distance (+ land) */
 export const WET_BAND = 0.5;            // metres of darker, wet ground on the land side of the waterline

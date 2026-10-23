@@ -1,8 +1,8 @@
 // landmarksTauride/ponds.js - the WATER of the Tauride Garden (docs/TAURIDE-REMAKE.md, phase T4a): the water surface at the one level of the datum table, the impassable shore (colliders) and the numbers the tests read.
 // Everything is DERIVED from data/ponds.js (the single datum table: water level, beds, bank top, collider tops and contour) and data/water.js (the union outline of the two ponds and the canals, 3 island holes).
 // The bowls and the banks themselves are not built here: they are the ground (height.js is the profile, terrain-mesh.js samples it into the garden floor, ground-material.js paints the wet band and the bed).
-//   planPonds(o)    PURE: { water: { pos, idx, nrm, area, triangles, holes }, quay: { pos, nrm, idx, triangles, length, runs }, colliders: [{ cx, cz, w, d, rot, y0, y1, len }], stats }
-//   buildPonds(ctx, parent, plan, opts)  the water mesh (waterMaterial of environment/water.js, LOOK key 'tauride-pond', one draw, never batched, out of the outline pass) + the quay wall (T4a fix round 1: one more draw) + the shore colliders on ctx.physics
+//   planPonds(o)    PURE: { water: { pos, idx, nrm, area, triangles, holes }, quay: { pos, nrm, idx, triangles, length, runs, negLength, posLength, maxStep }, colliders: [{ cx, cz, w, d, rot, y0, y1, len }], stats }
+//   buildPonds(ctx, parent, plan, opts)  the water mesh (waterMaterial of environment/water.js, LOOK key 'tauride-pond', one draw, never batched, out of the outline pass) + the kerb skirt (the quay: T4a fix rounds 1 and 2, one more draw, planned from the floor plan `o.floor`) + the shore colliders on ctx.physics
 // The colliders: physics.js blocks a walker whose feet + STEP_HEIGHT (0.45) is below the top of a box, at every feet height down to the box's bottom: the top (data COLLIDER.top) is far above the contour's feet + 0.45, so a
 // walker (or a jump from the crest: apex +0.73) cannot step or hop over it, and the bottom is below the bed so that nobody can slip under it either. The old module's trap (a 0.22 m box that ignored a walker at y = 0 and
 // blocked one at feet -1.4) is NOT reproduced: the box stands INLAND of the shore on the contour where the bank is at COLLIDER.contourY, so nobody ever stands in the water in the first place.
@@ -13,6 +13,7 @@ import { WATER_UNION } from './data/water.js';
 import * as PONDS from './data/ponds.js';
 import { GARDEN } from './data/footprints.js';
 import { pondProfile } from './height.js';
+import { TERRAIN } from './terrain-mesh.js';
 
 /** the bank slope (1 : s) at a point, from the table */
 const slopeOf = (P) => pondProfile(P).slopeAt;
@@ -66,46 +67,83 @@ function simplifyClosed(pts, tol, maxLen) {
 }
 
 /**
- * The quay wall (T4a fix round 1). Where the water outline lies on the outline of the garden (`garden`, a flat ring) there is no bank: the street (y 0, the environment's) ends at the outline, the floor stops there and the water ends there, with a
- * step of -WATER_Y m between that nothing closed (the sky showed through it). A vertical quad from Q.top to Q.bottom on every stretch of the water outline within Q.tol m of the garden outline (sampled every 0.25 m; runs shorter than Q.minRun are
- * skipped), facing the WATER (the side the viewer stands on); one-sided, so the street side never sees it. Returns { pos, nrm, idx, triangles, length (m of wall), runs }.
+ * The kerb skirt (T4a fix round 1: the quay along the lake; fix round 2: every stretch of the outline; the numbers: data/ponds.js QUAY). The floor (`floor`, the plan of terrain-mesh.js planTerrain in cover mode) stops at the garden outline
+ * (`ring`, a flat ring), the environment ground (street, y Q.top) is cut at it, and between the two there is a step wherever the floor at the outline is not at the street level. The step is closed by a vertical wall ON the outline, stitched to the
+ * open edges of the floor plan that lie on the outline (an edge that one triangle uses and whose ends and middle are within Q.tol of the ring), from the height of the edge (+ `lift`, the offset the floor mesh is drawn with) to Q.top: a floor
+ * BELOW the street gets a wall that faces the garden (seen from the water and the banks), a floor ABOVE it one that faces the street. Edges whose ends are both within Q.drop of the street level get none. The vertices of the floor on the outline
+ * are the exact heights of the terrain (planTerrain evaluates gardenHeight at every vertex, the cut points included) and the mesh is linear between them, so the wall follows the mesh edge: no gap and no poke whatever the tolerance of the floor.
+ * Consecutive edges of one outline edge are merged into one quad while every vertex between stays within Q.merge m of the chord (the quay along the lake is flat: a quad per outline edge). The wall reaches Q.under m past the surface it meets
+ * (below the floor edge, below the street) so no crack opens. Returns { pos, nrm, idx, triangles, length (m of outline), runs (quads), edges (floor edges on the outline), negLength, posLength, maxStep (m) }.
  */
-export function planQuay(union, garden, Q = PONDS.QUAY) {
-  const gn = garden.length / 2;
-  const dG = (x, z) => { let m = Infinity; for (let i = 0, j = gn - 1; i < gn; j = i++) { const ex = garden[2 * i] - garden[2 * j], ez = garden[2 * i + 1] - garden[2 * j + 1], l2 = ex * ex + ez * ez, t = l2 ? Math.max(0, Math.min(1, ((x - garden[2 * j]) * ex + (z - garden[2 * j + 1]) * ez) / l2)) : 0; m = Math.min(m, Math.hypot(x - garden[2 * j] - t * ex, z - garden[2 * j + 1] - t * ez)); } return m; };
-  const pos = [], nrm = [], idx = []; let length = 0, runs = 0;
-  const wall = (ax, az, bx, bz, wx, wz) => {                                       // the quad A-B (top .. bottom), facing (wx, wz)
-    const base = pos.length / 3, dx = bx - ax, dz = bz - az;
-    pos.push(ax, Q.top, az, bx, Q.top, bz, bx, Q.bottom, bz, ax, Q.bottom, az);
-    for (let k = 0; k < 4; k++) nrm.push(wx, 0, wz);
-    // (A top, B top, B bottom) has the normal (dz, 0, -dx) (the cross product of the edges): flip the winding when that points away from the water
-    if (dz * wx - dx * wz > 0) idx.push(base, base + 1, base + 2, base, base + 2, base + 3); else idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
-    length += Math.hypot(dx, dz); runs++;
-  };
-  for (const ring of ringsOf(union)) {
-    const { v, sg } = ring, m = v.length;
-    for (let i = 0; i < m; i++) {
-      const a = v[i], b = v[(i + 1) % m], ex = b[0] - a[0], ez = b[1] - a[1], L = Math.hypot(ex, ez); if (L < 1e-3) continue;
-      const n = Math.max(1, Math.ceil(L / 0.25)), wx = ez / L * sg, wz = -ex / L * sg;       // (wx, wz): the unit normal toward the WATER (the land normal of shoreSegments, turned round)
-      let t0 = null;
-      for (let k = 0; k <= n; k++) {
-        const t = k / n, on = dG(a[0] + ex * t, a[1] + ez * t) <= Q.tol;
-        if (on && t0 === null) t0 = t;
-        if (t0 !== null && (!on || k === n)) {
-          const t1 = on ? t : (k - 1) / n, s0 = t0; t0 = null;
-          if ((t1 - s0) * L >= Q.minRun) wall(a[0] + ex * s0, a[1] + ez * s0, a[0] + ex * t1, a[1] + ez * t1, wx, wz);
-        }
-      }
+export function planQuay(floor, ring = GARDEN.o, Q = PONDS.QUAY, lift = TERRAIN.lift) {
+  const n = ring.length / 2, pos = [], nrm = [], idx = []; let length = 0, runs = 0, negLength = 0, posLength = 0, maxStep = 0, edges = 0;
+  const result = () => ({ pos: Float32Array.from(pos), nrm: Float32Array.from(nrm), idx: Uint32Array.from(idx), triangles: idx.length / 3, length, runs, edges, negLength, posLength, maxStep, top: Q.top });
+  if (!floor || !floor.chunks) return result();
+  const sx = (i) => ring[2 * i], sz = (i) => ring[2 * i + 1], dSeg = (i, x, z) => { const j = (i + 1) % n, ex = sx(j) - sx(i), ez = sz(j) - sz(i), l2 = ex * ex + ez * ez, t = l2 ? Math.max(0, Math.min(1, ((x - sx(i)) * ex + (z - sz(i)) * ez) / l2)) : 0; return Math.hypot(x - sx(i) - t * ex, z - sz(i) - t * ez); };
+  const inRing = (x, z) => { let c = false; for (let i = 0, j = n - 1; i < n; j = i++) if ((sz(i) > z) !== (sz(j) > z) && x < (sx(j) - sx(i)) * (z - sz(i)) / (sz(j) - sz(i)) + sx(i)) c = !c; return c; };
+  // the ring segments by 4 m cell: a cell lists every segment that comes within its half diagonal (+ Q.tol) of its centre, so no cell that the outline touches is missed (the floor has ~20,000 triangles and only a few hundred stand on the outline)
+  const CS = 4, cells = new Map(), ck = (x, z) => Math.floor(x / CS) * 100003 + Math.floor(z / CS), reach = CS * Math.SQRT1_2 + Q.tol;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, i0 = Math.floor((Math.min(sx(i), sx(j)) - Q.tol) / CS), i1 = Math.floor((Math.max(sx(i), sx(j)) + Q.tol) / CS), k0 = Math.floor((Math.min(sz(i), sz(j)) - Q.tol) / CS), k1 = Math.floor((Math.max(sz(i), sz(j)) + Q.tol) / CS);
+    for (let a = i0; a <= i1; a++) for (let b = k0; b <= k1; b++) if (dSeg(i, (a + 0.5) * CS, (b + 0.5) * CS) <= reach) { const key = a * 100003 + b, l = cells.get(key); if (!l) cells.set(key, [i]); else l.push(i); }
+  }
+  const segOf = (x, z) => { const l = cells.get(ck(x, z)); if (l) for (const i of l) if (dSeg(i, x, z) <= Q.tol) return i; return -1; };
+  // 1. the open edges of the floor that lie on the outline, oriented along their outline edge i: { i, t0 < t1 (metres along it), the ends A, B (x, z, y of the plan) }
+  const bySeg = new Map();
+  for (const c of floor.chunks) {
+    const p = c.pos, ix = c.idx;
+    for (let t = 0; t < ix.length; t += 3) for (let e = 0; e < 3; e++) {
+      const a = ix[t + e] * 3, b = ix[t + (e + 1) % 3] * 3, ax = p[a], az = p[a + 2], bx = p[b], bz = p[b + 2];
+      const i = segOf((ax + bx) / 2, (az + bz) / 2); if (i < 0 || segOf(ax, az) < 0 || segOf(bx, bz) < 0 || Math.hypot(bx - ax, bz - az) < 1e-3) continue;
+      const j = (i + 1) % n, ex = sx(j) - sx(i), ez = sz(j) - sz(i), L = Math.hypot(ex, ez), ta = ((ax - sx(i)) * ex + (az - sz(i)) * ez) / L, tb = ((bx - sx(i)) * ex + (bz - sz(i)) * ez) / L;
+      const rec = ta <= tb ? { i, t0: ta, t1: tb, ax, az, ay: p[a + 1], bx, bz, by: p[b + 1] } : { i, t0: tb, t1: ta, ax: bx, az: bz, ay: p[b + 1], bx: ax, bz: az, by: p[a + 1] };
+      let l = bySeg.get(i); if (!l) bySeg.set(i, l = []); edges++;
+      // an edge that crosses the street level is cut there: its two halves have opposite sides (a wall faces the garden over a floor below the street and the street over one above it)
+      const fa = rec.ay + lift - Q.top, fb = rec.by + lift - Q.top;
+      if (fa * fb < 0) { const k = fa / (fa - fb), cx = rec.ax + (rec.bx - rec.ax) * k, cz = rec.az + (rec.bz - rec.az) * k, ct = rec.t0 + (rec.t1 - rec.t0) * k, cy = Q.top - lift; l.push({ ...rec, t1: ct, bx: cx, bz: cz, by: cy }, { ...rec, t0: ct, ax: cx, az: cz, ay: cy }); }
+      else l.push(rec);
     }
   }
-  return { pos: Float32Array.from(pos), nrm: Float32Array.from(nrm), idx: Uint32Array.from(idx), triangles: idx.length / 3, length, runs, top: Q.top, bottom: Q.bottom };
+  const tri = (p, q, r, wx, wz) => {                                                       // a triangle whose front side faces (wx, wz); a zero-area one is dropped
+    const e1 = [q[0] - p[0], q[1] - p[1], q[2] - p[2]], e2 = [r[0] - p[0], r[1] - p[1], r[2] - p[2]];
+    const cx = e1[1] * e2[2] - e1[2] * e2[1], cy = e1[2] * e2[0] - e1[0] * e2[2], cz = e1[0] * e2[1] - e1[1] * e2[0];
+    if (Math.hypot(cx, cy, cz) < 1e-9) return;
+    const base = pos.length / 3; pos.push(...p, ...q, ...r); for (let k = 0; k < 3; k++) nrm.push(wx, 0, wz);
+    if (cx * wx + cz * wz > 0) idx.push(base, base + 1, base + 2); else idx.push(base, base + 2, base + 1);
+  };
+  const stepOf = (y) => y + lift - Q.top, side = (r) => stepOf(r.ay) + stepOf(r.by) < 0;           // the floor edge above (+) / below (-) the street; side(r) true = below
+  // 2. a chain of edges -> one quad
+  const wall = (ch) => {
+    const A = ch[0], B = ch[ch.length - 1], ya = A.ay, yb = B.by, dx = B.bx - A.ax, dz = B.bz - A.az, L = Math.hypot(dx, dz), neg = side({ ay: ya, by: yb });
+    let ux = -dz / L, uz = dx / L; if (!inRing((A.ax + B.bx) / 2 + ux * 0.05, (A.az + B.bz) / 2 + uz * 0.05)) { ux = -ux; uz = -uz; }     // (ux, uz): the unit normal toward the garden
+    const wx = neg ? ux : -ux, wz = neg ? uz : -uz;
+    let tA, tB, bA, bB;                                                                                                          // the corners A / B at the top and at the bottom of the wall
+    if (neg) { tA = tB = Q.top; bA = Math.min(Q.top, ya + lift - Q.under); bB = Math.min(Q.top, yb + lift - Q.under); }
+    else { tA = Math.max(Q.top, ya + lift); tB = Math.max(Q.top, yb + lift); bA = bB = Q.top - Q.under; }
+    const A0 = [A.ax, tA, A.az], B0 = [B.bx, tB, B.bz], B1 = [B.bx, bB, B.bz], A1 = [A.ax, bA, A.az];
+    tri(A0, B0, B1, wx, wz); tri(A0, B1, A1, wx, wz);
+    length += L; runs++; if (neg) negLength += L; else posLength += L; maxStep = Math.max(maxStep, Math.abs(stepOf(ya)), Math.abs(stepOf(yb)));
+  };
+  // the vertices between the ends of a chain against its chord
+  const flat = (c) => { const A = c[0], B = c[c.length - 1], span = (B.t1 - A.t0) || 1; for (let k = 0; k + 1 < c.length; k++) { const f = (c[k].t1 - A.t0) / span; if (Math.abs(c[k].by - (A.ay + (B.by - A.ay) * f)) > Q.merge) return false; } return true; };
+  for (const [, list] of [...bySeg.entries()].sort((a, b) => a[0] - b[0])) {
+    list.sort((a, b) => a.t0 - b.t0 || a.t1 - b.t1);
+    let ch = null;
+    for (const r of list) {
+      if (Math.max(Math.abs(stepOf(r.ay)), Math.abs(stepOf(r.by))) <= Q.drop) { if (ch) wall(ch); ch = null; continue; }
+      if (ch) { const last = ch[ch.length - 1]; if (Math.hypot(r.ax - last.bx, r.az - last.bz) < 1e-3 && Math.abs(r.ay - last.by) < 1e-6 && side(r) === side(ch[0]) && flat([...ch, r])) { ch.push(r); continue; } wall(ch); }
+      ch = [r];
+    }
+    if (ch) wall(ch);
+  }
+  return result();
 }
 
 /**
  * The plan of the ponds (pure, deterministic).
  *   o.union (data/water.js WATER_UNION), o.ponds (a datum table), o.gaps ([{ x, z, r }]: no collider starts within r of it; T4b), o.slopeAt (the bank slope function, default the table's)
  * water: the surface at P.WATER_Y over the union with its holes (earcut), counter-clockwise seen from above (normal +y); area = the sum of the triangle areas.
- * quay: the wall that closes the step between the street and the water where the water outline lies on the garden outline (planQuay; o.garden = the flat ring of the garden outline, o.quay = a table)
+ * quay: the kerb skirt that closes the step between the street and the floor on every stretch of the garden outline where there is one (planQuay; o.floor = the plan of the floor (terrain-mesh.js planTerrain); without it there is no skirt; o.garden = the flat ring of the garden outline, o.quay = a table, o.lift = the offset of the floor mesh)
  * colliders: boxes along the contour ring at P.COLLIDER.contourY, inland of the shore, merged (chord tolerance, maximum length), each { cx, cz, w (thickness), d (length), rot, y0, y1, len }.
  */
 export function planPonds(o = {}) {
@@ -128,8 +166,8 @@ export function planPonds(o = {}) {
   }
   const nrm = new Float32Array(pos.length); for (let i = 1; i < nrm.length; i += 3) nrm[i] = 1;
   const water = { pos: Float32Array.from(pos), nrm, idx: Uint32Array.from(idx), area, triangles: idx.length / 3, holes, y: P.WATER_Y };
-  // ---- the quay wall
-  const quay = planQuay(union, o.garden || GARDEN.o, o.quay || P.QUAY);
+  // ---- the kerb skirt (the quay)
+  const quay = planQuay(o.floor || null, o.garden || GARDEN.o, o.quay || P.QUAY, o.lift ?? TERRAIN.lift);
   // ---- the colliders
   const colliders = []; let chords = 0;
   for (const ring of ringsOf(union)) {
@@ -180,7 +218,7 @@ export function buildPonds(ctx, parent, plan, opts = {}) {
   const mesh = new THREE.Mesh(g, pondMaterial(ctx, opts.field ?? ctx.services?.environment?.field ?? null, P));
   mesh.name = 'tauride-pond-water'; mesh.receiveShadow = false; mesh.castShadow = false; mesh.renderOrder = 1;
   ctx.noBatch(mesh); ctx.noOutline(mesh); parent.add(mesh);
-  // the quay wall: one more draw (a granite-grey toon material, the floor's lighting; one-sided, facing the water)
+  // the kerb skirt (the quay): one more draw (a granite-grey toon material, the floor's lighting; one-sided, facing the garden where the floor is below the street and the street where it is above)
   let quayMesh = null; const Qd = plan.quay;
   if (Qd && Qd.triangles > 0) {
     const qg = new THREE.BufferGeometry();

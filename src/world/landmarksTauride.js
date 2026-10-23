@@ -76,8 +76,8 @@ export function build(ctx) {
   const noise=makeNoiseTexture(),ground=gardenGroundMaterial(ctx,mask,noise);
   const terrain=buildTerrain(ctx,root,tplan,{material:ground.mat});
   const meshHeight=makeMeshHeight(tplan),pplan=planPaths(DP.PATHS,{meshHeight,gh:gardenHeight}),paths=buildPaths(ctx,root,pplan,noise);
-  // T4a: the water surface at the one level of data/ponds.js and the impassable shore (the bowls and the banks are the floor above: gardenHeight is the terrain, ponds included). The bridges are T4b.
-  const pondsPlan=planPonds(),ponds=buildPonds(ctx,root,pondsPlan);
+  // T4a: the water surface at the one level of data/ponds.js and the impassable shore (the bowls and the banks are the floor above: gardenHeight is the terrain, ponds included); T4a fix round 2: the kerb skirt on the garden outline is stitched to the floor plan. The bridges are T4b.
+  const pondsPlan=planPonds({floor:tplan}),ponds=buildPonds(ctx,root,pondsPlan);
   ctx.addStatic(root);
   // The service the engine reads (docs/AREAS.md 9.1 HOOKS.deckServices, docs/TAURIDE-REMAKE.md T1): deckY(x, z) = the Paradny podium (3.3 m) and its eight stair ramps, else null; cars (drive/handling.js)
   // and walkers (people/nav.js surfaceY) ask it FIRST. The later phases compose the garden bridges into it (`courts.deckY(x,z) ?? bridgesDeckY(x,z)`). No `entrances`: PRUNE_SERVICES does not list this module.
