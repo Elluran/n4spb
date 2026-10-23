@@ -799,7 +799,8 @@ The integration then (1) wired what the clusters could not touch (10.4), (2) re-
 * **Door points and services**: `landmarksNorthFull/doors.js doorPoints(recs)` derives door points from the facade's OSM entrance nodes (81 lie on the claimed footprints) projected onto the outer edges and pushed 0.6 m out as
   `city/shops.js:143` does, else the parade-door rule of `city/walls.js` (round(len/20) per street-facing edge >= 5 m, no hash jitter; points closer than 1.5 m to an existing one are dropped). `landmarksNorthFull` publishes 86 door
   points for its 17 buildings (r946930 4, r5802451 3, the bookstore w96123542 8 parade points, the vestibule w22999175 3, one 0.6 m from the G3 door, 13 corridor houses 2-20 each), `landmarksOktyabrsky` 9 for the hall in the North only
-  (7 mapped on w30324279 + 2 parade on the part w929214560; gated by `A.ID !== 'strip'` through `import * as A from './area.js'`, the first world module to read the area id directly; the strip's list stays empty and its check is
+  (7 mapped on w30324279 + 2 parade on the part w929214560; gated by the area's TABLE: `PRUNE_SERVICES.includes('landmarksOktyabrsky')` read through `lib/area-tables.js` like every other engine module (the strip's table does not list
+  it, the North's does; the first version gated on `A.ID !== 'strip'` through a direct `import * as A from './area.js'`, replaced in fix round 1: no world module reads `area.js`); the strip's list stays empty and its check is
   identical). Smolny / Suvorov / Kirochnaya / NorthFull merge monuments / photo spots into `ctx.services.landmarks` like `landmarksD` (so `ctx.services.landmarks` is now created by `landmarksNorthFull`, the first landmark module: only
   the ORDER of the services list in `check:north` changes); `people-test --at smolny` with an eval script: 4 distinct pedestrians photographing the cathedral within 5 minutes (max 4 standing). Services census of the North
   (`north-knock-test` check 4): NorthFull entrances 86, Smolny 1 / photo spots 1, Suvorov 1, Kirochnaya 2, Oktyabrsky 9 / monuments 2 / photo spots 3 (+ the Kapodistrias rows of 10.3), shared `landmarks`: monuments 4, photo spots 6;
@@ -832,7 +833,11 @@ The integration then (1) wired what the clusters could not touch (10.4), (2) re-
 * `src/areas/north/area.js PRUNE_SERVICES` = `city, landmarksNorthFull, landmarksSmolny, landmarksSuvorov, landmarksKirochnaya, landmarksD, landmarksOktyabrsky`: the door clearings of `environment` read the 95 new door points (the
   vestibule's G3 door among them). Measured on the merged tree against the clean `feat/areas` (a scratch probe over the base snapshot): no clean tree stood within the clearance of any of the 95 points (nearest 5.20 m at NorthFull, 13.6 m
   at the hall), so the North's 7,110 trees and `treesPruned 344` are unchanged; the wiring is live (the list is read and would prune), the geometry just has nothing to prune. The strip's table is unchanged (its `landmarksOktyabrsky`
-  publishes an empty list).
+  publishes an empty list). Since fix round 1 the SAME table is the hall's gate for publishing its door points (10.2): an area that lists `landmarksOktyabrsky` in `PRUNE_SERVICES` gets the 9 points, one that does not gets the empty list.
+* **Fix round 1 (the code review of `m7-prep`)**: `src/world/landmarksOktyabrsky.js` no longer imports `area.js` (it was the only world module to do so, an id-string gate on the seam of section 3): the door points are gated on
+  `PRUNE_SERVICES` of `lib/area-tables.js` instead, the same behaviour in both areas (the strip's table omits the module, the North's lists it). Re-verified: the strip's `npm run check` (25 modules) identical to the clean `feat/areas`,
+  the strip layout golden and env snapshot identical, `check:north` landmarksOktyabrsky services unchanged (entrances 9), `north-knock-test` census unchanged, `cross-places-test` both areas, `npm run areas`, `importlint`, `runtimelint`,
+  `areahtml:check`, `hooks:all` (see the report of the fix round for the exact counts).
 * `src/world/environment/claims.js`: where the running area claims `kapodistrias` (`L.GROUPS.landmarksOktyabrsky`), the tuft mask takes `KAPODISTRIAS_PAVED_RINGS` (the source's promenade + apron ring) instead of `PAVED_RINGS`; the strip
   claims no `kapodistrias` and keeps `PAVED_RINGS` (its environment snapshot is byte-identical). Effect in the North: two tuft cells differ, (792, -432) 254 -> 248 and (792, -468) 1,395 -> 1,234 tufts: the apron round the monument at
   (797, -461) holds no grass any more.

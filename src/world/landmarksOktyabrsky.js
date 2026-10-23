@@ -22,7 +22,7 @@ import * as L from './layout.js';
 import { Parts } from './landmarksOktyabrsky/kit.js';
 import { makeMats, addMonumentMats } from './landmarksOktyabrsky/mats.js';
 import { GROUPS_LIST } from './landmarksOktyabrsky/groups.js';
-import * as A from './area.js';                                       // the area id (the page's import map remaps this to its area module, docs/AREAS.md section 2)
+import { PRUNE_SERVICES } from './lib/area-tables.js';               // the area's table of the services whose door points are read (docs/AREAS.md section 3): the engine never reads area.js directly
 import { doorPoints } from './landmarksNorthFull/doors.js';
 
 const PARTS = [
@@ -56,9 +56,10 @@ export async function build(ctx) {
     svc.triangles += tris; svc.parts[name] = { tris, ms: Math.round(performance.now() - t1) };
   }
   ctx.addStatic(root);
-  // M7 (docs/AREAS.md 8.7): in another area the hall publishes the door points of its claimed outline (landmarksNorthFull/doors.js: the mapped OSM entrance nodes of w30324279, 0.6 m out, as city/shops.js
-  // would) for the door clearings and the services census; the strip keeps the empty list it always published (gated by the area id: the strip's services, check counts and bake must not move)
-  if (A.ID !== 'strip' && claimed.has('oktyabrsky-hall')) svc.entrances.push(...doorPoints(L.groupMembers('oktyabrsky-hall')));
+  // M7 (docs/AREAS.md 8.7): where the area lists this module in PRUNE_SERVICES (the North does, the strip does not) the hall publishes the door points of its claimed outline (landmarksNorthFull/doors.js:
+  // the mapped OSM entrance nodes of w30324279, 0.6 m out, as city/shops.js would) for the door clearings and the services census; elsewhere it keeps the empty list it always published (the strip's
+  // services, check counts and bake must not move). The gate is the area's TABLE, read through lib/area-tables.js like every other engine module (no module reads area.js directly).
+  if (PRUNE_SERVICES.includes('landmarksOktyabrsky') && claimed.has('oktyabrsky-hall')) svc.entrances.push(...doorPoints(L.groupMembers('oktyabrsky-hall')));
   if (ctx.shared && ctx.shared.uNight && ctx.onUpdate) ctx.onUpdate(() => { M.reflect.opacity = 0.36 * (1 - 0.85 * Math.min(1, ctx.shared.uNight.value)); });
   const S = (ctx.services.landmarks ||= {});
   S.monuments = (S.monuments || []).concat(svc.monuments);
