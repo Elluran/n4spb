@@ -21,7 +21,7 @@ if (arg('repeat', null)) {
   }
   const st = (a) => { const s = a.slice().sort((x, y) => x - y); return { mean: +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2), median: +s[s.length >> 1].toFixed(2), min: +s[0].toFixed(2), max: +s[s.length - 1].toFixed(2) }; };
   const out = { area: process.env.AREA || 'strip', repeat: N, modes: Object.fromEntries(modes.map((m) => [m, { cold: st(res[m].cold), warm: st(res[m].warm) }])) };
-  if (north) { const p = out.modes.paradny, f = out.modes.full, pc = (a, b) => +((a / b - 1) * 100).toFixed(1); out.fullVsParadnyPercent = { coldMean: pc(f.cold.mean, p.cold.mean), coldMedian: pc(f.cold.median, p.cold.median), warmMean: pc(f.warm.mean, p.warm.mean), warmMedian: pc(f.warm.median, p.warm.median), addedColdMs: +(f.cold.median - p.cold.median).toFixed(2), gate: 30 }; }
+  if (north) { const p = out.modes.paradny, f = out.modes.full, pc = (a, b) => +((a / b - 1) * 100).toFixed(1); out.fullVsParadnyPercent = { coldMean: pc(f.cold.mean, p.cold.mean), coldMedian: pc(f.cold.median, p.cold.median), warmMean: pc(f.warm.mean, p.warm.mean), warmMedian: pc(f.warm.median, p.warm.median), addedColdMs: +(f.cold.median - p.cold.median).toFixed(2), gate: 30 }; out.fullVsParadnyPercent.pass = out.fullVsParadnyPercent.coldMedian <= 30; }      // T4a fix round 1: the verdict is part of the line (the T4a terrain breaches the gate: the garden patch hull is 97 % of the garden box, see docs/TAURIDE-REMAKE.md)
   console.log(JSON.stringify(out));
   process.exit(0);
 }

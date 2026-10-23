@@ -27,7 +27,7 @@ import { ROOT, parseArgs, inPolys } from './tauride/lib/common.mjs';
 import * as S from './tauride/lib/site.mjs';
 import { loadEngine, makeContext, makePlayer, buildModules, engineRoot } from './tauride/lib/stub-env.mjs';
 import { builtinModels } from './tauride/lib/demo-models.mjs';
-import { makeWorld, wadeProbes, wadeSummary, wadeRing, shoreProbes, pathGraph, route, walkRoute, slopeReport, landingReport, carBreach } from './tauride/lib/height-harness.mjs';
+import { makeWorld, wadeProbes, wadeSummary, wadeRing, shoreProbes, pathGraph, route, walkRoute, slopeReport, landingReport, flightLanding, carBreach } from './tauride/lib/height-harness.mjs';
 
 const args = parseArgs();
 const WADE = Number(args['wade-depth'] ?? 0.3), PROBES = Number(args.probes ?? 14), MAX_SLOPE = Number(args['max-slope'] ?? 0.25);
@@ -129,7 +129,7 @@ async function reliefSection(ctx, ph, engine) {
   rel(`the mesh footprint hugs the relief: ${(M.padArea).toFixed(0)} m2 of triangles for ${M.liftedArea.toFixed(0)} m2 lifted by ${TM.TERRAIN.drop * 100} cm or more (at most +20 %), and only ${(M.apronArea).toFixed(0)} m2 (${(100 * M.apronArea / M.padArea).toFixed(1)} %, at most 6 %) are flat triangles with no corner above ${TM.TERRAIN.drop * 100} cm`, M.padArea <= 1.2 * M.liftedArea && M.apronArea <= 0.06 * M.padArea && M.liftedArea > 8000, '');
   { const old = TM.measurePlan(TM.planTerrain(RH, GH.RELIEF_BOX, { edge: 16 }));
     rel('mutant: leaves that straddle the foot left at 16 m (the apron of the first T2) turn the footprint check red (the check can fail)', !(old.padArea <= 1.2 * old.liftedArea && old.apronArea <= 0.06 * old.padArea), `pad ${old.padArea.toFixed(0)} m2 for ${old.liftedArea.toFixed(0)} lifted, apron ${old.apronArea.toFixed(0)} m2`); }
-  const planBuilt = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, { cover: TM.gardenPieces() });
+  const planBuilt = TM.planTerrain(GH.gardenHeight, GH.RELIEF_BOX, TM.floorOptions());
   rel('the plan of the build (the COVER plan of T3: the whole floor of the garden) equals the plan of the test (deterministic)', planBuilt.tris === svc.terrain.triangles, `${planBuilt.tris} triangles, ${planBuilt.leaves} leaves, ${planBuilt.chunksBefore} chunks -> ${planBuilt.chunks.length} draws (the relief-only plan of T2: ${plan.tris})`);
   { const bad2 = TM.measurePlan(TM.planTerrain(RH, GH.RELIEF_BOX, { split: 0.4 }));
     rel('mutant: a split tolerance of 40 cm turns the 5 cm check red (the check can fail)', bad2.maxErr > TM.TERRAIN.tol, `max ${(bad2.maxErr * 100).toFixed(1)} cm`); }
@@ -273,9 +273,26 @@ async function pondSection(ctx, ph, engine) {
     for (const c of pl.colliders) low.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1);
     const n = wadeRing(world(low, (x, z) => L.heightAt(x, z)), shore, segs, { spacing: 3, angles: [0], modes: ['walk'], limit: 120, offset: 0.4 });
     rel('mutant: a top below contour + STEP_HEIGHT (a box that a walker steps over) -> entries (the top is a real parameter)', n.entered > 0, `${n.entered} of ${n.runs} entered`); }
-  // flight landing (reported; the refusal is the engine's: groundHeight < -1)
-  const ld = landingReport(real, { ...S, U: S.U }), bigDeep = ld.refused;
-  rel('flight landing over the water: the Big Pond bed (-1.2 m) triggers the engine\'s refusal (ground < -1) where the water is deeper than 0.55 m, the shallows and the whole Small Pond (-0.5 m) do not: REPORTED, the engine is not changed here', ld.cells > 1000 && bigDeep > 0, `${ld.cells} water cells (4 m lattice), ${ld.refused} refused as 'water', ${ld.cells - ld.refused} landable (${ld.landableDeep} deeper than 0.3 m), and the landing then sits inside the shore ring`);
+  // FLIGHT LANDING (T4a fix round 1). The engine refuses a landing only where the ground is below -1 m (the Big Pond deeper than 0.55 m); in the shallows and the whole Small Pond (-0.5 m) a flyer landed INSIDE the ring of the
+  // shore colliders and could not walk out (QA: 9 of 9). HOOKS.noLanding (hooks/water.js, handed to the Player by main.js) refuses the ponds.
+  const AT = await import(pathToFileURL(path.join(ROOT, 'src/world/lib/area-tables.js')).href), HW = await import(pathToFileURL(path.join(ROOT, 'src/areas/north/hooks/water.js')).href), hook = AT.HOOKS.noLanding;
+  rel('the page has HOOKS.noLanding (a function: the ponds refuse a flight landing); a module list without the garden has none (the strip is untouched)', typeof hook === 'function' && HW.makeNoLanding(['environment']) === undefined && HW.makeNoLanding(undefined) === undefined, '');
+  const ld0 = landingReport(real, S), ld = landingReport(real, S, hook);
+  rel("flight landing over the water, the lattice of 4 m: the hook refuses EVERY water cell (the engine's own test refused " + ld0.refused + ' of ' + ld0.cells + ')', ld.cells > 1000 && ld.refused === ld.cells && ld0.refused < ld0.cells && ld.landableDeep === 0, `${ld.cells} water cells, ${ld.refused} refused with the hook, ${ld0.refused} without (the engine's ground < -1), ${ld.landableDeep} landable deeper than ${real.model.wadeDepth ?? 0.3} m`);
+  // the real Player at spots over the water: shallows of the Big Pond, the Small Pond, the middle depths, the deep
+  const lat = []; for (const p of S.U) { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < p.o.length; i += 2) { x0 = Math.min(x0, p.o[i]); x1 = Math.max(x1, p.o[i]); z0 = Math.min(z0, p.o[i + 1]); z1 = Math.max(z1, p.o[i + 1]); }
+    for (let x = x0; x <= x1; x += 3) for (let z = z0; z <= z1; z += 3) { const d = shore.dist(x, z); if (d > -1.5) continue; lat.push({ x, z, g: real.ph.groundHeight(x, z, 60), d }); } }
+  const pick = (fn, n) => { const a = lat.filter(fn), out = []; for (let i = 0; i < n && a.length; i++) out.push(a[Math.floor((i + 0.5) * a.length / n)]); return out; };
+  const spots = [...pick((c) => c.g > -0.6 && c.x > 1250, 6), ...pick((c) => c.x <= 1250, 5), ...pick((c) => c.g <= -0.6 && c.g > -1.0, 4), ...pick((c) => c.g <= -1.0, 3)];
+  const shallowIn = spots.filter((c) => c.g > -1.0);
+  const withHook = flightLanding(real, shore, segs, spots, { noLanding: hook });
+  rel(`the real Player at ${spots.length} spots over the water (the shallows of the Big Pond, the Small Pond, the middle, the deep) presses F with the hook: every landing is refused as 'water'`, withHook.n === spots.length && withHook.refused === spots.length && withHook.landed === 0, `${withHook.refused} of ${withHook.n} refused`);
+  const noHook = flightLanding(real, shore, segs, shallowIn, { noLanding: null });
+  rel("mutant: WITHOUT the hook the landings in the shallows and the Small Pond are accepted and the flyer cannot walk out of the shore ring (the QA finding is reproduced: the check can fail)", noHook.landed > 0 && noHook.trapped > 0, `${noHook.landed} of ${noHook.n} accepted, ${noHook.trapped} trapped (walking toward the nearest shore ends on the wet slope, shore distance ${noHook.rows.filter((r) => r.end).slice(0, 3).map((r) => r.end[3]).join(' / ')} m)`);
+  const dry = []; for (let x = 1040; x < 1470; x += 5) for (let z = -1730; z < -1270; z += 5) { const d = shore.dist(x, z); if (d >= 4 && d <= 14 && S.inGarden(x, z) && !L.insideBuilding(x, z, 4)) dry.push({ x, z }); }
+  const dryPts = []; for (let i = 0; i < 10; i++) dryPts.push(dry[Math.floor((i + 0.5) * dry.length / 10)]);
+  const dryLand = flightLanding(real, shore, segs, dryPts, { noLanding: hook });
+  rel('the hook does not over-refuse: 10 spots on the lawn 4 .. 14 m from the shore (inside the garden) are landable, the flyer ends on land', dryLand.refused === 0 && dryLand.landed === dryPts.length, `${dryLand.landed} of ${dryPts.length} landed`);
   return bad;
 }
 
@@ -290,7 +307,7 @@ if (!onlySource) {
     const m = mod.model || mod.default;
     main = { name: path.basename(args.model), waterLevel: -0.45, inWater: (x, z) => inPolys(x, z, S.U), addColliders() {}, ...m, wadeDepth: m.wadeDepth ?? WADE };      // defaults for what a model leaves out
   } else main = models[args.model || 'north'];
-  if (main && main === models.north && buildList.includes('landmarksTauride')) main = { ...main, name: 'north + landmarksTauride (the REAL built module: ponds, banks, shore colliders)', waterLevel: (await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/data/ponds.js')).href)).WATER_Y, routeToShore: true };
+  if (main && main === models.north && buildList.includes('landmarksTauride')) main = { ...main, name: 'north + landmarksTauride (the REAL built module: ponds, banks, shore colliders)', waterLevel: (await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/data/ponds.js')).href)).WATER_Y, routeToShore: true, heightAt: (x, z) => engine.L.heightAt(x, z) };      // the engine's heightAt of the page: the garden patch (bowls, banks, hills) is what is tested
   if (!main) { console.error(`unknown model ${args.model}`); process.exit(2); }
   say(`TAURIDE HEIGHT TEST (real Player + Physics of ${path.basename(ROOT)})${buildList.length ? ', modules built: ' + buildList.join(', ') : ''}`);
   const ex = { buildList };

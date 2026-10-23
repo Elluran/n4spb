@@ -26,6 +26,7 @@ import { createUI, createInteract } from './core/ui.js';
 import { createMinimap } from './core/minimap.js';
 import { createTouchControls } from './core/touch.js';      // phones / tablets: the touch UI (does nothing on desktop)
 import { installBootGuard } from './core/boot-guard.js';      // fatal card, lost-context handler, phone warning + crash-loop guard
+import { HOOKS } from './world/lib/area-tables.js';      // the validated hook table of the area module (docs/AREAS.md section 9): the engine reads it only through this file
 import { REGISTRY } from './areas/registry.js';      // runtime-only (tools/baked-revision.mjs): only this file may import it and core/gates.js / core/handoff.js
 import { createGates, planArrival } from './core/gates.js';      // the area gates: the question near a border, the navigation to the neighbour's page (docs/AREAS.md)
 import { camParam } from './core/handoff.js';
@@ -252,6 +253,7 @@ async function build() {
 const player = new Player(camera, canvas, ctx.physics, L.WORLD.play);
 ctx.playerObj = player;
 player.solidAt = L.insideBuilding;
+player.noLanding = HOOKS.noLanding || null;       // the ponds of the North refuse a flight landing (HOOKS.noLanding); the strip has no such hook
 player.clampXZ = L.clampToPlay;                       // the play area is a union of rectangles (layout.js): nobody walks into the empty notches
 ctx.ui = createUI({ player, toast: showToast });
 ctx.interact = createInteract({ camera, player, ui: ctx.ui });

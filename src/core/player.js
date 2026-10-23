@@ -43,6 +43,7 @@ export class Player {
     this.onRescue = null;   // () => void: the walker fell through nothing and was put back on its last safe spot
     this.solidAt = null;    // (x, z, r) => boolean: is the terrain there covered by a building (colliders are hollow wall boxes)? Set by the world.
     this.clampXZ = null;    // (x, z, margin) => [x, z]: the nearest point of the walkable area, which is a UNION of rectangles with empty notches (layout.clampToPlay); null = the `bounds` rectangle. Set by the world.
+    this.noLanding = null;  // (x, z) => boolean: water that a landing refuses although it is shallower than 1 m (the ponds of an area module: HOOKS.noLanding, docs/AREAS.md section 9); null = only the ground < -1 test. Set by the world.
     this.keys = new Set();
     this.bob = 0; this.smoothY = null;
     this.look = { dx: 0, dy: 0 };          // raw mouse / touch movement since the last frame (pixels)
@@ -134,6 +135,7 @@ export class Player {
     if (ph.inHole(x, z, this.radius + 0.3)) return 'blocked';           // never touch down on the mouth of an escalator shaft: the drop would end 60 m below
     const g = ph.groundHeight(x, z, this.pos.y);
     if (g < -1 && !this.noclipUnder) return 'water';
+    if (this.noLanding && !this.noclipUnder && this.noLanding(x, z)) return 'water';      // a pond: the shore colliders keep a walker in, so a flyer must not touch down inside them
     if (this.clampXZ) { const c = this.clampXZ(x, z, 0); if (c[0] !== x || c[1] !== z) return 'blocked'; }
     else if (x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) return 'blocked';
     const clear = () => !ph.columnBlocked(x, z, this.radius, g + STEP_HEIGHT, this.pos.y + this.height);

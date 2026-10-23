@@ -20,6 +20,7 @@
 //      groundHoles          -> (() => [flat ring, ...]) | undefined                                T3a  the rings cut out of the environment ground (environment/ground.js groundCuts): the garden outline moved in by 6 cm; undefined unless MODULES has 'landmarksTauride'
 //      groundWayReject      -> ((road) => boolean) | undefined                                     T3b  the ways that the ground class mask does not paint (environment/field.js buildField): the 120 garden ways; undefined unless MODULES has 'landmarksTauride'
 //      waterBodies          -> (() => [{ id, o, h }]) | undefined                                  T4a  the ponds of the garden as water bodies of the field's water mask (environment/field.js buildField, after the river polygons): env.waterAt / shoreDist / the water shader's distance atlas; undefined unless MODULES has 'landmarksTauride'
+//      noLanding            -> ((x, z) => boolean) | undefined                                     T4a1 a flight landing on the ponds is refused as 'water' (core/player.js landingBlocked reads player.noLanding, set by main.js); true where the terrain is at or below the contour of the shore colliders; undefined unless MODULES has 'landmarksTauride'
 //    }
 //    HEIGHT_PATCHES = [{ id: string, box: [x0, x1, z0, z1], at: (x, z) => number | null }]       H01  heightAt: per patch in array order a box reject, then at(); the first non-null wins;
 //                                                                                                     then the old waterway-bed / GROUND_Y line
@@ -31,7 +32,7 @@ import { treeCleared, treeReject, tuftReject, propReject, pedestrianOnly, makePa
 import { makeHeightPatches as terrainPatches } from './hooks/height.js';
 import { inGarden } from './hooks/people.js';
 import { makeGroundHoles, makeGroundWayReject } from './hooks/ground.js';
-import { makeWaterBodies } from './hooks/water.js';
+import { makeWaterBodies, makeNoLanding } from './hooks/water.js';
 
 /** The services whose own deckY(x, z) (a podium, stairs, garden bridges) is consulted before the bridge decks by the drive handling and the pedestrian navigation (H09). An absent service is skipped. */
 const DECK_SERVICES = Object.freeze(['landmarksTauride']);
@@ -47,6 +48,7 @@ export function makeHooks(MODULES) {
     groundHoles: makeGroundHoles(MODULES),          // T3: the environment ground is cut out under the garden's own floor (a plain function, gated by the module list like parkingReject)
     groundWayReject: makeGroundWayReject(MODULES),  // T3: the garden's ways are not painted into the ground class mask (the garden draws them)
     waterBodies: makeWaterBodies(MODULES),          // T4a: the garden's ponds enter the field's water mask (env.waterAt, shoreDist, the water shader's distance atlas)
+    noLanding: makeNoLanding(MODULES),              // T4a fix 1: a flight landing on the ponds is refused as 'water' (core/player.js landingBlocked; main.js hands it to the Player)
   };
 }
 
