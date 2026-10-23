@@ -84,7 +84,9 @@ const caught = [];
 for (const k of ['error', 'warn']) { const orig = console[k].bind(console); console[k] = (...args) => { const line = args.map((x) => (x && x.stack) || String(x)).join(' '); if (/failed|is not a function|is not defined|Cannot read/.test(line) && !line.startsWith('[textures]')) caught.push(line.split(String.fromCharCode(10))[0].slice(0, 220)); orig(...args); }; }
 const BUDGET = { environment: 500e3, streets: 500e3, city: 600e3, landmarksA: 400e3, landmarksB: 500e3, landmarksC: 500e3, landmarksD: 300e3, traffic: 400e3, props: 300e3, people: 200e3, wildlife: 100e3,
   // the North's landmark modules (M5, measured 2026-10-21: NorthFull 583 k incl. Dom Muruzi 241 k, Smolny 433 k, Kirochnaya 121 k, Suvorov 47 k, Oktyabrsky 27.5 k)
-  landmarksNorthFull: 600e3, landmarksSmolny: 450e3, landmarksKirochnaya: 130e3, landmarksSuvorov: 55e3, landmarksOktyabrsky: 30e3,
+  landmarksNorthFull: 600e3, landmarksSmolny: 450e3, landmarksKirochnaya: 130e3, landmarksSuvorov: 55e3,
+  // M7 C-landmarks (measured 2026-10-23, + 20 %): Oktyabrsky 47,307 in the North with the Kapodistrias monument, its apron and its 8 trees (27,542 in the strip, which does not claim it); the Church of Simeon and Anna 27,955
+  landmarksOktyabrsky: 57e3, landmarksBelinskyNorth: 34e3,
   // the Tauride Palace + the Paradny quarter (T1 of docs/TAURIDE-REMAKE.md, measured: 621,713 incl. the courts 29 k and the palace 23 k; the garden is not in it, it comes with the later phases and gets its own allowance)
   landmarksTauride: 700e3 };
 

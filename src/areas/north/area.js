@@ -16,7 +16,8 @@ import { GROUPS_LIST as G_SUVOROV } from '../../world/landmarksSuvorov/groups.js
 import { GROUPS_LIST as G_KIROCHNAYA } from '../../world/landmarksKirochnaya/groups.js';
 import { GROUPS_LIST as G_TAURIDE } from '../../world/landmarksTauride/groups.js';
 import { LIBRARY_GROUP } from '../../world/landmarksD/groups.js';
-import { GROUPS_LIST as G_OKTYABRSKY } from '../../world/landmarksOktyabrsky/groups.js';
+import { GROUPS_LIST as G_OKTYABRSKY, KAPODISTRIAS_GROUP } from '../../world/landmarksOktyabrsky/groups.js';
+import { GROUPS_LIST as G_BELINSKY_NORTH } from '../../world/landmarksBelinskyNorth/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'north';
@@ -34,10 +35,11 @@ export const MODULES = [
   'landmarksSuvorov', // the Suvorov Memorial Museum on Kirochnaya (7 OSM footprints, mosaics, tower)
   'landmarksKirochnaya', // the Elena Pavlovna Clinical Institute, Kirochnaya 41: 20 OSM footprints, garden campus (lawn, service lanes, trees, fence); before streets, it claims 14 service ways
   'landmarksTauride', // the Tauride Palace and the Paradny Quarter (T1 of docs/TAURIDE-REMAKE.md; the garden is rewritten by the later phases); before streets / city, it claims 2 sub-groups (12 buildings, 2 fountain waters) and switches the Paradny hooks on
+  'landmarksBelinskyNorth', // the Church of Simeon and Anna (Mokhovaya 48) with its corner chapel: the church part of the source's landmarksBelinsky (M7 C-landmarks); before city, it claims 2 buildings
   'streets',      // roads, markings, kerbs, granite pavements, crossings, road furniture, trolleybus overhead wires
   'city',         // every OSM building that no landmark module claims: Petersburg facade grammar, roofs, courtyards, entrances
   'landmarksD',   // the National Library (Fontanka 36) and the Mariinsky hospital block, the strip's band at (-334, -311): only the 'library' sub-group is claimed here
-  'landmarksOktyabrsky', // Bolshoy Concert Hall Oktyabrsky on Ligovsky Prospekt, the strip's band at (797, -347)
+  'landmarksOktyabrsky', // Bolshoy Concert Hall Oktyabrsky on Ligovsky Prospekt, the strip's band at (797, -347), and (claimed here only: M7 C-landmarks) the Kapodistrias monument at (797, -461) with its apron
   'props',        // benches, bins, kiosks, bus shelters, billboards, flower baskets
   'traffic',      // moving cars, buses, trolleybuses + parked cars
   'people',       // pedestrians, groups, cyclists, scooters
@@ -52,7 +54,8 @@ export const LABELS = {
   landmarksSuvorov: 'Музей Суворова',
   landmarksKirochnaya: 'Клинический институт на Кирочной',
   landmarksTauride: 'Таврический дворец и Парадный квартал',
-  landmarksD: 'Национальная библиотека', landmarksOktyabrsky: 'БКЗ «Октябрьский»',
+  landmarksD: 'Национальная библиотека', landmarksOktyabrsky: 'БКЗ «Октябрьский» и памятник Каподистрии',
+  landmarksBelinskyNorth: 'церковь Симеона и Анны',
 };
 
 export const NAMES = {
@@ -100,7 +103,8 @@ GROUPS.landmarksSuvorov = G_SUVOROV;
 GROUPS.landmarksKirochnaya = G_KIROCHNAYA;
 GROUPS.landmarksTauride = G_TAURIDE;      // T1: the Tauride Palace r3801092 and the Paradny quarter (11 buildings + the two fountain waters); T2: the garden (osm ids only: park, woods, ways, benches, bins)
 GROUPS.landmarksD = [LIBRARY_GROUP];      // the strip's landmarksD claims four sub-groups; only the National Library / Mariinsky block lies in the band (landmarksD/groups.js)
-GROUPS.landmarksOktyabrsky = G_OKTYABRSKY;      // the concert hall w30324279 (797, -347), shared with the strip
+GROUPS.landmarksOktyabrsky = [...G_OKTYABRSKY, KAPODISTRIAS_GROUP];      // the concert hall w30324279 (797, -347), shared with the strip, + the Kapodistrias monument n1372027612 (797, -461): 56 m beyond the strip's play edge, claimed by the North only (M7 C-landmarks; the module builds its monument part and the apron only where this key is claimed)
+GROUPS.landmarksBelinskyNorth = G_BELINSKY_NORTH;      // the Church of Simeon and Anna w96148838 + the chapel w96148878 (-304, -688): the church part of the source's landmarksBelinsky (M7 C-landmarks)
 
 /**
  * The HUD location table (first match wins), built with the layout helpers `h` ({ NAMES, SUBGROUPS, _sqPolys, _groupPolys, _named, _areaPolys, _shoreOf, _deck, inRiver, shoreDist }).
@@ -206,6 +210,8 @@ export const TEST = {
     { id: 'r3127704', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
     { id: 'w30324355', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
     { id: 'r3801087', by: 'landmarksD', group: 'library' }, { id: 'w30324279', by: 'landmarksOktyabrsky', group: 'oktyabrsky-hall' },
+    { id: 'n1372027612', by: 'landmarksOktyabrsky', group: 'kapodistrias' },      // M7 C-landmarks: the Kapodistrias monument (claimed by the North only)
+    { id: 'w96148838', by: 'landmarksBelinskyNorth', group: 'simeon-anna' }, { id: 'w96148878', by: 'landmarksBelinskyNorth', group: 'simeon-anna' },      // M7 C-landmarks: the Church of Simeon and Anna and its chapel
     { id: 'r3801092', by: 'landmarksTauride', group: 'tauride-palace' },                  // T1: the Tauride Palace
     { id: 'w102153008', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w102153013', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w145419644', by: 'landmarksTauride', group: 'paradny-quarter' },
     { id: 'r1452259', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'r1967088', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'r3304715', by: 'landmarksTauride', group: 'paradny-quarter' },
@@ -293,13 +299,29 @@ export const GARAGE = {
 };
 
 // ---------------------------------------------------------------- the rest
-/** environment.js: the services whose `entrances` clear the trees from the doors of the buildings they list: the generic `city` and the M5 landmark services that publish an `entrances` array
- *  (landmarksSmolny, landmarksSuvorov, landmarksKirochnaya; landmarksD publishes an array that is empty in the North, as in the strip's list). landmarksNorthFull and landmarksOktyabrsky publish none
- *  (the strip's table does not list them either). */
-export const PRUNE_SERVICES = ['city', 'landmarksSmolny', 'landmarksSuvorov', 'landmarksKirochnaya', 'landmarksD'];
+/** environment.js: the services whose `entrances` clear the trees from the doors of the buildings they list: the generic `city` and every landmark service of this page that publishes an `entrances`
+ *  array (landmarksSmolny, landmarksSuvorov, landmarksKirochnaya; landmarksD publishes an array that is empty in the North, as in the strip's list; since M7 (docs/AREAS.md section 10) landmarksNorthFull
+ *  publishes the door points of its 17 claimed buildings (landmarksNorthFull/doors.js: the vestibule's door of the G3 gate among them, which must stay clear) and landmarksOktyabrsky the hall's 9
+ *  (in the North only; in the strip its list is empty, so the strip's table need not list it). landmarksBelinskyNorth and landmarksTauride publish none. */
+export const PRUNE_SERVICES = ['city', 'landmarksNorthFull', 'landmarksSmolny', 'landmarksSuvorov', 'landmarksKirochnaya', 'landmarksD', 'landmarksOktyabrsky'];
 // The hook set (milestone M6, docs/AREAS.md section 9): hooks.js builds it from the module list above (a hook that serves a landmark module is dormant until the module is in MODULES).
 import { makeHooks, makeHeightPatches } from './hooks.js';
 /** the hooks of the engine modules (keep-outs of trees / tufts / props / ways / parking, the garden of the crowd cap, the deck services): src/areas/north/hooks.js documents the contract */
 export const HOOKS = makeHooks(MODULES);
 /** the height patches of layout.heightAt (the first patch that answers wins): the Paradny podium once 'landmarksTauride' is in MODULES (the Tauride remake), none before; the pond bed of the remake appends after it in hooks.js */
 export const HEIGHT_PATCHES = makeHeightPatches(MODULES);
+
+// ---------------------------------------------------------------- the places of the OTHER areas (milestone M7, docs/AREAS.md: core/gates.js, the HUD list "Места · Places")
+/**
+ * CROSS_PLACES: places of the strip the HUD list offers under "Невский проспект"; a pick asks the gate question (core/gates.js offerPlace, via 'place') and the hand-off through g2 lands at this
+ * pose instead of the gate's arrival rectangle (the shape: src/world/area.js CROSS_PLACES). The rows copy src/world/area.js makeViews (yaw to 2 decimals, what ?cam= carries; tools/cross-places-test.mjs
+ * pins them to the strip's VIEWS by `view` and proves every pose with the predicates of views-check on the strip).
+ */
+export const CROSS_PLACES = [
+  { key: 'vosstaniya', label: 'Площадь Восстания · Московский вокзал', area: 'strip', gate: 'g2', view: 'Digit1', x: 560, z: 192, yaw: -138.53, pitch: 8 },
+  { key: 'palace-square', label: 'Дворцовая площадь · Александровская колонна', area: 'strip', gate: 'g2', view: 'Digit0', x: -1985, z: -715, yaw: 31.52, pitch: 6 },
+  { key: 'winter-palace', label: 'Зимний дворец · Дворцовая набережная', area: 'strip', gate: 'g2', view: 'Digit8', x: -2143, z: -1008, yaw: -129.33, pitch: 10 },
+  { key: 'anichkov', label: 'Аничков мост', area: 'strip', gate: 'g2', view: 'Digit5', x: -395, z: -108, yaw: 102.04, pitch: 6 },
+  { key: 'kazan', label: 'Казанский собор', area: 'strip', gate: 'g2', view: 'Digit9', x: -1470, z: -312, yaw: 171.14, pitch: 8 },
+  { key: 'library', label: 'Российская национальная библиотека · Фонтанка', area: 'strip', gate: 'g2', view: 'Place.library', x: -372, z: -300, yaw: -73.86, pitch: 8 },
+];

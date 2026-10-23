@@ -64,9 +64,12 @@ export function build(K) {
 
   // ---------------------------------------------------------------------------------------- the promenade paving (hall frame: u along the front, v toward the building)
   P.push(HALL.x, 0, HALL.z, HALL.rot);
-  // one polygon: the promenade along the stair (v -4.4 .. -17.9, u up to 108), widened to the kerb at the SSW corner (groups.js PAVED_RINGS is the same ring in world metres);
+  // one polygon: the promenade along the stair (v -4.4 .. -17.9, u up to 108), widened to the kerb at the SSW corner (groups.js PAVED_RINGS is the same ring in world metres); where the area
+  // claims the Kapodistrias monument (K.claimed, the North) the ring goes on to the apron round the monument at its NNE end (u 108 .. 133, v -31 .. -4.4; the source's ring, groups.js KAPODISTRIAS_PAVED_RINGS);
   // triangles on asphalt, in the lot, inside a building or on the lawn of the Nekrasov Garden are dropped
-  const ring = [[-14, STAIR.v0], [108.4, STAIR.v0], [108.4, -17.9], [13.5, -17.9], [12.8, -25], [-14, -25]];
+  const ring = K.claimed && K.claimed.has('kapodistrias')
+    ? [[-14, STAIR.v0], [133.4, STAIR.v0], [133.4, -31], [108.4, -31], [108.4, -17.9], [13.5, -17.9], [12.8, -25], [-14, -25]]
+    : [[-14, STAIR.v0], [108.4, STAIR.v0], [108.4, -17.9], [13.5, -17.9], [12.8, -25], [-14, -25]];
   const park = GREEN.filter((g) => g.id === 'r1806731').flatMap((g) => g.polys.map((p) => pairs(p.o)));
   const inPark = (x, z) => park.some((r) => inRing(r, x, z));
   const tris = fillPolyClipped(P, M.paving, ring, 0.06, (x, z) => (inLot(x, z) || inPark(x, z) || L.insideBuilding(x, z, 0.4) ? 1 : cover(x, z)), { margin: 0.25, maxEdge: 3.5, tile: 6 });

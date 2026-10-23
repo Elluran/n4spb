@@ -4,9 +4,13 @@
 //
 //  Three layers, so that the logic can be tested without a browser:
 //    1. pure geometry   gateCoords, depthFor, chipFor                         (street frame: x east, z south; a gate's `inward` points from the border into its OWN area)
-//    2. the state machine  createGateMachine({ gates })                       when does the chip show, when is the question asked, when is a decline over
-//    3. the DOM layer   createGates(deps)                                     chip, ui.confirm, preflight, travel veil, navigation, window.__gates
+//    2. the state machine  createGateMachine({ gates })                       when does the chip show, when is the question asked, when is a decline over (border gates only)
+//    3. the DOM layer   createGates(deps)                                     chip, ui.confirm, preflight, travel veil, navigation, window.__gates; the DOOR gates (kind 'door': a ctx.interact item,
+//                                                                             E / USE at a door, no chip, no zone) and the PLACES of the other area (the area module's CROSS_PLACES: the HUD list offers
+//                                                                             them, a pick asks the same question and lands at that place's pose; milestone M7)
 //  plus planArrival (the destination side: ?cam= + ?ho= -> the pose the player really starts at).
+//  Indoors (M7): while the player is inside a walk-in interior (ctx.indoor.zone, core/zones.js: the Podpisnye Izdaniya bookstore of the North lies inside the prompt zone of g2) there is no chip and no
+//  question; the machine keeps running, so the gate re-arms the moment he steps out. The predicate is a dependency (deps.isIndoors), so the machine stays pure.
 // ============================================================================
 import { REGISTRY, GATES as ALL_GATES, GATES_ENABLED } from '../areas/registry.js';
 import { makeHo, arrivalUrl, decodeHo, parseCamParam, resolveArrival, makeProbe } from './handoff.js';
@@ -51,11 +55,12 @@ export function createGateMachine({ gates, config = {} }) {
     get clock() { return clock; },
     get speed() { return clock < holdUntil ? 0 : Math.hypot(vx, vz); },
     /**
-     * One step. inp = { dt, x, z, mode: 'walk'|'fly'|'car', blocked: bool (not started, travelling, a panel open, underground, riding ...), teleported?: bool }.
+     * One step. inp = { dt, x, z, mode: 'walk'|'fly'|'car', blocked: bool (not started, travelling, a panel open, underground, riding ...), indoors?: bool (inside a walk-in interior: no chip, no
+     * question, the state keeps running so the gate re-arms on stepping out), teleported?: bool }.
      * Returns { chip: { gate, d, depth } | null (show the passive chip), offer: gate | null (ask now) }.
      */
     update(inp) {
-      const { dt, x, z, mode, blocked } = inp;
+      const { dt, x, z, mode } = inp, blocked = inp.blocked || !!inp.indoors;
       clock += dt;
       if (lastX === null) { lastX = x; lastZ = z; }
       else if (dt > 0) {
@@ -79,19 +84,26 @@ export function createGateMachine({ gates, config = {} }) {
       }
       return { chip, offer, v };
     },
-    /** the question is on screen for gate g */
-    markOpen(g) { st.get(g.id).open = true; },
+    /** the question is on screen for gate g (a gate the machine does not run, a door, is ignored by these three) */
+    markOpen(g) { const s = st.get(g.id); if (s) s.open = true; },
     /** declined: no question for cooldownS and until the player has left the zone by exitMargin */
-    decline(g) { const s = st.get(g.id); s.open = false; s.until = clock + C.cooldownS; s.needExit = true; },
+    decline(g) { const s = st.get(g.id); if (!s) return; s.open = false; s.until = clock + C.cooldownS; s.needExit = true; },
     /** the question ended without a decision by the player (a failed preflight, a cancelled travel): wait `seconds`, no exit needed */
-    cooldown(g, seconds = C.failCooldownS) { const s = st.get(g.id); s.open = false; s.until = clock + seconds; s.needExit = false; },
+    cooldown(g, seconds = C.failCooldownS) { const s = st.get(g.id); if (!s) return; s.open = false; s.until = clock + seconds; s.needExit = false; },
     /** no question for `seconds` from now (an arrival) */
     grace(seconds) { graceUntil = clock + seconds; },
     /** forget the speed estimate (a teleport) */
     teleported() { vx = vz = 0; holdUntil = clock + C.holdS; lastX = lastZ = null; },
-    state: (g) => ({ ...st.get(g.id) }),
+    state: (g) => (st.has(g.id) ? { ...st.get(g.id) } : null),
   };
   return machine;
+}
+/** a registry row the machine runs: a stretch of the border (a door is a ctx.interact item: isDoor) */
+export const isDoor = (g) => !!g && g.kind === 'door';
+export const isBorderGate = (g) => !!g && !isDoor(g);
+/** the rows of the area module's CROSS_PLACES that this area can really travel through: the gate exists, leaves this area and leads to the place's area */
+export function crossPlaces(table, areaId, gates = ALL_GATES) {
+  return (Array.isArray(table) ? table : []).filter((p) => p && typeof p.key === 'string' && gates.some((g) => g.id === p.gate && g.from === areaId && g.to === p.area));
 }
 
 // ---------------------------------------------------------------- the destination side
@@ -103,23 +115,31 @@ export function planArrival({ L, A, params }) {
   const raw = params.get('ho'); if (!raw) return null;
   const dec = decodeHo(raw, { to: A.ID }); if (!dec.ok) return { invalid: dec.why };
   const cam = parseCamParam(params.get('cam')); if (!cam) return { invalid: 'cam' };
-  const ho = dec.ho, fly = params.has('fly') && cam.y !== null, mode = ho.car ? 'car' : fly ? 'fly' : 'walk';
-  const gate = ALL_GATES.find((g) => g.id === ho.gate && g.to === A.ID) || null;
+  const ho = dec.ho, gate = ALL_GATES.find((g) => g.id === ho.gate && g.to === A.ID) || null;
+  // a door (the metro ride) arrives ON FOOT at the door's pose (?cam= carries it; no car, no flight); a place (via 'place') lands at the place's pose, never clamped into the gate's arrival
+  // rectangle (plan 3.4): the pose is a pedestrian viewpoint (a VIEWS row), so it is resolved as a walker's even when the car comes along (drive.arrive then parks the car at the nearest free
+  // spot within 40 m, as the in-area places list does with drive.place); a border gate clamps into its rectangle and a car needs a lane there
+  const door = isDoor(gate), place = ho.via === 'place';
+  const fly = !door && params.has('fly') && cam.y !== null, mode = door ? 'walk' : ho.car ? 'car' : fly ? 'fly' : 'walk';
   const probe = makeProbe(L); if (fly) probe.blocked = () => false;      // a flyer over a building or the river is fine, only the border matters
-  const r = resolveArrival(probe, { x: cam.x, z: cam.z, yaw: cam.yaw }, mode === 'fly' ? 'walk' : mode, gate ? gate.arrive : null);
+  const r = resolveArrival(probe, { x: cam.x, z: cam.z, yaw: cam.yaw }, place || mode === 'fly' ? 'walk' : mode, gate && !door && !place ? gate.arrive : null);
   return { ho, mode, fly, gate, how: r.how, moved: r.moved, pose: { x: r.x, y: fly && r.how !== 'hero' ? cam.y : null, z: r.z, yaw: r.how === 'hero' ? r.yaw : cam.yaw, pitch: r.how === 'hero' ? 8 : cam.pitch } };
 }
 
 // ---------------------------------------------------------------- texts (Russian first, English after the dot)
-export function promptTexts(to) {
+/** the texts of the question for area `to`; a door gate brings its own title / sights / scene / fine (registry row `prompt`), a place of CROSS_PLACES names itself in the sights line */
+export function promptTexts(to, { gate = null, place = null } = {}) {
   const a = REGISTRY[to], mb = a.approxMB;
-  return {
+  const T = {
     title: `Новая область: ${a.title} · New area: ${a.titleEn}`, sights: a.sights.join(' · '),
     scene: `Отдельная сцена, около ${mb} МБ, 25–40 с, страница перезагрузится · A separate scene, about ${mb} MB, 25–40 s; the page reloads`,
     fine: 'Машина, время суток и звук поедут с вами, припаркованное останется · Your car, time of day and sound come along; anything parked stays here',
     yes: 'Загрузить · Load', no: 'Не сейчас · Not now', chip: `${a.title} впереди · ${a.titleEn} ahead · N`, travelKicker: 'Загрузка области · Loading the area',
     stalled: 'Версия области устарела: обновите страницу · The area is out of date: reload the page', offline: 'Нет связи с областью · Cannot reach the area', unavailable: 'Область недоступна · The area is not available',
   };
+  if (isDoor(gate) && gate.prompt) for (const k of ['title', 'sights', 'scene', 'fine']) if (gate.prompt[k]) T[k] = gate.prompt[k];
+  if (place) T.sights = `Сразу к месту: ${place.label}${place.labelEn ? ` · Straight to ${place.labelEn}` : ''}`;
+  return T;
 }
 /** the body of the question as DOM (text nodes only: the strings above are never parsed as HTML) */
 export function promptBody(doc, T) {
@@ -132,15 +152,19 @@ export function promptBody(doc, T) {
 
 // ---------------------------------------------------------------- 3. the DOM layer
 /**
- * deps = { ctx, player, camera, ui, tod, audio, guard, params, A, isStarted: () => bool, toast: (text) => void, win = window, doc = document, fetchImpl = fetch, setTimeoutImpl = setTimeout }
- * Returns the API that is also exposed as window.__gates (tests replace api.navigate / api.preflight and drive api.machine). null when the gates are off or this area has none.
+ * deps = { ctx, player, camera, ui, tod, audio, guard, params, A, isStarted: () => bool, toast: (text) => void, win = window, doc = document, fetchImpl = fetch,
+ *          isIndoors = () => !!ctx.indoor?.zone (inside a walk-in interior: no chip, no question; core/zones.js tracks the camera's zone) }
+ * Returns the API that is also exposed as window.__gates (tests replace api.navigate / api.preflight and drive api.machine). null when the gates are off or this area has none
+ * (neither a border gate, nor a door, nor a place to offer).
  */
 export function createGates(deps) {
   const { ctx, player, camera, ui, tod, audio, guard, params, A, isStarted, toast } = deps;
   const win = deps.win || window, doc = deps.doc || document, fetchImpl = deps.fetchImpl || ((...a) => fetch(...a));
+  const isIndoors = deps.isIndoors || (() => !!(ctx.indoor && ctx.indoor.zone));
   const off = params.get('gates') === '0' || (params.get('gates') !== '1' && !GATES_ENABLED);
-  const gates = ALL_GATES.filter((g) => g.from === A.ID && (!g.dev || params.has('devgates')));
-  if (off || !gates.length) return null;
+  const mine = ALL_GATES.filter((g) => g.from === A.ID && (!g.dev || params.has('devgates')));
+  const gates = mine.filter(isBorderGate), doors = mine.filter(isDoor), places = crossPlaces(A.CROSS_PLACES, A.ID, mine);
+  if (off || (!gates.length && !doors.length && !places.length)) return null;
   const machine = createGateMachine({ gates });
   const chipEl = doc.getElementById('gatechip'), veil = doc.getElementById('travel');
   let traveling = false, chipGate = null, watchdog = null;
@@ -167,16 +191,25 @@ export function createGates(deps) {
   }
   function tick(dt) {
     if (dt <= 0) return;
-    const p = xz(), r = machine.update({ dt, x: p.x, z: p.z, mode: mode(), blocked: isBlocked() });
+    if (!gates.length) return;      // doors and places only: nothing to arm
+    const p = xz(), r = machine.update({ dt, x: p.x, z: p.z, mode: mode(), blocked: isBlocked(), indoors: isIndoors() });
     setChip(r.chip);
     if (r.offer && !ui.open && !traveling) prompt(r.offer, 'gate');
   }
-  function prompt(g, via = 'gate') {
+  /** the question for gate g; via 'gate' (the zone, the chip, N) books the machine's state, a door or a place does not (declining a place must not silence the border gate it travels through) */
+  function prompt(g, via = 'gate', place = null) {
     if (traveling || ui.open) return false;
-    machine.markOpen(g);
-    const T = promptTexts(g.to);
-    ui.confirm({ title: T.title, body: promptBody(doc, T), yes: T.yes, no: T.no, onYes: () => api.go(g, via), onNo: () => machine.decline(g) });
+    if (via === 'gate') machine.markOpen(g);
+    const T = promptTexts(g.to, { gate: g, place });
+    ui.confirm({ title: T.title, body: promptBody(doc, T), yes: T.yes, no: T.no, onYes: () => api.go(g, via, place), onNo: () => { if (via === 'gate') machine.decline(g); } });
     return true;
+  }
+  /** the HUD list picked a place of the other area (CROSS_PLACES key or row): the same question, the arrival at that place's pose */
+  function offerPlace(keyOrRow) {
+    const p = typeof keyOrRow === 'string' ? places.find((q) => q.key === keyOrRow) : places.includes(keyOrRow) ? keyOrRow : null;
+    if (!p || !isStarted()) return false;
+    const g = mine.find((q) => q.id === p.gate);
+    return prompt(g, 'place', p);
   }
 
   // ---- preflight: is the destination there, and does it match this version of the page?
@@ -204,8 +237,12 @@ export function createGates(deps) {
   const hideVeil = () => { if (veil) { veil.hidden = true; veil.classList.remove('stalled'); } };
   function endTravel(g) { traveling = false; ctx.travelPending = false; player.inputLock = Math.max(0, player.inputLock - 1); clearTimeout(watchdog); hideVeil(); if (g) machine.cooldown(g); }
 
-  /** accept: preflight, show the veil, navigate. The origin page stays alive (and playable behind the veil) until the browser commits the new page. */
-  async function go(g, via = 'gate') {
+  /**
+   * accept: preflight, show the veil, navigate. The origin page stays alive (and playable behind the veil) until the browser commits the new page.
+   * A border gate hands over the current pose in the current mode; a door (via 'door') hands over the door's arrival pose ON FOOT (no car, no flight: the player walks out of the metro); a place
+   * (via 'place') hands over the place's pose, in the car when the player drove, standing when he walked or flew. The return pose (ho.ret) is always where he stood here.
+   */
+  async function go(g, via = 'gate', place = null) {
     if (traveling) return false;
     traveling = true; ctx.travelPending = true; player.inputLock++;
     const veilTimer = setTimeout(() => { if (traveling) showVeil(g.to); }, 300);      // feedback at once when the preflight is slow; an instant failure never flashes the veil
@@ -216,9 +253,12 @@ export function createGates(deps) {
       { const T = promptTexts(g.to); toast(pf.why === 'stale' ? T.stalled : pf.why === 'offline' ? T.offline : T.unavailable); }
       return false;
     }
-    const pose = currentPose(), d = ctx.drive, m = mode();
+    const here = currentPose(), d = ctx.drive, m0 = mode(), door = isDoor(g);
+    const dest = door ? g.pose : via === 'place' && place ? place : null;
+    const m = door ? 'walk' : dest && m0 === 'fly' ? 'walk' : m0;
+    const pose = dest ? { x: dest.x, y: null, z: dest.z, yaw: dest.yaw, pitch: dest.pitch ?? 0 } : here;
     const incoming = ctx.handoff && ctx.handoff.ho ? ctx.handoff.ho.n : 0;
-    const ho = makeHo({ from: A.ID, to: g.to, via, gate: g.id, n: incoming + 1, mute: !!audio.muted, noui: doc.body.classList.contains('noui'), ret: { x: pose.x, z: pose.z, yaw: pose.yaw, pitch: pose.pitch },
+    const ho = makeHo({ from: A.ID, to: g.to, via, gate: g.id, n: incoming + 1, mute: !!audio.muted, noui: doc.body.classList.contains('noui'), ret: { x: here.x, z: here.z, yaw: here.yaw, pitch: here.pitch },
       car: m === 'car' ? { id: d.vehicle.id, view: d.view.mode, d: [d.damage.state.front, d.damage.state.rear, d.damage.state.left, d.damage.state.right] } : null });
     const url = arrivalUrl({ page: REGISTRY[g.to].page, pose, fly: m === 'fly', tod: tod.k, look: tod.variant, ho, search: win.location.search });
     showVeil(g.to);
@@ -235,7 +275,7 @@ export function createGates(deps) {
     return true;
   }
   const api = {
-    machine, gates, prompt, go, preflight, mode, currentPose, tick,
+    machine, gates, doors, places, prompt, offerPlace, go, preflight, mode, currentPose, tick, isIndoors,
     lastUrl: null,
     /** replaceable in tests: the navigation itself (location.replace keeps ONE history entry, so a page that holds a gigabyte cannot be restored from the back/forward cache) */
     navigate: (url) => win.location.replace(new URL(url, win.location.href)),
@@ -244,6 +284,13 @@ export function createGates(deps) {
     teleported: () => machine.teleported(),
   };
   ctx.onUpdate((dt) => tick(dt));
+  // the doors: an interact item each (core/ui.js createInteract: the chip "[E] label" within r metres of the door point, for a walker who is not flying and not held; the item is enabled only while
+  // the game runs and no travel or question is open). Without ctx.interact (a test) the doors are listed but not offered.
+  if (ctx.interact && doors.length) for (const d of doors) {
+    const P = d.prompt || {};
+    ctx.interact.add({ id: 'gate-' + d.id, x: d.at.x, z: d.at.z, radius: d.r, label: P.label || promptTexts(d.to).title, labelEn: P.labelEn || '',
+      enabled: () => isStarted() && !traveling && !ui.open && !ctx.travelPending && !(guard && guard.dead), onUse: () => prompt(d, 'door') });
+  }
   win.addEventListener('keydown', (e) => {      // N: the question again, whenever the chip shows
     if (e.code !== 'KeyN' || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !isStarted() || ui.open || traveling) return;
     if (e.target && /^(SELECT|INPUT|TEXTAREA)$/.test(e.target.tagName)) return;

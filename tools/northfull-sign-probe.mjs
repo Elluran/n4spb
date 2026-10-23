@@ -84,6 +84,20 @@ if (AREA === 'north') {
   if (tex && !onMetro.length) fail(`no mesh of the part north-chernyshevskaya carries the ${SIGN} texture`);
   console.log(`sign ${SIGN}: texture requested ${!!tex}, painted ${painted.has(SIGN)}, meshes of north-chernyshevskaya that carry it: ${onMetro.length}${onMetro.length ? `, ${Math.round(onMetro.reduce((s, m) => s + m.geometry.index.count / 3, 0))} triangles` : ''}`);
   for (const t of ['МЕТРОПОЛИТЕН']) if (!painted.has(t)) fail(`the canvas was never painted with ${t}`);
+  // M7, the night term (the M5 GPU QA finding 5: the signs stayed dark at night): the three sign materials of the vestibule (ЧЕРНЫШЕВСКАЯ, МЕТРОПОЛИТЕН, М) carry their sign texture as the emissive map and
+  // follow ctx.shared.uNight through the kit's night update (landmarksD/common.js nightMats, landmarksNorthFull.js litFascia): dark by day (intensity 0), lit at night (> 0.5)
+  const signKeys = ['ЧЕРНЫШЕВСКАЯ', 'МЕТРОПОЛИТЕН', 'М'].map((t) => [t, [...r.drawn.keys()].find((k) => k.startsWith('lmD-sign|' + t + '|'))]);
+  const signMats = [];
+  for (const [t, k] of signKeys) {
+    const tx = k && r.drawn.get(k), mats = r.meshes.filter((m) => m.name === 'north-chernyshevskaya' && tx && m.material.map === tx).map((m) => m.material);
+    if (!mats.length) { fail(`no mesh of north-chernyshevskaya carries the sign ${t}`); continue; }
+    for (const m of mats) { if (m.emissiveMap !== tx) fail(`the sign ${t} has no emissive map (its own texture)`); signMats.push([t, m]); }
+  }
+  const run = (night) => { r.ctx.shared.uNight.value = night; for (const f of r.ctx._updates) f(0.1, 1); return signMats.map(([t, m]) => [t, +m.emissiveIntensity.toFixed(3)]); };
+  const day = run(0), night = run(1); r.ctx.shared.uNight.value = 0;
+  for (const [t, v] of day) if (v !== 0) fail(`by day the sign ${t} emits (${v})`);
+  for (const [t, v] of night) if (!(v > 0.5)) fail(`at night the sign ${t} is not lit (emissiveIntensity ${v})`);
+  console.log(`night: emissive intensity by day ${JSON.stringify(day)}, at night ${JSON.stringify(night)}`);
 }
 
 if (PARITY) {
