@@ -57,7 +57,11 @@ export const DAM = { crest: 0.0, spillToLake: false, bodyBelowBed: 0.3, bodyOut:
 /** the budgets of the kit (tools/tauride/bridge-test.mjs): triangles of the six sites together (plan C6: ~10 k), draws (the bridges, the dam water), colliders */
 export const BUDGET = { triangles: 10000, draws: 2, colliders: 320 };
 
-/** The reed belts (reeds.js): instanced clumps on the shore band. `band`: shore distance range [water side, land side] in m (negative = in the water); `belt`: the belts along the shore come from a slow noise of the arc length
- *  (`period` m, a belt where the noise exceeds `threshold`); `spacing` m between clumps inside a belt (jittered); `count` the target instance count; keep-outs in m: alley ends (`wayEnd`), any alley (`way`), the bridge decks (`deck`, from the extended deck rectangle), the dam axis (`dam`),
- *  the memorial descents (`steps`), the garden outline (`outline`: the quay and the skirt stretches: no bank there). The clump: `blades` triangles of `height` m (random in the range), vertex colours base -> tip. */
-export const REEDS = { band: [-0.55, 0.35], belt: { period: 23, threshold: 0.64 }, spacing: 0.9, count: 500, keepOut: { wayEnd: 3.5, way: 2.2, deck: 3.0, dam: 5.0, steps: 4.0, outline: 3.0 }, blades: 7, height: [1.1, 1.9], lean: 0.22, color: { base: '#4f6b2a', tip: '#a8b35a', dry: '#b9a35e' }, draws: 1 };
+/** The reed belts (reeds.js): instanced clumps on the shore band. `band`: shore distance range [water side, land side] in m (negative = in the water); `split` / `shallowShare` (T5, the T4b GPU QA: "a single row of identical thin
+ *  tufts at 5-12 m"): a clump stands in the SHALLOWS (the water side of `split`) or on the WET FOOT of the bank (the land side), `shallowShare` of them in the shallows: two rows; `belt`: the belts along the shore come from a slow noise of the
+ *  arc length (`period` m, a belt where the noise exceeds `threshold`); `spacing` m between clumps inside a belt (jittered); `count` the target instance count; keep-outs in m: alley ends (`wayEnd`), any alley (`way`), the bridge decks (`deck`, from the
+ *  extended deck rectangle), the dam axis (`dam`), the memorial descents (`steps`), the garden outline (`outline`: the quay and the skirt stretches: no bank there). The clump (ONE geometry, one draw): `clumps` sub-clumps side by side (offset `dx, dz` m,
+ *  height factor `h`, `n` blades each; the three read as three shapes under the random yaw), `blades` = their blades in all, `height` m (random per blade in the range), vertex colours base -> tip; per instance a non-uniform scale (`wide`:
+ *  the footprint, `tall`: the height) and a tint. */
+export const REEDS = { band: [-1.1, 0.35], split: -0.32, shallowShare: 0.55, belt: { period: 23, threshold: 0.58 }, spacing: 0.7, count: 700, keepOut: { wayEnd: 3.5, way: 2.2, deck: 3.0, dam: 5.0, steps: 4.0, outline: 3.0 },
+  clumps: [{ dx: 0, dz: 0, h: 1.0, n: 5 }, { dx: 0.32, dz: 0.12, h: 0.78, n: 4 }, { dx: -0.2, dz: 0.3, h: 1.18, n: 4 }], blades: 13, height: [1.0, 1.9], lean: 0.22, wide: [0.7, 1.3], tall: [0.75, 1.25], color: { base: '#4f6b2a', tip: '#a8b35a', dry: '#b9a35e' }, draws: 1 };
