@@ -38,8 +38,10 @@ ctx.sky = { sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight()
 // the knock bus: ctx.knock.listen(fn(record, body)) as in core/knock.js; fire() stands for the knock of a record
 const listeners = [];
 const bus = { listen: (fn) => { listeners.push(fn); }, fire: (rec) => { for (const f of listeners) f(rec, { dx: 1, dz: 0 }); } };      // (set before people only: the street / prop modules would register records with a real ctx.knock)
-ctx.buildList = ['environment', 'streets', 'city', 'rail', 'landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksE', 'landmarksF', 'landmarksG', 'landmarksH', 'landmarksI', 'landmarksJ', 'landmarksK', 'landmarksBelinsky', 'landmarksCastle', 'landmarksOktyabrsky',
-  'bridges', 'metro', 'props', 'people', 'wildlife'];
+// another area (node tools/area.mjs north tools/knock-consumers-test.mjs, M7): the modules of ITS page without traffic / drive (tools/modules-list.mjs), so the North's landmark modules are built and claim their buildings
+ctx.buildList = (process.env.AREA || 'strip') === 'strip' ? ['environment', 'streets', 'city', 'rail', 'landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksE', 'landmarksF', 'landmarksG', 'landmarksH', 'landmarksI', 'landmarksJ', 'landmarksK', 'landmarksBelinsky', 'landmarksCastle', 'landmarksOktyabrsky',
+  'bridges', 'metro', 'props', 'people', 'wildlife']
+  : (await import('./modules-list.mjs')).mainModules().filter((m) => m !== 'traffic' && m !== 'drive');
 for (const m of ctx.buildList) {
   if (m === 'people') ctx.knock = bus;
   const mod = await import(pathToFileURL(path.join(root, `src/world/${m}.js`)).href);

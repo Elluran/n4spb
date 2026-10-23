@@ -7,7 +7,7 @@
 //   4 the attached panels sit on their stand (within 3.5 m, in front of the facade) and keep their pose relative to it through a knock (rigid): kiosk, booth, hot-dog cart, A-frame
 //   5 the real coupe at 30 km/h against a real press kiosk: it slides (a free, heavy body), the car keeps rolling, the fascia travels with it, the rest box is low
 //   6 an A-frame (6 kg) flies on a nudge, its chalk board with it; the rest collider is a drive-over box
-// usage: node tools/knock-stands-test.mjs [--verbose]
+// usage: node tools/knock-stands-test.mjs [--verbose];  another area: node tools/area.mjs north tools/knock-stands-test.mjs (the modules of ITS page up to props, M7: the structural checks run, the strip's counts are printed, not asserted)
 import assert from 'node:assert/strict';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -41,9 +41,14 @@ const { SPEC } = await import(url('src/world/drive/model.js'));
 const { MASS, tuningFor } = await import(url('src/world/drive/cars/tuning.js'));
 const L = await import(url('src/world/layout.js'));
 
-// the module order of main.js up to props (the placement of the stands depends on what the earlier modules reserved)
-const MODULES = ['environment', 'landmarksNorth', 'streets', 'city', 'rail', 'landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksE', 'landmarksF', 'landmarksG', 'landmarksH', 'landmarksI', 'landmarksJ',
-  'landmarksBelinsky', 'landmarksK', 'landmarksCastle', 'landmarksOktyabrsky', 'bridges', 'metro', 'props'];
+// the module order of main.js up to props (the placement of the stands depends on what the earlier modules reserved); another area (node tools/area.mjs north tools/knock-stands-test.mjs, M7):
+// the modules of ITS page up to props (tools/modules-list.mjs), so the North's landmark modules (landmarksNorthFull, Smolny, Suvorov, Kirochnaya, Tauride) are built and claim their buildings;
+// the strip-only counts of check 1 (booths of the west, 17 carts ...) are asserted in the strip only
+const STRIP = (process.env.AREA || 'strip') === 'strip';
+const PAGE = STRIP ? null : (await import('./modules-list.mjs')).mainModules();
+const MODULES = STRIP ? ['environment', 'landmarksNorth', 'streets', 'city', 'rail', 'landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksE', 'landmarksF', 'landmarksG', 'landmarksH', 'landmarksI', 'landmarksJ',
+  'landmarksBelinsky', 'landmarksK', 'landmarksCastle', 'landmarksOktyabrsky', 'bridges', 'metro', 'props']
+  : PAGE.slice(0, PAGE.indexOf('props') + 1);
 const hyp = (a, b) => Math.sqrt(a * a + b * b);
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; console.log('PASS', name); };
@@ -85,10 +90,11 @@ check('1 census: kiosk 17-18, booth 4, cart 17 (7 with a fascia), aframe 34-35 =
   // every placed stand is a record (no instance without a collider within 1 m), the counts follow the placement of the earlier modules (kiosk 17 or 18 and aframe 34 or 35 with the main.js order)
   const svc = K.services.props, st = svc.stats, KIOSK = /^(press|excKiosk|cabin)/, CART = /^(cart|iceCart)/;
   const placed = (re) => svc.kiosks.filter((q) => re.test(q.kind)).length;
-  assert.equal(kiosks.length, placed(KIOSK), `kiosks ${kiosks.length} = placed ${placed(KIOSK)}`); assert(kiosks.length >= 17 && kiosks.length <= 18, `kiosks ${kiosks.length}`);
-  assert.equal(booths.length, st.west.booths, `booths ${booths.length}`); assert.equal(booths.length, 4);
-  assert.equal(carts.length, placed(CART), `carts ${carts.length} = placed ${placed(CART)}`); assert.equal(carts.length, 17); assert.equal(cartsFascia.length, 7, `carts with a fascia ${cartsFascia.length}`);
-  assert.equal(aframes.length, st.stands.aframes, `aframes ${aframes.length}`); assert(aframes.length >= 34 && aframes.length <= 35);
+  assert.equal(kiosks.length, placed(KIOSK), `kiosks ${kiosks.length} = placed ${placed(KIOSK)}`); if (STRIP) assert(kiosks.length >= 17 && kiosks.length <= 18, `kiosks ${kiosks.length}`);
+  assert.equal(booths.length, st.west.booths, `booths ${booths.length}`); if (STRIP) assert.equal(booths.length, 4);
+  assert.equal(carts.length, placed(CART), `carts ${carts.length} = placed ${placed(CART)}`); if (STRIP) { assert.equal(carts.length, 17); assert.equal(cartsFascia.length, 7, `carts with a fascia ${cartsFascia.length}`); }
+  assert.equal(aframes.length, st.stands.aframes, `aframes ${aframes.length}`); if (STRIP) assert(aframes.length >= 34 && aframes.length <= 35);
+  if (!STRIP) console.log(`     ${process.env.AREA}: kiosks ${kiosks.length}, booths ${booths.length}, carts ${carts.length} (${cartsFascia.length} with a fascia), aframes ${aframes.length} (the strip's counts are not expected here)`);
   for (const k of ['pressKiosk', 'pressKiosk2', 'excKiosk', 'cabinIce', 'cabinSouv', 'cabinBoats', 'ticketBooth', 'cartHot0', 'cartHot1', 'cartSouv', 'aFrameR', 'aFrameK']) assert(!(st.knockLoose || {})[k], `no loose ${k} (an instance whose collider was not found)`);
   for (const r of [...kiosks, ...booths, ...carts, ...aframes]) {
     assert(r.state === 'stand' && r.items.length === 1 && r.items[0].source && r.items[0].source.knock === r, `${r.kind} at ${r.x.toFixed(1)}, ${r.z.toFixed(1)} owns its collider`);
@@ -98,7 +104,7 @@ check('1 census: kiosk 17-18, booth 4, cart 17 (7 with a fascia), aframe 34-35 =
   for (const r of aframes) assert.equal(objsOf(r).length, 1, 'an A-frame carries its chalk board');
   for (const r of booths) assert.equal(objsOf(r).length, 1, 'a booth carries its sign');
   // press kiosks and excursion kiosks: fascia + poster (2); cabins: one fascia (1)
-  assert(kiosksOf(2).length >= 12 && kiosksOf(1).length >= 1, `kiosks with 2 panels ${kiosksOf(2).length}, with 1 ${kiosksOf(1).length}`);
+  if (STRIP) assert(kiosksOf(2).length >= 12 && kiosksOf(1).length >= 1, `kiosks with 2 panels ${kiosksOf(2).length}, with 1 ${kiosksOf(1).length}`);
   assert.equal(kiosksOf(2).length + kiosksOf(1).length, kiosks.length, 'every kiosk carries 1 or 2 panels');
   const masses = new Set(kiosks.map((r) => r.mass)); assert([...masses].every((m) => m >= 500 && m <= 700), `kiosk masses ${[...masses]}`);
 });
@@ -107,7 +113,7 @@ check('2 no ghost fascia: merged panels without knock = merged panels with knock
   const mine = [...kiosks, ...booths, ...carts, ...aframes].reduce((n, r) => n + objsOf(r).length, 0);
   let all = 0; K.scene.traverse((o) => { if (o.name === 'pr-panel-obj') all++; });          // (the city-light posters of ads.js are standalone panels too)
   K.__objs = all; K.__mineObjs = mine;
-  assert(mine >= 40 && all >= mine, `${mine} standalone panels on the stands, ${all} in all`);
+  assert(mine >= (STRIP ? 40 : 1) && all >= mine, `${mine} standalone panels on the stands, ${all} in all`);
   K.__verts = panelVerts(K);
 });
 
@@ -129,7 +135,8 @@ check('3 without ctx.knock: same service lists and colliders, no knock mesh, no 
 });
 
 check('4 the attached panels sit on their stand and keep their pose through a knock (rigid): kiosk with 2 panels, booth, hot-dog cart, A-frame', () => {
-  const pick = [kiosksOf(2)[0], booths[0], cartsFascia[0], aframes[0]];
+  const pick = [kiosksOf(2)[0], booths[0], cartsFascia[0], aframes[0]].filter(Boolean);          // (another area may have no booth / cart with a fascia)
+  assert(pick.length >= (STRIP ? 4 : 1), `${pick.length} kinds to knock`);
   for (const r of pick) {
     const ps = objsOf(r), body = r.parts.find((p) => p.mesh);
     const before = ps.map((p) => matOf(p)), base0 = posOf(body);
@@ -184,7 +191,7 @@ check('6 an A-frame (6 kg) flies on a nudge, its chalk board with it; the rest c
   assert.equal(r.state, 'rest');
   assert(posOf(body).distanceTo(p0) > 0.5, `thrown ${posOf(body).distanceTo(p0).toFixed(2)} m`); assert(matOf(ch).distanceTo(c0) > 0.5, 'the chalk board followed');
   assert(r.items.length === 1 && r.items[0].y1 <= 0.42 + 0.2, 'a low rest box');
-  assert(recs('aframe').length === aframes.length && recs('kiosk').length === kiosks.length && recs('booth').length === 4, 'the census is stable after knocks');
+  assert(recs('aframe').length === aframes.length && recs('kiosk').length === kiosks.length && recs('booth').length === booths.length, 'the census is stable after knocks');
 });
 
 console.log(`\n${checks} checks passed`);
