@@ -333,9 +333,9 @@
    "GROUPS": {
     "[hashed]": true,
     "kind": "object",
-    "n": 7,
-    "bytes": 10025,
-    "hash": "765202a76a76671d"
+    "n": 8,
+    "bytes": 10634,
+    "hash": "14d62d373936870e"
    },
    "HERO": {
     "pitch": 10,
@@ -356,7 +356,8 @@
     "landmarksKirochnaya",
     "landmarksTauride",
     "landmarksD",
-    "landmarksOktyabrsky"
+    "landmarksOktyabrsky",
+    "landmarksBelinskyNorth"
    ],
    "NAMES": {
     "[hashed]": true,
@@ -423,9 +424,9 @@
    "SUBGROUPS": {
     "[hashed]": true,
     "kind": "object",
-    "n": 14,
-    "bytes": 10565,
-    "hash": "32dc2c3527a3d44c"
+    "n": 16,
+    "bytes": 11241,
+    "hash": "0b7bc306d7e2184f"
    },
    "SUN_DIR": [
     -0.473,
@@ -2453,8 +2454,8 @@
  },
  "probes": {
   "inPlay": {
-   "n": 501,
-   "hash": "3c663fb8de959677",
+   "n": 503,
+   "hash": "1b6250f28aaa0461",
    "head": [
     false,
     false,
@@ -2467,8 +2468,8 @@
    ]
   },
   "inPlay25": {
-   "n": 501,
-   "hash": "b1b40ba09b5c942f",
+   "n": 503,
+   "hash": "54d26d72aa67851b",
    "head": [
     false,
     false,
@@ -2481,8 +2482,8 @@
    ]
   },
   "inPlay-40": {
-   "n": 501,
-   "hash": "bb7b134a2ba1893b",
+   "n": 503,
+   "hash": "c81735b9e7e5cea0",
    "head": [
     false,
     false,
@@ -2495,8 +2496,8 @@
    ]
   },
   "inExtent": {
-   "n": 501,
-   "hash": "e11525eb6b171e21",
+   "n": 503,
+   "hash": "7fa6e4bdaca40e9e",
    "head": [
     false,
     false,
@@ -2509,8 +2510,8 @@
    ]
   },
   "inExtent60": {
-   "n": 501,
-   "hash": "78ac974a7562fd48",
+   "n": 503,
+   "hash": "9231728570a6fc49",
    "head": [
     false,
     false,
@@ -2523,8 +2524,8 @@
    ]
   },
   "clampToPlay": {
-   "n": 501,
-   "hash": "e18698d5f7d60f25",
+   "n": 503,
+   "hash": "a489ddac930cc31f",
    "head": [
     [
      -420,
@@ -2561,8 +2562,8 @@
    ]
   },
   "clampToPlay30": {
-   "n": 501,
-   "hash": "5798a41392510103",
+   "n": 503,
+   "hash": "7fd30b4a142063cd",
    "head": [
     [
      -390,
@@ -2599,8 +2600,8 @@
    ]
   },
   "heightAt": {
-   "n": 501,
-   "hash": "38d58e4c0110a569",
+   "n": 503,
+   "hash": "54ef1e9b57da79fd",
    "head": [
     -6,
     -6,
@@ -2613,8 +2614,8 @@
    ]
   },
   "groundAt": {
-   "n": 501,
-   "hash": "38d58e4c0110a569",
+   "n": 503,
+   "hash": "54ef1e9b57da79fd",
    "head": [
     -6,
     -6,
@@ -2627,8 +2628,8 @@
    ]
   },
   "inRiver": {
-   "n": 501,
-   "hash": "5d51cdf7cbde848f",
+   "n": 503,
+   "hash": "2110edd488558dd3",
    "head": [
     true,
     true,
@@ -2641,8 +2642,8 @@
    ]
   },
   "waterwayAt": {
-   "n": 501,
-   "hash": "ba40bd61a011c5b7",
+   "n": 503,
+   "hash": "2b1d3a1ec980454c",
    "head": [
     "neva",
     "neva",
@@ -2655,8 +2656,8 @@
    ]
   },
   "waterLevelAt": {
-   "n": 501,
-   "hash": "ccfc4e08544527e5",
+   "n": 503,
+   "hash": "054290c23da8675a",
    "head": [
     -3.4,
     -3.4,
@@ -2669,8 +2670,8 @@
    ]
   },
   "shoreDist": {
-   "n": 501,
-   "hash": "e72c185cea3f7451",
+   "n": 503,
+   "hash": "a56b15dab1f6ff59",
    "head": [
     0,
     0,
@@ -2683,8 +2684,8 @@
    ]
   },
   "insideBuilding": {
-   "n": 501,
-   "hash": "c3d0fe2fbcb4e476",
+   "n": 503,
+   "hash": "9f37ba2a3d4e2296",
    "head": [
     false,
     false,
@@ -2697,8 +2698,8 @@
    ]
   },
   "insideBuilding1.5": {
-   "n": 501,
-   "hash": "513b2b4042b815e2",
+   "n": 503,
+   "hash": "962f943a1a304432",
    "head": [
     false,
     false,
@@ -2711,8 +2712,8 @@
    ]
   },
   "buildingAt": {
-   "n": 501,
-   "hash": "8347a7e876100968",
+   "n": 503,
+   "hash": "4b66e6b5486d7a87",
    "head": [
     null,
     null,
@@ -2725,8 +2726,8 @@
    ]
   },
   "areaAt": {
-   "n": 501,
-   "hash": "cf7fe9abd5a935c5",
+   "n": 503,
+   "hash": "a9226ec3b6cab5e2",
    "head": [
     "Нева · Neva River",
     "Нева · Neva River",
@@ -2739,8 +2740,8 @@
    ]
   },
   "isOnRoad": {
-   "n": 501,
-   "hash": "82196129d852cc1c",
+   "n": 503,
+   "hash": "cbb244044a3683bd",
    "head": [
     false,
     false,
@@ -2753,8 +2754,8 @@
    ]
   },
   "isOnRoadAll": {
-   "n": 501,
-   "hash": "e9e203b806b32ffc",
+   "n": 503,
+   "hash": "842a8bf828e21782",
    "head": [
     false,
     false,
@@ -2767,8 +2768,8 @@
    ]
   },
   "nearestRoad": {
-   "n": 501,
-   "hash": "9e88f208a5775dde",
+   "n": 503,
+   "hash": "a4a19e59d9bcb3d4",
    "head": [
     null,
     null,
@@ -2790,8 +2791,8 @@
    ]
   },
   "toGrid": {
-   "n": 501,
-   "hash": "a37138673936b11f",
+   "n": 503,
+   "hash": "47700449085d86ca",
    "head": [
     {
      "u": -1697.523827,
@@ -2828,8 +2829,8 @@
    ]
   },
   "fromGrid": {
-   "n": 501,
-   "hash": "842cbd47736b73b0",
+   "n": 503,
+   "hash": "5023af4bc46af481",
    "head": [
     {
      "x": -495.212368,
@@ -2866,8 +2867,8 @@
    ]
   },
   "yawToward": {
-   "n": 501,
-   "hash": "163a272d8ee89cd9",
+   "n": 503,
+   "hash": "f9d4e9ecdbbca9d7",
    "head": [
     -154.063485,
     -152.883507,
@@ -2880,8 +2881,8 @@
    ]
   },
   "rotYToward": {
-   "n": 501,
-   "hash": "8fb378203420e3b7",
+   "n": 503,
+   "hash": "942239c8c8394ea3",
    "head": [
     0.452678,
     0.473272,
@@ -2894,8 +2895,8 @@
    ]
   },
   "groundHeight": {
-   "n": 501,
-   "hash": "26d748cd24df6103",
+   "n": 503,
+   "hash": "ea434cf72a3f1fdc",
    "head": [
     null,
     null,
@@ -2908,8 +2909,9 @@
    ]
   },
   "groups": {
-   "n": 14,
+   "n": 16,
    "keys": [
+    "kapodistrias",
     "kirochnaya-clinical-institute",
     "library",
     "north-chernyshevskaya",
@@ -2922,10 +2924,12 @@
     "north-suvorov-museum",
     "oktyabrsky-hall",
     "paradny-quarter",
+    "simeon-anna",
     "tauride-garden",
     "tauride-palace"
    ],
    "members": {
+    "kapodistrias": 0,
     "kirochnaya-clinical-institute": 20,
     "library": 2,
     "north-chernyshevskaya": 1,
@@ -2938,10 +2942,12 @@
     "north-suvorov-museum": 7,
     "oktyabrsky-hall": 2,
     "paradny-quarter": 11,
+    "simeon-anna": 2,
     "tauride-garden": 0,
     "tauride-palace": 1
    },
    "osm": {
+    "kapodistrias": "9022922e71e9dc84",
     "kirochnaya-clinical-institute": "6fcd191976cfa656",
     "library": "4f53cda18c2baa0c",
     "north-chernyshevskaya": "4f53cda18c2baa0c",
@@ -2954,10 +2960,12 @@
     "north-suvorov-museum": "4f53cda18c2baa0c",
     "oktyabrsky-hall": "a2d31d19bfa13670",
     "paradny-quarter": "d5d720ba10e5ba46",
+    "simeon-anna": "4f53cda18c2baa0c",
     "tauride-garden": "29f75742c22c16c0",
     "tauride-palace": "4f53cda18c2baa0c"
    },
    "bounds": {
+    "kapodistrias": null,
     "kirochnaya-clinical-institute": {
      "cx": 1224.1,
      "cz": -1155.9,
@@ -3054,6 +3062,14 @@
      "z0": -1204.6,
      "z1": -878.7
     },
+    "simeon-anna": {
+     "cx": -310.35,
+     "cz": -682.3,
+     "x0": -337,
+     "x1": -283.7,
+     "z0": -704.5,
+     "z1": -660.1
+    },
     "tauride-garden": null,
     "tauride-palace": {
      "cx": 1375.9,
@@ -3071,12 +3087,13 @@
     "landmarksKirochnaya",
     "landmarksTauride",
     "landmarksD",
-    "landmarksOktyabrsky"
+    "landmarksOktyabrsky",
+    "landmarksBelinskyNorth"
    ]
   },
   "claims": {
-   "n": 532,
-   "hash": "4d80857395f8216b"
+   "n": 535,
+   "hash": "69ef496a608b8af9"
   },
   "buildings": {
    "n": 2016,
