@@ -1,5 +1,6 @@
 # Deploys the static scene to GitHub Pages (https://averkij.github.io/n4spb/): no build step, the deployment whitelist of docs/STRIP.md section 7.
-# A pull request runs the CPU 'verify' job only (nothing is deployed); a push to main deploys when 'verify' passed.
+# A pull request runs the CPU 'verify' job (no npm ci: repository files only) and the 'engine' job (npm ci: three.js in node, the hook set and the Tauride tests); nothing is deployed.
+# A push to main deploys when 'verify' passed ('engine' reports next to it and does not gate the deployment: docs/AREAS.md section 5.3).
 name: Deploy to GitHub Pages
 
 on:
@@ -39,12 +40,12 @@ jobs:
       - name: Areas, registry, gate geometry
         run: node tools/areas-test.mjs
       # M6 (docs/AREAS.md section 9). The tests below import no three.js; tools/north-height-test.mjs, the engine part of tools/north-keepout-test.mjs and the --scene part of
-      # tools/north-people-hooks-test.mjs build the engine (three.js, 'npm ci'): they run locally with `npm run hooks:all` (this job has no 'npm ci' on purpose)
+      # tools/north-people-hooks-test.mjs build the engine (three.js, 'npm ci'): they run locally with `npm run hooks:all` and in the 'engine' job below (this job has no 'npm ci' on purpose)
       - name: Layout golden of both areas (the hook set moves neither)
         run: |
           node tools/layout-golden.mjs --diff
           node tools/area.mjs north tools/layout-golden.mjs --diff
-      # `node --check` only (no 'npm ci' here): the engine files edited by M6 parse. Their call sites are NOT run in this job; that is `npm run hooks:all` (docs/AREAS.md 9.6)
+      # `node --check` only (no 'npm ci' here): the engine files edited by M6 parse. Their call sites are NOT run in this job; that is `npm run hooks:all` (docs/AREAS.md 9.6) and the 'engine' job
       - name: Engine files edited by M6 parse (node --check)
         run: node tools/hooks-syntax-check.mjs
       - name: Hook set contract of the North (M6 - tables, Paradny golden, text checks of the engine files)
@@ -53,6 +54,12 @@ jobs:
         run: node tools/area.mjs north tools/north-keepout-test.mjs --only pure
       - name: Tauride Garden polygon and crowd cap row (M6)
         run: node tools/north-people-hooks-test.mjs
+      # The Tauride remake (docs/TAURIDE-REMAKE.md section 10), the two tests that need neither three.js nor python: the committed data modules against the facade (--no-regen: no python / shapely run)
+      # and the camera poses of the garden against the data
+      - name: Tauride data modules (T0, --no-regen) and camera poses
+        run: |
+          node tools/tauride/data-test.mjs --no-regen
+          node tools/tauride-cams-check.mjs
       - name: Hand-off codec and gates
         run: |
           node tools/handoff-test.mjs
@@ -70,6 +77,31 @@ jobs:
           for d in src/world/data src/areas/*/data; do
             if [ -d "$d" ]; then echo "== $d"; node tools/strip-data-clip.mjs --in "$d" --check; fi
           done
+
+  # The CPU tests that build the engine in node (three.js from package-lock.json, no browser, no GPU, no bake): the hook set of M6 with its engine call sites (docs/AREAS.md 9.2, 9.6: `npm run hooks:all`)
+  # and the Tauride remake tests of docs/TAURIDE-REMAKE.md section 10 (T2-T4a: the garden floor, the ponds, the relief and the real built module). A separate job so that 'verify' stays free of
+  # 'npm ci' and its steps keep running when the engine part is red; it does not gate 'deploy' (docs/AREAS.md section 5.3). Nothing here reads assets/baked.
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Hook set of the North with the engine call sites (npm run hooks:all)
+        run: npm run hooks:all
+      - name: Tauride remake - the garden floor, the painted ground, the alleys (T3)
+        run: node tools/area.mjs north tools/tauride/ground-test.mjs
+      - name: Tauride remake - the ponds, the shores, the water mask (T4a)
+        run: node tools/area.mjs north tools/tauride/pond-test.mjs
+      - name: Tauride remake - the height harness self-check and the relief of the REAL built module (T2 / T4a)
+        run: |
+          node tools/area.mjs north tools/tauride-height-test.mjs
+          node tools/area.mjs north tools/tauride-height-test.mjs --model north --build landmarksTauride --assert-cars --no-selfcheck
+      - name: Landmark claims are drawn by their owners and by nobody else (every real area)
+        run: node tools/each-area.mjs tools/claims-draw-audit.mjs
 
   deploy:
     needs: verify

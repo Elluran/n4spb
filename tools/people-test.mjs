@@ -6,7 +6,10 @@
 // simulates N minutes (micro steps of 1/60 s, the player stands still at --player, default the hero view) and asserts / prints:
 //   * nobody inside a building footprint (the station hall is a floor), nobody on a carriageway outside a zebra corridor (sampled every second), nobody entering a signalised zebra on
 //     'dont', no NaN, a constant head count, at most 45 % hidden (inside / in a train / in the metro),
-//   * pose continuity: no position jump > 0.8 m per step except the known teleports (sit / stand up / emerge / approach / recycle / mass placement), yaw change per step < 0.9 rad,
+//   * pose continuity: no position jump > 0.8 m per step except the known teleports (sit / stand up / emerge / approach / recycle / mass placement, and the two re-placements the sim makes out of
+//     view, recognised by their state transition and counted on their own line: the watchdog snap of a stuck walker to the graph (people/sim.js watchdog: noProg >= 4 -> 0, wx = x, a new route)
+//     and the re-placement of a lagging follower on its leader's trail (stepFollower: the follower lands on a trail point of its leader; the tour groups, M7)), yaw change per step < 0.9 rad,
+//     the jump limit is per area: max(8, population x minutes x 0.01) (the population follows the area's DENSITY tables), printed on its own line,
 //   * density: people near the obelisk, people on Nevsky between Mayakovskaya and Vosstaniya (per 10 m of pavement), the number of people in the play area, stuck walkers,
 //   * statistics: crossings started, mean waiting time at the kerb, sit / door counts.
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -106,7 +109,18 @@ const upd = ctx._updates;
 const viol = { building: 0, road: 0, nan: 0, jump: 0, turn: 0, signal: 0, hiddenMax: 0, step: 0, water: 0, deep: 0, low: 0 };
 /** a scripted person off street level (the roof walk, a descent landing): really on a walk surface at its own height? */
 const lowOK = (a) => { const yy = a.kind === 'sit' ? a.y + 0.45 : a.y, h = ctx.physics.groundHeight(a.x, a.z, yy + 0.5, false); return Number.isFinite(h) && Math.abs(h - yy) < 0.3; };       // (a sitter on the edge of a landing: the seat is the surface)
-const first = {}; const prev = sim.agents.map((a) => ({ x: a.x, z: a.z, yaw: a.yaw, dyaw: 0, kind: a.kind, hidden: a.hidden, seat: !!a.seat, cross: a.crossIdx, rec: (a.recycled | 0) + (a.leader ? (a.leader.recycled | 0) : 0) }));
+const first = {}; const prev = sim.agents.map((a) => ({ x: a.x, z: a.z, yaw: a.yaw, dyaw: 0, kind: a.kind, hidden: a.hidden, seat: !!a.seat, cross: a.crossIdx, rec: (a.recycled | 0) + (a.leader ? (a.leader.recycled | 0) : 0), noProg: a.noProg, wx: a.wx, wz: a.wz, rt: a.rt }));
+// The two re-placements the sim makes on purpose, out of view (people/sim.js), told apart by the state they leave behind and NOT counted as jumps (each has its own counter, printed below):
+//   watchdog: a free walker that made no progress for 4 checks (noProg 3 -> 4) is snapped to the nearest graph node and given a new route: noProg is 0 again, (wx, wz) is the new position, rt is a new object
+//   trail:    a follower that lags > 7 m behind its leader (or is stuck > 60 steps) is put on the trail point of its leader it was heading for; it then walks at most one step (<= ~0.3 m), so it stands on one of the 64 trail points
+const TRAIL_SNAP = 0.35;
+const teleportKind = (a, p) => {
+  const l = a.leader;
+  if (!l && a.kind === 'walk' && p.noProg >= 3 && a.noProg === 0 && a.wx === a.x && a.wz === a.z && a.rt !== p.rt) return 'watchdog';
+  if (l && l.trX) { for (let j = 0; j < l.trX.length; j++) if (Math.hypot(a.x - l.trX[j], a.z - l.trZ[j]) < TRAIL_SNAP) return 'trail'; }
+  return null;
+};
+const teleports = { watchdog: 0, trail: 0 };
 const startPos = sim.agents.map((a) => ({ x: a.x, z: a.z })); const progress = sim.agents.map(() => ({ x: 0, z: 0, d: 0, kind: '' }));
 let playerMin = 9, playerNear = 0;
 let t = 0, steps = Math.round(MIN * 60 / 0.1); const dt = 0.1; const stats = { crossStart: 0, crossStartBad: 0, waits: 0, waitTime: 0, sits: 0, doors: 0, cars: 0 };
@@ -132,7 +146,12 @@ for (let i = 1; i <= steps; i++) {
     if (!Number.isFinite(a.x) || !Number.isFinite(a.z) || !Number.isFinite(a.yaw) || !Number.isFinite(a.speed)) { viol.nan++; if (viol.nan < 6) console.log(`  NaN agent ${k} scene=${a.scene} kind=${a.kind} t=${t.toFixed(1)} x=${a.x} z=${a.z} yaw=${a.yaw} speed=${a.speed} leader=${!!a.leader} goal=${a.goal && a.goal.type}`); return; }
     if (!a.hidden && !p.hidden) {
       const d = Math.hypot(a.x - p.x, a.z - p.z), kindChange = a.kind !== p.kind || (!!a.seat !== p.seat) || ((a.recycled | 0) + (a.leader ? (a.leader.recycled | 0) : 0)) !== p.rec || sim.mass > 0 || a.kind === 'approach' || p.kind === 'approach';
-      if (d > 0.8 && !kindChange) { viol.jump++; if (onPB(a.x, a.z, 3)) { pb.jumps++; if (a.leader) pb.jumpF++; pb.jumpT[Math.min(9, Math.floor(t / (MIN * 6)))]++; if (pb.jumps < 5) console.log(`  jump ON THE PALACE BRIDGE ${d.toFixed(2)} m agent ${k} ${a.kind} (${a.x.toFixed(1)},${a.z.toFixed(1)}) t=${t.toFixed(1)} scene=${a.scene} leader=${!!a.leader}`); } if (viol.jump < 8) console.log(`  jump ${d.toFixed(2)} m agent ${k} ${a.kind} (${a.x.toFixed(1)},${a.z.toFixed(1)}) t=${t.toFixed(1)} scene=${a.scene}`); }
+      if (d > 0.8 && !kindChange) {
+        if (onPB(a.x, a.z, 3)) { pb.jumps++; if (a.leader) pb.jumpF++; pb.jumpT[Math.min(9, Math.floor(t / (MIN * 6)))]++; if (pb.jumps < 5) console.log(`  jump ON THE PALACE BRIDGE ${d.toFixed(2)} m agent ${k} ${a.kind} (${a.x.toFixed(1)},${a.z.toFixed(1)}) t=${t.toFixed(1)} scene=${a.scene} leader=${!!a.leader}`); }      // (every jump, the re-placements too, as before: the deck line is a strip oracle)
+        const tele = teleportKind(a, p);
+        if (tele) teleports[tele]++;
+        else { viol.jump++; if (viol.jump < 8) console.log(`  jump ${d.toFixed(2)} m agent ${k} ${a.kind} (${a.x.toFixed(1)},${a.z.toFixed(1)}) t=${t.toFixed(1)} scene=${a.scene} leader=${!!a.leader} stuck=${a.stuck} noProg=${p.noProg}>${a.noProg}`); }
+      }
       let dy = a.yaw - p.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       if (Math.abs(dy) > 0.9 && !kindChange && d < 0.8) { viol.turn++; if (viol.turn < 6) console.log(`  turn ${dy.toFixed(2)} agent ${k} ${a.kind} t=${t.toFixed(1)}`); }
       p.dyaw = dy;
@@ -147,7 +166,7 @@ for (let i = 1; i <= steps; i++) {
     if (a.kind === 'sit' && p.kind !== 'sit') stats.sits++;
     if (a.hidden && !p.hidden) stats.doors++;
     if (a.hidden !== p.hidden && !a.ug) { for (const e of sim.nav.metroDoors || []) if (Math.hypot(e.x - a.x, e.z - a.z) < 4) { const kk = e.metro.id + (a.hidden ? ' in' : ' out'); metroFlow[kk] = (metroFlow[kk] || 0) + 1; break; } }
-    p.x = a.x; p.z = a.z; p.yaw = a.yaw; p.kind = a.kind; p.hidden = a.hidden; p.seat = !!a.seat; p.cross = a.crossIdx; p.rec = (a.recycled | 0) + (a.leader ? (a.leader.recycled | 0) : 0);
+    p.x = a.x; p.z = a.z; p.yaw = a.yaw; p.kind = a.kind; p.hidden = a.hidden; p.seat = !!a.seat; p.cross = a.crossIdx; p.rec = (a.recycled | 0) + (a.leader ? (a.leader.recycled | 0) : 0); p.noProg = a.noProg; p.wx = a.wx; p.wz = a.wz; p.rt = a.rt;
   });
   if (PLX) for (const a of sim.agents) if (!a.hidden) { const d = Math.hypot(a.x - PLX[0], a.z - PLX[1]); if (d < playerMin) playerMin = d; if (d < 1.2) playerNear++; }
   if (i % 10 === 0) {                                              // once per second: containment, density
@@ -190,6 +209,8 @@ if (viol.building) console.log('building violations by scene@cell:', Object.entr
 if (PB) { console.log(`Palace Bridge deck (u -2 .. ${PB.len.toFixed(0)} m, |v| <= ${PB.hw}): mean ${(pb.n / Math.max(1, pb.steps)).toFixed(1)} people, max ${pb.max}, distinct ${pb.seen.size}; per 25 m of u (samples) ${pb.bins.join(' ')}; position jumps on it ${pb.jumps} (${pb.jumpF} of followers; per tenth of the run ${pb.jumpT.join(' ')}), on the carriageway ${pb.carriage}, outside the play area ${pb.outside}; y ${pb.yMin.toFixed(2)} .. ${pb.yMax.toFixed(2)}; by scene ${JSON.stringify(pb.scenes)}`); if (pb.carriage) fail(pb.carriage + ' samples on the Palace Bridge carriageway'); if (pb.outside) fail(pb.outside + ' samples beyond the play border on the Palace Bridge'); }
 console.log('metro platform people (underground, mean visible):', ugN / Math.max(1, regN));
 console.log('violations', JSON.stringify(viol), 'stuck walkers (no 3 m in 3 min):', stuck);
+const jumpLimit = Math.max(8, Math.round(N0 * MIN * 0.01));
+console.log(`re-placements out of view, not counted as jumps: watchdog ${teleports.watchdog} (a stuck walker snapped to the graph), trail ${teleports.trail} (a follower put back on its leader's trail); jump limit of area ${process.env.AREA || 'strip'}: ${jumpLimit} (max(8, ${N0} people x ${MIN} min x 0.01))`);
 console.log('mean people: visible in play area', (densAcc.play / densAcc.n).toFixed(0), 'within 70 m of the obelisk', (densAcc.square / densAcc.n).toFixed(0), 'on Nevsky Mayakovskaya - Vosstaniya (400 m x both pavements)', (densAcc.lenina / densAcc.n).toFixed(0), '= per 10 m of pavement', (densAcc.lenina / densAcc.n / 80).toFixed(1));
 console.log('people inside the Gostiny arcade (mean)', (galN / Math.max(1, regN)).toFixed(1), '| under the Kazan colonnade (mean)', (colN / Math.max(1, regN)).toFixed(1));
 console.log('metro door flows (people entering / leaving, whole run):', JSON.stringify(Object.fromEntries(Object.entries(metroFlow).sort((p2, q) => p2[0] < q[0] ? -1 : 1))));
@@ -205,7 +226,7 @@ if (viol.deep) fail(`${viol.deep} samples below street level`);
 if (viol.low) fail(`${viol.low} samples of off-level people without a surface`);
 if (viol.road > N0 * MIN * 60 * 0.002) fail(`${viol.road} samples on a carriageway outside a zebra`);
 if (viol.signal > Math.max(3, stats.crossStart * 0.003)) fail(`${viol.signal} zebra entries on a red pedestrian head`);
-if (viol.jump > N0 * MIN * 0.05) fail(`${viol.jump} position jumps > 0.8 m`);
+if (viol.jump > jumpLimit) fail(`${viol.jump} position jumps > 0.8 m (limit ${jumpLimit})`);
 if (viol.turn > N0 * MIN * 0.05) fail(`${viol.turn} turns > 0.9 rad per step`);
 if (viol.hiddenMax > N0 * (args.includes('--night') ? 0.95 : 0.45)) fail(`${viol.hiddenMax} hidden at once`);
 if (stuck > N0 * 0.12) fail(`${stuck} stuck walkers`);
