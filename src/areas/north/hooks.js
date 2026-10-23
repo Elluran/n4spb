@@ -21,7 +21,9 @@
 //      groundWayReject      -> ((road) => boolean) | undefined                                     T3b  the ways that the ground class mask does not paint (environment/field.js buildField): the 120 garden ways; undefined unless MODULES has 'landmarksTauride'
 //      waterBodies          -> (() => [{ id, o, h }]) | undefined                                  T4a  the ponds of the garden as water bodies of the field's water mask (environment/field.js buildField, after the river polygons): env.waterAt / shoreDist / the water shader's distance atlas; undefined unless MODULES has 'landmarksTauride'
 //      noLanding            -> ((x, z) => boolean) | undefined                                     T4a1 a flight landing on the ponds is refused as 'water' (core/player.js landingBlocked reads player.noLanding, set by main.js); true where the terrain is at or below the contour of the shore colliders; undefined unless MODULES has 'landmarksTauride'
+//      duckPonds            -> (() => { y, offset, margin, rings, keepOut, shoreDist, inWater }) | undefined   T4b  duck lanes on the ponds of a landmark module (wildlife/ducks.js: the pond branch beside the waterway lanes; lane y = the water level, lanes `margin` m off every shore, none under a bridge deck); undefined unless MODULES has 'landmarksTauride'
 //    }
+//    The deck service (deckServices) may also publish `deckLift(x, z) -> number | null`: what the pedestrians' feet stand above its deckY (people/nav.js surfaceY; absent / null = the engine's pavement lift 0.12). T4b: the garden bridges answer 0.02 (the deck is the walking surface), the Paradny podium keeps 0.12.
 //    HEIGHT_PATCHES = [{ id: string, box: [x0, x1, z0, z1], at: (x, z) => number | null }]       H01  heightAt: per patch in array order a box reject, then at(); the first non-null wins;
 //                                                                                                     then the old waterway-bed / GROUND_Y line
 //  Every (ctx) factory is evaluated ONCE per build (the tuft / prop / tree paths are hot) and returns null when none of the modules it serves is in ctx.buildList (absent list = not built). The
@@ -32,7 +34,7 @@ import { treeCleared, treeReject, tuftReject, propReject, pedestrianOnly, makePa
 import { makeHeightPatches as terrainPatches } from './hooks/height.js';
 import { inGarden } from './hooks/people.js';
 import { makeGroundHoles, makeGroundWayReject } from './hooks/ground.js';
-import { makeWaterBodies, makeNoLanding } from './hooks/water.js';
+import { makeWaterBodies, makeNoLanding, makeDuckPonds } from './hooks/water.js';
 
 /** The services whose own deckY(x, z) (a podium, stairs, garden bridges) is consulted before the bridge decks by the drive handling and the pedestrian navigation (H09). An absent service is skipped. */
 const DECK_SERVICES = Object.freeze(['landmarksTauride']);
@@ -49,6 +51,7 @@ export function makeHooks(MODULES) {
     groundWayReject: makeGroundWayReject(MODULES),  // T3: the garden's ways are not painted into the ground class mask (the garden draws them)
     waterBodies: makeWaterBodies(MODULES),          // T4a: the garden's ponds enter the field's water mask (env.waterAt, shoreDist, the water shader's distance atlas)
     noLanding: makeNoLanding(MODULES),              // T4a fix 1: a flight landing on the ponds is refused as 'water' (core/player.js landingBlocked; main.js hands it to the Player)
+    duckPonds: makeDuckPonds(MODULES),              // T4b: duck lanes on the garden's ponds (wildlife/ducks.js)
   };
 }
 

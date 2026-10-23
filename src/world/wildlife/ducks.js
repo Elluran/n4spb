@@ -6,11 +6,15 @@
 // closer than 170 m). Everything is a PURE FUNCTION of t inside a lane: s(t) = span (1 - cos(w t + phi)) / 2 along the lane, the heading follows the direction of travel and turns through the
 // side while the group nearly stops at the end of its lane; members hold a small formation (pair / hen with 4-6 ducklings / trio) with their own bobbing and slow dabbling (head down, tail
 // up). Instanced (drake / hen bodies, heads, folded wings), a pale wake ellipse under each (decal, no outline). ~23 ducks, ~8 k triangles.
+// PONDS (T4b of the Tauride remake, docs/AREAS.md 9.1 HOOKS.duckPonds): an area may name ponds of a landmark module: their shore lines give lanes exactly like the bank chains (the water on the left of travel, offset into
+// the water, every sample asked env.waterAt and kept `margin` m off every shore by the hook's exact shore distance, 2.5 m of free water beyond, no bridge deck near), key 'pond', at the ponds' own water level (lane.y).
+// The strip exports no such hook: its lanes are the waterway lanes as before.
 import * as THREE from 'three';
 import { birdModel, shadowGeometry } from './models.js';
 import { instanced } from './geom.js';
 import { collectBoats, hullBoxes, makeHullIndex } from './boats.js';
 import { allBanks } from '../environment/waterways.js';
+import { HOOKS } from '../lib/area-tables.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -37,6 +41,8 @@ export function buildDucks(ctx, W, say, opts = {}) {
   const decks = [...(env?.quay?.bridges || []).map((z) => ({ x: z.c[0], z: z.c[1], r: (z.w || 12) / 2 + 12 }))];
   const bd = S.landmarksC?.bridge?.deck; if (bd) decks.push({ x: bd.x, z: bd.z, r: 50 });
   const stairs = (env?.quay?.allStairs || []).map((s) => ({ x: s.x, z: s.z, r: 7 }));
+  const ponds = typeof HOOKS.duckPonds === 'function' ? HOOKS.duckPonds() : null;       // T4b: the ponds of the area's landmark module (null for the strip: nothing below runs for it)
+  if (ponds) for (const k of ponds.keepOut || []) decks.push({ x: k.x, z: k.z, r: k.r });   // no lane under a garden bridge deck or the dam
   // the obstacles go into a 40 m hash (an obstacle is entered into every cell its circle's box touches): every lane sample used to be tested against all piers, decks and stairs of the map (~150 ms)
   const OC = 40, ogrid = new Map(), okey = (i, j) => i * 40009 + j;
   for (const o of [...piers, ...decks, ...stairs]) {
@@ -76,6 +82,29 @@ export function buildDucks(ctx, W, say, opts = {}) {
       const mid = (xs.length >> 1);
       lanes.push({ id: lanes.length, key: bank.key, n: xs.length, span: (xs.length - 1) * STEP, xs, zs, tx, tz, cx: xs[mid], cz: zs[mid], taken: null, bank: bank.id });
     }
+  }
+  // T4b: the pond lanes (HOOKS.duckPonds): the same lane rule on the shore rings of the ponds; a sample must be water for the field (env.waterAt) AND at least `margin` m off every shore by the hook's exact distance
+  if (ponds) {
+    const wet = (x, z) => !!(env && env.waterAt && env.waterAt(x, z)) && ponds.shoreDist(x, z) <= -ponds.margin;
+    (ponds.rings || []).forEach((ring, ri) => {
+      let len = 0; for (let i = 0; i + 1 < ring.length; i++) len += Math.hypot(ring[i + 1][0] - ring[i][0], ring[i + 1][1] - ring[i][1]);
+      if (len < 60) return;
+      const P = resample(ring), d0 = ponds.offset;
+      for (let i0 = Math.floor(rng.range(6, 22)); i0 + 20 < P.length; i0 += Math.floor(rng.range(26, 38))) {
+        const n = Math.min(P.length - i0, Math.floor(rng.range(15, 26))), xs = [], zs = [], tx = [], tz = [];
+        let good = n >= 15;
+        for (let k = 0; k < n && good; k++) {
+          const p = P[i0 + k], d = d0 + 0.4 * Math.sin(k * 0.5);
+          const x = p.x + p.wx * d, z = p.z + p.wz * d;
+          if (!L.inPlay(x, z, 6) || !wet(x, z) || !wet(p.x + p.wx * (d + 2.5), p.z + p.wz * (d + 2.5)) || !wet(x + p.tx * 2, z + p.tz * 2)) { good = false; break; }
+          if (hullGap(x, z) < 3.6 || blocked(x, z)) { good = false; break; }
+          xs.push(x); zs.push(z); tx.push(p.tx); tz.push(p.tz);
+        }
+        if (!good) continue;
+        const mid = (xs.length >> 1);
+        lanes.push({ id: lanes.length, key: 'pond', y: ponds.y, n: xs.length, span: (xs.length - 1) * STEP, xs, zs, tx, tz, cx: xs[mid], cz: zs[mid], taken: null, bank: 'pond-' + ri });
+      }
+    });
   }
   out.lanes = lanes;
   const near = (a, b) => Math.hypot(a.cx - b.cx, a.cz - b.cz) < (a.span + b.span) / 2 + 14;
@@ -151,7 +180,7 @@ export function buildDucks(ctx, W, say, opts = {}) {
     const dab = (() => { const per = 17 + q.seed * 12, u = ((tt / per) % 1) * per; return u < 2.2 && !q.duck ? Math.sin(Math.PI * u / 2.2) : (q.duck ? Math.max(0, Math.sin(tt * 1.1)) * 0.5 * (Math.sin(tt * 0.13) > 0.6 ? 1 : 0) : 0); })();
     const bob = 0.012 * Math.sin(tt * 1.6 + q.ph), s = q.scale;
     const pitch = 0.04 * Math.sin(tt * 0.9 + q.ph) + 0.6 * dab, roll = 0.03 * Math.sin(tt * 1.15 + q.ph * 3);
-    const wl = L.WATERWAYS[g.lane.key]?.water ?? WATER;
+    const wl = g.lane.y ?? (L.WATERWAYS[g.lane.key]?.water ?? WATER);      // (T4b: a pond lane carries its own level; the waterway lanes have none, so the expression is the old one for them)
     const y = wl - 0.035 * s + bob - 0.02 * dab;
     _E.set(pitch, gp.yaw, roll, 'YXZ'); _Q.setFromEuler(_E);
     _M0.compose(_V.set(x, y, z), _Q, _S.set(s, s, s));
@@ -203,7 +232,7 @@ export function buildDucks(ctx, W, say, opts = {}) {
     wakes.instanceMatrix.needsUpdate = true;
     if (t >= tcall.next) {
       tcall.next = t + 14 + rng.range(0, 26);
-      let best = null, bd = 1e9; for (const q of specs) { if (q.duck || q.model === 'drake') continue; groupPose(q.g, t); const d = Math.hypot(pose.x - W.player.x, pose.z - W.player.z); if (d < bd) { bd = d; best = { x: pose.x, y: WATER + 0.2, z: pose.z }; } }
+      let best = null, bd = 1e9; for (const q of specs) { if (q.duck || q.model === 'drake') continue; groupPose(q.g, t); const d = Math.hypot(pose.x - W.player.x, pose.z - W.player.z); if (d < bd) { bd = d; best = { x: pose.x, y: (q.g.lane.y ?? WATER) + 0.2, z: pose.z }; } }
       if (best && bd < 90) say('duck', best, 0.7 + 0.3 * rng());
     }
   }
