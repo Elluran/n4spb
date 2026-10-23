@@ -113,6 +113,18 @@ node tools/areas-flow-test.mjs            browser, GPU, fast harness: prompt, ar
 node tools/areas-hop-test.mjs             browser, GPU, REAL bake of both areas (no fast harness, no fakes): strip > north > strip walking, then the coupe through both gates (the car and its cockpit view survive)
 node tools/nav-memory-probe.mjs           browser, GPU: does a navigation free a scene (post-GC heap, process-tree bytes, per hop; --pages index.html,north.html alternates the areas)
 node tools/area-garage-check.mjs          CPU: the GARAGE of an area (four cars + spawn): no building / traffic lane / parked car, level ground, solid for walkers, 14 m of free way out (run it as `node tools/area.mjs north tools/area-garage-check.mjs [--map x0 z0 x1 z1 [step]]`)
+node tools/claims-draw-audit.mjs [--mutant unclaim:<id>] [--where <id>] [--verbose]   CPU draw audit of the claims (M7; `npm run claims-draw` = both areas, `claims-draw:north`): builds the static modules of the page as check.mjs does and tests every triangle centroid against the footprints of the data:
+                                          the owner of every claimed id draws inside it (red for a claimed building, a warning for a point / a tiny part / a way / a lawn), city / streets / props draw nothing above 1.5 m deeper than 1 m inside a claimed
+                                          building (a neighbour's cornice may overhang; an overlapping unclaimed outline is attributed, OVERLAPS; fewer than 5 triangles is a note), and no landmark module draws >= 50 triangles above 1.5 m deeper than
+                                          1.5 m inside an UNCLAIMED building (a mutant: `--mutant unclaim:r5802451` turns red with 13,605 triangles of landmarksNorthFull). Claimed parks / paving / ways / points and environment / rail / metro / bridges
+                                          are reported, not graded. OWNER_SKIPS and KNOWN_UNCLAIMED in the tool list the documented exceptions with their reason (the Suvorov folly; the Paradny court deck over Kirochnaya 35; in the strip the
+                                          Winkler fence piers through the Marso Polo outline and the landmarksJ house walls on Bolshaya Morskaya 37, a possible double draw found by the first run). ~40 s for the strip, ~1 min for the North
+node tools/nav-bake-equiv.mjs [--area <id>] [--q medium]   GPU / browser: the nav bake format against the generator inside the real page of the area (recorded into memory, hydrated, nodes / edges / crossings / routes compared); `npm run navequiv[:north]`.
+                                          The page opens with ?baked=force, so the bake may be stale but the area's manifest must exist: the North needs a scratch `node tools/bake-scene.mjs --area north` first (a missing manifest is a FAIL line before the
+                                          browser starts). The long-bridge chain (nav.longK) is asserted only where the nav built one (nav.longs: the strip's Palace Bridge), everything else in every area; prints PASS / FAIL and RESULT lines
+node tools/people-test.mjs                CPU, 10 simulated minutes: the jump counter (M7) excludes the two re-placements the sim makes out of view, recognised by their state transition and printed on their own line (the watchdog snap of a stuck
+                                          walker: noProg >= 3 -> 0, wx = x, a new route; a follower put back on its leader's trail: it stands on one of the 64 trail points); the limit is per area, max(8, population x minutes x 0.01), printed with it.
+                                          Clean trees: strip 0 jumps (177 before: 15 watchdog + 162 trail), North hero 0 (368 before: 271 + 168), North --at tauride 0 (203 before: 49 + 194); every other line of the strip's log is unchanged
 ```
 
 ### 5.1 The generated area page
@@ -162,6 +174,18 @@ The `help` lines list the keyed views of the area: they must follow `VIEWS` in t
   written independently of the probe (25 m inset, not in a building or the river, a car on a drivable lane within 30 degrees); **a fall-back to the destination HERO counts as a failure**. A gate whose destination is another area runs the grid
   in a child (`tools/area.mjs <to> tools/areas-test.mjs --arrival-only <gate>`). The band-parity hook is `tools/band-parity.mjs` exporting `bandParity({ gate, root, REGISTRY })` (a list of problem strings); it runs check 4 of `tools/area-data-test.mjs` for the area on the
   other side of the gate (docs/AREAS-DATA.md section 5), once per area per process (~3 s). Synthetic fixtures inside the test exercise every check and every way it must fail.
+
+### 5.3 CI (`.github/workflows/pages.yml`, M7)
+
+Two jobs run on a pull request and on a push to `main`. **`verify`** is the job of 6.1, unchanged in nature: no `npm ci`, repository files only, and `deploy` still needs only it. M7 added one step to it, the two Tauride tests that
+need neither three.js nor python: `node tools/tauride/data-test.mjs --no-regen` (the committed data modules of `src/world/landmarksTauride/data` against the facade, 138 checks, 1 s) and `node tools/tauride-cams-check.mjs`
+(the 12 camera poses against the data, 4 s). **`engine`** is new: `npm ci` (three.js from `package-lock.json`, `cache: npm`), then the lanes that build the engine in node and were "not in CI" until now (T3 log, 9.7): `npm run hooks:all`
+(the hook syntax check, `north-hooks-test`, `north-height-test`, `north-keepout-test --parallel --footprints`, `north-people-hooks-test` with its `--scene` part: 37 s locally), `node tools/area.mjs north tools/tauride/ground-test.mjs`
+(T3, 29 s), `tools/tauride/pond-test.mjs` (T4a, 13 s), `tools/tauride-height-test.mjs` as the North (the harness self-check, 7 s) and with `--model north --build landmarksTauride --assert-cars --no-selfcheck` (the relief, the shores
+and the flight landing on the REAL built module, 19 s), and `node tools/each-area.mjs tools/claims-draw-audit.mjs` (the draw audit of both areas). The whole job is ~5 minutes with the install. Nothing in it reads `assets/baked`,
+so it is green before the bake of M8 while `verify` is red on purpose (6.1); `npm run tauride:ci` runs the Tauride part locally in one line. Decision: `engine` does NOT gate `deploy` (the pages job is as it was: a failing engine test shows red on the
+pull request and on the push, and the deployment of `main` still waits for `verify` only); making it a gate is one line (`needs: [verify, engine]`) once the job has run green on GitHub a few times. The 10-minute simulations
+(`people-test`, `traffic-test`), the bake checks and every browser / GPU tool stay out of CI.
 
 ## 6. Decisions in one place
 
