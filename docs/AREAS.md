@@ -911,3 +911,25 @@ the bake (stale until M8).
   (Potemkin's 1791 feast, the First Duma of 1906, February 1917, Rastrelli / Stasov 1748-1835, the Smolny tar yard, the II Congress of Soviets, Stasov 1827-1829 «построил» vs «перестроил», the captured Turkish cannons of 1828-1829, the
   Liteyny and Shpalernaya name origins, Chernyshevsky's novel, the Neva's 74 km).
 * **Decisions for the user**: the `engine` CI job as a deploy gate; the strip registry's `approxMB: 48` vs the page's 51; Bolshaya Morskaya 37 (`landmarksJ` claims it or leaves it to `city`); the night look of the vestibule signs.
+
+## 11. M7 polish
+
+### 11.2 B, landmarks polish (branch `m7p-landmarks`): Kirochnaya benches and stubs, the cross-module import, a stale comment
+
+* **The Kirochnaya campus benches are knockable** (`landmarksKirochnaya/landscape.js`, closes the "5 campus benches" gap of 8.7 / 10): with `ctx.knock` the benches are `knockInstances` records of kind `bench` (iron ends + green slats as two instanced parts,
+  one box collider 2.1 x 0.64 m, 1.1 m high, mass 50 kg, `minDv` 0.5; the pattern of `landmarksF/garden.js`); without `ctx.knock` the merged geometry is drawn as before (the bench drawing is one function now, the same boxes in the same order). The module's triangle
+  service counts the instances (`K.tris` += template triangles x placements), so the North check differs in `landmarksKirochnaya` only in structure: meshes 176 -> 179, instanced meshes 0 -> 4, instances 0 -> 8, colliders 255 -> 259; the knock census of the North page
+  4,513 -> 4,517 (benches 576 -> 580). **Four, not five**: the placement (1258, -1130) lies inside a mapped building (`L.insideBuilding`) and was skipped by the source's own filter, so it never drew a bench (the docs counted placements). Moving it is a look decision, not made here.
+* **Both gate stubs reach the kerb** (`clipToKerb`, `KERB_CLEAR` 1.0 -> 0.3): the stub geometry was measured against the triangles of the streets asphalt (`pt-asphalt`) of the North page. Both stubs HAVE asphalt (the west one w515895295 is 6.08 m long along its axis with 60
+  vertices south of z -1236, the east one w515895296 6.25 m; a "missing west stub" does not reproduce on the CPU), but since T1 moved the streets (no parking pockets at the mouths any more) the 1 m margin left 0.94 m (west) / 1.03 m (east) of bare ground between the stub
+  and the street. Now 0.249 m (west) / 0.343 m (east), no stub vertex inside a `pt-asphalt` triangle (0 of 60 each). The data's `w/2` is still the only kerb the module can read before `streets` builds, so the margin is an estimate: a later change of the streets' width
+  at the mouths is caught by `north-knock-test` check 5b (0.05 .. 0.45 m, nothing inside). The GPU look (stub asphalt at y 0.051-0.055 against the street's 0.03, the 0.25-0.34 m slit) is still owed.
+* **No cross-module import**: `landmarksOktyabrsky` built the hall's door points with `landmarksNorthFull/doors.js`. `doorPoints` now lives in `src/world/lib/door-points.js` (pure data; its `ringEdges` is the arithmetic of `landmarksD/kit.js`, computed from `lib/massing.js`,
+  so `lib/` imports no landmark kit); both modules import the lib file and `landmarksNorthFull/doors.js` is a one-line re-export. Proof: the door points of the North page serialise to byte-identical JSON before and after (86 for `landmarksNorthFull`, 9 for `landmarksOktyabrsky`),
+  the strip's `check` counts are identical in all 25 modules, `importlint` / `runtimelint` / `owns-table --check` are green.
+* **Stale comments** (`landmarksOktyabrsky/groups.js`): the `PAVED_RINGS` text proposed to the environment owner to treat the rings as claimed ground, and the `KAPODISTRIAS_PAVED_RINGS` text said `environment/claims.js` read `PAVED_RINGS` only. Both were done in M7 (`extraClaimRings`
+  feeds the claim mask of `environment/field.js`, and reads the Kapodistrias ring where the area claims `'kapodistrias'`); the comments say so. The comment lines of `tools/check.mjs` belong to cluster C.
+* **Tests** (`tools/north-knock-test.mjs`, 9 checks, was 6): check 2b (the benches: census = placements outside buildings, collider shape, two instanced parts, off the streets asphalt by `net.cover`, one hit at 25 km/h is knocked and rests as a low box), check 5b (both stubs by
+  geometry, see above, with the unclipped data end points as the negative control: both corners lie inside the road mesh), a second mutant `--mutant-bench` (the benches register nothing) next to `--mutant` (the fence); check 6 requires each child to be red in its own check and in that one only.
+  `knock-stands-test` and `knock-consumers-test` have no Kirochnaya rows and needed no edit (the North run of `knock-stands-test` is green with the benches registered).
+* **Known red, not from this cluster** (identical on a clean `feat/areas` export): `node tools/knock-stands-test.mjs` in the strip (`16 !== 17`, the kiosk census) and `node tools/knock-scene-test.mjs` (census bench 1,102 / bin 823 / pot 232 / urn 48 outside the expected ranges).
