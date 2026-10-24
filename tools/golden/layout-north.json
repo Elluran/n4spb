@@ -334,8 +334,8 @@
     "[hashed]": true,
     "kind": "object",
     "n": 8,
-    "bytes": 11126,
-    "hash": "287b8390701bfcbe"
+    "bytes": 11297,
+    "hash": "c9f486f3bf677a4b"
    },
    "HERO": {
     "pitch": 10,
@@ -424,9 +424,9 @@
    "SUBGROUPS": {
     "[hashed]": true,
     "kind": "object",
-    "n": 16,
-    "bytes": 11733,
-    "hash": "b60d8b653117cd32"
+    "n": 17,
+    "bytes": 11950,
+    "hash": "b5d3ad96faf5a7c5"
    },
    "SUN_DIR": [
     -0.473,
@@ -2454,8 +2454,8 @@
  },
  "probes": {
   "inPlay": {
-   "n": 503,
-   "hash": "1b6250f28aaa0461",
+   "n": 504,
+   "hash": "85871c0d93b7088c",
    "head": [
     false,
     false,
@@ -2468,8 +2468,8 @@
    ]
   },
   "inPlay25": {
-   "n": 503,
-   "hash": "54d26d72aa67851b",
+   "n": 504,
+   "hash": "e1c97c519e175b7f",
    "head": [
     false,
     false,
@@ -2482,8 +2482,8 @@
    ]
   },
   "inPlay-40": {
-   "n": 503,
-   "hash": "c81735b9e7e5cea0",
+   "n": 504,
+   "hash": "a1769ad8db8e32df",
    "head": [
     false,
     false,
@@ -2496,8 +2496,8 @@
    ]
   },
   "inExtent": {
-   "n": 503,
-   "hash": "7fa6e4bdaca40e9e",
+   "n": 504,
+   "hash": "d32d61d67375ce99",
    "head": [
     false,
     false,
@@ -2510,8 +2510,8 @@
    ]
   },
   "inExtent60": {
-   "n": 503,
-   "hash": "9231728570a6fc49",
+   "n": 504,
+   "hash": "52967ab2402b45bf",
    "head": [
     false,
     false,
@@ -2524,8 +2524,8 @@
    ]
   },
   "clampToPlay": {
-   "n": 503,
-   "hash": "a489ddac930cc31f",
+   "n": 504,
+   "hash": "c2a4b5d22705d084",
    "head": [
     [
      -420,
@@ -2562,8 +2562,8 @@
    ]
   },
   "clampToPlay30": {
-   "n": 503,
-   "hash": "7fd30b4a142063cd",
+   "n": 504,
+   "hash": "bcc09c9ac2411597",
    "head": [
     [
      -390,
@@ -2600,8 +2600,8 @@
    ]
   },
   "heightAt": {
-   "n": 503,
-   "hash": "54ef1e9b57da79fd",
+   "n": 504,
+   "hash": "fb73369eaeab8063",
    "head": [
     -6,
     -6,
@@ -2614,8 +2614,8 @@
    ]
   },
   "groundAt": {
-   "n": 503,
-   "hash": "54ef1e9b57da79fd",
+   "n": 504,
+   "hash": "fb73369eaeab8063",
    "head": [
     -6,
     -6,
@@ -2628,8 +2628,8 @@
    ]
   },
   "inRiver": {
-   "n": 503,
-   "hash": "2110edd488558dd3",
+   "n": 504,
+   "hash": "65b043b660b741f3",
    "head": [
     true,
     true,
@@ -2642,8 +2642,8 @@
    ]
   },
   "waterwayAt": {
-   "n": 503,
-   "hash": "2b1d3a1ec980454c",
+   "n": 504,
+   "hash": "d2d083cfc1428513",
    "head": [
     "neva",
     "neva",
@@ -2656,8 +2656,8 @@
    ]
   },
   "waterLevelAt": {
-   "n": 503,
-   "hash": "054290c23da8675a",
+   "n": 504,
+   "hash": "031391571b16bca8",
    "head": [
     -3.4,
     -3.4,
@@ -2670,8 +2670,8 @@
    ]
   },
   "shoreDist": {
-   "n": 503,
-   "hash": "a56b15dab1f6ff59",
+   "n": 504,
+   "hash": "71452e86e29eb932",
    "head": [
     0,
     0,
@@ -2684,8 +2684,8 @@
    ]
   },
   "insideBuilding": {
-   "n": 503,
-   "hash": "9f37ba2a3d4e2296",
+   "n": 504,
+   "hash": "cad7e40cdb377d91",
    "head": [
     false,
     false,
@@ -2698,8 +2698,8 @@
    ]
   },
   "insideBuilding1.5": {
-   "n": 503,
-   "hash": "962f943a1a304432",
+   "n": 504,
+   "hash": "0aa3082a8237f31d",
    "head": [
     false,
     false,
@@ -2712,8 +2712,8 @@
    ]
   },
   "buildingAt": {
-   "n": 503,
-   "hash": "4b66e6b5486d7a87",
+   "n": 504,
+   "hash": "fd29f9eb2504ecad",
    "head": [
     null,
     null,
@@ -2726,8 +2726,8 @@
    ]
   },
   "areaAt": {
-   "n": 503,
-   "hash": "a9226ec3b6cab5e2",
+   "n": 504,
+   "hash": "46a96b6967f75857",
    "head": [
     "Нева · Neva River",
     "Нева · Neva River",
@@ -2740,8 +2740,8 @@
    ]
   },
   "isOnRoad": {
-   "n": 503,
-   "hash": "cbb244044a3683bd",
+   "n": 504,
+   "hash": "501bb8d7e7cb634c",
    "head": [
     false,
     false,
@@ -2754,8 +2754,8 @@
    ]
   },
   "isOnRoadAll": {
-   "n": 503,
-   "hash": "842a8bf828e21782",
+   "n": 504,
+   "hash": "f4fd5c8555f38331",
    "head": [
     false,
     false,
@@ -2768,8 +2768,8 @@
    ]
   },
   "nearestRoad": {
-   "n": 503,
-   "hash": "a4a19e59d9bcb3d4",
+   "n": 504,
+   "hash": "759864afe0c84203",
    "head": [
     null,
     null,
@@ -2791,8 +2791,8 @@
    ]
   },
   "toGrid": {
-   "n": 503,
-   "hash": "47700449085d86ca",
+   "n": 504,
+   "hash": "c000f4e55ab328ba",
    "head": [
     {
      "u": -1697.523827,
@@ -2829,8 +2829,8 @@
    ]
   },
   "fromGrid": {
-   "n": 503,
-   "hash": "5023af4bc46af481",
+   "n": 504,
+   "hash": "502b8ae264bb89f6",
    "head": [
     {
      "x": -495.212368,
@@ -2867,8 +2867,8 @@
    ]
   },
   "yawToward": {
-   "n": 503,
-   "hash": "f9d4e9ecdbbca9d7",
+   "n": 504,
+   "hash": "ae040b6d488dec2b",
    "head": [
     -154.063485,
     -152.883507,
@@ -2881,8 +2881,8 @@
    ]
   },
   "rotYToward": {
-   "n": 503,
-   "hash": "942239c8c8394ea3",
+   "n": 504,
+   "hash": "94a32616918d0339",
    "head": [
     0.452678,
     0.473272,
@@ -2895,8 +2895,8 @@
    ]
   },
   "groundHeight": {
-   "n": 503,
-   "hash": "ea434cf72a3f1fdc",
+   "n": 504,
+   "hash": "af0407b419eb00a9",
    "head": [
     null,
     null,
@@ -2909,7 +2909,7 @@
    ]
   },
   "groups": {
-   "n": 16,
+   "n": 17,
    "keys": [
     "kapodistrias",
     "kirochnaya-clinical-institute",
@@ -2926,6 +2926,7 @@
     "paradny-quarter",
     "simeon-anna",
     "tauride-garden",
+    "tauride-nursery",
     "tauride-palace"
    ],
    "members": {
@@ -2944,6 +2945,7 @@
     "paradny-quarter": 11,
     "simeon-anna": 2,
     "tauride-garden": 1,
+    "tauride-nursery": 3,
     "tauride-palace": 1
    },
    "osm": {
@@ -2962,6 +2964,7 @@
     "paradny-quarter": "d5d720ba10e5ba46",
     "simeon-anna": "4f53cda18c2baa0c",
     "tauride-garden": "4d6e40d1ec63b710",
+    "tauride-nursery": "4f53cda18c2baa0c",
     "tauride-palace": "4f53cda18c2baa0c"
    },
    "bounds": {
@@ -3078,6 +3081,14 @@
      "z0": -1807.2,
      "z1": -1750.9
     },
+    "tauride-nursery": {
+     "cx": 1043.55,
+     "cz": -1698.85,
+     "x0": 982.8,
+     "x1": 1104.3,
+     "z0": -1796.5,
+     "z1": -1601.2
+    },
     "tauride-palace": {
      "cx": 1375.9,
      "cz": -1727.1,
@@ -3099,8 +3110,8 @@
    ]
   },
   "claims": {
-   "n": 572,
-   "hash": "1947adb58147c540"
+   "n": 575,
+   "hash": "211b3bee9587a5bc"
   },
   "buildings": {
    "n": 2016,

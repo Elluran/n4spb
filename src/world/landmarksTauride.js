@@ -27,6 +27,7 @@ import { planVegetation, buildVegetation, collectVegetationInputs } from './land
 import { planFence, buildFence } from './landmarksTauride/fence.js';
 import { planFurniture, buildFurniture, benchSeats, keepOutDiscs, resolveWornSpots } from './landmarksTauride/furniture.js';
 import { planMonuments, buildMonuments } from './landmarksTauride/monuments.js';
+import { planNursery, buildNursery } from './landmarksTauride/nursery.js';
 import * as FD from './landmarksTauride/data/furniture-design.js';
 import { WORN_SPOTS } from './landmarksTauride/data/ground.js';
 import { WALK_LIFT } from './landmarksTauride/data/bridge-design.js';
@@ -114,6 +115,10 @@ export function build(ctx) {
   const fence=buildFence(ctx,root,fplan);
   const furniture=buildFurniture(ctx,root,fnplan);
   const monuments=buildMonuments(ctx,root,mplan);
+  // T8b (a user fix): the greenhouse nursery west of the garden's north-west corner: its own brown floor (the environment ground is cut out under it, HOOKS.groundHoles), nine glasshouses with most panes missing, the three
+  // buildings of the lot drawn low and plain (claimed: groups.js `tauride-nursery`), rows of young trees, the gravel tracks; one box collider per house (nursery.js)
+  const nplan=planNursery();
+  const nursery=buildNursery(ctx,root,nplan,noise);
   ctx.addStatic(root);
   // the shared landmark services (docs/AREAS.md 10.2): the benches are seats for the pedestrians, the monuments and the photo spots are places to stop
   { const S=(ctx.services.landmarks||={});
@@ -139,5 +144,7 @@ export function build(ctx) {
     fence:{plan:fplan,triangles:fence.triangles,draws:fence.draws,colliders:fence.colliders,meshes:fence.meshes,instances:fence.instances,items:fence.items,gateTriangles:fence.gateTriangles,stoneTriangles:fence.stoneTriangles,alphaTriangles:fence.alphaTriangles,parts:fence.parts,template:fence.template},
     furniture:{plan:fnplan,benches:fnplan.benches,bins:fnplan.bins,lanterns:fnplan.lanterns,gateLanterns:fnplan.gateLanterns,benchPoints:fnplan.benches.map((b)=>({x:b.x,z:b.z})),triangles:furniture.triangles,draws:furniture.draws,colliders:furniture.colliders,instances:furniture.instances,records:furniture.records,items:furniture.items,meshes:furniture.meshes,pool:furniture.pool,spots:furniture.spots},
     monuments:{plan:mplan,list:mplan.monuments,photoSpots:mplan.photoSpots,triangles:monuments.triangles,draws:monuments.draws,colliders:monuments.colliders,meshes:monuments.meshes,items:monuments.items,figures:monuments.figures,parts:monuments.parts,fountain:monuments.fountain},
-    terrain:{heightAt:gardenHeight,meshHeight,triangles:terrain.triangles,draws:terrain.draws,cover:true},ground:{mask:mask.stats,maskBytes:mask.data.length,maskBox:mask.box,maskData:mask.data,material:ground.mat},paths:{triangles:paths.triangles,draws:paths.draws,stats:pplan.stats,stairs:pplan.stairs},ponds:{y:PONDS.WATER_Y,triangles:ponds.triangles,waterTriangles:ponds.waterTriangles,quayTriangles:ponds.quayTriangles,quayLength:pondsPlan.quay.length,draws:ponds.draws,colliders:ponds.colliders,buildMs:ponds.buildMs,stats:pondsPlan.stats,mesh:ponds.mesh,quayMesh:ponds.quayMesh,inWater:(x,z)=>GARDEN_SHORE.dist(x,z)<0,shoreDist:GARDEN_SHORE.dist},kitTriangles:K.tris,triangles:K.tris+terrain.triangles+paths.triangles+ponds.triangles+bridges.triangles+reeds.triangles+trees.triangles()+fence.triangles+furniture.triangles+monuments.triangles};
+    // T8b: the nursery (plan: the ring, the 9 houses with their panes, the 3 replaced buildings, the tracks, the trees; meshes; colliders; the floor mask)
+    nursery:{plan:nplan,triangles:nursery.triangles,draws:nursery.draws,colliders:nursery.colliders,items:nursery.items,meshes:nursery.meshes,parts:nursery.parts,mask:nursery.mask.stats,maskData:nursery.mask.data,maskBox:nursery.mask.box,material:nursery.floorMaterial,stats:nplan.stats},
+    terrain:{heightAt:gardenHeight,meshHeight,triangles:terrain.triangles,draws:terrain.draws,cover:true},ground:{mask:mask.stats,maskBytes:mask.data.length,maskBox:mask.box,maskData:mask.data,material:ground.mat},paths:{triangles:paths.triangles,draws:paths.draws,stats:pplan.stats,stairs:pplan.stairs},ponds:{y:PONDS.WATER_Y,triangles:ponds.triangles,waterTriangles:ponds.waterTriangles,quayTriangles:ponds.quayTriangles,quayLength:pondsPlan.quay.length,draws:ponds.draws,colliders:ponds.colliders,buildMs:ponds.buildMs,stats:pondsPlan.stats,mesh:ponds.mesh,quayMesh:ponds.quayMesh,inWater:(x,z)=>GARDEN_SHORE.dist(x,z)<0,shoreDist:GARDEN_SHORE.dist},kitTriangles:K.tris,triangles:K.tris+terrain.triangles+paths.triangles+ponds.triangles+bridges.triangles+reeds.triangles+trees.triangles()+fence.triangles+furniture.triangles+monuments.triangles+nursery.triangles};
 }
