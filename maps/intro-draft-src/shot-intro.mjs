@@ -1,0 +1,13 @@
+import puppeteer from 'puppeteer-core';
+import path from 'node:path';
+const out = process.argv[2] || 'shot'; const hash = process.argv[3] || ''; const w = Number(process.argv[4] || 1500), h = Number(process.argv[5] || 900);
+const b = await puppeteer.launch({ executablePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: 'new', args: ['--no-sandbox'] });
+const p = await b.newPage(); await p.setViewport({ width: w, height: h });
+const errs = []; p.on('pageerror', (e) => errs.push('PAGEERROR ' + e.message)); p.on('console', (m) => { if (m.type() === 'error') errs.push('console ' + m.text()); });
+await p.goto('' + new URL('../intro-draft.html', import.meta.url).href + '' + hash, { waitUntil: 'load' });
+await new Promise((r) => setTimeout(r, 900));
+if (process.argv[6]) await p.evaluate(process.argv[6]);
+await new Promise((r) => setTimeout(r, 700));
+await p.screenshot({ path: out + '.png' });
+console.log(errs.length ? errs.join('\n') : 'no errors');
+await b.close();

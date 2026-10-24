@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Санкт-Петербург · выбор района (черновик) · Saint Petersburg area picker (draft)</title>
+<meta name="description" content="Черновик стартовой карты: районы Петербурга по реальным муниципальным округам, границы по улицам. Draft intro map: Saint Petersburg areas as real municipal districts, borders along streets.">
+<style>
+:root {
+  --bg: #efe9dc; --sea: #a9cfe6; --water: #a9cfe6; --ink: #1f2430; --muted: #5d6676; --panel: rgba(255,255,255,.94); --panel-solid: #ffffff;
+  --line: rgba(31,36,48,.16); --accent: #d6402f; --road: rgba(255,255,255,.75); --road2: rgba(255,255,255,.95); --border: rgba(255,255,255,.95);
+  --halo: rgba(255,255,255,.88); --shadow: 0 6px 24px rgba(20,28,45,.18); --chip: #1f2430; --chipink: #fff;
+  --lbl: #1b2030; --park: #8fbf7a;
+}
+:root[data-theme="dark"] {
+  --bg: #1b202b; --sea: #16314a; --water: #16314a; --ink: #e8ecf4; --muted: #9aa5b8; --panel: rgba(28,33,46,.94); --panel-solid: #1c212e;
+  --line: rgba(232,236,244,.16); --accent: #ff6a55; --road: rgba(255,255,255,.14); --road2: rgba(255,255,255,.26); --border: rgba(20,25,38,.9);
+  --halo: rgba(14,18,28,.82); --shadow: 0 6px 24px rgba(0,0,0,.5); --chip: #e8ecf4; --chipink: #1b202b; --lbl: #f1f4fb; --park: #3f6a3f;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 14px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; overflow: hidden; }
+button, input, select { font: inherit; color: inherit; }
+#app { position: fixed; inset: 0; display: grid; grid-template-columns: 330px 1fr; grid-template-rows: auto 1fr; }
+header { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: var(--panel-solid); border-bottom: 1px solid var(--line); z-index: 5; flex-wrap: wrap; }
+header h1 { font-size: 17px; margin: 0; letter-spacing: .1px; font-weight: 650; }
+header .sub { color: var(--muted); font-size: 12.5px; max-width: 46ch; }
+header .draft { background: var(--accent); color: #fff; font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 99px; letter-spacing: .6px; }
+header .grow { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 5px 10px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.btn { border: 1px solid var(--line); background: transparent; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+.btn:hover { background: var(--line); }
+aside { background: var(--panel-solid); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; z-index: 4; }
+#search { margin: 10px 12px 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; }
+#stats { margin: 0 12px 6px; color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+#list { overflow: auto; flex: 1; padding: 0 6px 12px; }
+.ray { margin-top: 6px; }
+.ray > summary { cursor: pointer; padding: 6px 8px; display: flex; align-items: center; gap: 8px; font-weight: 600; list-style: none; border-radius: 6px; }
+.ray > summary::-webkit-details-marker { display: none; }
+.ray > summary:hover { background: var(--line); }
+.ray .dot { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+.ray .cnt { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 12px; }
+.item { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 28px; border-radius: 6px; cursor: pointer; }
+.item:hover, .item.on { background: var(--line); }
+.item .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .km { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tag { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 99px; background: var(--chip); color: var(--chipink); white-space: nowrap; }
+.tag.b { background: #2e8b57; color: #fff; } .tag.large { background: #c58a00; color: #fff; } .tag.big { background: #c0392b; color: #fff; } .tag.small { background: #5b6bd6; color: #fff; }
+.tag.A, .tag.B { background: var(--ink); color: var(--bg); }
+#stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--bg); touch-action: none; cursor: grab; }
+#stage.drag { cursor: grabbing; }
+svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#map path { vector-effect: non-scaling-stroke; }
+.area { stroke: var(--border); stroke-width: 1.1; stroke-linejoin: round; cursor: pointer; transition: filter .12s; }
+.area:hover { filter: brightness(1.08) saturate(1.1); }
+.area.on { stroke: var(--ink); stroke-width: 2.4; }
+.area.dim { opacity: .38; }
+#lab text { font-family: inherit; paint-order: stroke; stroke: var(--halo); stroke-width: 3px; stroke-linejoin: round; fill: var(--lbl); text-anchor: middle; pointer-events: none; }
+#lab .sm { font-weight: 450; fill: var(--muted); }
+#lab .chip rect { fill: var(--chip); }
+#lab .chip text { fill: var(--chipink); stroke: none; font-weight: 700; }
+#lab .water text { fill: #4a7fa3; font-style: italic; stroke: none; }
+:root[data-theme="dark"] #lab .water text { fill: #7fb2d6; }
+.hud { position: absolute; z-index: 3; }
+#zoom { right: 12px; top: 12px; display: flex; flex-direction: column; gap: 6px; }
+#zoom button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); cursor: pointer; font-size: 18px; }
+#layers { right: 58px; top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; box-shadow: var(--shadow); font-size: 12.5px; max-width: 220px; }
+#layers label { display: flex; gap: 6px; align-items: center; padding: 2px 0; cursor: pointer; }
+#layers summary { cursor: pointer; list-style: none; } #layers summary::-webkit-details-marker { display: none; } #layers summary::after { content: ' ▾'; color: var(--muted); } #layers[open] summary { margin-bottom: 4px; }
+#legend { left: 12px; bottom: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow); font-size: 12px; max-width: 270px; }
+#legend .row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+#legend .sw { width: 22px; height: 14px; border-radius: 3px; border: 1px solid var(--line); flex: none; }
+#legend .sw.hatch { background: repeating-linear-gradient(45deg, rgba(190,50,40,.75) 0 2px, transparent 2px 6px); }
+#legend .sw.dots { border: 2px dotted #5b6bd6; background: transparent; }
+#legend .sw.bsq { border: 2px solid var(--ink); background: rgba(46,139,87,.28); }
+#bsq { position: absolute; left: 12px; bottom: 150px; z-index: 2; border: 2px solid var(--ink); background: rgba(46,139,87,.22); display: none; pointer-events: none; }
+#bsq span { position: absolute; left: 4px; top: 2px; font-size: 11px; font-weight: 700; background: var(--panel); padding: 0 4px; border-radius: 4px; }
+#ruler { left: 12px; bottom: 12px; display: none; }
+#card { right: 12px; bottom: 12px; width: 340px; max-height: calc(100% - 24px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px; box-shadow: var(--shadow); display: none; }
+#card.show { display: block; }
+#card h2 { margin: 0 24px 2px 0; font-size: 19px; line-height: 1.15; }
+#card .en { color: var(--muted); font-size: 12.5px; margin-bottom: 8px; }
+#card .x { position: absolute; right: 10px; top: 8px; border: 0; background: transparent; font-size: 20px; cursor: pointer; color: var(--muted); }
+#card dl { margin: 8px 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; }
+#card dt { color: var(--muted); } #card dd { margin: 0; font-variant-numeric: tabular-nums; }
+#card .plan { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: var(--line); font-size: 13px; }
+#card .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px; }
+#card .chips a { font-size: 12px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 99px; cursor: pointer; text-decoration: none; color: var(--ink); }
+#card .chips a:hover { background: var(--line); }
+#card h3 { margin: 10px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
+#card .go { display: inline-block; margin-top: 8px; padding: 7px 12px; border-radius: 9px; background: var(--ink); color: var(--bg); text-decoration: none; font-weight: 600; }
+#tip { position: absolute; z-index: 6; pointer-events: none; background: var(--ink); color: var(--bg); padding: 4px 8px; border-radius: 7px; font-size: 12.5px; display: none; white-space: nowrap; box-shadow: var(--shadow); }
+#toggleList { display: none; }
+@media (max-width: 820px) {
+  #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  aside { position: fixed; left: 0; top: 0; bottom: 0; width: min(88vw, 340px); transform: translateX(-102%); transition: transform .2s; z-index: 20; box-shadow: var(--shadow); }
+  aside.open { transform: none; }
+  #toggleList { display: inline-block; }
+  header .sub { display: none; }
+  #card { left: 8px; right: 8px; width: auto; bottom: 8px; max-height: 52%; }
+  #legend { display: none; } #layers { right: 54px; max-width: 170px; } #bsq { bottom: 12px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button class="btn" id="toggleList" aria-label="list">☰</button>
+    <h1 id="ttl"></h1><span class="draft" id="draft"></span>
+    <span class="sub" id="sub"></span>
+    <span class="grow"></span>
+    <button class="btn" id="fitCity"></button><button class="btn" id="fitCenter"></button>
+    <span class="seg" id="colorBy"><button data-v="rayon" aria-pressed="true"></button><button data-v="size" aria-pressed="false"></button></span>
+    <span class="seg" id="lang"><button data-v="ru" aria-pressed="true">RU</button><button data-v="en" aria-pressed="false">EN</button></span>
+    <button class="btn" id="theme" aria-label="theme">◐</button>
+  </header>
+  <aside id="side">
+    <input id="search" type="search" autocomplete="off">
+    <div id="stats"></div>
+    <div id="list"></div>
+  </aside>
+  <main id="stage">
+    <svg id="map" aria-label="map"></svg>
+    <svg id="lab" aria-hidden="true"></svg>
+    <div id="bsq"><span></span></div>
+    <div class="hud" id="zoom"><button id="zin" aria-label="+">+</button><button id="zout" aria-label="−">−</button></div>
+    <details class="hud" id="layers"></details>
+    <div class="hud" id="legend"></div>
+    <div class="hud" id="card"></div>
+    <div id="tip"></div>
+  </main>
+</div>
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(() => {
+'use strict';
+const D = JSON.parse(document.getElementById('data').textContent);
+const $ = (id) => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+
+// ------------------------------------------------------------------ strings
+const T = {
+  ru: { title: 'Выберите район Петербурга', draft: 'ЧЕРНОВИК', sub: 'Районы = реальные муниципальные округа города. Границы идут по улицам, рекам и каналам. Размер сравнивается с районом B (Север).',
+    city: 'Весь город', center: 'Центр', rayon: 'По районам', size: 'По размеру', search: 'Поиск района…', areas: 'районов', km2: 'км²', total: 'всего',
+    cls: { b: '≈ B', large: 'чуть больше', big: 'разделить', small: 'объединить' },
+    clsLong: { b: 'Размер как у района B (±20 %)', large: 'Немного больше B (до 1,5 × B): можно оставить', big: 'Слишком большой: разделить', small: 'Слишком мал: объединить с соседом' },
+    layers: 'Слои', lRoads: 'Главные улицы', lRayon: 'Границы городских районов', lPlan: 'Размеры: штриховка', lLabels: 'Названия', lParks: 'Парки (центр)', lExist: 'Уже в игре (A, B)', lSq: 'Квадрат = район B',
+    legend: 'Размер района', rayonH: 'Район города', area: 'Территория', land: 'Суша', vsB: 'к району B', exist: 'В игре', plan: 'План', isolated: 'рядом нет малых районов: оставить как отдельный малый район', bestEffort: 'пока лучший вариант, обсудим', mergeOk: 'получится ≈ B', mergeNear: 'близко к B', splitInto: (n) => 'Разделить примерно на ' + n + ' (по ~' , mergeWith: 'Объединить с', contains: 'Что внутри', neighbours: 'Соседи', open: 'Открыть сцену',
+    live: 'работает', wip: 'в разработке', none: 'сцены пока нет', bname: 'район B ≈ 3,95 км²', sq: '= район B · 3,95 км²', gulf: 'Финский залив', bay: 'Невская губа', neva: 'Нева', ladoga: '',
+    pickA: 'Нажмите на район, чтобы увидеть сведения', ofB: '× B', cover: 'покрыто' },
+  en: { title: 'Choose a part of Saint Petersburg', draft: 'DRAFT', sub: 'Areas = the real municipal districts of the city. Borders follow streets, rivers and canals. Size is compared with area B (North).',
+    city: 'Whole city', center: 'Centre', rayon: 'By district', size: 'By size', search: 'Search areas…', areas: 'areas', km2: 'km²', total: 'total',
+    cls: { b: '≈ B', large: 'slightly large', big: 'split', small: 'merge' },
+    clsLong: { b: 'About the size of area B (±20 %)', large: 'A little larger than B (up to 1.5 × B): can stay as is', big: 'Too large: split', small: 'Too small: merge with a neighbour' },
+    layers: 'Layers', lRoads: 'Main streets', lRayon: 'City district borders', lPlan: 'Size plan: hatching', lLabels: 'Names', lParks: 'Parks (centre)', lExist: 'Already in the game (A, B)', lSq: 'Square = area B',
+    legend: 'Area size', rayonH: 'City district', area: 'Territory', land: 'Land', vsB: 'vs area B', exist: 'In the game', plan: 'Plan', isolated: 'no small neighbour: keep as a separate small area', bestEffort: 'best option so far, to discuss', mergeOk: 'gives about B', mergeNear: 'close to B', splitInto: (n) => 'Split into about ' + n + ' (about ', mergeWith: 'Merge with', contains: 'Inside', neighbours: 'Neighbours', open: 'Open the scene',
+    live: 'live', wip: 'in development', none: 'no scene yet', bname: 'area B ≈ 3.95 km²', sq: '= area B · 3.95 km²', gulf: 'Gulf of Finland', bay: 'Neva Bay', neva: 'Neva', ladoga: '',
+    pickA: 'Click an area to see details', ofB: '× B', cover: 'covered' },
+};
+let lang = 'ru';
+try { lang = localStorage.getItem('intro-lang') || ((navigator.language || 'ru').startsWith('ru') ? 'ru' : 'en'); } catch (e) {}
+const S = () => T[lang];
+const nm = (a) => (lang === 'ru' ? a.ru : a.en);
+const rayName = (r) => (lang === 'ru' ? r.ru : r.en);
+const fmt = (v) => (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)).replace('.', lang === 'ru' ? ',' : '.');
+
+// ------------------------------------------------------------------ geometry (metres around the centre)
+const LON0 = 30.30, LAT0 = 59.95, KX = 111320 * Math.cos(LAT0 * Math.PI / 180), KY = 110950;
+const pm = (p) => [(p[0] - LON0) * KX, -(p[1] - LAT0) * KY];
+const ringD = (r) => { let d = ''; for (let i = 0; i < r.length; i++) { const q = pm(r[i]); d += (i ? 'L' : 'M') + q[0].toFixed(0) + ' ' + q[1].toFixed(0); } return d + 'Z'; };
+const ringsD = (rs) => rs.map(ringD).join('');
+const lineD = (l) => { let d = ''; for (let i = 0; i < l.length; i++) { const q = pm(l[i]); d += (i ? 'L' : 'M') + q[0].toFixed(0) + ' ' + q[1].toFixed(0); } return d; };
+
+// ------------------------------------------------------------------ colours
+const LIGHT = { l: [70, 79, 62, 85, 56], d: [36, 30, 42, 26, 48] };
+const dark = () => document.documentElement.dataset.theme === 'dark';
+const rayById = new Map(D.rayons.map((r) => [r.id, r]));
+const KC = { b: '#4caf7a', large: '#e5b94a', big: '#d9604f', small: '#7f8ce6' };
+const KCD = { b: '#2f8a5a', large: '#b88a1c', big: '#b0463a', small: '#5b6bd6' };
+let colorBy = 'rayon';
+function fillOf(a) {
+  if (colorBy === 'size') return dark() ? KCD[a.kind] : KC[a.kind];
+  const h = rayById.get(a.ray).hue, sh = a.shade % 5;
+  return dark() ? `hsl(${h} 34% ${LIGHT.d[sh]}%)` : `hsl(${h} 52% ${LIGHT.l[sh]}%)`;
+}
+
+// ------------------------------------------------------------------ build the map
+const map = $('map'), lab = $('lab'), stage = $('stage');
+const defs = el('defs', {}, map);
+defs.innerHTML = `<pattern id="hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="9" stroke="rgba(176,40,30,.55)" stroke-width="2.4"/></pattern>
+<pattern id="hatchL" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="12" stroke="rgba(190,140,0,.4)" stroke-width="1.6"/></pattern>`;
+const world = el('g', { id: 'world' }, map);
+const gLand = el('rect', { x: -90000, y: -90000, width: 180000, height: 180000, fill: 'var(--bg)' }, world);
+const gAreas = el('g', {}, world), gPlan = el('g', { 'pointer-events': 'none' }, world);
+const gRay = el('path', { fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.8, 'stroke-opacity': .55, 'stroke-linejoin': 'round', 'pointer-events': 'none' }, world);
+const gParks = el('path', { fill: 'var(--park)', 'fill-opacity': .55, 'fill-rule': 'evenodd', 'pointer-events': 'none' }, world);
+const gWater = el('path', { fill: 'var(--water)', 'fill-rule': 'evenodd', 'pointer-events': 'none' }, world);
+const gSea = el('path', { fill: 'var(--sea)', 'fill-rule': 'evenodd', 'pointer-events': 'none' }, world);
+const gRiv1 = el('path', { fill: 'none', stroke: 'var(--water)', 'stroke-width': 1.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'pointer-events': 'none' }, world);
+const gRiv2 = el('path', { fill: 'none', stroke: 'var(--water)', 'stroke-width': 2.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'pointer-events': 'none' }, world);
+const gRoad1 = el('path', { fill: 'none', stroke: 'var(--road)', 'stroke-width': 1, 'stroke-linejoin': 'round', 'pointer-events': 'none' }, world);
+const gRoad2 = el('path', { fill: 'none', stroke: 'var(--road2)', 'stroke-width': 1.7, 'stroke-linejoin': 'round', 'pointer-events': 'none' }, world);
+const gSel = el('g', { 'pointer-events': 'none' }, world);
+const gEx = el('g', { 'pointer-events': 'none' }, world);
+
+gSea.setAttribute('d', ringsD(D.layers.sea));
+gWater.setAttribute('d', D.layers.water.map((w) => ringsD(w.o) + ringsD(w.i)).join(''));
+gRiv1.setAttribute('d', D.layers.rivers.filter((l) => l.w === 1).map((l) => lineD(l.p)).join(''));
+gRiv2.setAttribute('d', D.layers.rivers.filter((l) => l.w === 2).map((l) => lineD(l.p)).join(''));
+gRoad1.setAttribute('d', D.layers.roads.filter((l) => l.c === 1).map((l) => lineD(l.p)).join(''));
+gRoad2.setAttribute('d', D.layers.roads.filter((l) => l.c !== 1).map((l) => lineD(l.p)).join(''));
+gRay.setAttribute('d', D.layers.rayons.map((r) => ringsD(r.o)).join(''));
+gParks.setAttribute('d', D.layers.parks.map((p) => ringsD(p.o)).join(''));
+
+const pathOf = new Map(), planOf = new Map();
+for (const a of D.areas) {
+  const d = ringsD(a.outer) + ringsD(a.inner);
+  a.d = d;
+  const p = el('path', { d, class: 'area', 'fill-rule': 'evenodd', fill: fillOf(a), 'data-k': a.k }, gAreas);
+  pathOf.set(a.k, p);
+  if (a.kind === 'big' || a.kind === 'large') planOf.set(a.k, el('path', { d, 'fill-rule': 'evenodd', fill: a.kind === 'big' ? 'url(#hatch)' : 'url(#hatchL)', stroke: 'none' }, gPlan));
+  else if (a.kind === 'small') planOf.set(a.k, el('path', { d, 'fill-rule': 'evenodd', fill: 'none', stroke: '#4a58c8', 'stroke-width': 2.6, 'stroke-dasharray': '1.5 5', 'stroke-linecap': 'round' }, gPlan));
+}
+// the areas that exist today: A (strip) and B (north) as dashed rectangles
+for (const e of D.existing) {
+  const d = e.rects.map((r) => ringD(r)).join('');
+  el('path', { d, fill: 'rgba(255,255,255,.0)', stroke: 'var(--ink)', 'stroke-width': 2.2, 'stroke-dasharray': '7 4' }, gEx);
+}
+const gSelPath = el('path', { fill: 'none', stroke: 'var(--ink)', 'stroke-width': 3, 'stroke-linejoin': 'round', 'fill-rule': 'evenodd' }, gSel);
+const gSelPartners = el('path', { fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2.6, 'stroke-dasharray': '6 4', 'fill-rule': 'evenodd' }, gSel);
+const gSelPath2 = el('path', { fill: 'none', stroke: 'var(--bg)', 'stroke-width': 1.2, 'stroke-linejoin': 'round', 'fill-rule': 'evenodd' }, gSel);
+
+// ------------------------------------------------------------------ view (pan / zoom)
+let view = { k: 0.01, tx: 0, ty: 0 };
+const rect = () => stage.getBoundingClientRect();
+function apply() {
+  world.setAttribute('transform', `translate(${view.tx} ${view.ty}) scale(${view.k})`);
+  scheduleLabels(); updateScale();
+}
+function fitBox(x0, y0, x1, y1, pad = 0.9, animate = true) {
+  const r = rect(), k = Math.min(r.width / (x1 - x0), r.height / (y1 - y0)) * pad;
+  const to = { k, tx: r.width / 2 - (x0 + x1) / 2 * k, ty: r.height / 2 - (y0 + y1) / 2 * k };
+  if (!animate) { view = to; apply(); return; }
+  const from = { ...view }, t0 = performance.now(), dur = 420;
+  const step = (t) => { const u = Math.min(1, (t - t0) / dur), e = u < .5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+    // interpolate in log-space for k so the zoom feels even
+    const k2 = Math.exp(Math.log(from.k) + (Math.log(to.k) - Math.log(from.k)) * e);
+    const cx0 = (r.width / 2 - from.tx) / from.k, cy0 = (r.height / 2 - from.ty) / from.k, cx1 = (r.width / 2 - to.tx) / to.k, cy1 = (r.height / 2 - to.ty) / to.k;
+    const cx = cx0 + (cx1 - cx0) * e, cy = cy0 + (cy1 - cy0) * e;
+    view = { k: k2, tx: r.width / 2 - cx * k2, ty: r.height / 2 - cy * k2 }; apply(); if (u < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+const cityBox = () => { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const a of D.areas) for (const r of a.outer) for (const p of r) { const q = pm(p); x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); } return [x0, y0, x1, y1]; };
+const CITY = cityBox();
+const CENTER = (() => { const a = pm([30.19, 59.995]), b = pm([30.47, 59.875]); return [a[0], a[1], b[0], b[1]]; })();
+function zoomAt(f, cx, cy) {
+  const r = rect(); cx = cx ?? r.width / 2; cy = cy ?? r.height / 2;
+  const k2 = Math.min(Math.max(view.k * f, 0.002), 0.9), f2 = k2 / view.k;
+  view = { k: k2, tx: cx - (cx - view.tx) * f2, ty: cy - (cy - view.ty) * f2 }; apply();
+}
+const ptrs = new Map(); let moved = false, down = null, pinch0 = null;
+stage.addEventListener('pointerdown', (e) => { if (e.target.closest('.hud, #card')) return; stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); moved = false; down = { x: e.clientX, y: e.clientY }; if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) }; } });
+stage.addEventListener('pointermove', (e) => {
+  const r = rect();
+  if (!ptrs.has(e.pointerId)) { hoverMove(e); return; }
+  const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0 && pinch0.d) { zoomAt(d / pinch0.d, (a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top); pinch0.d = d; } moved = true; return; }
+  const dx = e.clientX - prev[0], dy = e.clientY - prev[1];
+  if (Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y) > 4) { moved = true; stage.classList.add('drag'); }
+  if (moved) { view.tx += dx; view.ty += dy; apply(); hideTip(); }
+});
+const endPtr = (e) => { ptrs.delete(e.pointerId); pinch0 = null; stage.classList.remove('drag'); };
+stage.addEventListener('pointerup', (e) => { const wasTap = !moved; endPtr(e); if (wasTap && !e.target.closest('.hud, #card')) { const t = document.elementFromPoint(e.clientX, e.clientY); const k = t && t.classList && t.classList.contains('area') ? Number(t.dataset.k) : null; if (k != null) select(k, false); else select(null); } });
+stage.addEventListener('pointercancel', endPtr);
+stage.addEventListener('pointerleave', hideTip);
+stage.addEventListener('wheel', (e) => { e.preventDefault(); const r = rect(); zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0016)), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+$('zin').onclick = () => zoomAt(1.6); $('zout').onclick = () => zoomAt(1 / 1.6);
+$('fitCity').onclick = () => fitBox(...CITY); $('fitCenter').onclick = () => fitBox(...CENTER);
+
+// ------------------------------------------------------------------ hover tooltip
+const tip = $('tip');
+function hideTip() { tip.style.display = 'none'; }
+function hoverMove(e) {
+  const t = e.target;
+  if (t.classList && t.classList.contains('area')) {
+    const a = D.areas[Number(t.dataset.k)]; const r = rect();
+    tip.textContent = nm(a) + ' · ' + fmt(a.km2) + ' ' + S().km2; tip.style.display = 'block';
+    tip.style.left = Math.min(e.clientX - r.left + 14, r.width - tip.offsetWidth - 8) + 'px'; tip.style.top = (e.clientY - r.top + 16) + 'px';
+  } else hideTip();
+}
+
+// ------------------------------------------------------------------ labels (screen space, collision-free)
+let labTimer = 0;
+function scheduleLabels() { if (!labTimer) labTimer = requestAnimationFrame(() => { labTimer = 0; drawLabels(); }); }
+const layerOn = { roads: true, rayon: true, plan: true, labels: true, parks: false, exist: true, sq: true };
+const cpos = (a) => { const q = pm(a.label); return [q[0] * view.k + view.tx, q[1] * view.k + view.ty]; };
+const WATERLAB = [{ k: 'gulf', p: [29.62, 60.03] }, { k: 'bay', p: [30.03, 59.955] }, { k: 'neva', p: [30.435, 59.905] }];
+function drawLabels() {
+  while (lab.firstChild) lab.removeChild(lab.firstChild);
+  const r = rect(); if (!layerOn.labels) return;
+  const boxes = [];
+  const free = (b) => { for (const o of boxes) if (b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]) return false; return true; };
+  const order = [...D.areas].sort((p, q) => q.lr - p.lr);
+  for (const a of order) {
+    const [x, y] = cpos(a); const pr = a.lr * view.k;
+    if (x < -50 || y < -30 || x > r.width + 50 || y > r.height + 30) continue;
+    const name = nm(a), words = name.split(/[\s-]+/);
+    const widest = Math.max(...words.map((w) => w.length)), whole = name.length;
+    // try one line, then two lines
+    let fs = Math.min(15, (pr * 1.9) / (whole * 0.53)), lines = [name];
+    if (fs < 11 && words.length > 1) { const half = Math.ceil(words.length / 2); lines = [words.slice(0, half).join(' '), words.slice(half).join(' ')]; const mx = Math.max(lines[0].length, lines[1].length); fs = Math.min(14, (pr * 1.8) / (mx * 0.53)); }
+    if (fs < 7.5 || pr < 11) continue;
+    const w = Math.max(...lines.map((l) => l.length)) * fs * 0.55, h = fs * 1.15 * lines.length;
+    const showKm = fs >= 11 && pr > 26; const hh = h + (showKm ? fs * 1.05 : 0);
+    const b = [x - w / 2 - 3, y - hh / 2 - 2, x + w / 2 + 3, y + hh / 2 + 2];
+    if (!free(b)) continue;
+    boxes.push(b);
+    const g = el('g', {}, lab);
+    const y0 = y - hh / 2 + fs * 0.95;
+    lines.forEach((l, i) => { const t = el('text', { x, y: y0 + i * fs * 1.12, 'font-size': fs.toFixed(1), 'font-weight': 600 }, g); t.textContent = l; });
+    if (showKm) { const t = el('text', { x, y: y0 + lines.length * fs * 1.12 + fs * 0.1, 'font-size': (fs * 0.82).toFixed(1), class: 'sm' }, g); t.textContent = fmt(a.km2) + ' ' + S().km2 + (a.kind === 'big' ? ' · ÷' + a.split : a.kind === 'small' ? ' · +' : ''); }
+  }
+  // existing areas' letters
+  if (layerOn.exist) for (const e of D.existing) {
+    const ctr = e.rects.flat().reduce((s, p) => [s[0] + p[0], s[1] + p[1]], [0, 0]).map((v) => v / e.rects.flat().length);
+    const q = pm(ctr), x = q[0] * view.k + view.tx, y = q[1] * view.k + view.ty - 0;
+    if (x < -20 || y < -20 || x > r.width + 20 || y > r.height + 20) continue;
+    const g = el('g', { class: 'chip' }, lab); el('circle', { cx: x, cy: y, r: 13, fill: 'var(--ink)', stroke: 'var(--bg)', 'stroke-width': 2 }, g);
+    const t = el('text', { x, y: y + 5, 'font-size': 14, 'font-weight': 800, fill: 'var(--bg)' }, g); t.textContent = e.id; t.style.fill = 'var(--bg)';
+  }
+  // water names
+  for (const w of WATERLAB) { const q = pm(w.p), x = q[0] * view.k + view.tx, y = q[1] * view.k + view.ty; if (view.k > 0.06 && w.k !== 'neva') continue; if (x < 0 || y < 0 || x > r.width || y > r.height) continue; const g = el('g', { class: 'water' }, lab); const t = el('text', { x, y, 'font-size': w.k === 'neva' ? 11 : 14 }, g); t.textContent = S()[w.k]; }
+}
+
+// ------------------------------------------------------------------ the B square and the scale
+function updateScale() {
+  const sq = $('bsq'); const side = Math.sqrt(D.meta.B_KM2) * 1000 * view.k;
+  if (layerOn.sq && side > 24 && side < Math.min(rect().width, rect().height) * 0.42) { sq.style.display = 'block'; sq.style.width = sq.style.height = side + 'px'; sq.firstChild.textContent = side > 120 ? S().sq : 'B';  sq.style.bottom = (window.innerWidth > 820 ? 150 : 12) + 'px'; }
+  else sq.style.display = 'none';
+}
+
+// ------------------------------------------------------------------ selection and the card
+let selected = null;
+const card = $('card');
+function select(k, zoom = true) {
+  selected = k;
+  for (const [kk, p] of pathOf) { p.classList.toggle('on', kk === k); }
+  document.querySelectorAll('.item').forEach((i) => i.classList.toggle('on', Number(i.dataset.k) === k));
+  if (k == null) { card.classList.remove('show'); gSelPath.setAttribute('d', ''); gSelPath2.setAttribute('d', ''); gSelPartners.setAttribute('d', ''); return; }
+  const a = D.areas[k]; gSelPath.setAttribute('d', a.d); gSelPath2.setAttribute('d', a.d);
+  gSelPartners.setAttribute('d', a.kind === 'small' && a.mergeGroup ? a.mergeGroup.filter((q) => q !== k).map((q) => D.areas[q].d).join('') : '');
+  pathOf.get(k).parentNode.appendChild(pathOf.get(k));
+  renderCard(a);
+  if (zoom) { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const r of a.outer) for (const p of r) { const q = pm(p); x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); } const wide = window.innerWidth > 820; fitBox(x0, y0, x1 + (wide ? 900 : 0), y1, 0.5); }
+}
+function renderCard(a) {
+  const s = S(), ray = rayById.get(a.ray);
+  const other = lang === 'ru' ? a.en : a.ru;
+  let plan = '';
+  if (a.kind === 'b') plan = `<div class="plan"><b>${s.cls.b}</b> · ${s.clsLong.b}</div>`;
+  if (a.kind === 'large') plan = `<div class="plan"><b>${s.cls.large}</b> · ${s.clsLong.large}</div>`;
+  if (a.kind === 'big') plan = `<div class="plan"><b>${s.cls.big}</b> · ${s.clsLong.big}<br>${s.splitInto(a.split)}${fmt(a.km2 / a.split)} ${s.km2})</div>`;
+  if (a.kind === 'small') {
+    const ms = (a.mergeGroup || []).filter((k) => k !== a.k).map((k) => D.areas[k]); const links = ms.map((m) => `<a href="#" data-go="${m.k}">${nm(m)}</a>`).join(' + ');
+    const note = a.mergeLone ? (a.mergeSum > D.meta.B_HI * 1.5 ? s.isolated : s.bestEffort) : (a.mergeSum >= D.meta.B_LO && a.mergeSum <= D.meta.B_HI ? s.mergeOk : s.mergeNear);
+    plan = `<div class="plan"><b>${s.cls.small}</b> · ${s.clsLong.small}${ms.length ? `<br>${s.mergeWith}: ${links}<br>${a.mergeLone ? '' : fmt(a.mergeSum) + ' ' + s.km2 + ' · '}${note}` : ''}</div>`; }
+  const ex = a.exist.map((e) => { const x = D.existing.find((q) => q.id === e.id); return `<span class="tag ${e.id}">${e.id}</span> ${lang === 'ru' ? x.title : x.titleEn} ${e.pct}% ${s.cover} · ${x.status === 'Live' ? s.live : s.wip}`; });
+  const goLinks = a.exist.map((e) => { const x = D.existing.find((q) => q.id === e.id); return `<a class="go" href="../${x.key === 'strip' ? 'index.html' : 'north.html'}">${s.open} ${e.id} →</a>`; }).join(' ');
+  card.innerHTML = `<button class="x" aria-label="close">×</button><h2>${nm(a)}</h2><div class="en">${other !== nm(a) ? other + ' · ' : ''}${rayName(ray)}${lang === 'ru' ? ' район' : ' district'}</div>
+  <dl><dt>${s.land}</dt><dd>${fmt(a.km2)} ${s.km2} · ${fmt(a.x)} ${s.ofB}</dd>${ex.length ? `<dt>${s.exist}</dt><dd>${ex.join('<br>')}</dd>` : `<dt>${s.exist}</dt><dd style="color:var(--muted)">${s.none}</dd>`}</dl>
+  ${plan}
+  ${a.contains.length ? `<h3>${s.contains}</h3><div class="chips">${a.contains.map((c) => `<span style="font-size:12.5px">${lang === 'ru' ? c.ru : c.en}</span>`).join(' · ')}</div>` : ''}
+  <h3>${s.neighbours}</h3><div class="chips">${a.nb.slice(0, 6).map((n) => `<a href="#" data-go="${n.k}">${nm(D.areas[n.k])}</a>`).join('')}</div>${goLinks ? '<div>' + goLinks + '</div>' : ''}`;
+  card.classList.add('show');
+  card.querySelector('.x').onclick = () => select(null);
+  card.querySelectorAll('[data-go]').forEach((l) => { l.onclick = (e) => { e.preventDefault(); select(Number(l.dataset.go)); }; });
+}
+
+// ------------------------------------------------------------------ the list
+function buildList() {
+  const s = S(), list = $('list'), q = $('search').value.trim().toLowerCase();
+  list.innerHTML = '';
+  for (const ray of D.rayons) {
+    const items = D.areas.filter((a) => a.ray === ray.id && (!q || a.ru.toLowerCase().includes(q) || a.en.toLowerCase().includes(q))).sort((p, r) => r.km2 - p.km2);
+    if (!items.length) continue;
+    const det = document.createElement('details'); det.className = 'ray'; det.open = !!q || ray.id < 4;
+    const sum = document.createElement('summary');
+    sum.innerHTML = `<span class="dot" style="background:${dark() ? `hsl(${ray.hue} 40% 46%)` : `hsl(${ray.hue} 60% 62%)`}"></span>${rayName(ray)}<span class="cnt">${items.length} · ${fmt(ray.km2)} ${s.km2}</span>`;
+    det.appendChild(sum);
+    for (const a of items) {
+      const d = document.createElement('div'); d.className = 'item'; d.dataset.k = a.k; d.tabIndex = 0;
+      d.innerHTML = `<span class="nm">${nm(a)}</span><span class="km">${fmt(a.km2)}</span><span class="tag ${a.kind}">${a.kind === 'big' ? '÷' + a.split : a.kind === 'small' ? '+' : '≈B'}</span>`;
+      d.onclick = () => { select(a.k); document.getElementById('side').classList.remove('open'); };
+      d.onkeydown = (e) => { if (e.key === 'Enter') d.click(); };
+      det.appendChild(d);
+    }
+    list.appendChild(det);
+  }
+  const cls = D.areas.reduce((m, a) => (m[a.kind] = (m[a.kind] || 0) + 1, m), {});
+  const tot = D.areas.reduce((x, a) => x + a.km2, 0);
+  $('stats').innerHTML = `<span><b>${D.areas.length}</b> ${s.areas} · ${fmt(tot)} ${s.km2}</span><span class="tag b">≈B ${cls.b || 0}</span><span class="tag large">${s.cls.large} ${cls.large || 0}</span><span class="tag big">${s.cls.big} ${cls.big || 0}</span><span class="tag small">${s.cls.small} ${cls.small || 0}</span>`;
+  if (selected != null) document.querySelectorAll('.item').forEach((i) => i.classList.toggle('on', Number(i.dataset.k) === selected));
+}
+
+// ------------------------------------------------------------------ layers, legend, static texts
+function buildLayers() {
+  const s = S(), L = $('layers');
+  const rows = [['roads', s.lRoads], ['rayon', s.lRayon], ['plan', s.lPlan], ['labels', s.lLabels], ['parks', s.lParks], ['exist', s.lExist], ['sq', s.lSq]];
+  L.innerHTML = `<summary><b style="display:inline">${s.layers}</b></summary>` + rows.map(([k, t]) => `<label><input type="checkbox" data-l="${k}" ${layerOn[k] ? 'checked' : ''}> ${t}</label>`).join('');
+  L.querySelectorAll('input').forEach((i) => { i.onchange = () => { layerOn[i.dataset.l] = i.checked; applyLayers(); }; });
+  $('legend').innerHTML = `<b>${s.legend}</b>
+    <div class="row"><span class="sw bsq"></span><span><b>${s.cls.b}</b> ${fmt(D.meta.B_LO)}–${fmt(D.meta.B_HI)} ${s.km2} (${s.bname})</span></div>
+    <div class="row"><span class="sw" style="background:repeating-linear-gradient(45deg, rgba(190,140,0,.5) 0 2px, transparent 2px 7px)"></span><span><b>${s.cls.large}</b> ${fmt(D.meta.B_HI)}–${fmt(D.meta.B_KM2 * 1.5)}</span></div>
+    <div class="row"><span class="sw hatch"></span><span><b>${s.cls.big}</b> &gt; ${fmt(D.meta.B_KM2 * 1.5)} (÷N)</span></div>
+    <div class="row"><span class="sw dots"></span><span><b>${s.cls.small}</b> &lt; ${fmt(D.meta.B_LO)} (+)</span></div>
+    <div class="row"><span class="tag A">A</span><span class="tag B">B</span><span>${lang === 'ru' ? 'уже в игре (пунктир)' : 'already in the game (dashed)'}</span></div>`;
+}
+function applyLayers() {
+  gRoad1.style.display = gRoad2.style.display = layerOn.roads ? '' : 'none';
+  gRay.style.display = layerOn.rayon ? '' : 'none';
+  gPlan.style.display = layerOn.plan ? '' : 'none';
+  gParks.style.display = layerOn.parks ? '' : 'none';
+  gEx.style.display = layerOn.exist ? '' : 'none';
+  drawLabels(); updateScale();
+}
+function texts() {
+  const s = S();
+  document.documentElement.lang = lang; $('ttl').textContent = s.title; $('draft').textContent = s.draft; $('sub').textContent = s.sub;
+  $('fitCity').textContent = s.city; $('fitCenter').textContent = s.center; $('search').placeholder = s.search;
+  const cb = $('colorBy').children; cb[0].textContent = s.rayon; cb[1].textContent = s.size;
+  document.querySelectorAll('#lang button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === lang)));
+  buildList(); buildLayers(); if (selected != null) renderCard(D.areas[selected]); drawLabels();
+}
+function recolor() { for (const a of D.areas) pathOf.get(a.k).setAttribute('fill', fillOf(a)); buildList(); }
+document.querySelectorAll('#lang button').forEach((b) => { b.onclick = () => { lang = b.dataset.v; try { localStorage.setItem('intro-lang', lang); } catch (e) {} texts(); }; });
+document.querySelectorAll('#colorBy button').forEach((b) => { b.onclick = () => { colorBy = b.dataset.v; document.querySelectorAll('#colorBy button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); recolor(); }; });
+const setTheme = (t) => { document.documentElement.dataset.theme = t; try { localStorage.setItem('intro-theme', t); } catch (e) {} recolor(); drawLabels(); };
+$('theme').onclick = () => setTheme(dark() ? 'light' : 'dark');
+$('search').oninput = buildList;
+$('toggleList').onclick = () => $('side').classList.toggle('open');
+window.addEventListener('resize', () => { apply(); });
+{ let th = null; try { th = localStorage.getItem('intro-theme'); } catch (e) {} if (!th) th = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.dataset.theme = th; }
+
+$('layers').open = window.innerWidth > 820;
+recolor(); texts(); applyLayers();
+fitBox(...CITY, 0.94, false);
+// open straight to a given area: #k=12 or #A / #B
+const hash = location.hash.replace('#', '');
+if (/^k=\d+$/.test(hash)) select(Number(hash.slice(2)));
+else if (hash === 'center') fitBox(...CENTER, 0.94, false);
+})();
+</script>
+</body>
+</html>
