@@ -10,6 +10,7 @@ const imp = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 const args = new Set(process.argv.slice(2));
 let failed = 0, total = 0;
 const ok = (name, cond, detail = '') => { total++; if (!cond) failed++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}${detail ? ' - ' + detail : ''}`); };
+const t6Colliders = (s) => (s.fence?.colliders || 0) + (s.furniture?.colliders || 0) + (s.monuments?.colliders || 0);          // T6: the fence, the furniture and the monuments add their colliders to the module's
 
 const SE = await imp('tools/tauride/lib/stub-env.mjs');
 const eng = await imp('tools/tauride/lib/stub-env.mjs').then((m) => m.loadEngine(ROOT));
@@ -167,7 +168,7 @@ ok('the module publishes bridges { deckY, sites, stats, triangles, draws, collid
   ok('the service deckY answers the Paradny deck on the podium (bit for bit paradnyDeckY, deckLift null) and the bridge profile on all eight bridge ways (deckLift WALK_LIFT), null elsewhere', bad === 0 && onBridge > 150 && onPodium > 500 && svc.deckY(1200, -1500) === null && svc.deckLift(1200, -1500) === null, `${n} points, ${onBridge} on bridges, ${onPodium} on the podium, ${bad} wrong`); }
 { const fake = { deckY: (x, z) => Hk.paradnyDeckY(x, z) }; let miss = 0; for (const s of plan.sites) { const q = s.at(s.L / 2); if (fake.deckY(q.x, q.z) === null) miss++; }
   ok('mutant: a service that forgets the bridges (the T1 service: courts.deckY alone) answers null on every deck (the check above can fail)', miss === plan.sites.length, `${miss} of ${plan.sites.length}`); }
-ok('HOOKS.deckServices names the service, and the colliders of the module are the Paradny + palace 1,270, the shore ring with the deck cuts, the bridge colliders and the trunks of the trees (T5)', AT.HOOKS.deckServices.includes('landmarksTauride') && nModule === 1270 + svc.ponds.colliders + B.colliders + (svc.trees?.colliders || 0), `${nModule} = 1270 + ${svc.ponds.colliders} + ${B.colliders} + ${svc.trees?.colliders}`);
+ok('HOOKS.deckServices names the service, and the colliders of the module are the Paradny + palace 1,270, the shore ring with the deck cuts, the bridge colliders, the trunks of the trees (T5) and the fence, the furniture and the monuments (T6)', AT.HOOKS.deckServices.includes('landmarksTauride') && nModule === 1270 + svc.ponds.colliders + B.colliders + (svc.trees?.colliders || 0) + t6Colliders(svc), `${nModule} = 1270 + ${svc.ponds.colliders} + ${B.colliders} + ${svc.trees?.colliders} + ${t6Colliders(svc)} (T6)`);
 { const meshes = {}; ctx.staticRoot.traverse((o) => { if (o.isMesh && /^tauride-(bridges|dam-water|reeds)$/.test(o.name)) meshes[o.name] = o; });
   const b = meshes['tauride-bridges'], w = meshes['tauride-dam-water'], r = meshes['tauride-reeds'];
   ok('the meshes: tauride-bridges (one draw, vertex colours, never batched, in the outline pass), tauride-dam-water (a transparent decal out of the outline pass), tauride-reeds (one InstancedMesh, out of the outline pass, never batched)', !!b && !!w && !!r && b.userData.noBatch && b.geometry.attributes.color && b.layers.mask !== 1 << ctx.LAYER_NO_OUTLINE && w.material.transparent && w.layers.mask === 1 << ctx.LAYER_NO_OUTLINE && r.isInstancedMesh && r.count === svc.reeds.instances && r.layers.mask === 1 << ctx.LAYER_NO_OUTLINE && r.userData.noBatch, Object.keys(meshes).join(' '));

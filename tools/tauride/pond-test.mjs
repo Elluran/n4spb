@@ -11,6 +11,7 @@ const imp = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 const args = new Set(process.argv.slice(2));
 let failed = 0, total = 0;
 const ok = (name, cond, detail = '') => { total++; if (!cond) failed++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}${detail ? ' - ' + detail : ''}`); };
+const t6Colliders = (s) => (s.fence?.colliders || 0) + (s.furniture?.colliders || 0) + (s.monuments?.colliders || 0);          // T6: the fence, the furniture and the monuments add their colliders to the module's
 
 const SE = await imp('tools/tauride/lib/stub-env.mjs');
 const eng = await SE.loadEngine(ROOT);
@@ -226,7 +227,7 @@ console.log('5. the built module: the water surface at the datum, the colliders,
   ok('the Small Pond bed lies 5 cm below the water: the surface cannot z-fight with it because of the polygon offset (documented), and the Big Pond bed is 0.75 m below', Math.abs((P.WATER_Y - P.BED_SMALL) - 0.05) < 1e-9 && Math.abs((P.WATER_Y - P.BED_BIG) - 0.75) < 1e-9, '');
   const nCol = ctx.physics.count - n0;
   const nBridge = svc.bridges ? svc.bridges.colliders : 0, nTrees = svc.trees ? svc.trees.colliders : 0;      // T4b: the bridge kit adds its walk ramps and rail boxes (tools/tauride/bridge-test.mjs counts them); T5: the trunks of the trees (vegetation-test)
-  ok(`the shore colliders: ${pond.colliders} boxes (${pond.stats.colliderLengthM.toFixed(0)} m of the 2,666 m shore; T4b: ${pond.stats.chordsCut} chords cut where a deck crosses the ring), all inland of the shore, planned in ${(pond.buildMs).toFixed(1)} ms; the module added ${nCol} colliders in all (Paradny + palace 1,270 + the bridges ${nBridge} + the trunks ${nTrees})`, pond.colliders > 150 && pond.colliders < 400 && nCol === 1270 + pond.colliders + nBridge + nTrees, '');
+  ok(`the shore colliders: ${pond.colliders} boxes (${pond.stats.colliderLengthM.toFixed(0)} m of the 2,666 m shore; T4b: ${pond.stats.chordsCut} chords cut where a deck crosses the ring), all inland of the shore, planned in ${(pond.buildMs).toFixed(1)} ms; the module added ${nCol} colliders in all (Paradny + palace 1,270 + the bridges ${nBridge} + the trunks ${nTrees} + the fence, the furniture and the monuments ${t6Colliders(ctx.services.landmarksTauride)})`, pond.colliders > 150 && pond.colliders < 400 && nCol === 1270 + pond.colliders + nBridge + nTrees + t6Colliders(ctx.services.landmarksTauride), '');
   { const pl = PM.planPonds(); let inWater = 0; for (const c of pl.colliders) if (shore.dist(c.cx, c.cz) <= 0) inWater++; ok('no collider is centred in the water (they stand on the land side of the shore)', inWater === 0, `${inWater} of ${pl.colliders.length}`); }
   const plain = PM.planPonds(), gaps = PM.planPonds({ gaps: [{ x: 1394, z: -1461, r: 12 }] });
   ok('the gaps hook (T4a) removes the colliders near a deck head (and only there); the ring without decks is the T4a ring of 195', plain.colliders.length === 195 && gaps.colliders.length < plain.colliders.length && gaps.colliders.length > plain.colliders.length - 12, `${plain.colliders.length} -> ${gaps.colliders.length}`);

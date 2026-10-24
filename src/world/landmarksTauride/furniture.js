@@ -16,6 +16,7 @@ import { PATHS } from './data/paths.js';
 import { BENCHES, BINS, FENCES, GATES } from './data/furniture.js';
 import { GARDEN, FOOTPRINTS } from './data/footprints.js';
 import { BENCH, BIN, LANTERN } from './data/furniture-design.js';
+import { CLEARINGS } from './data/vegetation.js';
 
 // ---------------------------------------------------------------------------------------------------------------- geometry helpers
 const segPoint = (x, z, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz, t = l2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0; return [ax + dx * t, az + dz * t, t]; };
@@ -39,7 +40,7 @@ export const ribbonHalf = (p, L = LANTERN) => (p.cls === 'steps' ? 1.1 + 0.2 : p
  */
 export function planFurniture(o = {}) {
   const gh = o.gh || gardenHeight, shore = o.shore || GARDEN_SHORE, paths = o.paths || PATHS, DB = o.BENCH || BENCH, DN = o.BIN || BIN, DL = o.LANTERN || LANTERN;
-  const garden = o.garden || GARDEN.o, footprints = o.footprints || FOOTPRINTS.flatMap((f) => f.polys.map((p) => p.o)), fences = o.fences || FENCES, gates = o.gates || GATES, piers = o.piers || [], decks = o.decks || [];
+  const poses = o.poses || CLEARINGS, garden = o.garden || GARDEN.o, footprints = o.footprints || FOOTPRINTS.flatMap((f) => f.polys.map((p) => p.o)), fences = o.fences || FENCES, gates = o.gates || GATES, piers = o.piers || [], decks = o.decks || [];
   const H = (x, z) => gh(x, z) ?? 0;
   const ways = paths.filter((p) => p.cls !== 'bridge').map((p) => ({ id: p.id, pts: p.pts, hw: ribbonHalf(p, DL), steps: p.cls === 'steps', box: bbox(p.pts), lit: !!p.lit, cls: p.cls, w: p.w }));
   const fpBox = footprints.map((r) => ({ r, b: bbox(r) }));
@@ -111,6 +112,7 @@ export function planFurniture(o = {}) {
     for (const s of stairWays) if (nearestOn(s.pts, x, z)[2] < DL.clear.stair + s.hw) return drop('stair');
     for (const d of deckList) if (nearestOn(d.pts, x, z)[2] < d.r) return drop('deck');
     for (const g of gatePts) if (Math.hypot(g[0] - x, g[1] - z) < DL.clear.gate) return drop('gate');
+    for (const c of poses) if (Math.hypot(c.x - x, c.z - z) < DL.clear.pose) return drop('pose');
     for (const t of taken) if (Math.hypot(t.x - x, t.z - z) < t.r) return drop('piece');
     for (const l of lanterns) if (Math.hypot(l.x - x, l.z - z) < DL.clear.lantern) return drop('lantern');
     const e = 0.5, sl = Math.hypot(H(x + e, z) - H(x - e, z), H(x, z + e) - H(x, z - e)); if (sl > 0.2) return drop('slope');
@@ -212,6 +214,7 @@ export function buildFurniture(ctx, parent, plan, opts = {}) {
     });
     out.pool = pool; out.glowMaterial = mGlow; }
   out.draws = out.meshes.length + (out.pool ? 1 : 0);
+  out.colliders = out.items.bench.length + out.items.bin.length + out.items.lamp.filter(Boolean).length;
   out.spots = spots;
   return out;
 }

@@ -10,6 +10,7 @@ const imp = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 const args = new Set(process.argv.slice(2));
 let failed = 0, total = 0;
 const ok = (name, cond, detail = '') => { total++; if (!cond) failed++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}${detail ? ' - ' + detail : ''}`); };
+const t6Colliders = (s) => (s.fence?.colliders || 0) + (s.furniture?.colliders || 0) + (s.monuments?.colliders || 0);          // T6: the fence, the furniture and the monuments add their colliders to the module's
 const hashOf = (...arrs) => { const h = createHash('sha1'); for (const a of arrs) h.update(Buffer.from(a.buffer, a.byteOffset, a.byteLength)); return h.digest('hex').slice(0, 16); };
 
 const C = await imp('tools/tauride/lib/common.mjs');
@@ -238,7 +239,7 @@ console.log('5. the built module (landmarksTauride) and the environment ground' 
       ok('mutant: without the claim (module not in the build list) streets draws them: the check turns red', w2.wallIn >= 60 && w2.capIn > 20, `${w2.wallIn} wall triangles, ${w2.capIn} cap triangles`); }
   }
   ok(`the paths are ${pth.length} draws (<= ${PD.PATHS_DRAPED.drawsMax}) and <= ${PD.PATHS_DRAPED.trianglesMax} + 2,500 (T4a) triangles, the ribbons carry colour + aPath, the stairs colour + normals`, pth.length === 2 && pth.length <= PD.PATHS_DRAPED.drawsMax && svc.paths.triangles <= PD.PATHS_DRAPED.trianglesMax + 2500 && !!pth.find((m) => m.name === 'tauride-paths-ribbons').geometry.getAttribute('aPath'), `${svc.paths.triangles} triangles`);
-  ok('the module adds the colliders of the Paradny quarter and the palace (1,270 as before), the shore colliders of the ponds (T4a), the walk ramps and rails of the bridges (T4b) and the trunks of the trees (T5), nothing else', nCol === 1270 + ctx.services.landmarksTauride.ponds.colliders + (ctx.services.landmarksTauride.bridges?.colliders || 0) + (ctx.services.landmarksTauride.trees?.colliders || 0), `${nCol} = 1270 + ${ctx.services.landmarksTauride.ponds.colliders} + ${ctx.services.landmarksTauride.bridges?.colliders} + ${ctx.services.landmarksTauride.trees?.colliders}`);
+  ok('the module adds the colliders of the Paradny quarter and the palace (1,270 as before), the shore colliders of the ponds (T4a), the walk ramps and rails of the bridges (T4b) and the trunks of the trees (T5) and the fence, the furniture and the monuments (T6), nothing else', nCol === 1270 + ctx.services.landmarksTauride.ponds.colliders + (ctx.services.landmarksTauride.bridges?.colliders || 0) + (ctx.services.landmarksTauride.trees?.colliders || 0) + t6Colliders(ctx.services.landmarksTauride), `${nCol} = 1270 + ${ctx.services.landmarksTauride.ponds.colliders} + ${ctx.services.landmarksTauride.bridges?.colliders} + ${ctx.services.landmarksTauride.trees?.colliders} + ${t6Colliders(ctx.services.landmarksTauride)} (T6)`);
   // the shader text: the program is what the module says it is (balanced, every uniform declared and supplied)
   const FAKE = () => ({ uniforms: {}, vertexShader: '#include <common>\n#include <fog_vertex>', fragmentShader: '#include <common>\n#include <map_fragment>\n#include <fog_fragment>' });
   for (const [what, mat] of [['ground', terr[0].material], ['ribbons', pth.find((m) => m.name === 'tauride-paths-ribbons').material]]) {

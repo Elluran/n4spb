@@ -165,7 +165,7 @@ const limestoneCap = (g, ring, y, col) => {
 };
 const lineQuad = (g, p, q, w, y, col) => {
   const dx = q[0] - p[0], dz = q[1] - p[1], l = Math.hypot(dx, dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
-  g.quad([p[0] - nx, y, p[1] - nz], [q[0] - nx, y, q[1] - nz], [q[0] + nx, y, q[1] + nz], [p[0] + nx, y, p[1] + nz], col);
+  hq(g, [p[0] - nx, y, p[1] - nz], [q[0] - nx, y, q[1] - nz], [q[0] + nx, y, q[1] + nz], [p[0] + nx, y, p[1] + nz], col);
 };
 /** a rectangular tapered block (centre cx, cz; base w0 x d0 at y0, top w1 x d1 at y1) rotated by yaw */
 const taper = (g, cx, cz, yaw, y0, y1, w0, d0, w1, d1, col, top = true) => {
@@ -265,7 +265,7 @@ export function buildMonuments(ctx, parent, plan, opts = {}) {
     if (g.tris) add(g.build(), 'tauride-play'); }
   // ---- colliders
   for (const c of plan.colliders) { const it = c.cyl ? ph.addCylinder(c.x, c.z, c.r, c.y0, c.y1) : ph.addBox(c.x, c.z, c.w, c.d, c.rotY, c.y0, c.y1); out.items.push(it); }
-  if (plan.pitch) for (const gl of plan.pitch.goals) { const it = ph.addBox(gl.x, gl.z, PLAY.goal.d, PLAY.goal.w, gl.yaw, gl.y - 0.5, gl.y + 0.3); void it; }
+  if (plan.pitch) for (const gl of plan.pitch.goals) { out.items.push(ph.addBox(gl.x, gl.z, PLAY.goal.d, PLAY.goal.w, gl.yaw, gl.y - 0.5, gl.y + 0.3)); }
   for (const p of plan.playgrounds) for (const it of p.items) { const r = it.kind === 'sandpit' ? 0 : it.kind === 'slide' ? 1.0 : it.kind === 'swing' ? 0.0 : 0.5; if (r) { const c = ph.addCylinder(it.x, it.z, r, it.y - 0.5, it.y + 1.6); out.items.push(c); } }
   out.colliders = out.items.length;
   return out;
@@ -369,16 +369,17 @@ function buildOrangery(ctx, parent, o, out, add) {
 
 // ---------------------------------------------------------------------------------------------------------------- the pitch, the playgrounds, the fitness station
 function pitchGeometry(g, p) {
-  const S = PLAY.pitchSurface, ring = p.ring, y = p.y + S.lift;
-  limestoneCap(g, ring, y, S.turf);
-  for (const [a, b] of p.lines) lineQuad(g, a, b, S.lineW, y + 0.004, S.line);
+  const S = PLAY.pitchSurface, y = p.y + S.lift, Pt = (u, v) => [p.c.x + p.ux * u + p.vx * v, y, p.c.z + p.uz * u + p.vz * v];
+  // the turf in 12 mown bands across the long axis (two greens); the ring is a rectangle in the (u, v) frame of the pitch
+  const nb = 12; for (let i = 0; i < nb; i++) { const ua = p.u0 + (p.u1 - p.u0) * i / nb, ub = p.u0 + (p.u1 - p.u0) * (i + 1) / nb; hq(g, Pt(ua, p.v0), Pt(ub, p.v0), Pt(ub, p.v1), Pt(ua, p.v1), i % 2 ? S.turf : S.turfD); }
+  for (const [a, b] of p.lines) lineQuad(g, a, b, S.lineW, y + 0.012, S.line);
   const G = PLAY.goal;
   for (const gl of p.goals) {
-    g.at(gl.x, gl.y, gl.z, gl.yaw);                                              // local: x across the goal mouth, z into the pitch... (yaw puts +z along the axis towards the pitch centre)
+    g.at(gl.x, gl.y, gl.z, gl.yaw);                                              // local: x across the goal mouth, z into the pitch (the back frame is at -z)
     const hw = G.w / 2, pw = G.post / 2;
     g.box(-hw - pw, -hw + pw, 0, G.h, -pw, pw, G.color, 'b'); g.box(hw - pw, hw + pw, 0, G.h, -pw, pw, G.color, 'b'); g.box(-hw - pw, hw + pw, G.h - pw * 2, G.h, -pw, pw, G.color, 'b');
-    for (const s of [-1, 1]) { g.box(s * hw - pw, s * hw + pw, 0, pw * 2, -G.d, 0, G.color, 'b'); g.box(s * hw - pw / 2, s * hw + pw / 2, G.h - pw * 2, G.h, -G.d, 0, G.color, 'b'); }
-    g.quad([-hw, 0.02, -G.d], [hw, 0.02, -G.d], [hw, G.h - 0.08, -G.d * 0.2], [-hw, G.h - 0.08, -G.d * 0.2], G.net);
+    for (const s of [-1, 1]) { g.box(s * hw - pw, s * hw + pw, 0, pw * 2, -G.d, 0, G.color, 'b'); g.box(s * hw - pw / 2, s * hw + pw / 2, G.h - pw * 2, G.h, -G.d, 0, G.color, 'b'); g.box(s * hw - pw / 2, s * hw + pw / 2, 0.02, G.h - pw * 2, -G.d - pw / 2, -G.d + pw / 2, G.color, 'b'); }
+    g.box(-hw, hw, G.h - pw * 2, G.h, -G.d - pw / 2, -G.d + pw / 2, G.color, 'b');                         // the back crossbar
     g.at();
   }
 }

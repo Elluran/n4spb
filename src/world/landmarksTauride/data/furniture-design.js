@@ -21,11 +21,11 @@ export const BIN = { r: 0.3, h: 0.78, edge: 0.3, nudgeStep: 0.15, nudgeMax: 4.5,
 /** LANTERNS: the garden lights itself (a claimed way loses its street lamps; the mapped data has no lamp in the garden: LAMPS_IN_GARDEN 0). The 17 `lit` ways of data/paths.js (bridge ways and steps excepted) get a cast-iron
  *  garden lantern (a green-black pole 4.2 m with a collar, a four-sided glass lantern and a pyramid roof: the strip's landmarksE lantern, scaled) every `spacing` m along the way, on ALTERNATE sides, `offset` m beyond the
  *  ribbon's edge (the drawn ribbon is the nominal half width +- `widthVar` plus the ragged edge `rag`, paths-draped.js), starting `start` m from the way's first vertex. A candidate is dropped when it stands on a
- *  ribbon of ANY way, on a stair / bridge head / deck (axis + `deck`), within `clear` m of a bench / bin / gate / pier / another lantern, in the water or its bank band, in a footprint, outside the garden or within `fence`
- *  m of the fence line. Night: the lantern's glow follows the page's uNight (the strip's lamps); a light pool (additive, radius `pool`) lies on the ground. */
+ *  ribbon of ANY way, on a stair / bridge head / deck (axis + `deck`), within `clear` m of a bench / bin / gate / pier / another lantern, in the water or its bank band, in a footprint, outside the garden, within `fence`
+ *  m of the fence line or within `pose` m of a camera pose (data/vegetation.js CLEARINGS: a pole in the middle of a QA frame). Night: the lantern's glow follows the page's uNight (the strip's lamps); a light pool (additive, radius `pool`) lies on the ground. */
 export const LANTERN = {
   spacing: 27, start: 8, offset: 0.6, widthVar: 0.08, rag: 0.17, h: 4.2,
-  clear: { bench: 1.3, bin: 0.9, gate: 4, pier: 0.8, lantern: 12, deck: 2.2, fence: 1.2, footprint: 1.0, stair: 2.0 },
+  clear: { bench: 1.3, bin: 0.9, gate: 4, pier: 0.8, lantern: 12, deck: 2.2, fence: 1.2, footprint: 1.0, stair: 2.0, pose: 6 },
   poolR: 4.6, poolK: 0.5,
   iron: '#25382d', ironL: '#33493b', glass: '#fff0cc', mass: 160, anchored: 18, hitK: 0.5, far: 260, farGlow: 420,
 };
@@ -67,14 +67,14 @@ export const MEMORIAL = {
   // the stele: limestone slab tapering from `w0` x `d0` at the foot to `w1` x `d1` at the top, on a two-step granite base; a recessed relief panel (darker limestone) on the front and a bronze bugle and flame
   stele: { w0: 2.5, d0: 0.9, w1: 1.9, d1: 0.7, y0: 0.62 },
   base: [{ w: 4.2, d: 2.4, h: 0.3 }, { w: 3.3, d: 1.7, h: 0.32 }],
-  apronR: 4.6, apronRings: 3, apronSeg: 28, apronLift: 0.035, kerb: 0.18,
+  apronR: 4.6, apronRings: 3, apronSeg: 28, apronLift: 0.07, kerb: 0.18,       // the lift is 7 cm: the draped alley ribbons (+3 cm, polygon offset -1.4) must not cover the pavers
   stairs: ['w425635247', 'w1458068086', 'w1458068092'],
   cheek: { w: 0.4, h: 0.62, coping: 0.06, gap: 0.0 },
   limestone: '#d6ccb4', limestoneD: '#b9ad92', limestoneL: '#e4dcc8', graniteBase: '#8c8a86', bronze: '#3a4a42', paving: '#bdb4a2', pavingD: '#a49b8a', kerbColor: '#8b8783',
   photoR: [5.5, 8.5], collider: 1.0,
 };
 export const CHAIKOVSKY = {
-  id: 'n2974761162', name: 'П. И. Чайковский', year: 1990, h: 3.3, pedestal: { w: 1.1, d: 1.1, h: 1.9, base: 1.5, baseH: 0.28 }, bust: { scale: 1.45, style: 'civil' },
+  id: 'n2974761162', name: 'П. И. Чайковский', year: 1990, h: 3.0, pedestal: { w: 1.1, d: 1.1, h: 1.6, base: 1.5, baseH: 0.28 }, bust: { scale: 1.6, style: 'civil' },
   granite: '#7d7c7a', graniteL: '#98958f', photoR: [3.2, 5.5], collider: 0.9,
 };
 export const YESENIN = {
@@ -85,7 +85,7 @@ export const YESENIN = {
  *  a small spout from the duck's beak (a jet of `jetH` m) animated with the page time; a paved plaza of `plazaR` m round it (setts, granite kerb). The trees keep 14 m off (data/vegetation.js KEEP_OUT.fountain). */
 export const FOUNTAIN = {
   id: 'n950150577', name: 'Фонтан «Мальчик с уткой»', year: 1910, R: 2.6, rimH: 0.5, rimW: 0.34, waterDrop: 0.12, pedestal: { r: 0.42, h: 1.15 }, jetH: 0.9,
-  plazaR: 6.2, plazaLift: 0.04, plazaKerb: 0.14, plazaSeg: 36,
+  plazaR: 6.2, plazaLift: 0.07, plazaKerb: 0.14, plazaSeg: 36,
   granite: '#8a8782', graniteL: '#a09c94', water: '#6f9fa0', spray: '#d8ecea', paving: '#b2a998', pavingD: '#9a9181', bronze: '#3a4a42', photoR: [5.5, 8],
 };
 
