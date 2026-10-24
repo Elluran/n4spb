@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tauride T8a preview (software GL)</title>
+<!-- The harness of tools/tauride/t8a-preview.mjs (T8a): the modules environment, landmarksTauride, streets, city built with the REAL builders into one context and rendered through the engine's real render pipeline
+     (core/renderer.js: normal / depth pre-pass, colour pass, outline composite) on software GL. No sky dome, no traffic, no people: the look of the floor, the roofs and the plate, with the outline pass. -->
+<script type="importmap">
+{ "imports": {
+  "/src/world/data/city.js": "/src/areas/north/data/city.js",
+  "/src/world/area.js": "/src/areas/north/area.js",
+  "/src/world/city/known-data.js": "/src/areas/north/known-data.js",
+  "three": "/node_modules/three/build/three.module.js",
+  "three/addons/": "/node_modules/three/examples/jsm/"
+} }
+</script>
+<style>html,body{margin:0;background:#888}canvas{display:block}</style></head>
+<body><canvas id="c" width="1280" height="720"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { createContext } from '/src/core/ctx.js';
+import { createRenderPipeline } from '/src/core/renderer.js';
+import * as L from '/src/world/layout.js';
+const q = new URLSearchParams(location.search);
+const MODS = (q.get('mods') || 'environment,landmarksTauride,streets,city').split(',');
+const errors = [];
+const origErr = console.error; console.error = (...a) => { errors.push(a.map(String).join(' ').slice(0, 2000)); origErr(...a); };
+const W = 1280, H = 720, canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H, false);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(62, W / H, 0.25, 3000);
+const sunDir = new THREE.Vector3(...L.SUN_DIR).normalize();
+scene.background = new THREE.Color('#a9c4e0'); scene.fog = new THREE.FogExp2('#b7cde6', 0.00045);
+const sun = new THREE.DirectionalLight('#fff2dc', 2.6); sun.position.copy(sunDir.clone().multiplyScalar(500)); const hemi = new THREE.HemisphereLight('#cfe3ff', '#7a8a60', 1.1); scene.add(sun, hemi);
+const ctx = createContext({ scene, camera, renderer, audio: null, quality: { name: 'medium', pixelRatio: 1, msaa: 0, shadowMap: 2048, shadowSize: 70, petals: 0.6 }, sunDir });
+ctx.buildList = MODS.slice(); ctx.sky = { sun, hemi, uniforms: {} };
+const pipeline = createRenderPipeline(renderer, { name: 'medium', pixelRatio: 1, msaa: 0 }); pipeline.setSize(W, H, 1);
+const T = {}; const t0 = performance.now();
+for (const n of MODS) { const t = performance.now(); try { const m = await import(`/src/world/${n}.js`); await m.build(ctx); } catch (e) { errors.push('build ' + n + ': ' + (e && e.stack || e)); } T[n] = Math.round(performance.now() - t); }
+scene.updateMatrixWorld(true);
+const view = (x, y, z, yaw, pitch) => { camera.position.set(x, y, z); camera.rotation.order = 'YXZ'; camera.rotation.set(THREE.MathUtils.degToRad(pitch), THREE.MathUtils.degToRad(yaw), 0); camera.updateMatrixWorld(true); for (const f of ctx._updates || []) { try { f(0, 1); } catch (e) {} } renderer.info.reset(); pipeline.render(scene, camera, sunDir, 0); window.__last = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; return canvas.toDataURL('image/png'); };
+window.__api = { view, errors, T, programs: () => renderer.info.programs.length };
+window.__done = true;
+</script></body></html>

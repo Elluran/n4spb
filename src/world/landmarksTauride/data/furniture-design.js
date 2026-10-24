@@ -86,6 +86,9 @@ export const CHAIKOVSKY = {
 export const YESENIN = {
   id: 'n4222941889', name: 'С. А. Есенин', year: 1995, h: 3.1, pedestal: { w: 1.0, d: 1.0, h: 0.6, base: 1.5, baseH: 0.14 }, figure: { scale: 1.12 },      // T7: the T6 pedestal (1.5 m, base 2.2 m) dominated the 1.75 m figure at 20 m: slimmer, the figure 12 % taller
   granite: '#838079', graniteL: '#9c988f', photoR: [3.2, 5.5], collider: 0.8,
+  // T8a (the owner's bug 3: "the label 'Сергей Есенин' on the base"): the inscription plate on the FRONT face of the shaft (the face toward the alley): a dark bronze plate `w` x `h` m, centred on the shaft,
+  // `proud` m in front of the face (a raised plate: its edge is real geometry, 8 mm, no z-fight), the text in raised gold letters; ONE canvas texture of `tw` x `th` px painted at load (ctx.tex.draw, key `tex`), one draw.
+  plate: { text: 'Сергей Есенин', w: 0.86, h: 0.22, proud: 0.008, tw: 512, th: 132, bg: '#2c2a22', rim: '#7a6638', fg: '#dcc984', shade: '#0e0d09', hi: '#f2e3a6', tex: 'tauride-plate-yesenin' },
 };
 /** THE FOUNTAIN "Boy with a duck" (Мальчик с уткой, 1910; n950150577): a round granite basin `R` m with a rim `rimH` high and a central pedestal carrying the bronze boy and his duck; the water `waterDrop` under the rim;
  *  a small spout from the duck's beak (a jet of `jetH` m) animated with the page time; a paved plaza of `plazaR` m round it (setts, granite kerb). The trees keep 14 m off (data/vegetation.js KEEP_OUT.fountain). */
@@ -113,7 +116,7 @@ export const PLAY = {
   sandpit: { r: 2.1, kerb: '#8a5a32', sand: '#d9c28f', kerbH: 0.25 },
   rocker: { color: '#3d9a55', spring: '#bfc4c8' },
   bars: { n: 4, h: 2.3, w: 1.6, color: '#3563b8', pitch: 2.4 },
-  margin: 3, inset: 1.5, lift: 0.035,
+  margin: 3, inset: 1.5, lift: 0.046,      // T8a: 4.6 cm (was 3.5): the alleys' ribbons (3 cm + bias + level, at most 3.6 cm) cross the play surfaces and were 0 .. 3 mm from them (z-fight at 45 m and more)
   // the structures of each playground: kind, polar position round the centroid as a fraction of the polygon's equivalent radius (sqrt(area / pi)) and an angle in degrees (0 = +x east, 90 = +z south)
   sets: {
     w188083933: [['slide', 0.42, 200], ['swing', 0.45, 330], ['sandpit', 0.12, 80], ['rocker', 0.6, 120]],
@@ -121,7 +124,7 @@ export const PLAY = {
     w188083935: [['sandpit', 0.0, 0], ['rocker', 0.55, 45]],
   },
   surface: { w188083933: '#a9553c', w69029505: '#4f8a52', w188083935: '#d9c28f', w423708263: '#9d4f3a' },
-  pitchSurface: { turf: '#4f8f45', turfD: '#468540', line: '#f1f1ea', inset: 2.0, lineW: 0.12, lift: 0.032 },
+  pitchSurface: { turf: '#4f8f45', turfD: '#468540', line: '#f1f1ea', inset: 2.0, lineW: 0.12, lift: 0.046 },
 };
 
 /** THE SERVICE LANE (w1258039516 asphalt + w1258039517 paving stones, 66.6 m, 4 m wide, from the private west gate n11695724997 into the garden): DECISION (T6): it is NOT claimed. `streets` keeps drawing the asphalt and
