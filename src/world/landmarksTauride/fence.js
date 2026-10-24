@@ -130,7 +130,7 @@ export function planFence(o = {}) {
   const gh = o.gh || gardenHeight, shore = o.shore || GARDEN_SHORE;
   const fences = o.fences || FENCES, openings = o.openings || FENCE_OPENINGS, gates = o.gates || GATES;
   const baseY = (x, z) => Math.max(0, gh(x, z) ?? 0);
-  const panels = [], piers = [], gateOut = [], dropped = [], openOut = [], stats = { fences: {}, panels: 0, closed: 0, open: 0, dropped: 0, piers: 0, shifted: 0 };
+  const panels = [], piers = [], gateOut = [], dropped = [], openOut = [], stats = { fences: {}, panels: 0, closed: 0, open: 0, dropped: 0, piers: 0, shifted: 0, low: 0 };
   // the outward direction of the garden at (x, z) for a tangent (tx, tz): the side whose point 0.6 m away is outside the garden (null if both are inside / outside)
   const outward = (x, z, tx, tz) => { const nx = -tz, nz = tx; const a = shore.inGarden(x + nx * 0.6, z + nz * 0.6), b = shore.inGarden(x - nx * 0.6, z - nz * 0.6); return a === b ? null : a ? [-nx, -nz] : [nx, nz]; };
   /** the shift (m, outward) of an item of half width `half` standing at (x, z) on a tangent: the water's edge pushes it to the street side */
@@ -140,14 +140,14 @@ export function planFence(o = {}) {
     const s = half + 0.03 - d; return [out[0] * s, out[1] * s];
   };
   for (const f of fences) {
-    const pitch = f.id === PD.id, pts = f.pts, mine = [];
+    const pitch = f.id === PD.id, low = !!(D.low && D.low.ids.includes(f.id)), pts = f.pts, mine = [];
     for (let s = 0; s + 3 < pts.length; s += 2) {
       const ax = pts[s], az = pts[s + 1], bx = pts[s + 2], bz = pts[s + 3], dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
       if (len < 0.2) continue;
       const n = Math.ceil(len / D.panelM);
       for (let k = 0; k < n; k++) {
         const t0 = k / n, t1 = (k + 1) / n, p0 = lerpPt([ax, az], [bx, bz], t0), p1 = lerpPt([ax, az], [bx, bz], t1), cx = (p0[0] + p1[0]) / 2, cz = (p0[1] + p1[1]) / 2, l = len / n;
-        mine.push({ fence: f.id, i: mine.length, seg: s / 2, x: cx, z: cz, y: 0, yaw: Math.atan2(dx, dz), len: l, ax: p0[0], az: p0[1], bx: p1[0], bz: p1[1], pitch, open: false, drop: null, tx: dx / len, tz: dz / len, cx, cz });
+        mine.push({ fence: f.id, i: mine.length, seg: s / 2, x: cx, z: cz, y: 0, yaw: Math.atan2(dx, dz), len: l, ax: p0[0], az: p0[1], bx: p1[0], bz: p1[1], pitch, low, open: false, drop: null, tx: dx / len, tz: dz / len, cx, cz });
       }
     }
     // the openings of this fence: the panels whose centre lies on the segment between the first and the last open centre
@@ -157,6 +157,8 @@ export function planFence(o = {}) {
       for (const p of hit) p.open = true;
       openOut.push({ fence: f.id, open: hit.map((p) => p.i), width: q.widthM, panels: q.panels, gates: q.gates.slice(), kind: q.kind, matched: hit.length });
     }
+    // T7: the extra openings of the design (D.extraOpen: the dam's east end)
+    for (const e of D.extraOpen || []) if (e.fence === f.id) { const p = mine[e.i]; if (p && !p.open) { p.open = true; p.extra = true; openOut.push({ fence: f.id, open: [p.i], width: p.len, panels: 1, gates: [], kind: e.kind || 'extra', matched: 1, extra: true }); } }
     // the base and the quay: the panel stands on the street side where its centre or an end is on the water's edge
     for (const p of mine) {
       const sh = quay(p.cx, p.cz, p.tx, p.tz, D.plinthW / 2), sa = quay(p.ax, p.az, p.tx, p.tz, D.plinthW / 2), sb = quay(p.bx, p.bz, p.tx, p.tz, D.plinthW / 2);
@@ -166,7 +168,7 @@ export function planFence(o = {}) {
       // in the water: the plinth footprint (centre, both ends, both edges) must be dry
       const wet = [[p.x, p.z], [p.ax, p.az], [p.bx, p.bz]].some(([x, z]) => shore.dist(x, z) < 0);
       if (wet) { p.drop = 'water'; dropped.push({ fence: f.id, i: p.i, why: 'water', x: p.x, z: p.z }); stats.dropped++; }
-      else if (p.open) stats.open++; else stats.closed++;
+      else if (p.open) stats.open++; else { stats.closed++; if (p.low) stats.low++; }
     }
     stats.fences[f.id] = mine.length; stats.panels += mine.length;
     for (const p of mine) panels.push(p);
@@ -175,7 +177,7 @@ export function planFence(o = {}) {
     const ring = Math.hypot(pts[0] - pts[pts.length - 2], pts[1] - pts[pts.length - 1]) < 0.05;
     const state = (p) => (p.drop ? 'd' : p.open ? 'o' : 'c');
     const chosen = new Set();
-    if (pitch) for (let b = 0; b <= N; b++) chosen.add(b);                                              // the wire-mesh fence: a post at every panel boundary
+    if (pitch || low) for (let b = 0; b <= N; b++) chosen.add(b);                                       // the wire-mesh fence and the low rail fence of the round plaza (T7): a post at every panel boundary
     else {
       const forced = new Set([0]); if (!ring) forced.add(N);
       for (let b = 1; b < N; b++) { const a = mine[b - 1], c = mine[b]; if (state(a) !== state(c) || turnDeg(a.tx, a.tz, c.tx, c.tz) > D.pier.turn) forced.add(b); }
@@ -192,12 +194,12 @@ export function planFence(o = {}) {
       if (sa !== 'c' && sc !== 'c') continue;                                                            // an opening's or a dropped panel's far side: no pier without a closed panel next to it
       const tx0 = a && c ? a.tx + c.tx : (c || a).tx, tz0 = a && c ? a.tz + c.tz : (c || a).tz, tl = Math.hypot(tx0, tz0) || 1;
       const x = c ? c.ax : a.bx, z = c ? c.az : a.bz;                                                      // the join: the start of panel b, or the end of panel b-1
-      piers.push({ fence: f.id, b, x, z, y: 0, yaw: Math.atan2(tx0 / tl, tz0 / tl), kind: pitch ? 'post' : 'pier', tx: tx0 / tl, tz: tz0 / tl });
+      piers.push({ fence: f.id, b, x, z, y: 0, yaw: Math.atan2(tx0 / tl, tz0 / tl), kind: pitch ? 'post' : low ? 'lowpost' : 'pier', tx: tx0 / tl, tz: tz0 / tl });
     }
   }
   // ---- the piers' bases and the quay: a pier on the water's edge moves outward
   for (const q of piers) {
-    const half = (q.kind === 'post' ? PD.post : D.pier.cap) / 2, sh = quay(q.x, q.z, q.tx, q.tz, half);
+    const half = (q.kind === 'post' ? PD.post : q.kind === 'lowpost' ? D.low.post : D.pier.cap) / 2, sh = quay(q.x, q.z, q.tx, q.tz, half);
     if (sh[0] || sh[1]) { q.x += sh[0]; q.z += sh[1]; }
     q.y = baseY(q.x, q.z);
   }
@@ -287,7 +289,7 @@ export function mergeGeos(list) {
  */
 export function fenceGeometry(plan, D = FENCE, GD = GATE, PD = PITCH_FENCE) {
   const s = new GB(), b = new GB(), baseOf = (x, z, g) => (g.gatePiers.length ? Math.max(0, (g.gatePiers[0].y + g.gatePiers[1].y) / 2) : 0), counts = {};
-  for (const p of plan.panels) { if (p.pitch || p.open || p.drop) continue; s.at(p.x, p.y, p.z, p.yaw); plinthInto(s, D, p.len); s.at(); }
+  for (const p of plan.panels) { if (p.pitch || p.open || p.drop || p.low) continue; s.at(p.x, p.y, p.z, p.yaw); plinthInto(s, D, p.len); s.at(); }
   counts.plinths = s.tris;
   for (const q of plan.piers) if (q.kind === 'pier') { s.at(q.x, q.y, q.z, q.yaw); pierInto(s, D); s.at(); }
   counts.piers = s.tris - counts.plinths;
@@ -318,7 +320,19 @@ export function fenceGeometry(plan, D = FENCE, GD = GATE, PD = PITCH_FENCE) {
     s.at(p.x, y, p.z, p.yaw); s.box(-PD.rail / 2, PD.rail / 2, H - PD.rail, H, -p.len / 2, p.len / 2, PD.postColor, 'b'); s.at();
   }
   for (const q of plan.piers) if (q.kind === 'post') { s.at(q.x, q.y, q.z, q.yaw); s.box(-PD.post / 2, PD.post / 2, -0.2, PD.h + 0.15, -PD.post / 2, PD.post / 2, PD.postColor, 'b'); s.at(); }
-  counts.pitchPosts = s.tris - t0; counts.alpha = b.tris;
+  counts.pitchPosts = s.tris - t0; t0 = s.tris;
+  // T7: the LOW rail fence of the round plaza (D.low: the user's photo): two rails per closed panel (a box along the panel, the ends inside the posts) and a post at every boundary with a collar and a ball finial
+  if (D.low) {
+    const Lw = D.low, rw = Lw.railW / 2;
+    for (const p of plan.panels) { if (!p.low || p.drop || p.open) continue; s.at(p.x, p.y, p.z, p.yaw); for (const ry of Lw.rails) s.box(-rw, rw, ry - rw, ry + rw, -p.len / 2, p.len / 2, Lw.color, 'fk'); s.at(); }
+    for (const q of plan.piers) if (q.kind === 'lowpost') {
+      s.at(q.x, q.y, q.z, q.yaw); const w = Lw.post / 2, c = Lw.collarW / 2;
+      s.box(-w, w, -D.skirt, Lw.h, -w, w, Lw.color, 'b'); s.box(-c, c, Lw.collarY, Lw.collarY + Lw.collarH, -c, c, Lw.color, 'b'); s.box(-c, c, Lw.h - Lw.collarH - 0.02, Lw.h - 0.02, -c, c, Lw.color, 'b');
+      s.cyl(0, 0, Lw.h - 0.02, Lw.ballY, Lw.ballR * 0.7, Lw.ballR, 6, Lw.color, false); s.cyl(0, 0, Lw.ballY, Lw.ballY + Lw.ballR * 0.55, Lw.ballR, 0.012, 6, Lw.color, false); s.at();
+    }
+    counts.low = s.tris - t0;
+  }
+  counts.alpha = b.tris;
   return { stone: s.tris ? s.build() : null, alpha: b.tris ? b.build() : null, counts };
 }
 
@@ -329,11 +343,11 @@ export function buildFence(ctx, parent, plan, opts = {}) {
   const matS = T('#ffffff', { vertexColors: true, paint: 0.04, name: 'tauride-fence-stone' });
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), S = new THREE.Vector3();
   const far = D.far ?? 650;
-  const closed = plan.panels.filter((p) => !p.open && !p.drop && !p.pitch);
+  const closed = plan.panels.filter((p) => !p.open && !p.drop && !p.pitch), lowN = closed.filter((p) => p.low).length, tall = closed.filter((p) => !p.low);       // T7: `tall` = the 1.9 m panels (pickets + plinth); the low rail panels are in the stone mesh
   // ---- 1. the pickets of the panels (instanced, alpha-cut: the no-outline layer, the outline pass cannot see cut-outs)
-  const pg = picketGeometry(D), panels = new THREE.InstancedMesh(pg, matA, Math.max(1, closed.length)); panels.name = 'tauride-fence-panels'; panels.castShadow = true; panels.receiveShadow = true;
-  closed.forEach((p, i) => { E.set(0, p.yaw, 0); Q.setFromEuler(E); M.compose(V.set(p.x, p.y, p.z), Q, S.set(1, 1, p.len / D.panelM)); panels.setMatrixAt(i, M); });
-  panels.count = closed.length; panels.instanceMatrix.needsUpdate = true; panels.frustumCulled = true;
+  const pg = picketGeometry(D), panels = new THREE.InstancedMesh(pg, matA, Math.max(1, tall.length)); panels.name = 'tauride-fence-panels'; panels.castShadow = true; panels.receiveShadow = true;
+  tall.forEach((p, i) => { E.set(0, p.yaw, 0); Q.setFromEuler(E); M.compose(V.set(p.x, p.y, p.z), Q, S.set(1, 1, p.len / D.panelM)); panels.setMatrixAt(i, M); });
+  panels.count = tall.length; panels.instanceMatrix.needsUpdate = true; panels.frustumCulled = true;
   ctx.noBatch(panels); ctx.noOutline(panels); parent.add(panels); registerLOD(panels, far);
   // ---- 2. the STONE (one opaque static mesh on layer 0, so that it is in the normal / depth pre-pass the outlines read and hides the lines of the trees and walkers behind a pier: QA round 1 found the outlines of
   //         the pedestrians and crowns drawn across the faces of the gate piers when they were part of the alpha-cut mesh): the plinths of the panels, the ordinary piers, the gate piers, the posts and rails of the pitch fence
@@ -345,11 +359,11 @@ export function buildFence(ctx, parent, plan, opts = {}) {
   if (gates) { gates.name = 'tauride-fence-gates'; gates.castShadow = true; gates.receiveShadow = true; ctx.noBatch(gates); ctx.noOutline(gates); parent.add(gates); registerLOD(gates, far); }
   // ---- colliders: a thin box per closed panel (a wall for the pedestrians), a box per pier, per gate pier and per pitch panel / post; the openings stay open
   const col = D.collider, items = { panels: [], piers: [], gates: [], pitch: [] };
-  for (const p of closed) { const y0 = Math.min(0, p.y) + col.y0, it = ph.addBox(p.x, p.z, col.thick, p.len + 0.02, p.yaw, y0, p.y + col.y1); it.fence = true; items.panels.push(it); }
+  for (const p of closed) { const c = p.low ? D.low.collider : col, y0 = Math.min(0, p.y) + c.y0, it = ph.addBox(p.x, p.z, c.thick, p.len + 0.02, p.yaw, y0, p.y + c.y1); it.fence = true; items.panels.push(it); }
   for (const p of iron) items.piers.push(ph.addBox(p.x, p.z, D.pier.collider, D.pier.collider, p.yaw, Math.min(0, p.y) - 0.5, p.y + D.pier.h));
   for (const g of plan.gates) for (const p of g.gatePiers) items.gates.push(ph.addBox(p.x, p.z, GATE.collider.w, GATE.collider.w, p.yaw, Math.min(0, p.y) - 0.5, p.y + GATE.h));
   for (const p of plan.panels) if (p.pitch && !p.open && !p.drop) { const it = ph.addBox(p.x, p.z, PITCH_FENCE.collider.thick, p.len + 0.02, p.yaw, Math.min(0, p.y) - 0.5, p.y + PITCH_FENCE.collider.y1); it.fence = true; items.pitch.push(it); }
   const stoneTris = fg.stone ? fg.stone.index.count / 3 : 0, alphaTris = fg.alpha ? fg.alpha.index.count / 3 : 0, triangles = panels.count * pg.index.count / 3 + stoneTris + alphaTris;
-  return { meshes: { panels, piers, gates, stone: piers }, triangles, draws: 1 + (piers ? 1 : 0) + (gates ? 1 : 0), instances: { panels: panels.count, piers: iron.length }, colliders: items.panels.length + items.piers.length + items.gates.length + items.pitch.length, items,
+  return { meshes: { panels, piers, gates, stone: piers }, triangles, draws: 1 + (piers ? 1 : 0) + (gates ? 1 : 0), instances: { panels: panels.count, piers: iron.length, low: lowN }, colliders: items.panels.length + items.piers.length + items.gates.length + items.pitch.length, items,
     template: { panel: pg.index.count / 3 + 6, pier: pierGeometry(D).index.count / 3 }, gateTriangles: fg.counts.gatePiers + fg.counts.pitchPosts + alphaTris, stoneTriangles: stoneTris, alphaTriangles: alphaTris, parts: fg.counts };
 }

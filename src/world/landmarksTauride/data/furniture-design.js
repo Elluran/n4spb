@@ -3,7 +3,7 @@
 // openings); this file says how big and how far apart, which colours and which counts. tools/tauride/furniture-test.mjs asserts the rules written here on the real built module, each with a mutant.
 // Frame: metres from ORIGIN, +X east, +Z south (-Z is north), the frame of the whole project.
 
-/** BENCHES (data/furniture.js BENCHES, 132 OSM nodes; one has no backrest = a granite bench): the strip's park bench of props/furniture.js benchPark (black cast ends, orange-brown slats) in a lean 52-triangle model.
+/** BENCHES (data/furniture.js BENCHES, 132 OSM nodes; one has no backrest = a granite bench): the strip's park bench of props/furniture.js benchPark in a lean 52-triangle model; T7 (the user's photo of the round plaza, docs/TAURIDE-REMAKE.md 12): the slats are WHITE-painted (`wood`), the cast ends dark grey (`iron`), not the strip's orange-brown.
  *  ORIENTATION RULE: a bench faces the nearest way ribbon (a non-bridge, non-steps way of data/paths.js) within `faceWay` m of its centre (the front looks at the ribbon's nearest point); else the nearest water within
  *  `faceWater` m (the front looks at the shore); else the garden centre `centre`. NUDGE: the benches are OSM nodes beside the alleys; one whose footprint (len x depth, turned to face the way) would stand on a ribbon
  *  or within `edge` m of its edge, or on a footprint / the water, moves along the normal of the nearest way away from it in `nudgeStep` m steps up to `nudgeMax` m (`node` records the move); one that cannot be
@@ -12,7 +12,7 @@ export const BENCH = {
   len: 1.8, depth: 0.55, h: 0.9, seatH: 0.46,
   faceWay: 6, faceWater: 30, centre: [1210, -1520],
   edge: 0.3, nudgeStep: 0.15, nudgeMax: 3.0,
-  iron: '#1c1e1d', wood: '#b8793a', woodD: '#7a4a2a',
+  iron: '#33373a', wood: '#ece9e0', woodD: '#c9c5b8',
   mass: 40, hitK: 0.25, far: 220,
 };
 /** BINS (data/furniture.js BINS, 167 nodes): the strip's black cast-iron urn (props/furniture.js binCast: a vase 0.78 m high on a round foot), hexagonal. The same nudge rule as the benches (a circle of `r`). */
@@ -41,6 +41,12 @@ export const FENCE = {
   pier: { w: 0.5, h: 2.2, cap: 0.62, capH: 0.16, min: 3, max: 5, turn: 15, collider: 0.5 },
   quayShift: 0.18, shoreNear: 0.3,
   openTol: 0.12,
+  /** T7 (the T6 open decision): panels opened IN ADDITION to the 13 mapped openings. The east end of the dam's walkway (w112880645, T4b extended its deck 2.3 m to dry land) stood 0.8 m from the closed panel 27 of the lake's north-shore
+   *  fence w418563880 (the mapped way ends 2.2 m before the panel; the rule of the old garden.js opens a panel only within 2.1 m of a path): a dead end for walkers. Decision: panel 27 is a 14th opening (a plain gap between its two piers, no gate): the dam leads to the street. */
+  extraOpen: [{ fence: 'w418563880', i: 27, kind: 'dam' }],
+  /** T7 (the user's photo of the round plaza, docs/TAURIDE-REMAKE.md 12): the two fence ways of the round gravel plaza (w420650657 / w420650658, 29 m each) are NOT the 1.9 m panel fence but the LOW black cast-iron
+   *  post-and-two-rails fence: a post every panel boundary (0.1 m, a collar and a ball finial), two rails (railW), `h` m high; the collider is the rail height (a walker is stopped, a jump clears it: the apex 0.73 m). */
+  low: { ids: ['w420650657', 'w420650658'], h: 1.0, post: 0.1, collarW: 0.15, collarH: 0.06, collarY: 0.18, ballR: 0.075, ballY: 1.07, rails: [0.4, 0.76], railW: 0.04, color: '#262a2b', collider: { thick: 0.1, y0: -0.5, y1: 1.0 } },
   iron: '#1f2a24', ironL: '#2d3d33', granite: '#8f8a82', graniteL: '#aaa59b', stone: '#b6ab94',
   far: 650,
 };
@@ -78,13 +84,13 @@ export const CHAIKOVSKY = {
   granite: '#7d7c7a', graniteL: '#98958f', photoR: [3.2, 5.5], collider: 0.9,
 };
 export const YESENIN = {
-  id: 'n4222941889', name: 'С. А. Есенин', year: 1995, h: 3.1, pedestal: { w: 1.5, d: 1.5, h: 0.75, base: 2.2, baseH: 0.18 }, figure: { scale: 1.0 },
+  id: 'n4222941889', name: 'С. А. Есенин', year: 1995, h: 3.1, pedestal: { w: 1.0, d: 1.0, h: 0.6, base: 1.5, baseH: 0.14 }, figure: { scale: 1.12 },      // T7: the T6 pedestal (1.5 m, base 2.2 m) dominated the 1.75 m figure at 20 m: slimmer, the figure 12 % taller
   granite: '#838079', graniteL: '#9c988f', photoR: [3.2, 5.5], collider: 0.8,
 };
 /** THE FOUNTAIN "Boy with a duck" (Мальчик с уткой, 1910; n950150577): a round granite basin `R` m with a rim `rimH` high and a central pedestal carrying the bronze boy and his duck; the water `waterDrop` under the rim;
  *  a small spout from the duck's beak (a jet of `jetH` m) animated with the page time; a paved plaza of `plazaR` m round it (setts, granite kerb). The trees keep 14 m off (data/vegetation.js KEEP_OUT.fountain). */
 export const FOUNTAIN = {
-  id: 'n950150577', name: 'Фонтан «Мальчик с уткой»', year: 1910, R: 2.6, rimH: 0.5, rimW: 0.34, waterDrop: 0.12, pedestal: { r: 0.42, h: 1.15 }, jetH: 0.9,
+  id: 'n950150577', name: 'Фонтан «Мальчик с уткой»', year: 1910, R: 2.6, rimH: 0.5, rimW: 0.34, waterDrop: 0.12, pedestal: { r: 0.42, h: 1.15 }, jetH: 0.9, boyScale: 1.7,      // T7: the boy was a few pixels at 10 m (0.62 m): x boyScale = 1.05 m on the 1.15 m pedestal
   plazaR: 6.2, plazaLift: 0.07, plazaKerb: 0.14, plazaSeg: 36,
   granite: '#8a8782', graniteL: '#a09c94', water: '#6f9fa0', spray: '#d8ecea', paving: '#b2a998', pavingD: '#9a9181', bronze: '#3a4a42', photoR: [5.5, 8],
 };
@@ -93,7 +99,7 @@ export const FOUNTAIN = {
  *  the footprint is the MAPPED one (the building is claimed by the module so that `city` draws no block there); a low brick plinth (`plinth` m), an iron frame in `bays` bays along the long side, glass walls with
  *  a gabled roof of glass (central nave `nave` m higher), the end gables glazed; the glass is a translucent toon material, the frame cast iron painted white-green. */
 export const ORANGERY = {
-  id: 'w23002927', plinth: 0.9, wallH: 4.6, ridgeH: 7.6, bays: 11, frame: '#dfe6dc', frameD: '#3c5a49', brick: '#a9643f', brickD: '#8a4f33', glass: '#a9cfc6', glassOpacity: 0.34, photoR: 16, door: 2.6,
+  id: 'w23002927', plinth: 0.9, wallH: 4.6, ridgeH: 7.6, bays: 11, frame: '#dfe6dc', frameD: '#3c5a49', brick: '#a9643f', brickD: '#8a4f33', coping: '#cfc8b8', glass: '#a9cfc6', glassOpacity: 0.34, photoR: 16, door: 2.6,
 };
 
 /** THE PITCH, THE PLAYGROUNDS AND THE FITNESS STATION (data/footprints.js GARDEN_GREEN.others; polygons from the facade GREEN list): the pitch (w81524430, 3,917 m2, 90 x 45 m class, a rectangle 54.7 x 71.7 m
@@ -101,7 +107,7 @@ export const ORANGERY = {
  *  structures at design positions inside the polygon (a slide tower with a slide, a swing frame with two swings, a sandpit with a low timber kerb, a spring rocker), the fitness station (w423708263) a row of
  *  pull-up / dip bars. Counts are the design values below; positions are derived from the polygon (centroid, the long axis). */
 export const PLAY = {
-  goal: { w: 7.32, h: 2.44, d: 1.6, post: 0.06, color: '#f2f2ee', net: '#e8e8e2' },
+  goal: { w: 7.32, h: 2.44, d: 1.6, post: 0.13, color: '#f6f6f2', net: '#e8e8e2' },      // T7: the posts were 6 cm (a hairline at 30 m): the regulation 12 cm
   slide: { tower: 1.0, h: 2.0, len: 2.8, color: '#d8452f', slideColor: '#e8c23a', post: '#3563b8' },
   swing: { w: 3.0, h: 2.3, post: '#3563b8', seat: '#d8452f', chain: '#bfc4c8' },
   sandpit: { r: 2.1, kerb: '#8a5a32', sand: '#d9c28f', kerbH: 0.25 },

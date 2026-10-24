@@ -17,8 +17,8 @@ export const GARDEN_SPECIES = {
   ash:    { fam: 'ash',    scale: [0.85, 1.1], leaf: 'ash',   base: 4.58 },
   maple:  { fam: 'mapleA', scale: [0.9, 1.15], leaf: 'maple', base: 3.32 },
   elm:    { fam: 'elm',    scale: [0.85, 1.1], leaf: 'elm',   base: 5.98 },
-  birch:  { fam: 'birchA', scale: [0.9, 1.15], leaf: 'birch', base: 3.82 },
-  birchB: { fam: 'birchB', scale: [0.9, 1.15], leaf: 'birch', base: 3.71 },
+  birch:  { fam: 'birchG', scale: [0.7, 0.88], leaf: 'birch', base: 4.58 },      // T7: the garden's birches are SPECIES_EXTRA rows (the engine's loose 14-lobe birch read as sparse discs on thin branches: the T5 GPU QA)
+  birchB: { fam: 'birchH', scale: [0.75, 0.92], leaf: 'birch', base: 4.04 },
   alder:  { fam: 'ash',    scale: [0.65, 0.85], leaf: 'alder', base: 4.58 },
   shrub:  { fam: 'shrub',  scale: [0.9, 1.4],  leaf: 'shrub', base: 0.13 },
 };
@@ -28,6 +28,10 @@ export const GARDEN_SPECIES = {
  *  paper cut-outs), `stem` the visible trunk [height, foot radius, top radius]. Fix round 1 of T5: the first larch (H 20 / R 3.4, tiers from 0.9 m, no underside) read as a flat tent at 12 m and as a lime-green spruce at 25 m;
  *  the GPU QA asked for a narrower base (R 2.0 .. 2.4), a clear stem of 3 .. 4 m, the underside kept and a less saturated green. trunk = the collision radius at the stem. */
 export const SPECIES_EXTRA = {
+  /** T7: the birch of the garden = the engine's white multi-stem trunk (sp 'birch') under a FULLER crown: `geo` names the engine layout the canopy and the branches are built on (treegeo.js canopyGeometry(geo, lod, F): the layout of a family is that of the ENGINE's row of that name, so H and R of the row here are the layout's (ash 15 / 3.6, limeB 13 / 3.7) and the birch size comes from the instance scale 0.7 .. 0.92; the `fam` of the row stays the mesh key):
+   *  birchG on the 'ash' layout (24 lobes, an open oval), birchH on the twin 'limeB' layout (22 lobes, leaning): the 14 scattered lobes of birchA / birchB left gaps the size of a lobe */
+  birchG: { sp: 'birch', geo: 'ash', H: 15.0, R: 3.6, trunk: 0.2, bark: 'birch', kind: 'lobes', lump: 0.13, blend: 0.7 },
+  birchH: { sp: 'birch', geo: 'limeB', H: 13.0, R: 3.7, trunk: 0.2, bark: 'birch', kind: 'lobes', lump: 0.12, blend: 0.74 },
   larch: { sp: 'larch', H: 21.0, R: 2.4, trunk: 0.45, bark: 'brown', kind: 'tiers', open: true, y0: 3.6, under: true, stem: [4.3, 0.27, 0.16], tiers: [7, 5, 3, 2], seg: [10, 8, 6, 5] },
 };
 
@@ -39,7 +43,7 @@ export const LEAF = {
   ash: ['#5a8a38', '#639240', '#4e7e30', '#6a9a44'],
   oak: ['#4a6e2c', '#53773a', '#42642a', '#5a7e3a'],
   birch: ['#668f3a', '#5e9a35', '#729a42', '#628a38', '#6b9440'],
-  larch: ['#6f9a44', '#769f4a', '#68923e', '#7aa44f'],       // lighter and fresher than the broad-leaved crowns (the larch in July), less saturated than the first round's lime green (fix round 1)
+  larch: ['#7ba146', '#84a74e', '#739842', '#8bae55'],       // lighter and fresher than the broad-leaved crowns (the larch in July), less saturated than the first round's lime green (fix round 1)
   alder: ['#3f6a30', '#466f36', '#3a6230', '#4a7238'],       // dark glossy green
   shrub: ['#52763a', '#5f8641', '#456b32', '#6a9248', '#4e7a3a'],
 };
@@ -53,7 +57,7 @@ export const ZONES = {
   /** avenues: rows of limes on both sides of every alley of class `classes` (data/paths.js: the long or lit alleys, 3.5-4.5 m), the trunks `offset` m off the ribbon edge (NOT on the ribbon), `spacing` m apart; a way shorter than `minLen` has none */
   avenue: { classes: ['main'], offset: 2.75, spacing: [7.5, 9.5], minLen: 40, endClear: 6, mix: { lime: 0.68, limeB: 0.32 } },
   /** groves on the OSM wood polygons: a jittered lattice of `step` m (`jitter` m) thinned by a slow noise (`clump`: period m, the share kept in the open patches .. in the knots: clearings and dense knots instead of a plantation), `shrub` = the share of candidates that are shrubs instead of trees */
-  grove: { step: 9.0, jitter: 4.0, clump: { period: 26, keep: [0.25, 1.0] }, shrub: 0.12, mix: { birch: 0.18, birchB: 0.1, maple: 0.22, lime: 0.22, ash: 0.18, oak: 0.06, elm: 0.04 } },
+  grove: { step: 9.0, jitter: 4.0, turn: 90, warp: 3.5, clump: { period: 26, keep: [0.25, 1.0] }, shrub: 0.12, mix: { birch: 0.18, birchB: 0.1, maple: 0.22, lime: 0.22, ash: 0.18, oak: 0.06, elm: 0.04 } },
   /** the open meadows (data/ground.js MEADOWS) stay open: a few solitary old oaks on the big lawns, authored one by one (the T10 meadow, the lake-west lawn, the east strip, the north lobe), each with a clearing of `clear` m that no other tree enters */
   meadow: { clear: 15, solitary: [{ x: 1162, z: -1386 }, { x: 1205, z: -1340 }, { x: 1288, z: -1462 }, { x: 1455, z: -1560 }, { x: 1462, z: -1470 }, { x: 1225, z: -1705 }] },
   /** the shore: alder, birch and shrubs on the CREST band of the banks (from the crest of the bank profile, data/ponds.js BANK_TOP, `d` m inland of it: never on the slope below the crest), walked along the shore rings every `spacing` m */

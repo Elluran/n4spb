@@ -178,7 +178,7 @@ console.log('2c. the furniture post pass (KEEP_OUT.furniture, T6): no trunk stan
 // =============================================================== 3. the crowns over the alleys: the real geometry
 console.log('3. the crowns: no leaf lower than the walker\'s head over a ribbon (the REAL LOD0 geometry), the crown base table pinned to the geometry');
 { const SPT = VG.speciesTable(), minY = {};
-  for (const [k, sp] of Object.entries(SPT)) { const g = TG.canopyGeometry(sp.fam, 0, sp.F); g.computeBoundingBox(); minY[k] = g.boundingBox.min.y; }
+  for (const [k, sp] of Object.entries(SPT)) { const g = TG.canopyGeometry(sp.F.geo || sp.fam, 0, sp.F); g.computeBoundingBox(); minY[k] = g.boundingBox.min.y; }
   const baseBad = Object.entries(SPT).filter(([k, sp]) => Math.abs(minY[k] - sp.base) > 0.02 * Math.max(1, sp.base) + 1e-6);
   ok('GARDEN_SPECIES.base equals the lowest leaf of the family\'s LOD0 canopy (within 2 %)', baseBad.length === 0, Object.entries(minY).map(([k, v]) => `${k} ${v.toFixed(2)}/${SPT[k].base}`).join(' '));
   const ways = Pd.PATHS.filter((p) => p.cls !== 'bridge' && p.cls !== 'steps').map((p) => ({ pts: p.pts, hw: p.w / 2 + PD.PATHS_DRAPED.pad }));

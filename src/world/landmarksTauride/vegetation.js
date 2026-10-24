@@ -229,8 +229,14 @@ export function planVegetation(o = {}) {
   // ---- 6. the groves on the wood polygons: a jittered lattice thinned by a slow noise (clearings and dense knots, not a plantation)
   woodsBox.forEach((w, wi) => {
     const R = rngOf('tauride-veg:grove:' + wi), b = w.b, G = Z.grove, st = G.step, j = G.jitter, C = G.clump;
-    for (let z = Math.floor(b[2] / st) * st; z < b[3]; z += st) for (let x = Math.floor(b[0] / st) * st; x < b[1]; x += st) {
-      const px = x + st / 2 + R.range(-j, j), pz = z + st / 2 + R.range(-j, j), shrub = R() < G.shrub, key = shrub ? 'shrub' : pick(R, G.mix, zs('grove').species), u = R();
+    // T7 (the T5 GPU QA: 'the groves show a near-regular trunk lattice'): each wood's lattice is TURNED by its own angle (G.turn) about the box centre and its points are carried by a slow warp (G.warp m), so no two woods
+    // share a row direction and the rows bend; the cells are the same size, the clump noise and the jitter are as they were
+    const wc = [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2], hd = Math.hypot(b[1] - b[0], b[3] - b[2]) / 2 + st, th = G.turn ? R.range(0, G.turn) * Math.PI / 180 : 0, ct = Math.cos(th), sn = Math.sin(th), WP = G.warp || 0;
+    for (let v0 = -Math.floor(hd / st) * st; v0 < hd; v0 += st) for (let u0 = -Math.floor(hd / st) * st; u0 < hd; u0 += st) {
+      const lu = u0 + st / 2 + R.range(-j, j), lv = v0 + st / 2 + R.range(-j, j);
+      let px = wc[0] + lu * ct - lv * sn, pz = wc[1] + lu * sn + lv * ct;
+      if (WP) { const wx = noise2(px / 37, pz / 37, 53) - 0.5, wz = noise2(px / 37 + 11, pz / 37 - 7, 59) - 0.5; px += wx * 2 * WP; pz += wz * 2 * WP; }
+      const shrub = R() < G.shrub, key = shrub ? 'shrub' : pick(R, G.mix, zs('grove').species), u = R();
       if (!polyHas(px, pz, w.p)) continue;
       if (C) { const n = noise2(px / C.period, pz / C.period, 31), keep = C.keep[0] + (C.keep[1] - C.keep[0]) * n; if (u > keep) continue; }
       plant('grove', key, px, pz, R);
@@ -330,12 +336,12 @@ export function buildVegetation(ctx, parent, plan, o = {}) {
     const n = byFam[fam].length, F = rows[fam]; M[fam] = []; TR[fam] = [];
     if (!barkMat[F.bark]) barkMat[F.bark] = trunkMaterial(ctx, barkTexture(ctx, F.bark), 'env-bark-pb-' + F.bark);
     for (let l = 0; l < 4; l++) {
-      const im = new T.InstancedMesh(canopyGeometry(fam, l, F), F.kind === 'tiers' ? matTier : matLobe, n);
+      const im = new T.InstancedMesh(canopyGeometry(F.geo || fam, l, F), F.kind === 'tiers' ? matTier : matLobe, n);
       im.instanceMatrix.setUsage(T.DynamicDrawUsage); im.setColorAt(0, col.setRGB(1, 1, 1)); im.instanceColor.setUsage(T.DynamicDrawUsage);
       im.count = 0; im.frustumCulled = false; im.castShadow = l <= 1; im.receiveShadow = l <= 1; im.name = `tauride-tree-${fam}-${l}`; im.visible = false;
       group.add(im); M[fam].push(im); meshes.push(im);
       if (l <= 1) {
-        const tg = trunkGeometry(fam, l, F);
+        const tg = trunkGeometry(F.geo || fam, l, F);
         if (tg) { const tm = new T.InstancedMesh(tg, barkMat[F.bark], n); tm.instanceMatrix = im.instanceMatrix; tm.count = 0; tm.frustumCulled = false; tm.castShadow = true; tm.receiveShadow = true; tm.name = `tauride-trunk-${fam}-${l}`; tm.visible = false; group.add(tm); TR[fam].push(tm); meshes.push(tm); }
         else TR[fam].push(null);
       }

@@ -33,7 +33,7 @@ export const PATHS_DRAPED = Object.freeze({
   discSegments: 8,
   trianglesMax: 12000, drawsMax: 4,
 });
-export const PATH_COLORS = Object.freeze({ gravel: '#c9a98a', earth: '#917658', paved: '#aaa7a1', wood: '#8a6446', metal: '#6d747c', unknown: '#c9a98a' });
+export const PATH_COLORS = Object.freeze({ gravel: '#bf9884', earth: '#917658', paved: '#aaa7a1', wood: '#8a6446', metal: '#6d747c', unknown: '#bf9884' });      // T7: the alleys are a warm PINK-BROWN gravel (the user's photos of the round plaza and the roses bridge), not pale beige
 export const STEP_COLORS = Object.freeze({ tread: '#a29d94', riser: '#8d8880', kerb: '#8b8783' });
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
