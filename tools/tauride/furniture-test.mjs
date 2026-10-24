@@ -67,12 +67,16 @@ console.log('1. the furniture (furniture.js): benches, bins, lanterns');
 const piecePts = (b) => rect(b.x, b.z, b.rotY, Dd.BENCH.len, Dd.BENCH.depth);
 /** the measures of the furniture rules for a plan { benches, bins, lanterns, gateLanterns } and the fence plan: counts of violations */
 function furnitureMeasures(plan, fence) {
-  const m = { y: 0, water: 0, ribbonBench: 0, ribbonBin: 0, trunk: 0, footprint: 0, outside: 0, lanternRibbon: 0 };
+  const m = { y: 0, water: 0, ribbonBench: 0, ribbonBin: 0, trunk: 0, footprint: 0, outside: 0, lanternRibbon: 0, absBench: 0, absBin: 0, onDeck: 0, binInBench: 0 };
+  // review fix: ABSOLUTE numbers that do not come from the design datum (a weakened Dd.BENCH.edge / Dd.BIN.edge left the datum-based checks green): a bench footprint point 0.25 m off a ribbon edge at least, a bin centre 0.45 m (0.25 + its 0.3 radius - 0.1), nothing in the keep-out of a bridge deck, no bin inside a bench seat
+  const decksK = svc.bridges.keepOut;
   for (const b of plan.benches) {
     if (Math.abs(b.y - H(b.x, b.z)) > 0.02) m.y++;
     const pts = piecePts(b);
     if (pts.some(([x, z]) => shore.dist(x, z) <= 0)) m.water++;
     if (pts.some(([x, z]) => ribbonEdge(x, z).edge < Dd.BENCH.edge - 1e-6)) m.ribbonBench++;
+    if (pts.some(([x, z]) => ribbonEdge(x, z).edge < 0.25)) m.absBench++;
+    if (pts.some(([x, z]) => decksK.some((d) => polyD(x, z, d.axis.flat()) < d.hw))) m.onDeck++;
     if (pts.some(([x, z]) => inFp(x, z, 0))) m.footprint++;
     if (!shore.inGarden(b.x, b.z)) m.outside++;
     for (const k of [-0.65, 0, 0.65]) { const x = b.x + Math.cos(b.rotY) * k, z = b.z - Math.sin(b.rotY) * k; if (trees.some((t) => Math.hypot(t.x - x, t.z - z) < t.tr + 0.25)) { m.trunk++; break; } }
@@ -81,6 +85,9 @@ function furnitureMeasures(plan, fence) {
     if (Math.abs(b.y - H(b.x, b.z)) > 0.02) m.y++;
     if (shore.dist(b.x, b.z) <= 0) m.water++;
     if (ribbonEdge(b.x, b.z).edge < Dd.BIN.edge + Dd.BIN.r - 0.05) m.ribbonBin++;
+    if (ribbonEdge(b.x, b.z).edge < 0.25 + 0.3 - 0.1) m.absBin++;
+    if (decksK.some((d) => polyD(b.x, b.z, d.axis.flat()) < d.hw)) m.onDeck++;
+    if (plan.benches.some((q) => { const c = Math.cos(q.rotY), sn = Math.sin(q.rotY), dx = b.x - q.x, dz = b.z - q.z; return Math.abs(c * dx - sn * dz) < Dd.BENCH.len / 2 + Dd.BIN.r && Math.abs(sn * dx + c * dz) < Dd.BENCH.depth / 2 + Dd.BIN.r; })) m.binInBench++;
     if (inFp(b.x, b.z, 0)) m.footprint++;
     if (trees.some((t) => Math.hypot(t.x - b.x, t.z - b.z) < t.tr + Dd.BIN.r)) m.trunk++;
   }
@@ -98,6 +105,7 @@ function furnitureMeasures(plan, fence) {
 const FM = furnitureMeasures(NP, FP);
 ok(`132 benches and 167 bins: the ids are exactly the OSM nodes of data/furniture.js (each once), the claimed ids of the garden (${NP.benches.length} / ${NP.bins.length})`, NP.benches.length === 132 && NP.bins.length === 167 && new Set(NP.benches.map((b) => b.id)).size === 132 && Df.BENCHES.every((q) => NP.benches.some((b) => b.id === q.id)) && Df.BINS.every((q) => NP.bins.some((b) => b.id === q.id)) && NP.benches.every((b) => L.isClaimed(b.id)) && NP.bins.every((b) => L.isClaimed(b.id)), '');
 ok('every bench, bin, lantern, pier and gate pier stands on gardenHeight (the street level, max(0, gardenHeight), for the fence) within 2 cm', FM.y === 0, `${FM.y} off`);
+ok('review fix: absolute margins and no overlaps, independent of the design datum: no bench footprint point within 0.25 m of a ribbon edge, no bin centre within 0.45 m, no bench or bin in the keep-out of a bridge deck (the dam), no bin in the seat of a bench', FM.absBench === 0 && FM.absBin === 0 && FM.onDeck === 0 && FM.binInBench === 0, `${FM.absBench} benches / ${FM.absBin} bins near a ribbon, ${FM.onDeck} on a deck, ${FM.binInBench} bins in a seat`);
 ok('none stands in the water (the exact shore distance of height.js; a bench with all 8 points of its footprint)', FM.water === 0, `${FM.water} in the water`);
 ok(`none of the benches (${NP.benches.length}) touches a ribbon: every point of its footprint (len ${Dd.BENCH.len} x depth ${Dd.BENCH.depth}) is at least ${Dd.BENCH.edge} m from the ribbon edge (the nominal half width + the +-${WV * 100} % of the draped ribbons, the stairs 1.3 m); none of the bins (${Dd.BIN.edge} m + its radius); none of the lanterns`, FM.ribbonBench === 0 && FM.ribbonBin === 0 && FM.lanternRibbon === 0, `${FM.ribbonBench} / ${FM.ribbonBin} / ${FM.lanternRibbon}`);
 ok('none stands in a building footprint and none outside the garden outline', FM.footprint === 0 && FM.outside === 0, `${FM.footprint} / ${FM.outside}`);

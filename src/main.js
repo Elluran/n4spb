@@ -273,7 +273,9 @@ async function goToView(v) {
   ctx.travelPending = true;
   try {
     if (ctx.regions) { showToast('Загрузка места…'); await ctx.regions.ensureAt(v.x, v.z); }
-    if (ctx.drive?.active) ctx.drive.place(v.x, v.z, v.yaw); else player.setPose(v.x, v.z, v.yaw, v.pitch);
+    let placed = true;      // review fix: drive.place() answers false when no free spot is within 40 m (the garden keeps the cars out): the car stays, so the label and the area name must not say it arrived
+    if (ctx.drive?.active) placed = ctx.drive.place(v.x, v.z, v.yaw) !== false; else player.setPose(v.x, v.z, v.yaw, v.pitch);
+    if (!placed) { showToast('Сюда на машине нельзя: выйдите из неё (E) · Cars cannot go there: get out first (E)'); return; }
     if (ctx.gates) ctx.gates.teleported();      // (a jump is no speed: the gate's velocity estimate starts over)
     showToast(v.label); areaName = areaAt(v.x, v.z);      // the place label keeps its 3.8 s: the area toast fires only when the player walks into a different area
   } catch (e) { console.error('[travel]', e); showToast('Не удалось загрузить место. Попробуйте ещё раз.'); }

@@ -178,15 +178,15 @@ export function planPaths(paths, ground, P = PATHS_DRAPED) {
   for (const p of stairs) {
     const q = flat(p.pts), A = q[0], B = q[q.length - 1], len = Math.hypot(B[0] - A[0], B[1] - A[1]); if (len < 0.3) continue;
     const hA = H(A[0], A[1]) + P.offset, hB = H(B[0], B[1]) + P.offset, drop = hB - hA;
-    let lowEnd = A, highEnd = B, hLow = hA, hHigh = hB, n, bridgeHead = false;
+    let lowEnd = A, highEnd = B, hLow = hA, hHigh = hB, n, bridgeHead = false, level = false;
     const bA = nearBridge(A[0], A[1]), bB = nearBridge(B[0], B[1]);
     if (bA || bB) {                                              // a stair at a bridge head: from the ground at its foot up to the deck head (T4b: ground.deckAt), whatever the terrain does under it
       bridgeHead = true; if (bA) { lowEnd = B; highEnd = A; hLow = hB; }
       const dh = deckAt ? deckAt(highEnd[0], highEnd[1]) : null;
       if (dh !== null && dh !== undefined && Number.isFinite(dh)) { hHigh = dh; n = Math.max(2, p.steps || Math.round(Math.abs(hHigh - hLow) / P.riser)); }
       else { n = Math.max(2, p.steps || 4); hHigh = hLow + n * P.riser; }
-    } else if (Math.abs(drop) < 0.1) {                           // level ground: the tag's count at the ordinary riser
-      n = Math.max(2, p.steps || 2); hHigh = hLow + n * P.riser;
+    } else if (Math.abs(drop) < 0.1) {                           // level ground: the tag's count of treads and NO rise (review fix: n x riser drew a 0.30 m pad on flat ground that the Player walks through)
+      n = Math.max(2, p.steps || 2); hHigh = hLow; level = true;
     } else {
       if (drop < 0) { lowEnd = B; highEnd = A; hLow = hB; hHigh = hA; }
       n = Math.max(2, Math.round(Math.abs(drop) / P.riser));
@@ -197,7 +197,7 @@ export function planPaths(paths, ground, P = PATHS_DRAPED) {
     for (let k = 0; k < n; k++) {
       let top = hLow + (k + 1) * (hHigh - hLow) / n, mh = -Infinity;
       for (let m = 0; m <= 4; m++) { const s = (k + m / 4) * d, x = lowEnd[0] + ux * s, z = lowEnd[1] + uz * s; for (const o of [-hw, 0, hw]) mh = Math.max(mh, H(x + vx * o, z + vz * o)); }
-      top = Math.max(top, mh + 0.01, floor + 0.05); tops.push(top); floor = top;
+      top = level ? Math.max(top, mh + 0.01) : Math.max(top, mh + 0.01, floor + 0.05); tops.push(top); floor = top;
     }
     const at3 = (s, o, y) => [lowEnd[0] + ux * s + vx * o, y, lowEnd[1] + uz * s + vz * o + 0];
     const low = (s, o) => H(lowEnd[0] + ux * s + vx * o, lowEnd[1] + uz * s + vz * o) - 0.03;     // the mesh under a point of the stair (the risers and kerbs reach down to it)
@@ -215,7 +215,7 @@ export function planPaths(paths, ground, P = PATHS_DRAPED) {
         if (k === n - 1) quad(at3(s1, o1, bot), at3(s1, o1, top), at3(s1, o0, top), at3(s1, o0, bot), ux, 0, uz, cK);             // the back of the last kerb
       }
     }
-    stairInfo.push({ id: p.id, n, riser: (hHigh - hLow) / n, treadDepth: d, width: hw * 2, hLow, hHigh, bridgeHead, tops, from: lowEnd, to: highEnd, drop: hHigh - hLow });
+    stairInfo.push({ id: p.id, n, level, riser: (hHigh - hLow) / n, treadDepth: d, width: hw * 2, hLow, hHigh, bridgeHead, tops, from: lowEnd, to: highEnd, drop: hHigh - hLow });
   }
   const R = { pos: Float32Array.from(pos), nrm: Float32Array.from(nrm), col: Float32Array.from(col), path: Float32Array.from(pth), wayOf: Int16Array.from(wayOf) };
   R.idx = pos.length / 3 > 65535 ? Uint32Array.from(idx) : Uint16Array.from(idx);

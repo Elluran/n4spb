@@ -50,7 +50,7 @@ const MODS = { smolny: 'landmarksSmolny', suvorov: 'landmarksSuvorov', kirochnay
 const rect = (x0, x1, z0, z1) => (x, z) => x > x0 && x < x1 && z > z0 && z < z1;       // open rectangles, as the source
 const SMOLNY = [rect(2320, 2440, -1847, -1820), rect(2400, 2520, -1553, -1533)];
 const SUVOROV = rect(1384, 1442, -1226, -1208);
-const PARTERRE = rect(1356, 1404, -1660, -1606);      // the palace parterre (T5 fix round 1 of the Tauride remake: hooks/keep-out.js PALACE_PARTERRE, the soft clearing in front of the Tauride Palace's garden front)
+const PARTERRE = rect(1356, 1436, -1660, -1598);      // the palace parterre (T5 fix round 1 of the Tauride remake: hooks/keep-out.js PALACE_PARTERRE, the soft clearing in front of the Tauride Palace's garden front)
 /** a polygon test by the winding number (the hooks use the even-odd ray cast of the source): ring = [[x, z], ...] */
 const winding = (ring, x, z) => {
   let w = 0;

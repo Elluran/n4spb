@@ -35,7 +35,8 @@ export const SMOLNY_APPROACHES = [[2320, 2440, -1847, -1820], [2400, 2520, -1553
  *  shore is the garden outline, z -1607 .. -1639 there), the width of the bow + 4 .. 10 m to each side, from the quay to the facade. OSM maps the whole palace side as the wood w1274934137 (11,641 m2, U-shaped round the palace,
  *  outside the park polygon) and the engine planted it at wood density up to the facade, which hid the palace front from the garden (the GPU QA of T5: from the T11 pose, 107 m across the lake, the facade stood behind
  *  6 crowns). The vista from the lake to the palace's garden front is the historical axis of the ensemble; the wood keeps its trees on both sides of the parterre. A soft clearing (H02), so the mapped trees go too. */
-export const PALACE_PARTERRE = [1356, 1404, -1660, -1606];
+// Review fix: x1 1404 -> 1436 and z1 -1606 -> -1598. The box covered the central bow only; the east wing (the facade east of x 1394 up to 1420) stood behind 17 crowns of the wood (lime / maple / ash / birch, 70 .. 90 m from T11, x 1406 .. 1433, z -1640 .. -1602) in a CPU sight test from the T11 pose (vegetation-test: the whole garden front).
+export const PALACE_PARTERRE = [1356, 1436, -1660, -1598];
 /** The north frontage of the Suvorov Museum, [x0, x1, z0, z1]: its width (the footprint is x 1384.3 .. 1441.2) and the 17 m from the doorstep (wall z -1224.9) to the middle of the building (it reaches z -1194.2). */
 export const SUVOROV_STRIP = [1384, 1442, -1226, -1208];
 /** The garden campus of the Elena Pavlovna Clinical Institute, 8 vertices [x, z]. A COPY of CAMPUS in src/world/landmarksKirochnaya/groups.js (that file imports the data facade, and the hooks files import none;

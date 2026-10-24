@@ -49,11 +49,13 @@ export function gateCoords(g, x, z) {
 export function createGateMachine({ gates, config = {} }) {
   const C = { ...DEFAULTS, ...config };
   const st = new Map(gates.map((g) => [g.id, { until: -1e9, needExit: false, open: false }]));
+  // review fix: update() runs every frame on the strip too and used to allocate ~750 bytes per call (two spreads of the 13-key config, a gateCoords object per gate, three Math.hypot): the per-gate geometry is computed once and the loop is plain arithmetic
+  const geo = gates.map((g) => { const [a, b] = g.seg, ex = b[0] - a[0], ez = b[1] - a[1], len = Math.hypot(ex, ez) || 1; return { a0: a[0], a1: a[1], len, tx: ex / len, tz: ez / len, zone: g.zone || C.depthWalk, chipW: Math.max(C.chipWalk, (g.zone || C.depthWalk) * 3) }; });
   let clock = 0, lastX = null, lastZ = null, vx = 0, vz = 0, holdUntil = 0, graceUntil = C.graceS;
   const machine = {
     config: C,
     get clock() { return clock; },
-    get speed() { return clock < holdUntil ? 0 : Math.hypot(vx, vz); },
+    get speed() { return clock < holdUntil ? 0 : Math.sqrt(vx * vx + vz * vz); },
     /**
      * One step. inp = { dt, x, z, mode: 'walk'|'fly'|'car', blocked: bool (not started, travelling, a panel open, underground, riding ...), indoors?: bool (inside a walk-in interior: no chip, no
      * question, the state keeps running so the gate re-arms on stepping out), teleported?: bool }.
@@ -65,22 +67,23 @@ export function createGateMachine({ gates, config = {} }) {
       if (lastX === null) { lastX = x; lastZ = z; }
       else if (dt > 0) {
         const dx = x - lastX, dz = z - lastZ;
-        if (inp.teleported || Math.hypot(dx, dz) > 40 + 80 * dt) { vx = vz = 0; holdUntil = clock + C.holdS; }      // a jump is a teleport, not a motion
+        if (inp.teleported || Math.sqrt(dx * dx + dz * dz) > 40 + 80 * dt) { vx = vz = 0; holdUntil = clock + C.holdS; }      // a jump is a teleport, not a motion
         else { const k = Math.min(1, dt / C.emaS); vx += (dx / dt - vx) * k; vz += (dz / dt - vz) * k; }
         lastX = x; lastZ = z;
       }
-      const held = clock < holdUntil, v = held ? 0 : Math.hypot(vx, vz);
+      const held = clock < holdUntil, v = held ? 0 : Math.sqrt(vx * vx + vz * vz);
       let chip = null, offer = null;
-      for (const g of gates) {
-        const s = st.get(g.id), c = gateCoords(g, x, z);
-        const depth = depthFor(mode, v, { ...C, depthWalk: g.zone || C.depthWalk }), chipD = chipFor(mode, v, { ...C, depthWalk: g.zone || C.depthWalk, chipWalk: Math.max(C.chipWalk, (g.zone || C.depthWalk) * 3) });
-        const tol = mode === 'fly' ? C.flyTol : C.lateralTol, lateral = c.s >= -tol && c.s <= c.len + tol;
-        if (!lateral || c.d > depth + C.exitMargin) s.needExit = false;       // the player has left the zone by the margin: a decline is over (the time must also have passed)
-        if (blocked || !lateral || c.d < -C.behind || c.d > chipD) continue;
-        if (!chip || c.d < chip.d) chip = { gate: g, d: c.d, depth };
+      const walk = mode === 'walk', vehDepth = walk ? 0 : depthFor(mode, v, C), tol = mode === 'fly' ? C.flyTol : C.lateralTol;      // (depthFor / chipFor of a vehicle do not read the zone)
+      for (let gi = 0; gi < gates.length; gi++) {
+        const g = gates[gi], q = geo[gi], s = st.get(g.id), px = x - q.a0, pz = z - q.a1, cd = px * g.inward[0] + pz * g.inward[1], cs = px * q.tx + pz * q.tz;
+        const depth = walk ? q.zone : vehDepth, chipD = walk ? q.chipW : vehDepth + 30;
+        const lateral = cs >= -tol && cs <= q.len + tol;
+        if (!lateral || cd > depth + C.exitMargin) s.needExit = false;       // the player has left the zone by the margin: a decline is over (the time must also have passed)
+        if (blocked || !lateral || cd < -C.behind || cd > chipD) continue;
+        if (!chip || cd < chip.d) chip = { gate: g, d: cd, depth };
         if (s.open || clock < graceUntil) continue;
         const vIn = held ? 0 : vx * g.inward[0] + vz * g.inward[1];
-        if (c.d <= depth && (vIn <= -C.approachV || c.d <= C.nearD) && clock >= s.until && !s.needExit && !offer) offer = g;
+        if (cd <= depth && (vIn <= -C.approachV || cd <= C.nearD) && clock >= s.until && !s.needExit && !offer) offer = g;
       }
       return { chip, offer, v };
     },

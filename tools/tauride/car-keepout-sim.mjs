@@ -119,9 +119,16 @@ if (!NO_WORLD) {
   const eng = await SE.loadEngine(ROOT);
   const all = mainModules('north'), names = all.filter((n) => !['people', 'wildlife', 'drive'].includes(n));
   const { ctx } = SE.makeContext(eng, all);
+  // Review fix: since T6 the fence colliders along the south edge stop the cars physically, before the keep-out hook is ever asked, so the 'proof can fail' controls (B1 mutant, B3) stopped breaching (1 of 110, 1 of 20).
+  // The colliders created by fence.js are tagged while the modules build, so that the CONTROLS can run in the same world with the fence taken out (the real handling is still proved with the fence standing).
+  const fenceItems = [], tagStack = /fence\.js/;
+  { const ph = ctx.physics, add = ph._insert.bind(ph); ph._insert = (it) => { if (tagStack.test(new Error().stack)) fenceItems.push(it); return add(it); }; }
   const t0 = Date.now(); await SE.buildModules(eng, ctx, names);
+  delete ctx.physics._insert;                                                          // the tagging wrapper is only for the build
+  const withoutFence = (fn) => { for (const it of fenceItems) ctx.physics.remove(it); try { return fn(); } finally { for (const it of fenceItems) ctx.physics._insert(it); } };
   console.log(`built ${names.length} modules (${names.join(', ')}) in ${Date.now() - t0} ms: ${ctx.physics.count} colliders`);
   const KO = AT.HOOKS.carKeepOut;
+  ok('the fence colliders were tagged while the garden built (the controls below take them out)', fenceItems.length >= 100, `${fenceItems.length} colliders from fence.js`);
   ok('the page publishes the car keep-out hook (the North list has landmarksTauride)', typeof KO === 'function');
   const SPECS = { roadster: { W: 2.00, R: 0.355, wb: 2.96, front: 2.36, rear: -2.26, hgt: 1.22, len: 4.62, centerZ: 0.05, mass: MASS.roadster }, truck: { W: 2.03, R: 0.43, wb: 3.80, front: 2.63, rear: -3.05, hgt: 1.80, len: 5.68, centerZ: -0.21, mass: MASS.truck } };
   const world = { L: eng.L, physics: ctx.physics, services: ctx.services };
@@ -162,16 +169,16 @@ if (!NO_WORLD) {
     return { runs, breaches, deepest };
   }
   const ts = Date.now();
-  const site = sweepSite(realHandling), siteM1 = sweepSite(await mutantHandling('M1'));
+  const site = sweepSite(realHandling), mutM1 = await mutantHandling('M1'), siteM1 = withoutFence(() => sweepSite(mutM1));
   ok('B1 the bus-stop site of the QA report (x 1300 .. 1450, 20 .. 50 deg, plain and nitro): no run puts a footprint point in the garden', site.runs >= 100 && site.breaches === 0, `${site.runs} runs, ${site.breaches} breaches`);
-  ok('B1 mutant M1 (no undo of the contact push) breaches the same site (QA: 31 of 110 here; the proof can fail)', siteM1.breaches >= 10, `${siteM1.runs} runs, ${siteM1.breaches} breaches, ${siteM1.deepest} of 9 points at worst`);
+  ok('B1 mutant M1 (no undo of the contact push) breaches the same site with the fence colliders taken out (QA: 31 of 110 here; the proof can fail)', siteM1.breaches >= 10, `${siteM1.runs} runs, ${siteM1.breaches} breaches, ${siteM1.deepest} of 9 points at worst`);
   const full = await sweepOutline(realHandling);
   ok(`B2 the whole outline (${pts.length} points x ${OFFS.length} headings x nitro / plain x 3 cars, 8 s each): no run puts a footprint point in the garden`, full.runs >= (QUICK ? 100 : FULL ? 800 : 400) && full.breaches === 0, `${full.runs} runs (${full.skipped} starts skipped as blocked), ${full.breaches} breaches${full.firstBad ? ', first ' + full.firstBad : ''}`);
   const fullM1 = await sweepOutline(await mutantHandling('M1'));
   ok('B2 mutant M1 breaches somewhere on the outline (the proof can fail)', fullM1.breaches >= 3, `${fullM1.runs} runs, ${fullM1.breaches} breaches`);
   // the hook gone: the same drives enter the ground freely (the scenarios do cross the line)
-  const noHook = withHook(undefined, () => { let enter = 0, runs = 0; for (const p of pts) { const ang = Math.atan2(p.nx, p.nz), sx = p.x + Math.sin(ang) * 14, sz = p.z + Math.cos(ang) * 14; const car = make(realHandling, 'coupe'); car.reset(sx, sz, Math.atan2(p.x - sx, p.z - sz)); if (car.blocked(sx, sz)) continue; runs++; let c = 0; for (let k = 0; k < 8 * 60; k++) { car.step(1 / 60, THR); c = Math.max(c, keepCount(car, KO)); } if (c > 0) enter++; } return { runs, enter }; });
-  ok('B3 without the hook the head-on drives enter the garden (the scenarios cross the outline)', noHook.runs >= 10 && noHook.enter >= noHook.runs * 0.4, `${noHook.enter} of ${noHook.runs} enter`);
+  const noHook = withoutFence(() => withHook(undefined, () => { let enter = 0, runs = 0; for (const p of pts) { const ang = Math.atan2(p.nx, p.nz), sx = p.x + Math.sin(ang) * 14, sz = p.z + Math.cos(ang) * 14; const car = make(realHandling, 'coupe'); car.reset(sx, sz, Math.atan2(p.x - sx, p.z - sz)); if (car.blocked(sx, sz)) continue; runs++; let c = 0; for (let k = 0; k < 8 * 60; k++) { car.step(1 / 60, THR); c = Math.max(c, keepCount(car, KO)); } if (c > 0) enter++; } return { runs, enter }; }));
+  ok('B3 without the hook (and without the fence colliders) the head-on drives enter the garden (the scenarios cross the outline)', noHook.runs >= 10 && noHook.enter >= noHook.runs * 0.4, `${noHook.enter} of ${noHook.runs} enter`);
   console.log(`(part B ${((Date.now() - ts) / 1000).toFixed(0)} s)`);
 }
 console.log(failed ? `RESULT: FAIL (${failed} of ${total} checks)` : `RESULT: OK (${total} checks)`);

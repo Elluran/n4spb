@@ -70,15 +70,18 @@ export function planFurniture(o = {}) {
     for (const [u, v] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]]) { const lx = u * len / 2, lz = v * dep / 2; out.push([x + c * lx + s * lz, z - s * lx + c * lz]); }
     return out;
   };
-  const okSpot = (pts, edge) => ribbonClear(pts) >= edge && pts.every(([x, z]) => shore.dist(x, z) > 0.3 && shore.inGarden(x, z) && !inFootprint(x, z, 0.3));
+  // review fix: a bench or a bin never stands in the keep-out of a bridge deck (the bench of the node n13371954335 stood 1.77 m from the end of the dam, inside its collider), and a bin never stands in a bench seat (`extra`)
+  const deckAxes = decks.map((k) => ({ pts: k.axis.flat(), r: k.hw + 0.1 }));
+  const offDecks = (pts) => deckAxes.every((d) => pts.every(([x, z]) => nearestOn(d.pts, x, z)[2] >= d.r));
+  const okSpot = (pts, edge, extra) => ribbonClear(pts) >= edge && pts.every(([x, z]) => shore.dist(x, z) > 0.3 && shore.inGarden(x, z) && !inFootprint(x, z, 0.3)) && offDecks(pts) && (!extra || extra(pts));
   /** place a piece: its OSM node, else the NEAREST clear spot within `max` m (rings of `step` m with 24 directions, the first clear candidate of the nearest ring wins: deterministic; the T5 nudge of the OSM trees) */
-  const place = (n, footFn, edge, step, max) => {
+  const place = (n, footFn, edge, step, max, extra) => {
     const make = (x, z) => { const f = facing(x, z), rotY = Math.atan2(f[0], f[1]); return { x, z, rotY, face: f[2], pts: footFn(x, z, rotY) }; };
     let q = make(n.x, n.z);
-    if (okSpot(q.pts, edge)) return { ...q, node: null };
+    if (okSpot(q.pts, edge, extra)) return { ...q, node: null };
     for (let d = step; d <= max + 1e-9; d += step) for (let i = 0; i < 24; i++) {
       const a = i * Math.PI / 12; q = make(n.x + Math.cos(a) * d, n.z + Math.sin(a) * d);
-      if (okSpot(q.pts, edge)) return { ...q, node: { x: n.x, z: n.z, d } };
+      if (okSpot(q.pts, edge, extra)) return { ...q, node: { x: n.x, z: n.z, d } };
     }
     return null;
   };
@@ -91,8 +94,9 @@ export function planFurniture(o = {}) {
     benches.push({ id: n.id, x: at.x, z: at.z, y: H(at.x, at.z), rotY: at.rotY, face: at.face, node: at.node, backrest: n.backrest !== 'no', stuck: !!at.stuck });
     stats.faces[at.face]++; if (at.node) stats.benchesMoved++;
   }
+  const benchHas = (b, x, z, m) => { const c = Math.cos(b.rotY), sn = Math.sin(b.rotY), dx = x - b.x, dz = z - b.z; return Math.abs(c * dx - sn * dz) < DB.len / 2 + m && Math.abs(sn * dx + c * dz) < DB.depth / 2 + m; };
   for (const n of o.bins || BINS) {
-    const r = place(n, (x, z) => { const o = [[x, z]]; for (let k = 0; k < 8; k++) o.push([x + Math.cos(k * Math.PI / 4) * DN.r, z + Math.sin(k * Math.PI / 4) * DN.r]); return o; }, DN.edge, DN.nudgeStep, DN.nudgeMax);
+    const r = place(n, (x, z) => { const o = [[x, z]]; for (let k = 0; k < 8; k++) o.push([x + Math.cos(k * Math.PI / 4) * DN.r, z + Math.sin(k * Math.PI / 4) * DN.r]); return o; }, DN.edge, DN.nudgeStep, DN.nudgeMax, (pts) => !benches.some((b) => benchHas(b, pts[0][0], pts[0][1], DN.r + 0.05)));
     const at = r || (() => { stuck.push({ id: n.id, kind: 'bin' }); stats.binsStuck++; return { x: n.x, z: n.z, rotY: 0, node: null, stuck: true }; })();
     bins.push({ id: n.id, x: at.x, z: at.z, y: H(at.x, at.z), rotY: hashXZ(n.x, n.z, 5) * Math.PI * 2, node: at.node, stuck: !!at.stuck });
     if (at.node) stats.binsMoved++;

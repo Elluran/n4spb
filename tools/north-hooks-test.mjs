@@ -152,7 +152,7 @@ const PODIUM = [744, -884, 741, -970, 777, -995, 777, -1095, 839, -1095, 840, -1
 const CAMPUS_RING = CAMPUS.flat();                                                  // landmarksKirochnaya/groups.js (M5): the embedded polygon of keep-out.js must equal it
 const SUVOROV = [1384, 1442, -1226, -1208];                                          // the Suvorov strip (source trees.js plant())
 const SMOLNY_A = [2320, 2440, -1847, -1820], SMOLNY_B = [2400, 2520, -1553, -1533];   // Smolny's mapped ceremonial approaches (source trees.js cleared())
-const PARTERRE = [1356, 1404, -1660, -1606];                                         // the palace parterre of the Tauride remake (T5 fix round 1: hooks/keep-out.js PALACE_PARTERRE, a soft clearing in front of the palace's garden front)
+const PARTERRE = [1356, 1436, -1660, -1598];                                         // the palace parterre of the Tauride remake (T5 fix round 1: hooks/keep-out.js PALACE_PARTERRE, a soft clearing in front of the palace's garden front)
 const PROBES = { podium: [900, -1000], campus: [1230, -1150], suvorov: [1413, -1217], smolnyA: [2380, -1833], smolnyB: [2460, -1543], garden: [1200, -1500], parterre: [1380, -1630] };
 /** the Tauride Garden park ring of the facade (GREEN r1582734), the independent oracle of the T5 'garden' reason of treeReject */
 const GARDEN_PARK = C.GREEN.find((q) => q.id === 'r1582734').polys[0].o;
@@ -496,6 +496,9 @@ section('static');
       check(`${file} reads ${k === 'HEIGHT_PATCHES' ? k : 'HOOKS.' + k} through lib/area-tables.js`, uses && fromTables.length > 0, uses ? 'no import of HOOKS / HEIGHT_PATCHES from lib/area-tables.js' : 'the file does not use it (the cluster has not landed)');
     }
   }
+  // review fix: a place picked while driving (the garden's Digit5 is inside the closed ground) must not announce an arrival that drive.place() refused
+  { const m = strip(read('src/main.js')), i = m.indexOf('async function goToView'), g = i < 0 ? '' : m.slice(i, m.indexOf('\n}\n', i));
+    check('src/main.js goToView keeps the answer of drive.place(): a refused spot shows no place label and no area name', /=\s*ctx\.drive\.place\([^)]*\)\s*!==\s*false/.test(g) && /if \(!placed\) \{.*showToast\(.*\);\s*return;/.test(g) && g.indexOf('!placed') < g.indexOf('showToast(v.label)'), g ? 'the placed flag is missing' : 'goToView not found'); }
   // no engine file imports HOOKS / HEIGHT_PATCHES from an area module
   const walk = (d) => fs.readdirSync(path.join(root, d), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(d + '/' + e.name) : e.name.endsWith('.js') ? [d + '/' + e.name] : []));
   const offenders = [];
