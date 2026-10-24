@@ -6,7 +6,8 @@
 //     --root <dir>  a site root other than this repository (tests: a throw-away copy of index.html + src/areas/<id>/page.json)
 // index.html is the SOURCE and is never edited by this tool: the page is index.html with targeted replacements of stable anchors (every anchor must match exactly once, otherwise the tool
 // stops: an index.html edit that moves an anchor must be followed here). The replacements:
-//   <html data-area>, <title>, apple-mobile-web-app-title, the canvas aria-label, the intro kicker / title, the phone "heavy scene" note (the area's MB from the registry), the #places tooltip,
+//   <html data-area>, <title>, apple-mobile-web-app-title, the canvas aria-label, the intro kicker / title, the phone "heavy scene" note (the area's MB from the registry; it also gets data-card-title, the
+//   title of the phone's pre-start card: the intro kicker up to its first colon + " · Before you start"), the #places tooltip,
 //   the two keyboard-help lines (#help .walk / .air), the import map (the registry's remap entries first, the 'three' entries stay), and the facts script (SIGHTS + FACTS).
 // Everything else (every id, class, script, style) is index.html byte for byte, so the engine finds all it needs.
 //

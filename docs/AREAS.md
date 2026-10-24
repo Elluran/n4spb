@@ -911,3 +911,35 @@ the bake (stale until M8).
   (Potemkin's 1791 feast, the First Duma of 1906, February 1917, Rastrelli / Stasov 1748-1835, the Smolny tar yard, the II Congress of Soviets, Stasov 1827-1829 «построил» vs «перестроил», the captured Turkish cannons of 1828-1829, the
   Liteyny and Shpalernaya name origins, Chernyshevsky's novel, the Neva's 74 km).
 * **Decisions for the user**: the `engine` CI job as a deploy gate; the strip registry's `approxMB: 48` vs the page's 51; Bolshaya Morskaya 37 (`landmarksJ` claims it or leaves it to `city`); the night look of the vestibule signs.
+
+## 11. M7 polish
+
+The backlog of M7 after the preparation of section 10, one block per cluster (the integration run merges the blocks).
+
+### 11.1 Gates and texts (cluster A, branch `m7p-gates`)
+
+* **A CROSS_PLACES row routed through a door gate** (`core/gates.js go()`): `crossPlaces()` keeps a row whose gate is a door (g3 leaves the North and leads to the strip), and `go()` took `dest = door ? g.pose : place`, so such a pick
+  would have put the player at the metro rotunda, not at the place. The place now wins (`dest = via 'place' && place ? place : door ? g.pose : null`; a door E (`via 'door'`) is unchanged, a driver still walks: the door has no car).
+  The question of a place asked through a door keeps the area's own title and scene (the door's say "metro" and "the rotunda"), names the place in the sights line and keeps the door's walk-out `fine` line.
+  No real table names a door gate yet (both tables use g1 / g2): the pin is `tools/cross-places-test.mjs` section 5 (the real `core/gates.js` over fake DOM dependencies, a synthetic row `{...a North row, gate 'g3'}`: the question,
+  the cam of the hand-off, `ho { via place, gate g3, car null }`, the return pose, a driver, the door E) and its mutant (a temporary copy of the source with the old line put back must fail the pin at the cam assertion), run under
+  both areas (strip 22 / North 25 checks).
+* **The boot guard per area** (`core/boot-guard.js`): the pre-start warning of a phone ("Heavy scene ...") had the strip's title on every page. `pageSizes(doc)` now also reads `data-card-title` of the heavy-scene note; the generator
+  (`tools/gen-area-html.mjs`) writes it on a generated page as the intro kicker up to its first colon plus « · Before you start» (north.html: «Прогулка по северу города · Before you start»); `index.html` has no attribute and the
+  strip falls back to `STRIP_CARD_TITLE` = «Прогулка по Невскому · Before you start», byte for byte what it was. The MB / GB of the card are those of the page's note as before (strip 51 / 1, North 36 / 1).
+* **The way back on the arrival card**: `backLink(ho, { qName, base })` (core/gates.js, the code that was inline in `main.js`: the origin's page at `ho.ret` with `?cam=` and the quality tier, nothing new on the wire) feeds `guard.back`;
+  `guard.arrivalLink()` (boot-guard.js, called by `main.js` when `ctx.handoff` exists) adds ONE link «Вернуться: <area> · Back to <area>» under the Continue row of the intro card (`#backlink`, created in script: no markup of
+  index.html changes; a click is `location.replace`, one history entry like the hop itself). The fatal card keeps its button. The metro door leaves the player within 4 m of the vestibule door (`ho.ret` = where he stood), so the strip's
+  arrival card returns him to the North at the door (a driver cannot use the door: the interact item is for walkers). Every hand-off arrival (g1 / g2 / a place / g3 / the dev g0) now shows the link, as the plan's arrival card
+  wants; a page that is not reached by a hand-off shows none.
+* **Registry sizes**: the strip row said `approxMB: 48` (the bake directory alone) and so did the g3 question's scene line ("около 48 МБ / about 48 MB"), against the page's announced total of ~51 MB; both say 51 now. The North row (36,
+  generated into north.html) is untouched: the task text that started this run called the North row the one that says 48, the repository says the strip row does (section 10.7 listed it as a decision). `tools/areas-test.mjs` pins
+  that every real area's registry `approxMB` equals the MB of its page's note (index.html 51, north.html 36), that every door gate's scene line names the registry MB of its destination in Russian and English, and the card titles
+  above (fixture page, phone card on a fake DOM, `backLink`, `arrivalLink`).
+* **`tools/areas-flow-test.mjs`**: the sections `g3fast` (the fast harness, no bake: the North page 3 m west of the door, the [E] chip, the question, the URL and `ho`, the strip arrival at AltDigit1 on foot, the arrival link, a click requests
+  `north.html`) and `g3` (the same on the real pages with the real preflight, the link followed to the North page; needs `assets/baked/manifest.json` and `assets/baked/north/manifest.json`, otherwise a clear
+  "needs a bake" skip that starts no browser). `--software` runs the browser on SwiftShader (CPU) instead of the GPU; the browser starts at the first page, so a skipping run starts none. `npm run areasflow:g3`.
+  Run here with `--software` (no GPU): g3fast 10 checks green, g3 skipped (no bake in the checkout), arrival and required green (the fatal card still offers the way back); the walking sections (accept ...) cannot finish on SwiftShader
+  (the walker does not reach the zone in 25 s: the same failure on the clean `feat/areas` tree), so they need the GPU.
+* **Not changed on purpose**: `src/areas/north/page.json` (the card title is derived from its kicker; a dedicated field would be a data change), the strip's `index.html` (no markup), the `#places` list. The bake revision of the tree moves
+  with this block (`main.js`, `boot-guard.js` and `north.html` are hashed; `gates.js` / `registry.js` are runtime-only): the bake is stale until M8 anyway.
