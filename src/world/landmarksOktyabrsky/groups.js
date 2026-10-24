@@ -15,13 +15,15 @@ export const KAPODISTRIAS_GROUP = { key: 'kapodistrias', name: 'Памятник
   ids: [], osm: ['n1372027612'], at: [796.6, -460.6], note: 'statue node n1372027612; the figure, the pedestal and the platform are drawn by the module' };
 
 // Ground that this module paves (world metres [x, z] rings, pure data).  The promenade along the stair (between the stair foot and the parking lot) lies
-// on unmapped ground that `environment` paints as patchy grass, so its grass tufts stand through the pavers: proposal for the environment owner (docs/research/oktyabrsky-requests.md): paint these rings
-// as 'paved' / treat them as `field.claimed` (the triangles of plaza.js are further clipped at the asphalt, the lot, buildings and the Nekrasov Garden).
+// on unmapped ground that `environment` would paint as patchy grass, so the grass tufts would stand through the pavers. `environment` therefore takes these rings as claimed ground:
+// environment/claims.js extraClaimRings() hands them to the claim mask of environment/field.js (no trunks, hedges, beds or tufts there) whenever landmarksOktyabrsky is in the page's build list
+// (the triangles of plaza.js are further clipped at the asphalt, the lot, buildings and the Nekrasov Garden).
 export const PAVED_RINGS = [
   [[734.9, -328.6], [795.9, -434.7], [784.2, -441.4], [736.9, -359.1], [730.4, -362.1], [717, -338.8]],
 ];
-/** The same ring extended to the apron round the Kapodistrias monument (the source's PAVED_RINGS at 0568f7af): what plaza.js paves where 'kapodistrias' is claimed. environment/claims.js reads
- *  PAVED_RINGS only (the strip's ring), so the grass tufts of `environment` still stand through the apron pavers in the North until it reads this ring where the area claims the monument. */
+/** The same ring extended to the apron round the Kapodistrias monument (the source's PAVED_RINGS at 0568f7af): what plaza.js paves where 'kapodistrias' is claimed. environment/claims.js
+ *  extraClaimRings() reads this ring instead of PAVED_RINGS where the area claims the monument (the North: layout.GROUPS.landmarksOktyabrsky holds 'kapodistrias'), so no grass tuft stands through the
+ *  apron pavers there; the strip claims no 'kapodistrias' and keeps PAVED_RINGS. */
 export const KAPODISTRIAS_PAVED_RINGS = [
   [[734.9, -328.6], [808.3, -456.4], [785.3, -469.6], [772.8, -447.9], [784.2, -441.4], [736.9, -359.1], [730.4, -362.1], [717, -338.8]],
 ];
