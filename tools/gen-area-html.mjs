@@ -6,7 +6,8 @@
 //     --root <dir>  a site root other than this repository (tests: a throw-away copy of index.html + src/areas/<id>/page.json)
 // index.html is the SOURCE and is never edited by this tool: the page is index.html with targeted replacements of stable anchors (every anchor must match exactly once, otherwise the tool
 // stops: an index.html edit that moves an anchor must be followed here). The replacements:
-//   <html data-area>, <title>, apple-mobile-web-app-title, the canvas aria-label, the intro kicker / title, the phone "heavy scene" note (the area's MB from the registry), the #places tooltip,
+//   <html data-area>, <title>, apple-mobile-web-app-title, the canvas aria-label, the intro kicker / title, the phone "heavy scene" note (the area's MB from the registry; it also gets data-card-title, the
+//   title of the phone's pre-start card: the intro kicker up to its first colon + " · Before you start"), the #places tooltip,
 //   the two keyboard-help lines (#help .walk / .air), the import map (the registry's remap entries first, the 'three' entries stay), and the facts script (SIGHTS + FACTS).
 // Everything else (every id, class, script, style) is index.html byte for byte, so the engine finds all it needs.
 //
@@ -97,7 +98,10 @@ export function generatePage(indexHtml, row, page) {
   html = once(html, /(<div class="kicker">)[^<]*(<\/div>)/, (m, a, b) => a + escHtml(page.intro.kicker) + b, 'intro kicker');
   html = once(html, /(<h1 class="title" id="stname">)[^<]*(<\/h1>)/, (m, a, b) => a + escHtml(page.intro.title) + b, 'intro title');
   const fill = (t) => t.replaceAll('{mb}', String(row.approxMB)).replaceAll('{ram}', String(page.heavy.ramGB));
-  html = once(html, /(<span class="tk">)[^<]*Heavy scene:[^<]*(<\/span>)/, (m, a, b) => a + escHtml(fill(page.heavy.ru)) + ' · ' + escHtml(fill(page.heavy.en)) + b, 'heavy-scene note');
+  // the heavy-scene note also carries the title of the phone's pre-start card (core/boot-guard.js pageSizes reads data-card-title; index.html has none and the strip keeps its own text): the intro
+  // kicker up to its first colon («Прогулка по северу города: Таврический сад и Смольный» -> «Прогулка по северу города»), then the English half of the strip's card
+  const cardTitle = `${page.intro.kicker.split(':')[0].trim()} · Before you start`;
+  html = once(html, /<span class="tk">([^<]*Heavy scene:[^<]*)<\/span>/, () => `<span class="tk" data-card-title="${escAttr(cardTitle)}">` + escHtml(fill(page.heavy.ru)) + ' · ' + escHtml(fill(page.heavy.en)) + '</span>', 'heavy-scene note');
   html = once(html, /(<select id="places"[^>]*\stitle=")[^"]*(")/, (m, a, b) => a + escAttr(page.places.title) + b, '#places title');
   html = once(html, /(<span class="desk walk">)[\s\S]*?(<\/span>)/, (m, a, b) => a + page.help.walk + b, '#help walk line');
   html = once(html, /(<span class="desk air">)[\s\S]*?(<\/span>)/, (m, a, b) => a + page.help.air + b, '#help air line');

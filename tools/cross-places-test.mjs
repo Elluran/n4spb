@@ -205,6 +205,66 @@ if (here === 'north') {
   }
 } else console.log(`  (the bookstore zone check runs as the North: node tools/area.mjs north tools/cross-places-test.mjs)`);
 
+// ---------------------------------------------------------------- 5. a CROSS_PLACES row routed through a DOOR gate (M7 polish, docs/AREAS.md 11.1)
+// crossPlaces() keeps a row whose gate is a door (g3 leaves the North and leads to the strip), so the HUD list may offer it; picking it must land at the PLACE. go() used to take the door's own pose
+// whenever the gate was a door (dest = door ? g.pose : ...), whatever the hand-off said: the player of such a row came out at the metro rotunda. The pin drives the real core/gates.js with fake DOM
+// dependencies (no world needed); the mutant is the same source with the old line put back, and it must fail the pin.
+console.log('a CROSS_PLACES row through a door gate (core/gates.js, fake DOM):');
+const osMod = await import('node:os'), fsMod = await import('node:fs');
+const doorG = GATES.find((g) => g.id === 'g3'), northTable = modules.get('north') ? modules.get('north').CROSS_PLACES : [];
+const doorRow = northTable.length ? { ...northTable.find((p) => p.area === 'strip'), key: 'door-fixture', gate: doorG.id } : null;
+const fakeUi = () => ({ open: false, asked: [], confirm(o) { this.asked.push(o); } });
+/** the pin: what a pick of `row` (a place of the strip through the door g3) hands over; throws when the hand-off is wrong */
+async function doorPlacePin(gatesMod) {
+  const A = { ID: 'north', CROSS_PLACES: [doorRow] };
+  const mk = (over = {}) => {
+    const dom = { getElementById: () => null, documentElement: { classList: { contains: () => false } }, body: { classList: { contains: () => false } }, createElement: () => ({ className: '', textContent: '', append() {} }) };
+    const w = { location: { href: 'http://h/north.html', search: '' }, addEventListener() {} };
+    const api = gatesMod.createGates({ ctx: { onUpdate() {}, drive: null, ...(over.ctx || {}) }, player: { inputLock: 0, riding: false, fly: false, pos: { x: 458, z: -1350 }, yaw: 0.5, pitch: 0.1, isUnderground: () => false }, camera: { position: {} },
+      ui: over.ui || fakeUi(), tod: { k: 0, variant: null }, audio: { muted: false }, guard: null, params: new URLSearchParams('devgates=1&baked=0'), A, isStarted: () => true, toast() {}, win: w, doc: dom });
+    return api;
+  };
+  const ui = fakeUi(), api = mk({ ui });
+  assert(api && api.places.length === 1 && api.places[0].key === doorRow.key && api.doors.length === 1, 'the door row is a place of the North (crossPlaces keeps it) and the door gate g3 is still registered');
+  assert.equal(api.offerPlace(doorRow.key), true); assert.equal(ui.asked.length, 1);
+  assert(!/Метро/.test(ui.asked[0].title) && /Новая область: Невский проспект/.test(ui.asked[0].title), 'the question of a place names the area, not the metro ride: ' + ui.asked[0].title);
+  const body = (() => { const t = []; const el = () => ({ className: '', textContent: '', kids: [], append(...k) { this.kids.push(...k); } }); const dom = { createElement: el }; const b = gatesMod.promptBody(dom, gatesMod.promptTexts('strip', { gate: doorG, place: doorRow })); const walk = (n) => { if (n.textContent) t.push(n.textContent); (n.kids || []).forEach(walk); }; walk(b); return t.join(' | '); })();
+  assert(body.includes(doorRow.label) && !/ротонд/.test(body), 'the sights line names the place and the scene line does not promise the rotunda: ' + body);
+  let url = null; api.navigate = (u) => { url = u; };
+  assert.equal(await api.go(doorG, 'place', doorRow), true); assert(url, 'no navigation');
+  const [page, qs] = url.split('?'), q = new URLSearchParams(qs);
+  assert.equal(page, 'index.html'); assert.equal(q.get('cam'), camParam({ x: doorRow.x, z: doorRow.z, yaw: doorRow.yaw, pitch: doorRow.pitch }, false), `the hand-off lands at ${q.get('cam')}, not at the place ${doorRow.x},${doorRow.z} (the door pose is ${doorG.pose.x},${doorG.pose.z})`);
+  const ho = (await import(pathToFileURL(path.join(root, 'src/core/handoff.js')).href)).decodeHo(q.get('ho'), { to: 'strip' }); assert(ho.ok, ho.why);
+  assert.equal(ho.ho.via, 'place'); assert.equal(ho.ho.gate, doorG.id); assert.equal(ho.ho.car, null); assert.deepEqual([ho.ho.ret.x, ho.ho.ret.z], [458, -1350], 'the return pose is where the player stood');
+  // a driver who picks the row walks (the door has no car) and still lands at the place; a flyer too
+  const drive = { active: true, car: { x: 470, z: -1370, yaw: 0 }, vehicle: { id: 'lada' }, view: { mode: 0 }, damage: { state: { front: 0, rear: 0, left: 0, right: 0 } } };
+  const d = mk({ ctx: { drive } }); let url2 = null; d.navigate = (u) => { url2 = u; }; await d.go(doorG, 'place', doorRow);
+  const q2 = new URLSearchParams(url2.split('?')[1]); assert.equal(q2.get('cam'), q.get('cam')); assert.equal((await import(pathToFileURL(path.join(root, 'src/core/handoff.js')).href)).decodeHo(q2.get('ho'), { to: 'strip' }).ho.car, null, 'the car stays behind at the door');
+  // the same door used as a door (E at the vestibule) is unchanged: the door's pose
+  const e = mk(); let url3 = null; e.navigate = (u) => { url3 = u; }; await e.go(doorG, 'door');
+  assert.equal(new URLSearchParams(url3.split('?')[1]).get('cam'), camParam(doorG.pose, false), 'via door still lands at the door pose');
+}
+if (doorRow) {
+  const gatesUrl = pathToFileURL(path.join(root, 'src/core/gates.js')).href;
+  check('the door gate g3 leaves the North for the strip, so crossPlaces keeps a row of the North\'s table that names it', () => { assert(doorG && isDoor(doorG)); assert.equal(crossPlaces([doorRow], 'north', GATES).length, 1); });
+  let pinErr = null; try { await doorPlacePin(await import(gatesUrl)); } catch (e) { pinErr = e; }
+  check('a place picked through the door g3 asks the place question (no metro title) and lands at the PLACE (cam, via place, gate g3, no car), a door E still lands at the door pose', () => { if (pinErr) throw pinErr; });
+  {
+    const src = fsMod.readFileSync(path.join(root, 'src/core/gates.js'), 'utf8').replaceAll('\r\n', '\n');
+    const fixed = "const dest = via === 'place' && place ? place : door ? g.pose : null;", old = "const dest = door ? g.pose : via === 'place' && place ? place : null;";
+    let mutantOk = false, why = '';
+    if (!src.includes(fixed)) why = 'the fixed line was not found in core/gates.js (the mutant cannot be built; update this test)';
+    else {
+      const abs = (p) => pathToFileURL(path.join(root, 'src', p)).href;
+      const text = src.replace(fixed, old).replace("from '../areas/registry.js'", `from '${abs('areas/registry.js')}'`).replace("from './handoff.js'", `from '${abs('core/handoff.js')}'`);
+      const tmp = path.join(osMod.tmpdir(), `gates-mutant-${process.pid}.mjs`); fsMod.writeFileSync(tmp, text);
+      try { await doorPlacePin(await import(pathToFileURL(tmp).href)); why = 'the pin PASSED on the mutant: it does not detect a door pose taking over a place'; } catch (e) { mutantOk = /the hand-off lands at/.test(e.message); why = mutantOk ? '' : 'the mutant failed for another reason: ' + String(e.message).slice(0, 200); }
+      finally { try { fsMod.unlinkSync(tmp); } catch (e) { /* gone */ } }
+    }
+    check('the mutant (core/gates.js with the old line  dest = door ? g.pose : ...  put back) fails the pin at the cam assertion', () => { assert(mutantOk, why); });
+  }
+} else console.log('  (the North\'s table is not loaded: no door-routed row can be built)');
+
 console.log(`cross-places-test (${here}): ${passes} passed, ${fails} failed`);
 console.log(fails ? 'RESULT: FAIL' : 'RESULT: OK');
 process.exit(fails ? 1 : 0);

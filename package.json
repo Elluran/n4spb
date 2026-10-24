@@ -43,6 +43,7 @@
     "gates": "node tools/gates-test.mjs",
     "gatehold": "node tools/gate-hold-test.mjs",
     "areasflow": "node tools/areas-flow-test.mjs",
+    "areasflow:g3": "node tools/areas-flow-test.mjs --only g3fast,g3",
     "navmemory": "node tools/nav-memory-probe.mjs",
     "smoke": "node tools/smoke.mjs",
     "load": "node tools/load-test.mjs",
