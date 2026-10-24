@@ -160,7 +160,9 @@ export function makeWorld(ctx) {
     if (t.shrub || t.h < 9) continue;
     if (hash2(Math.round(t.x * 7), Math.round(t.z * 7)) > 0.22) continue;
     if (!L.inPlay(t.x, t.z, 0)) continue;
-    addPerch({ kind: 'tree', x: t.x, y: (t.y || 0) + t.h - 0.6, z: t.z, yaw: hash2(Math.round(t.x), Math.round(t.z)) * 6.283, size: 2, tree: t });
+    const p = addPerch({ kind: 'tree', x: t.x, y: (t.y || 0) + t.h - 0.6, z: t.z, yaw: hash2(Math.round(t.x), Math.round(t.z)) * 6.283, size: 2, tree: t });
+    // a garden tree publishes crown = [the drawn crown top above its terrain at LOD0, 1, 2, 3] and lod (the level on the screen now): the crow stands ON the crown that is drawn (T7 fix round 1; the nominal t.h lay 0.6 .. 2 m inside it)
+    if (Array.isArray(t.crown)) Object.defineProperty(p, 'y', { enumerable: true, get: () => (t.y || 0) + t.crown[Math.min(t.lod | 0, 2)] + 0.05, set() { /* the crown decides */ } });
   }
   lap('lamps+trees');
   // the quay: granite posts of the Fontanka parapet (a post every ~3.2 m), the posts / railing tops of the canals, the roll parapet of the Neva: the gulls' favourites. quay.js publishes

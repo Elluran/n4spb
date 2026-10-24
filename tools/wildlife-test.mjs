@@ -281,7 +281,8 @@ if (!STRIP && ctx.services.landmarksTauride && Array.isArray(ctx.services.landma
   const gp = svc.perches.filter((p) => p.kind === 'tree' && GT.includes(p.tree));
   console.log(`garden trees: ${GT.length} listed, ${tall.length} tall, ${gp.length} crown perches (highest ${Math.max(...gp.map((p) => p.y)).toFixed(1)} m)`);
   check(gp.length >= 30, 'crows can perch on the garden trees (' + gp.length + ' crown perches)');
-  check(gp.every((p) => Math.abs(p.y - ((p.tree.y || 0) + p.tree.h - 0.6)) < 1e-9), 'a crown perch sits 0.6 m under the top of its crown above the terrain under the trunk (the hills lift it)');
+  check(gp.every((p) => Math.abs(p.y - ((p.tree.y || 0) + p.tree.crown[Math.min(p.tree.lod | 0, 2)] + 0.05)) < 1e-9), 'a crown perch sits ON the drawn crown (the raycast top of the canopy of the family at the level on the screen x the height stretch of the tree, +0.05 m) above the terrain under the trunk');
+  { const q = gp.find((p) => p.tree.crown), t = q && q.tree, l0 = t && t.lod; if (t) { t.lod = 0; const y0 = q.y; t.lod = 1; const y1 = q.y; t.lod = l0; check(Math.abs(y1 - y0) > 0.3 && gp.every((p) => p.tree.crown.every((v) => v > p.tree.h * 0.5)), 'the crown perch follows the level of detail the tree is drawn at (LOD0 ' + y0.toFixed(2) + ' m / LOD1 ' + y1.toFixed(2) + ' m) and no crown is lower than half the nominal height'); } }
   check(gp.some((p) => p.tree.y > 1), 'some crown perches stand on the hills (terrain under the trunk > 1 m)');
   let inside = 0, tn = 0; for (const t of GT) { if (t.shrub) continue; tn++; if (W.inTree(t.x, t.z, 0)) inside++; }
   check(tn > 100 && inside === tn, 'the trunk grid holds every trunk of the garden: a ground bird is refused on it (' + inside + '/' + tn + ')');

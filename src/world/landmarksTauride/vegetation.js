@@ -361,6 +361,7 @@ export function buildVegetation(ctx, parent, plan, o = {}) {
   for (const t of list) if (inPlay(t.x, t.z, -5)) { t.col = ctx.physics.addCylinder(t.x, t.z, t.tr, Math.min(0, t.y) - 0.5, t.y + (t.shrub ? 1.3 : 4.5)); colliders++; }
   // the LOD assignment (the environment's rule without the view cone: the garden is small): re-packed when the camera moves
   const state = new Int8Array(list.length).fill(-1);
+  const lodSink = { list: null };
   const writer = createTreeInstanceWriter(list, (t) => ({ y: t.y, sx: t.s, sy: t.sy, sz: t.s, rgb: t.rgb }));
   const buckets = {}; for (const f in M) buckets[f] = M[f].map((m) => writer.bucket(m));
   function assign(cx, cz) {
@@ -369,7 +370,7 @@ export function buildVegetation(ctx, parent, plan, o = {}) {
       let l = d < LOD_D[0] ? 0 : d < LOD_D[1] ? 1 : d < LOD_D[2] ? 2 : 3;
       const pv = state[i];
       if (pv >= 0 && pv !== l) { const lo = pv === 0 ? 0 : LOD_D[pv - 1] * 0.9, hi = pv === 3 ? 1e9 : LOD_D[pv] * 1.1; if (d >= lo && d < hi) l = pv; }
-      state[i] = l;
+      state[i] = l; if (lodSink.list) lodSink.list[i].lod = l;
       if (pv !== l) writer.assign(buckets[t.fam][l], i);
     }
     writer.finish();
@@ -385,6 +386,19 @@ export function buildVegetation(ctx, parent, plan, o = {}) {
   const draws = () => meshes.filter((m) => m.count > 0).length + (blobs ? 1 : 0);
   /** every instance of every bucket as { fam, lod, x, y, z, sx, sy } (the matrices as uploaded) */
   const readBack = () => { const out = []; for (const fam of fams) M[fam].forEach((m, l) => { const a = m.instanceMatrix.array; for (let i = 0; i < m.count; i++) { const q = i * 16; out.push({ fam, lod: l, x: a[q + 12], y: a[q + 13], z: a[q + 14], sx: Math.hypot(a[q], a[q + 2]), sy: a[q + 5] }); } }); return out; };
-  const treeList = list.map((t) => ({ x: t.x, z: t.z, y: t.y, r: t.r, h: t.h, tr: t.tr, sp: t.sp, ...(t.shrub ? { shrub: true } : {}) }));
+  // T7 fix round 1 (QA: the crows on the crowns sat 2 m inside them): a perch for a bird is the DRAWN crown, not t.h (the nominal height of the family x s; the instance is stretched by sy, the lobes of LOD0 stand 1 .. 3 m lower than those
+  // of LOD1 / 2). crown = [top above the terrain under the trunk at LOD0, 1, 2, 3] = the highest of five rays dropped on the family's REAL canopy geometry within 0.3 m of the trunk axis, x sy; `lod` = the level the tree is drawn at now
+  // (assign() keeps it), so wildlife/world.js can seat a crow on the crown that is on the screen
+  const famTop = {}, rcast = new T.Raycaster(), rdir = new T.Vector3(0, -1, 0), rorg = new T.Vector3();
+  const topOf = (fam, l) => { const k = fam + l; if (k in famTop) return famTop[k]; const m = new T.Mesh(M[fam][l].geometry, new T.MeshBasicMaterial({ side: T.DoubleSide })); m.updateMatrixWorld(); let best = NaN;
+    for (const [dx, dz] of [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]]) { rcast.set(rorg.set(dx, 200, dz), rdir); const h = rcast.intersectObject(m)[0]; if (h && !(h.point.y <= best)) best = h.point.y; }
+    m.material.dispose(); return (famTop[k] = best); };
+  const treeList = list.map((t, i) => {
+    const row = { x: t.x, z: t.z, y: t.y, r: t.r, h: t.h, tr: t.tr, sp: t.sp, lod: Math.max(0, state[i]) };
+    if (t.shrub) row.shrub = true;
+    else row.crown = [0, 1, 2, 3].map((l) => { const v = topOf(t.fam, l); return Number.isFinite(v) ? v * t.sy : t.h * 0.8; });
+    return row;
+  });
+  lodSink.list = treeList;
   return { group, meshes, instances: list.length, colliders, blobs, triangles, trianglesWorst: worst, draws, assign, readBack, treeList, families: fams, materials: [matLobe, matTier, ...Object.values(barkMat)] };
 }
