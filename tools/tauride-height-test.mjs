@@ -44,7 +44,7 @@ const onlySource = !!args.source;
 const engine = onlySource ? null : await loadEngine(ROOT);      // this repository's three.js; --source loads only the source repository's (two copies in one process make three.js warn)
 
 /** evaluate one model; returns the verdicts */
-async function evaluate(model, { engine, world, wet, ring, bounds = BOUNDS, label, assertCars, assertLanding, carBlocked: realCar, route: doRoute = true }) {
+async function evaluate(model, { engine, world, wet, ring, bounds = BOUNDS, label, assertCars, assertLanding, carBlocked: realCar, route: doRoute = true, built = null }) {
   const res = { name: model.name, verdict: {} };
   say(`--- ${model.name}`);
   const probes = shoreProbes(engine.L, wet, ring, { count: PROBES });
@@ -59,12 +59,14 @@ async function evaluate(model, { engine, world, wet, ring, bounds = BOUNDS, labe
     const r = a && b ? route(g, a, b) : null;
     if (!r) { say('  route  : no way route from the south gate to the memorial in the garden ways  -> FAIL'); res.verdict.route = false; }
     else {
-      const w = walkRoute(world, r);
+      // T6: on the real built module the walker comes from the STREET and passes THROUGH the opening of the south gate in the fence (3 m south of the gate node, then the node itself, then the garden ways)
+      const gateLeg = built && built.ctx.services.landmarksTauride && built.ctx.services.landmarksTauride.fence ? [{ x: S.S_GATE.x, z: S.S_GATE.z + 3, way: null }, { x: S.S_GATE.x, z: S.S_GATE.z, way: null }] : [];
+      const w = walkRoute(world, [...gateLeg, ...r]);
       // (T4a: the ponds were impassable and the bridges did not exist: a model with routeToShore was allowed to stop at a shore, on a bridge way, dry. T4b: the real build walks the bridges and must ARRIVE.)
       const bridgeIds = new Set(S.P.PATHS.filter((p) => p.bridge).map((p) => p.id)), atShore = !w.ok && !!w.stuckAt && bridgeIds.has(w.stuckAt.way) && S.waterDist(w.stuckAt.x, w.stuckAt.z) >= 0 && S.waterDist(w.stuckAt.x, w.stuckAt.z) < 3.5;
       const ok = (w.ok || (model.routeToShore && atShore)) && w.maxDepth <= model.wadeDepth;
-      res.route = { ways: [...new Set(r.map((q) => q.way).filter(Boolean))].length, ...w, atShore };
-      say(`  route  : south gate -> memorial along ${res.route.ways} ways, ${w.lengthM} m: ${w.ok ? 'arrived' : 'STUCK at ' + JSON.stringify(w.stuckAt)} in ${(w.ticks / 60).toFixed(0)} s, lowest feet ${w.minY} m, deepest water ${w.maxDepth} m${model.deckY ? ' (on the bridge decks: no water)' : ''}  -> ${mark(ok)}${!w.ok && model.routeToShore ? (atShore ? ` (reachable up to the shore of the water, where the bridge way ${w.stuckAt.way} has no deck)` : ' (NOT at a bridge head)') : ''}`);
+      res.route = { ways: [...new Set(r.map((q) => q.way).filter(Boolean))].length, ...w, atShore, throughGate: gateLeg.length > 0 };
+      say(`  route  : ${gateLeg.length ? 'the street -> THROUGH the south gate opening in the fence -> ' : 'south gate -> '}memorial along ${res.route.ways} ways, ${w.lengthM} m: ${w.ok ? 'arrived' : 'STUCK at ' + JSON.stringify(w.stuckAt)} in ${(w.ticks / 60).toFixed(0)} s, lowest feet ${w.minY} m, deepest water ${w.maxDepth} m${model.deckY ? ' (on the bridge decks: no water)' : ''}  -> ${mark(ok)}${!w.ok && model.routeToShore ? (atShore ? ` (reachable up to the shore of the water, where the bridge way ${w.stuckAt.way} has no deck)` : ' (NOT at a bridge head)') : ''}`);
       res.verdict.route = ok;
     }
   }
@@ -123,7 +125,8 @@ async function reliefSection(ctx, ph, engine) {
   rel(`the terrain is at most ${TM.TERRAIN.drawsMax} meshes and ${TM.TERRAIN.trianglesTarget} triangles, and the service counts them`, meshes.length > 0 && meshes.length <= TM.TERRAIN.drawsMax && tris <= TM.TERRAIN.trianglesTarget && svc.terrain.draws === meshes.length && svc.terrain.triangles === tris, `${meshes.length} meshes, ${tris} triangles`);
   rel('the terrain meshes are noBatch (the garden ground material of T3, no vertex colour, one draw per chunk), carry normals and are inside the garden box', meshes.every((m) => m.userData.noBatch && !m.geometry.attributes.color && m.geometry.attributes.normal && m.material.userData.tauride === 'ground') && meshes.every((m) => { const b = m.geometry.boundingBox; return b.min.x >= GH.RELIEF_BOX[0] - 1 && b.max.x <= GH.RELIEF_BOX[1] + 1 && b.min.z >= GH.RELIEF_BOX[2] - 1 && b.max.z <= GH.RELIEF_BOX[3] + 1 && b.min.y >= GH.PONDS.BED_BIG - 0.01; }), '');
   { const c2 = makeContext(engine, []), n0 = c2.ctx.physics.count; TM.buildTerrain(c2.ctx, new engine.THREE.Group(), TM.planTerrain()); rel('the terrain builder adds no collider (the player follows heightAt)', c2.ctx.physics.count === n0, `${n0} -> ${c2.ctx.physics.count}`); }
-  rel('the module has the colliders of T1 (Paradny and palace: 1,270), the shore colliders of the ponds (T4a), the walk ramps and rails of the bridges (T4b) and the trunks of the trees (T5), nothing else', ph.count === 1270 + svc.ponds.colliders + (svc.bridges?.colliders || 0) + (svc.trees?.colliders || 0) && svc.ponds.colliders > 100, `${ph.count} = 1270 + ${svc.ponds.colliders} + ${svc.bridges?.colliders} + ${svc.trees?.colliders}`);
+  const t6 = (svc.fence?.colliders || 0) + (svc.furniture?.colliders || 0) + (svc.monuments?.colliders || 0);
+  rel('the module has the colliders of T1 (Paradny and palace: 1,270), the shore colliders of the ponds (T4a), the walk ramps and rails of the bridges (T4b), the trunks of the trees (T5) and the fence, the furniture and the monuments (T6), nothing else', ph.count === 1270 + svc.ponds.colliders + (svc.bridges?.colliders || 0) + (svc.trees?.colliders || 0) + t6 && svc.ponds.colliders > 100, `${ph.count} = 1270 + ${svc.ponds.colliders} + ${svc.bridges?.colliders} + ${svc.trees?.colliders} + ${t6} (T6)`);
   // ---- the mesh against the height function
   const plan = TM.planTerrain(), M = TM.measurePlan(plan);
   rel(`the planned mesh is within ${TM.TERRAIN.tol * 100} cm of gardenHeight (rasterised on a 0.5 m lattice)`, M.maxErr <= TM.TERRAIN.tol, `max ${(M.maxErr * 100).toFixed(2)} cm at ${JSON.stringify(M.at)}, ${M.samples} samples`);

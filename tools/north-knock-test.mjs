@@ -165,6 +165,27 @@ check(`2b landmarksKirochnaya: ${BENCHES.length} knockable campus benches (of ${
 });
 if (MUTANT) { console.log(failed ? 'MUTANT RED (as it must be)' : 'MUTANT GREEN (the census did not catch the missing registrations)'); process.exit(failed ? 1 : 0); }
 
+// ---------------------------------------------------------------- 2b the Tauride Garden (T6)
+check('2b landmarksTauride (T6): the furniture of the garden is knockable like the one of the strip: 132 benches + 167 bins + the lanterns on the lit ways; the fence, its piers and the lanterns on the gate piers are not', () => {
+  const c = census.landmarksTauride; assert(c, 'landmarksTauride was built');
+  const S = ctx.services.landmarksTauride, plan = S.furniture.plan, lamps = plan.lanterns.length;
+  assert.equal(c.byKind.bench, 132, `benches ${c.byKind.bench}`); assert.equal(c.byKind.bin, 167, `bins ${c.byKind.bin}`); assert.equal(c.byKind.lamp, lamps, `lanterns ${c.byKind.lamp} of ${lamps}`);
+  assert.equal(c.n, 132 + 167 + lamps, `the module registers nothing else (${JSON.stringify(c.byKind)})`);
+  for (const r of c.records) {
+    assert.equal(r.items.length, 1, `a ${r.kind} owns one collider`); const it = r.items[0];
+    if (r.kind === 'bench') { assert(it.type === 'box' && Math.abs(it.y1 - r.y - 0.9) < 1e-6, `bench collider ${it.type} y1 ${it.y1} (y ${r.y})`); assert.equal(r.parts.length, 1); }
+    if (r.kind === 'bin') { assert(it.type === 'cyl' && Math.abs(it.y1 - r.y - 0.78) < 1e-6, `bin collider ${it.type}`); }
+    if (r.kind === 'lamp') { assert(it.type === 'cyl' && Math.abs(it.y1 - r.y - 4.2) < 1e-6, `lantern collider ${it.type}`); assert.equal(r.parts.length, 3, 'body + glow + light pool'); assert.equal(r.anchored, 18); }
+    assert(it.y0 <= Math.min(0, r.y) - 0.5 + 1e-6, 'the collider reaches below the ground (a piece on a hill still blocks and is an obstacle of the nav)');
+  }
+  // the fence: no record (the iron fences of the strip are not knockable either); the panels and piers are plain colliders with fence = true on the panels
+  assert.equal(S.fence.items.panels.length > 800 && S.fence.items.panels.every((it) => it.fence === true && !(it.source && it.source.knock)), true, 'the fence panels are plain wall colliders');
+  // a bench hit at 40 km/h is knocked and takes its seats: the record leaves "stand" and its collider goes
+  const b = c.records.find((r) => r.kind === 'bench'); ctx.knock.hit(b.x, b.z, 40, 1, 0, 'bench'); idle(1);
+  assert.notEqual(b.state, 'stand', `the bench was knocked (${b.state})`);
+  console.log(`     ${c.n} records ${JSON.stringify(c.byKind)}; the fence (${S.fence.colliders} colliders, ${S.fence.instances.panels} panels, ${S.fence.instances.piers} piers) is not knockable`);
+});
+
 // ---------------------------------------------------------------- 3 the strip's furniture in the North
 check('3 the strip\'s furniture modules register in the North: streets, props, landmarksOktyabrsky (4 lamps + 2 city lights + the bollards its kerb rule keeps)', () => {
   assert(census.streets && census.streets.n > 1000, `streets ${census.streets && census.streets.n}`);
@@ -180,7 +201,7 @@ check('3 the strip\'s furniture modules register in the North: streets, props, l
 check('4 services: entrances / monuments / photoSpots per landmark module; the Smolny photo spot is in ctx.services.landmarks; landmarksNorthFull and landmarksOktyabrsky publish door points', () => {
   const S = ctx.services, lm = S.landmarks || {};
   const rows = [];
-  for (const m of MODULES.filter((k) => k.startsWith('landmarks'))) { const s = S[m] || {}; rows.push(`${m}: entrances ${(s.entrances || []).length}, monuments ${(s.monuments || []).length}, photoSpots ${(s.photoSpots || []).length}`); }
+  for (const m of MODULES.filter((k) => k.startsWith('landmarks'))) { const s = S[m] || {}, mo = Array.isArray(s.monuments) ? s.monuments : (s.monuments && s.monuments.list) || [], ph = Array.isArray(s.photoSpots) ? s.photoSpots : (s.monuments && s.monuments.photoSpots) || []; rows.push(`${m}: entrances ${(s.entrances || []).length}, monuments ${mo.length}, photoSpots ${ph.length}`); }
   rows.push(`landmarks (shared): monuments ${(lm.monuments || []).length}, photoSpots ${(lm.photoSpots || []).length}: ${(lm.photoSpots || []).map((p) => p.name).join(' | ')}`);
   rows.push(`city: entrances ${((S.city || {}).entrances || []).length}; PRUNE_SERVICES of the area: ${JSON.stringify(PRUNE_SERVICES)}`);
   for (const r of rows) console.log('     ' + r);

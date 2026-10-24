@@ -25,7 +25,9 @@ export default async function (ctx, L, THREE) {
   // the water (they are added without a water test), only the EDGES over the water fail edgeOK: nodes and walkers "on a deck" then still count on the land approaches, and only a route check or a wet sample turns red.
   const sites = ctx.services.landmarksTauride?.bridges?.sites || [], nav = sim.nav, NN = nav.N || nav.nodes, crossRows = []; let crossBad = 0;
   for (const s of sites) {
-    const a = nav.nearestNode(s.ends.a.x, s.ends.a.z, 6), b = nav.nearestNode(s.ends.b.x, s.ends.b.z, 6), r = a >= 0 && b >= 0 ? nav.route(a, b) : null;
+    // T6: the east end of the dam's deck reaches the garden fence (w418563880, 0.8 m from a closed panel: the walkers cannot stand there and the nearest node within 6 m lies beyond the fence): the route is asked between the two points 1.5 m inside the axis ends
+    const ex = s.ends.b.x - s.ends.a.x, ez = s.ends.b.z - s.ends.a.z, el = Math.hypot(ex, ez) || 1, IN = 1.5, ax = s.ends.a.x + ex / el * IN, az = s.ends.a.z + ez / el * IN, bx = s.ends.b.x - ex / el * IN, bz = s.ends.b.z - ez / el * IN;
+    const a = nav.nearestNode(ax, az, 6), b = nav.nearestNode(bx, bz, 6), r = a >= 0 && b >= 0 ? nav.route(a, b) : null;
     const wet = r ? r.filter((id) => shore.dist(NN.x[id], NN.z[id]) < 0 && deckY(NN.x[id], NN.z[id]) !== null).length : 0;
     if (!r || wet === 0) crossBad++; crossRows.push(`${s.site} ${r ? r.length + ' nodes, ' + wet + ' over the water on the deck' : 'NO ROUTE'}`);
   }

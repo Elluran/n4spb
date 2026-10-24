@@ -96,7 +96,7 @@ const BUDGET = { environment: 500e3, streets: 500e3, city: 600e3, landmarksA: 40
   // landmarksBelinskyNorth (M7 C-landmarks, measured 2026-10-23, + 20 %): the Church of Simeon and Anna 27,955
   landmarksOktyabrsky: 30.3e3, landmarksBelinskyNorth: 34e3,
   // the Tauride Palace + the Paradny quarter (T1 of docs/TAURIDE-REMAKE.md, measured: 621,713 incl. the courts 29 k and the palace 23 k; the garden is not in it, it comes with the later phases and gets its own allowance)
-  landmarksTauride: 765e3 };      // T5 (the Tauride remake): measured 695,273 after the trees and the reeds (T4b 668,023 + the 996 trees at the HERO's LOD3 + their contact shadows + the 700 reed clumps), the tripwire = the measure + 10 %
+  landmarksTauride: 815e3 };      // T6 (the Tauride remake): measured 741,242 after the fence, the furniture and the monuments (T5 695,581 + the fence 15.7 k + the furniture 19.1 k + the monuments 10.8 k), the tripwire = the measure + 10 % (T5: 765 k = 695,273 + 10 %)
 
 for (const name of names) {
   const before = snapshot();

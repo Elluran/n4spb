@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tauride furniture preview (software GL)</title>
+<!-- The harness of tools/tauride/furniture-preview.mjs (T6): the T3 floor, ground and alleys + the T6 pieces (fence, gates, benches, bins, lanterns, monuments, fountain, orangery, pitch, playgrounds) built with the real modules and rendered with the real three.js on software GL. No environment, no city, no trees, no ponds. -->
+<script type="importmap">
+{ "imports": {
+  "/src/world/data/city.js": "/src/areas/north/data/city.js",
+  "/src/world/area.js": "/src/areas/north/area.js",
+  "/src/world/city/known-data.js": "/src/areas/north/known-data.js",
+  "three": "/node_modules/three/build/three.module.js",
+  "three/addons/": "/node_modules/three/examples/jsm/"
+} }
+</script>
+<style>html,body{margin:0;background:#888}canvas{display:block}</style></head>
+<body><canvas id="c" width="1280" height="720"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { createContext } from '/src/core/ctx.js';
+import * as L from '/src/world/layout.js';
+import { GREEN } from '/src/world/data/city.js';
+import { gardenHeight, RELIEF_BOX } from '/src/world/landmarksTauride/height.js';
+import { planTerrain, buildTerrain, gardenPieces, floorOptions, makeMeshHeight } from '/src/world/landmarksTauride/terrain-mesh.js';
+import { planGroundMask, gardenGroundMaterial, collectGroundInputs, makeNoiseTexture } from '/src/world/landmarksTauride/ground-material.js';
+import { planPaths, buildPaths } from '/src/world/landmarksTauride/paths-draped.js';
+import * as DG from '/src/world/landmarksTauride/data/footprints.js';
+import * as DW from '/src/world/landmarksTauride/data/water.js';
+import * as DP from '/src/world/landmarksTauride/data/paths.js';
+import * as DF from '/src/world/landmarksTauride/data/furniture.js';
+import * as FD from '/src/world/landmarksTauride/data/furniture-design.js';
+import { BUILDINGS } from '/src/world/data/city.js';
+import { planFence, buildFence } from '/src/world/landmarksTauride/fence.js';
+import { planFurniture, buildFurniture } from '/src/world/landmarksTauride/furniture.js';
+import { planMonuments, buildMonuments } from '/src/world/landmarksTauride/monuments.js';
+const errors = [];
+const origErr = console.error; console.error = (...a) => { errors.push(a.map(String).join(' ').slice(0, 2000)); origErr(...a); };
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(1280, 720, false);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(62, 1280 / 720, 0.25, 3000);
+camera.layers.enable(1);  /* the garden meshes are on LAYER_NO_OUTLINE (colour pass only, core/renderer.js MASK_COLOR) */
+const sunDir = new THREE.Vector3(...L.SUN_DIR).normalize();
+scene.background = new THREE.Color('#a9c4e0'); scene.fog = new THREE.FogExp2('#b7cde6', 0.00045);
+const sun = new THREE.DirectionalLight('#fff2dc', 2.6); sun.position.copy(sunDir.clone().multiplyScalar(500)); const hemi = new THREE.HemisphereLight('#cfe3ff', '#7a8a60', 1.1); scene.add(sun, hemi);
+const ctx = createContext({ scene, camera, renderer, audio: null, quality: { name: 'medium', pixelRatio: 1, msaa: 4, shadowMap: 2048, shadowSize: 70, petals: 0.6 }, sunDir });
+const T = {}; const t0 = performance.now(); const lap = (n) => { T[n] = +(performance.now() - t0).toFixed(0); };
+const tplan = planTerrain(gardenHeight, RELIEF_BOX, floorOptions()); lap('terrainPlan');
+const mask = planGroundMask(collectGroundInputs({ GARDEN: DG.GARDEN, GARDEN_GREEN: DG.GARDEN_GREEN, FOOTPRINTS: DG.FOOTPRINTS, WATER_UNION: DW.WATER_UNION, PATHS: DP.PATHS, BENCHES: DF.BENCHES, GATES: DF.GATES, MONUMENTS: DF.MONUMENTS, FOUNTAINS: DF.FOUNTAINS }, GREEN, gardenHeight)); lap('mask');
+const noise = makeNoiseTexture(), ground = gardenGroundMaterial(ctx, mask, noise);
+const root = new THREE.Group(); scene.add(root);
+const terrain = buildTerrain(ctx, root, tplan, { material: ground.mat }); lap('terrain');
+const pplan = planPaths(DP.PATHS, { meshHeight: makeMeshHeight(tplan), gh: gardenHeight }); const paths = buildPaths(ctx, root, pplan, noise); lap('paths');
+const fplan = planFence(), fnplan = planFurniture({ piers: [...fplan.piers.filter((p) => p.kind === 'pier'), ...fplan.gates.flatMap((g) => g.gatePiers)], gateLanterns: fplan.gates.flatMap((g) => g.lantern || []), decks: [] });
+const ob = BUILDINGS.find((b) => b.id === FD.ORANGERY.id), mplan = planMonuments({ GREEN, stairs: pplan.stairs, orangeryRing: ob ? ob.polys[0].o : null });
+const fence = buildFence(ctx, root, fplan), furn = buildFurniture(ctx, root, fnplan), mon = buildMonuments(ctx, root, mplan); lap('t6');
+ctx.addStatic && void 0;
+const view = (x, y, z, yaw, pitch) => { camera.position.set(x, y, z); camera.rotation.order = 'YXZ'; camera.rotation.set(THREE.MathUtils.degToRad(pitch), THREE.MathUtils.degToRad(yaw), 0); camera.updateMatrixWorld(true); renderer.info.reset(); renderer.render(scene, camera); window.__last = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, programs: renderer.info.programs.length, lost: renderer.getContext().isContextLost() }; return canvas.toDataURL('image/png'); };
+const night = (v) => { ctx.shared.uNight.value = v; hemi.intensity = 1.1 * (1 - 0.85 * v); sun.intensity = 2.6 * (1 - 0.95 * v); scene.background.set(v > 0.5 ? '#0d1424' : '#a9c4e0'); scene.fog.color.set(v > 0.5 ? '#0d1424' : '#b7cde6'); for (const f of ctx._updates) f(0.016, 1.0); };
+window.__api = { night, view, errors, T, stats: { fence: fence.triangles, furniture: furn.triangles, monuments: mon.triangles, monDraws: mon.draws, fenceDraws: fence.draws, furnDraws: furn.draws, mask: mask.stats, paths: pplan.stats, terrainTris: terrain.triangles, terrainDraws: terrain.draws }, programs: () => renderer.info.programs.length };
+window.__done = true;
+</script></body></html>

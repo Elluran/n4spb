@@ -87,8 +87,19 @@ const GARDEN_BINS = [
     'n4263458860','n4263458861','n4263458862','n4263458863','n4263458873',
 ];
 
+// T6 (docs/TAURIDE-REMAKE.md): the fence ways (the 14 mapped fence ways of data/furniture.js FENCES, among them the central round's w420650657 / w420650658 and the pitch ring w81524430, which is also the pitch GREEN record: claimed once),
+// the 11 gate nodes, the 3 monuments and the fountain, the other GARDEN_GREEN records (the pitch, 3 playgrounds, the fitness station, the lake island's wetland) and the two hedges w1199664269 / w1199664270 that stand by the
+// west gate: the garden draws its own fence, gates, monuments and play fittings, so nothing generic may stand there. The orangery building w23002927 (the palm house, OUTSIDE the outline in the north-west corner) is a
+// building claim (`ids`): the module draws it as a glasshouse and `city` draws no block there. The service lane (w1258039516 / 17) is NOT claimed (data/furniture-design.js SERVICE_LANE_DECISION).
+const GARDEN_FENCES = ['w418967227','w418967228','w420650657','w420650658','w426502809','w1458068097','w1458068098','w83151420','w418563881','w1293521581','w10903027','w418563880','w81524430','w112853216'];
+const GARDEN_GATES = ['n950150459','n11695724997','n967683857','n4222941897','n8486544221','n828488069','n1001527689','n4249215401','n4249215405','n4263458837','n4263458839'];
+const GARDEN_MONUMENTS = ['n2974761162','n4222941889','n4186236011','n950150577'];
+const GARDEN_OTHERS = ['w188083933','w69029505','w188083935','w423708263','w188083936'];
+const GARDEN_HEDGES = ['w1199664269','w1199664270'];
+const GARDEN_ORANGERY = 'w23002927';
+
 export const GROUPS_LIST = [
   {key:'tauride-palace',name:'Таврический дворец',nameEn:'Tauride Palace',ids:['r3801092'],osm:[],at:[1380,-1735]},
   {key:'paradny-quarter',name:'Парадный квартал',nameEn:'Paradny Quarter',ids:['w102153008','w102153013','w145419644','r1452259','r1967088','r3304715','r3304716','w102153007','w134638076','w134638078','w134638079'],osm:['w1501496505','w1501496506'],at:[944,-1038]},
-  {key:'tauride-garden',name:'Таврический сад',nameEn:'Tauride Garden',ids:[],osm:[...GARDEN_GREEN_IDS,...GARDEN_WAYS,...GARDEN_AREAS,...GARDEN_BENCHES,...GARDEN_BINS],at:[1210,-1520]},
+  {key:'tauride-garden',name:'Таврический сад',nameEn:'Tauride Garden',ids:[GARDEN_ORANGERY],osm:[...GARDEN_GREEN_IDS,...GARDEN_WAYS,...GARDEN_AREAS,...GARDEN_BENCHES,...GARDEN_BINS,...GARDEN_FENCES,...GARDEN_GATES,...GARDEN_MONUMENTS,...GARDEN_OTHERS,...GARDEN_HEDGES],at:[1210,-1520]},
 ];

@@ -114,7 +114,7 @@ export function planVegetation(o = {}) {
   const t0 = Date.now();
   const D = o.data || DV, K = { ...D.KEEP_OUT, ...(o.keepOut || {}) }, Z = o.zones || D.ZONES, SPT = speciesTable(D, o.species || SPECIES), level = o.level || 'medium';
   const gh = o.gh || gardenHeight, shore = o.shore || GARDEN_SHORE, garden = o.garden || GARDEN.o, paths = o.paths || PATHS, P = o.ponds || PONDS;
-  const woods = o.woods || [], play = o.play || [], footprints = o.footprints || [], gates = [...(o.gates || []), ...(o.openings || [])], monuments = o.monuments || [], fountains = o.fountains || [];
+  const woods = o.woods || [], play = o.play || [], footprints = o.footprints || [], gates = [...(o.gates || []), ...(o.openings || [])], monuments = o.monuments || [], fountains = o.fountains || [], furniture = o.furniture || [];
   const osmTrees = o.osmTrees || [], lane = o.lane || null, memorial = o.memorial || null, decks = o.bridgeKeepOut || [], heads = o.bridgeHeads || [], reeds = o.reeds || [], clearings = o.clearings || D.CLEARINGS, orangery = o.orangery || D.ORANGERY;
   const H = (x, z) => gh(x, z) ?? 0;
   const slopeAt = (x, z) => Math.hypot(H(x + 0.5, z) - H(x - 0.5, z), H(x, z + 0.5) - H(x, z - 0.5));
@@ -134,6 +134,7 @@ export function planVegetation(o = {}) {
   const list = [], solitaries = [], grid = new Map(), gk = (i, j) => i * 100003 + j, cellOf = (v) => Math.floor(v / 8);
   const near = (x, z) => { const out = []; const ci = cellOf(x), cj = cellOf(z); for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) { const a = grid.get(gk(i, j)); if (a) out.push(...a); } return out; };
   const stats = { zones: {}, rejected: {}, nudged: {}, ms: 0 };
+  let furnActive = false; const furnBox = furniture;
   const zs = (zone) => stats.zones[zone] || (stats.zones[zone] = { candidates: 0, placed: 0, species: {} });
 
   /** why (x, z) may not hold a tree of species `sp` at scale s (the trunk radius tr, the crown radius r, the crown base cb); null = it may. Every zone answers every rule (fix round 2: the mapped OSM trees are no longer forced through). */
@@ -164,6 +165,7 @@ export function planVegetation(o = {}) {
     for (const m of monuments) if (Math.hypot(m.x - x, m.z - z) < K.monument) return 'monument';
     if (memorial) { const a = (memorial.rot || 0) * Math.PI / 180, c = Math.cos(a), si = Math.sin(a), dx = x - memorial.x, dz = z - memorial.z, u = (dx * c + dz * si) / (memorial.rx + K.memorial), v = (-dx * si + dz * c) / (memorial.rz + K.memorial); if (u * u + v * v < 1) return 'memorial'; }
     for (const g of gates) if (Math.hypot(g.x - x, g.z - z) < K.gate) return 'gate';
+    if (furnActive) for (const f of furnBox) if (Math.abs(f.x - x) < f.r + tr + K.furniture && Math.abs(f.z - z) < f.r + tr + K.furniture && Math.hypot(f.x - x, f.z - z) < f.r + tr + K.furniture) return 'furniture';      // T6: the post pass below
     if (orangery && Math.hypot(orangery.x - x, orangery.z - z) < orangery.r) return 'orangery';
     if (zone !== 'meadow') for (const m of solitaries) if (Math.hypot(m.x - x, m.z - z) < (Z.meadow.clear || 0)) return 'solitary';      // the clearing round a solitary oak of the meadows
     const pack = shrub ? Math.min(K.pack, 0.42) : K.pack;
@@ -234,6 +236,33 @@ export function planVegetation(o = {}) {
       plant('grove', key, px, pz, R);
     }
   });
+  // ---- 7. the furniture (T6): no trunk may stand on a bench, a bin, a lantern or a pier. A POST PASS, so that the planting stays what it was everywhere else (the packing and the random stream of the zones are not touched): a tree
+  //         whose trunk surface is nearer than KEEP_OUT.furniture to a piece (its footprint radius r) moves to the nearest clear spot within KEEP_OUT.furnitureNudge m (rings of NUDGE_STEP, NUDGE_DIRS directions: the
+  //         rule of the OSM trees) or goes
+  stats.furniture = { pieces: furniture.length, hit: 0, moved: 0, dropped: 0, byZone: {} };
+  if (furniture.length) {
+    furnActive = true;
+    const hits = list.filter((t) => furniture.some((f) => Math.hypot(f.x - t.x, f.z - t.z) < f.r + t.tr + K.furniture));
+    for (const t of hits) {
+      stats.furniture.hit++;
+      const g0 = grid.get(gk(cellOf(t.x), cellOf(t.z))); if (g0) g0.splice(g0.indexOf(t), 1);
+      const sp = SPT[t.species], zst = zs(t.zone); let moved = null;
+      search: for (let d = NUDGE_STEP; d <= (K.furnitureNudge || 0) + 1e-9; d += NUDGE_STEP) for (let i = 0; i < NUDGE_DIRS; i++) {
+        const a = i * 2 * Math.PI / NUDGE_DIRS, cx = t.x + d * Math.cos(a), cz = t.z + d * Math.sin(a);
+        if (!reject(cx, cz, sp, t.s, t.sy, t.zone)) { moved = { x: cx, z: cz, d }; break search; }
+      }
+      if (moved) {
+        t.fnode = { x: t.x, z: t.z, d: moved.d }; t.x = moved.x; t.z = moved.z; t.y = H(t.x, t.z); t.keep = hashXZ(t.x, t.z, 77);
+        const k = gk(cellOf(t.x), cellOf(t.z)); let a = grid.get(k); if (!a) grid.set(k, (a = [])); a.push(t);
+        stats.furniture.moved++;
+      } else {
+        list.splice(list.indexOf(t), 1); zst.placed--; zst.species[t.species]--; stats.furniture.dropped++;
+        const ti = solitaries.indexOf(t); if (ti >= 0) solitaries.splice(ti, 1);
+      }
+      stats.furniture.byZone[t.zone] = (stats.furniture.byZone[t.zone] || 0) + 1;
+    }
+    furnActive = false;
+  }
   // ---- the tier: a budget per level and a share of the plan (each tree keeps or goes by its own hash: the low tier is a subset of the medium one); the OSM trees and the solitary oaks always stay
   const B = D.BUDGET, cap = B.instances[level] ?? B.instances.medium, share = B.tierFactor[level] ?? 1;
   const fixed = list.filter((t) => t.zone === 'osm' || t.zone === 'meadow'), free = list.filter((t) => !(t.zone === 'osm' || t.zone === 'meadow')).sort((a, b) => a.keep - b.keep || a.x - b.x || a.z - b.z);
