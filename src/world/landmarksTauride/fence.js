@@ -320,6 +320,14 @@ export function fenceGeometry(plan, D = FENCE, GD = GATE, PD = PITCH_FENCE) {
     s.at(p.x, y, p.z, p.yaw); s.box(-PD.rail / 2, PD.rail / 2, H - PD.rail, H, -p.len / 2, p.len / 2, PD.postColor, 'b'); s.at();
   }
   for (const q of plan.piers) if (q.kind === 'post') { s.at(q.x, q.y, q.z, q.yaw); s.box(-PD.post / 2, PD.post / 2, -0.2, PD.h + 0.15, -PD.post / 2, PD.post / 2, PD.postColor, 'b'); s.at(); }
+  // T7: a gate of the pitch fence whose opening is so wide that no post of the fence stands within 2.5 m of the gate node (n1001527689: the claims audit found nothing drawn there) gets a frame of two latch posts 1.3 m
+  // either side of the node, along the fence (visual: the opening stays open, no collider)
+  for (const g of plan.gates) {
+    if (!g.pitch || !g.node) continue;
+    const near = plan.piers.some((q) => q.kind === 'post' && Math.hypot(q.x - g.node[0], q.z - g.node[1]) < 2.5);
+    if (near) continue;
+    for (const sg of [-1, 1]) { const x = g.node[0] + g.tx * 1.3 * sg, z = g.node[1] + g.tz * 1.3 * sg, y = Math.max(0, gardenHeight(x, z) ?? 0); s.at(x, y, z, g.yaw); s.box(-PD.post / 2, PD.post / 2, -0.2, PD.h * 0.6, -PD.post / 2, PD.post / 2, PD.postColor, 'b'); s.at(); }
+  }
   counts.pitchPosts = s.tris - t0; t0 = s.tris;
   // T7: the LOW rail fence of the round plaza (D.low: the user's photo): two rails per closed panel (a box along the panel, the ends inside the posts) and a post at every boundary with a collar and a ball finial
   if (D.low) {

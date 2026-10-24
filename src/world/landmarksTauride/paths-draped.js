@@ -1,5 +1,5 @@
 // landmarksTauride/paths-draped.js - THE ALLEYS OF THE TAURIDE GARDEN (docs/TAURIDE-REMAKE.md, phase T3): the 112 mapped ways (data/paths.js: main 3.5-4.5 m / side 2.4 m / trail 1.4 m / steps) as ribbons DRAPED on the terrain
-// mesh, in pale pink-beige gravel (#c9a98a .. #b58c78), darker earth for the trails, lighter grey for the paving stones and the concrete plates, and the 6 STEPS ways as real stairs.
+// mesh, in pink-brown gravel (T7: #bf9884 .. #b58c78, the user's photos), darker earth for the trails, lighter grey for the paving stones and the concrete plates, and the 6 STEPS ways as real stairs.
 //   planPaths(paths, ground)   PURE and DETERMINISTIC: { ribbons, steps, ways, stats }. `ground` = { meshHeight (the height of the PLANNED terrain mesh, terrain-mesh.js makeMeshHeight), gh (gardenHeight) }.
 //   buildPaths(ctx, parent, plan, noise)   the two meshes (ribbons, steps) and the ribbon material.
 // RIBBONS: one mesh, one draw. Each way is smoothed (one pass of corner cutting: the OSM polyline is a few vertices per alley; the ends and every vertex that another way shares are PINNED, so the joins stay where the
