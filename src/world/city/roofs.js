@@ -2,6 +2,7 @@
 // is drawn, so the player can land and walk on them); the pitched / mansard forms visible from the street are built by mansard.js.
 import * as THREE from 'three';
 import { MeshBuilder, addCap, ringFromFlat, signedArea } from '../lib/massing.js';
+import { HOOKS } from '../lib/area-tables.js';
 
 export const ROOF_COLOURS = [['#9ba0a3', 58], ['#5f7d68', 21], ['#8a5246', 21]];
 
@@ -49,5 +50,15 @@ export function deckPlan(OVERLAPS, drawn, isNew) {
   return { skip, lift };
 }
 /** Flat deck of a footprint polygon (with courtyard holes) at height y. uvScale = metres per texture tile. */
-export function addDeck(B, poly, y, uvScale = 1.2) { addCap(B, poly, y, { uvScale }); }
+export function addDeck(B, poly, y, uvScale = 1.2) {
+  addCap(B, poly, y, { uvScale });
+  // T8a (HOOKS.deckUnderside, an area's table; the strip has none: nothing changes there): the deck is a one-sided face, so a viewer who stands BELOW it (a low building in a park, the eaves 1 m from the eye) sees the sky through the roof
+  // while the outline pass (a double-sided normal / depth pre-pass) still draws its edges. For the buildings the hook names the deck also gets its UNDERSIDE: the same polygon 1 cm lower, facing down, in the roof colour x 0.6 (a soffit).
+  if (HOOKS.deckUnderside && HOOKS.deckUnderside(poly)) {
+    const keep = B.cur && B.cur.clone ? B.cur.clone() : null;
+    if (keep) B.cur.multiplyScalar(0.6);
+    addCap(B, poly, y - 0.01, { uvScale, up: false });
+    if (keep) B.cur.copy(keep);
+  }
+}
 export { ringFromFlat, signedArea };

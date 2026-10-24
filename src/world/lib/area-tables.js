@@ -12,6 +12,7 @@
 //                                                        T3 (Tauride remake) added groundHoles (environment/ground.js: rings cut out of the ground mesh) and groundWayReject (environment/field.js: ways the class mask does not paint);
 //                                                        T4a waterBodies (environment/field.js) and noLanding (main.js -> core/player.js); T4b duckPonds (wildlife/ducks.js: duck lanes on the ponds of a landmark module).
 //                                                        T7 doorServices (people/nav.js: the services whose entrances with a facing are pedestrian doors, besides the city's).
+//                                                        T8a deckUnderside (city/roofs.js addDeck: (poly) => boolean, the buildings whose flat deck also gets a down-facing underside because a viewer can stand below it).
 //                                                        Only people/nav.js imports HOOKS of the people files (people.js reads the row ZONES.peopleDensity.garden, people/sim.js reads nav.inGarden / nav.gardenCfg).
 //                                                        Both are VALIDATED here (checkHooks, checkPatches): a value of the wrong kind is dropped with one console.warn that names it, so that the table of a
 //                                                        hand-written area cannot crash the build in an unnamed place. A well-formed table is handed out as it is (the same object / array as the area module's).
@@ -22,7 +23,7 @@ const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 const kind = (v) => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v === 'object' ? 'an object' : typeof v === 'number' ? `the number ${v}` : `a ${typeof v}`);
 
 /** the HOOKS keys that must be functions (the factories of (ctx) and the plain functions); `deckServices` and `doorServices` must be arrays of strings */
-const HOOK_FUNCTIONS = ['treeCleared', 'treeReject', 'tuftReject', 'propReject', 'pedestrianOnly', 'parkingReject', 'carKeepOut', 'inGarden', 'groundHoles', 'groundWayReject', 'waterBodies', 'noLanding', 'duckPonds'];
+const HOOK_FUNCTIONS = ['treeCleared', 'treeReject', 'tuftReject', 'propReject', 'pedestrianOnly', 'parkingReject', 'carKeepOut', 'inGarden', 'groundHoles', 'groundWayReject', 'waterBodies', 'noLanding', 'duckPonds', 'deckUnderside'];
 /** HOOKS of an area module, checked: every known key is a function (undefined / null = absent), `deckServices` an array of strings; anything else is dropped with one warning naming the key. Unknown keys pass. */
 export function checkHooks(raw, warn = console.warn) {
   if (raw != null && obj(raw) !== raw) warn(`[area-tables] HOOKS is ${kind(raw)}, not an object: ignored`);
