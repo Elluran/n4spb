@@ -78,12 +78,14 @@ export function planMonuments(o = {}) {
   // ---- Chaikovsky and Yesenin: the pedestal faces the nearest alley
   const mk = (D, id) => {
     const n = node(MONUMENTS, id), w = faceWay(n.x, n.z), rotY = w ? Math.atan2(w.x - n.x, w.z - n.z) : 0;
-    const m = { id, x: n.x, z: n.z, y: H(n.x, n.z), rotY, name: D.name };
+    const m = { id, x: n.x, z: n.z, y: H(n.x, n.z), rotY, name: D.name, face: w ? { x: w.x, z: w.z } : null };      // T8a: `face` = the point of the alley the pedestal looks at (local +z)
     colliders.push({ x: n.x, z: n.z, w: (D.pedestal.base || D.pedestal.w) + 0.1, d: (D.pedestal.base || D.pedestal.d) + 0.1, rotY, y0: m.y - 0.5, y1: m.y + D.h, id });
     m.photo = spot(id, D.name, n.x, n.z, D.h, D.photoR, 8);
     return m;
   };
   const chai = mk(CHAIKOVSKY, CHAIKOVSKY.id), yes = mk(YESENIN, YESENIN.id);
+  // T8a: the inscription plate on the front face of Yesenin's pedestal (the face toward the alley; the same local frame as pedestalGeometry: +z is the front)
+  yes.plate = plateSpec(yes, YESENIN);
   // ---- the fountain
   const fn = node(FOUNTAINS, FOUNTAIN.id), fountain = { id: fn.id, x: fn.x, z: fn.z, y: H(fn.x, fn.z), name: FOUNTAIN.name };
   colliders.push({ cyl: true, x: fn.x, z: fn.z, r: FOUNTAIN.R + FOUNTAIN.rimW + 0.1, y0: fountain.y - 0.5, y1: fountain.y + FOUNTAIN.rimH + 0.2, id: 'fountain' });
@@ -215,6 +217,41 @@ export function memorialGeometry(m) {
   return g.build();
 }
 
+/** T8a: the inscription plate of a pedestal (D.plate, data/furniture-design.js): the text, the size, the local frame (the shaft's front face at local z = zFace, the plate `proud` m in front of it, centred on the shaft) and
+ *  the world normal (sin rotY, 0, cos rotY): the face the pedestal looks at, the alley. */
+export function plateSpec(m, D) {
+  const P = D.pedestal, pl = D.plate; if (!pl) return null;
+  const bh = P.baseH ?? 0.2, zFace = P.d / 2, y0 = bh + (P.h - pl.h) / 2;
+  return { text: pl.text, w: pl.w, h: pl.h, proud: pl.proud, zFace, y0, y1: y0 + pl.h, x: m.x, z: m.z, y: m.y, rotY: m.rotY, normal: [Math.sin(m.rotY), 0, Math.cos(m.rotY)] };
+}
+/** the plate's geometry: the painted front quad (uv 0..1 over the whole canvas) and the four edges of the raised plate (uv on the rim pixel of the canvas); returns the number of triangles */
+export function plateGeometry(g, pl) {
+  const hw = pl.w / 2, zf = pl.zFace, z1 = zf + pl.proud, y0 = pl.y0, y1 = pl.y1, W = [1, 1, 1], RIM = [0.004, 0.5], n0 = g.tris;
+  g.at(pl.x, pl.y, pl.z, pl.rotY);
+  g.quad([-hw, y0, z1], [hw, y0, z1], [hw, y1, z1], [-hw, y1, z1], W, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+  g.quad([-hw, y1, z1], [hw, y1, z1], [hw, y1, zf], [-hw, y1, zf], W, RIM);
+  g.quad([-hw, y0, zf], [hw, y0, zf], [hw, y0, z1], [-hw, y0, z1], W, RIM);
+  g.quad([hw, y0, z1], [hw, y0, zf], [hw, y1, zf], [hw, y1, z1], W, RIM);
+  g.quad([-hw, y0, zf], [-hw, y0, z1], [-hw, y1, z1], [-hw, y1, zf], W, RIM);
+  g.at();
+  return g.tris - n0;
+}
+/** paints the plate on a w x h canvas: a dark bronze field with a rim and a thin inner line, the text in gold with a dark shadow (engraved / raised) and a light edge; the text is fitted to 86 % of the width.
+ *  Pure of the engine (g is a 2d context): the test hands in a recording context and reads the strings drawn. */
+export function paintPlate(g, w, h, pl) {
+  g.fillStyle = pl.rim; g.fillRect(0, 0, w, h);
+  g.fillStyle = pl.bg; g.fillRect(6, 6, w - 12, h - 12);
+  g.strokeStyle = pl.rim; g.lineWidth = 2; g.strokeRect(15, 15, w - 30, h - 30);
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  const font = '"Noto Serif", "Times New Roman", serif';
+  let s = Math.floor(h * 0.5); g.font = `700 ${s}px ${font}`;
+  const w0 = g.measureText(pl.text).width; if (w0 > w * 0.86) { s = Math.max(8, Math.floor(s * w * 0.86 / w0)); g.font = `700 ${s}px ${font}`; }
+  const cx = w / 2, cy = h / 2 + 2;
+  g.fillStyle = pl.shade; g.fillText(pl.text, cx + 2, cy + 3);
+  g.fillStyle = pl.hi; g.fillText(pl.text, cx - 1, cy - 1);
+  g.fillStyle = pl.fg; g.fillText(pl.text, cx, cy);
+}
+
 /** a granite pedestal for a bust / figure: a base slab, the shaft with a cornice and a capstone; returns the top y */
 export function pedestalGeometry(g, x, z, y, yaw, D, col, colL) {
   const P = D.pedestal, b = P.base || P.w + 0.5, bh = P.baseH ?? 0.2, w = P.w / 2;
@@ -242,6 +279,13 @@ export function buildMonuments(ctx, parent, plan, opts = {}) {
   { const g = new GB(), c = plan.chaikovsky, y = plan.yesenin;
     const topC = pedestalGeometry(g, c.x, c.z, c.y, c.rotY, CHAIKOVSKY, CHAIKOVSKY.granite, CHAIKOVSKY.graniteL), topY = pedestalGeometry(g, y.x, y.z, y.y, y.rotY, YESENIN, YESENIN.granite, YESENIN.graniteL);
     add(g.build(), 'tauride-statues-base');
+    // T8a: the inscription plate of Yesenin's pedestal: one small canvas texture (painted at load, nothing baked), one draw, 8 mm proud of the shaft
+    if (y.plate) {
+      const D = YESENIN.plate, pg = new GB(); plateGeometry(pg, y.plate);
+      const tex = ctx.tex.draw(D.tw, D.th, (c2, w, h) => paintPlate(c2, w, h, D), { key: D.tex, anisotropy: 8 });
+      const pm = add(pg.build(), 'tauride-yesenin-plate', { mat: T('#ffffff', { map: tex, vertexColors: true, paint: 0, name: 'tauride-plate' }), shadow: false, noOutline: true });
+      if (pm) { pm.userData.plate = { text: y.plate.text, normal: y.plate.normal }; out.plate = pm; }
+    }
     const P = new Parts(), mk = { main: fm.bronze, dark: fm.dark, accent: fm.bronzeDark };
     const b = cached('tauride-chaikovsky', () => bust({ detail: 0.6, style: CHAIKOVSKY.bust.style, turn: 0.12, face: { hair: 'short', beard: 'full', age: 0.7, seed: 7 } }));
     b.place(P, mk, c.x, topC, c.z, c.rotY, CHAIKOVSKY.bust.scale);
