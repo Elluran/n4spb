@@ -83,6 +83,8 @@ export const KEEP_OUT = {
   gate: 9,               // the 11 gates and the 13 fence openings (data/furniture.js GATES, FENCE_OPENINGS)
   lane: 1.5,             // the service lane (data/furniture.js SERVICE_LANE: 4 m wide) + this
   outline: 1.5,          // the trunk stands this far inside the garden outline (the fence line is T6's)
+  furniture: 0.5,        // T6: a post pass: the trunk SURFACE stays this far from the footprint of every bench, bin, lantern and fence pier (data/furniture-design.js; a tree that breaks it moves to the nearest clear spot within furnitureNudge or goes)
+  furnitureNudge: 2,     // m: how far the post pass may move a tree (rings of 0.25 m, 24 directions)
   slopeOld: 0.18,        // an old tree (GARDEN_SPECIES.old) keeps off ground steeper than this (rise per metre; the relief's limit is 0.25)
   slope: 0.24,           // no tree on ground steeper than this
   water: 0,              // never in the water (the exact shore distance of height.js must be positive); the bank rule above keeps everything off the slope

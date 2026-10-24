@@ -334,8 +334,8 @@
     "[hashed]": true,
     "kind": "object",
     "n": 8,
-    "bytes": 10634,
-    "hash": "14d62d373936870e"
+    "bytes": 11126,
+    "hash": "287b8390701bfcbe"
    },
    "HERO": {
     "pitch": 10,
@@ -425,8 +425,8 @@
     "[hashed]": true,
     "kind": "object",
     "n": 16,
-    "bytes": 11241,
-    "hash": "0b7bc306d7e2184f"
+    "bytes": 11733,
+    "hash": "b60d8b653117cd32"
    },
    "SUN_DIR": [
     -0.473,
@@ -2943,7 +2943,7 @@
     "oktyabrsky-hall": 2,
     "paradny-quarter": 11,
     "simeon-anna": 2,
-    "tauride-garden": 0,
+    "tauride-garden": 1,
     "tauride-palace": 1
    },
    "osm": {
@@ -2961,7 +2961,7 @@
     "oktyabrsky-hall": "a2d31d19bfa13670",
     "paradny-quarter": "d5d720ba10e5ba46",
     "simeon-anna": "4f53cda18c2baa0c",
-    "tauride-garden": "29f75742c22c16c0",
+    "tauride-garden": "4d6e40d1ec63b710",
     "tauride-palace": "4f53cda18c2baa0c"
    },
    "bounds": {
@@ -3070,7 +3070,14 @@
      "z0": -704.5,
      "z1": -660.1
     },
-    "tauride-garden": null,
+    "tauride-garden": {
+     "cx": 960.65,
+     "cz": -1779.05,
+     "x0": 951.4,
+     "x1": 969.9,
+     "z0": -1807.2,
+     "z1": -1750.9
+    },
     "tauride-palace": {
      "cx": 1375.9,
      "cz": -1727.1,
@@ -3092,8 +3099,8 @@
    ]
   },
   "claims": {
-   "n": 535,
-   "hash": "69ef496a608b8af9"
+   "n": 572,
+   "hash": "1947adb58147c540"
   },
   "buildings": {
    "n": 2016,

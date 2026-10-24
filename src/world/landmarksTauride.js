@@ -14,7 +14,7 @@ import { dome, drum, ringWindows } from './landmarksD/parts.js';
 import { PALACE_PARTS } from './landmarksTauride/palace-parts.js';
 import { paradnyBuildings } from './landmarksTauride/paradny-buildings.js';
 import { paradnyCourts } from './landmarksTauride/paradny-courts.js';
-import { GREEN } from './data/city.js';
+import { GREEN, BUILDINGS } from './data/city.js';
 import { gardenHeight, RELIEF_BOX, GARDEN_SHORE } from './landmarksTauride/height.js';
 import { planPonds, buildPonds } from './landmarksTauride/ponds.js';
 import * as PONDS from './landmarksTauride/data/ponds.js';
@@ -24,6 +24,11 @@ import { planPaths, buildPaths } from './landmarksTauride/paths-draped.js';
 import { planBridges, buildBridges } from './landmarksTauride/bridges.js';
 import { planReeds, buildReeds } from './landmarksTauride/reeds.js';
 import { planVegetation, buildVegetation, collectVegetationInputs } from './landmarksTauride/vegetation.js';
+import { planFence, buildFence } from './landmarksTauride/fence.js';
+import { planFurniture, buildFurniture, benchSeats, keepOutDiscs, resolveWornSpots } from './landmarksTauride/furniture.js';
+import { planMonuments, buildMonuments } from './landmarksTauride/monuments.js';
+import * as FD from './landmarksTauride/data/furniture-design.js';
+import { WORN_SPOTS } from './landmarksTauride/data/ground.js';
 import { WALK_LIFT } from './landmarksTauride/data/bridge-design.js';
 import * as DG from './landmarksTauride/data/footprints.js';
 import * as DW from './landmarksTauride/data/water.js';
@@ -87,9 +92,16 @@ export function build(ctx) {
   const pplan=planPaths(DP.PATHS,{meshHeight,gh:gardenHeight,deckAt:bplan.deckY});
   const pondsPlan=planPonds({floor:tplan,decks:bplan.decks});
   const rplan=planReeds({keepOut:bplan.keepOut});
+  // T6: the fence and the gates, the furniture (benches, bins, lanterns) and the monuments are planned before the trees (the trees keep off every piece: vegetation.js post pass) and before the ground mask (the worn ground follows the
+  // furniture); all three plans are pure
+  const fplan=planFence();
+  const gatePiers=fplan.gates.flatMap((g)=>g.gatePiers),gateLanterns=fplan.gates.flatMap((g)=>g.lantern||[]);
+  const fnplan=planFurniture({piers:[...fplan.piers.filter((p)=>p.kind==='pier'),...gatePiers],gateLanterns,decks:bplan.keepOut});
+  const orangeryRec=BUILDINGS.find((b)=>b.id===FD.ORANGERY.id);
+  const mplan=planMonuments({GREEN,stairs:pplan.stairs,orangeryRing:orangeryRec&&orangeryRec.polys&&orangeryRec.polys[0]?orangeryRec.polys[0].o:null});
   const level=(ctx.quality&&(ctx.quality.level||ctx.quality.name))||'medium';     // the tier of the engine's trees (environment/trees.js: 'low' = the performance tier)
-  const vplan=planVegetation({...collectVegetationInputs(GREEN,bplan,rplan),level:level==='low'?'low':level==='high'?'high':'medium'});
-  const mask=planGroundMask({...collectGroundInputs({GARDEN:DG.GARDEN,GARDEN_GREEN:DG.GARDEN_GREEN,FOOTPRINTS:DG.FOOTPRINTS,WATER_UNION:DW.WATER_UNION,PATHS:DP.PATHS,BENCHES:DF.BENCHES,GATES:DF.GATES,MONUMENTS:DF.MONUMENTS,FOUNTAINS:DF.FOUNTAINS},GREEN,gardenHeight),canopy:vplan.canopy});
+  const vplan=planVegetation({...collectVegetationInputs(GREEN,bplan,rplan),furniture:keepOutDiscs(fnplan,fplan),level:level==='low'?'low':level==='high'?'high':'medium'});
+  const mask=planGroundMask({...collectGroundInputs({GARDEN:DG.GARDEN,GARDEN_GREEN:DG.GARDEN_GREEN,FOOTPRINTS:DG.FOOTPRINTS,WATER_UNION:DW.WATER_UNION,PATHS:DP.PATHS,BENCHES:fnplan.benches,GATES:DF.GATES,MONUMENTS:DF.MONUMENTS,FOUNTAINS:DF.FOUNTAINS},GREEN,gardenHeight),canopy:vplan.canopy,zones:{worn:resolveWornSpots(WORN_SPOTS,[...DF.FOUNTAINS,...DF.MONUMENTS,...DF.GATES])}});
   const noise=makeNoiseTexture(),ground=gardenGroundMaterial(ctx,mask,noise);
   const terrain=buildTerrain(ctx,root,tplan,{material:ground.mat});
   const bridges=buildBridges(ctx,root,bplan);
@@ -98,7 +110,16 @@ export function build(ctx) {
   const ponds=buildPonds(ctx,root,pondsPlan,{zones:bplan.zones});
   const reeds=buildReeds(ctx,root,rplan);
   const trees=buildVegetation(ctx,root,vplan,{at:[L.HERO.x,L.HERO.z],inPlay:L.inPlay});     // the first LOD assignment from the page's HERO, as the environment's trees
+  // T6: the fence and the gates (3 draws), the furniture (benches, bins, lanterns: knockable instances), the monuments, the fountain, the orangery, the play fittings
+  const fence=buildFence(ctx,root,fplan);
+  const furniture=buildFurniture(ctx,root,fnplan);
+  const monuments=buildMonuments(ctx,root,mplan);
   ctx.addStatic(root);
+  // the shared landmark services (docs/AREAS.md 10.2): the benches are seats for the pedestrians, the monuments and the photo spots are places to stop
+  { const S=(ctx.services.landmarks||={});
+    S.benches=(S.benches||[]).concat(benchSeats(fnplan));
+    S.monuments=(S.monuments||[]).concat(mplan.monuments);
+    S.photoSpots=(S.photoSpots||[]).concat(mplan.photoSpots); }
   // The service the engine reads (docs/AREAS.md 9.1 HOOKS.deckServices, docs/TAURIDE-REMAKE.md T1 / T4b): deckY(x, z) = the Paradny podium (3.3 m) and its eight stair ramps, else the walking profile of a garden bridge or the dam (bridges.js:
   // the deck, its approach ramps and the stairs at its heads), else null; cars (drive/handling.js) and walkers (people/nav.js surfaceY) ask it FIRST; the walkers also ask deckLift(x, z): on a garden bridge the feet stand WALK_LIFT above
   // the deck (the deck is the walking surface), on the podium the engine's pavement lift (null). No `entrances`: PRUNE_SERVICES does not list this module.
@@ -112,5 +133,9 @@ export function build(ctx) {
     // services.<module>.treeList of the landmark gardens it names), the instanced meshes, the LOD numbers (triangles() at the current camera, trianglesWorst = every tree at LOD0), the canopy discs the ground mask was painted with
     trees:{list:vplan.trees,treeList:trees.treeList,canopy:vplan.canopy,stats:vplan.stats,level:vplan.level,instances:trees.instances,colliders:trees.colliders,blobs:trees.blobs,meshes:trees.meshes,families:trees.families,triangles:trees.triangles,trianglesWorst:trees.trianglesWorst,draws:trees.draws,assign:trees.assign,readBack:trees.readBack},
     treeList:trees.treeList,
-    terrain:{heightAt:gardenHeight,meshHeight,triangles:terrain.triangles,draws:terrain.draws,cover:true},ground:{mask:mask.stats,maskBytes:mask.data.length,maskBox:mask.box,maskData:mask.data,material:ground.mat},paths:{triangles:paths.triangles,draws:paths.draws,stats:pplan.stats,stairs:pplan.stairs},ponds:{y:PONDS.WATER_Y,triangles:ponds.triangles,waterTriangles:ponds.waterTriangles,quayTriangles:ponds.quayTriangles,quayLength:pondsPlan.quay.length,draws:ponds.draws,colliders:ponds.colliders,buildMs:ponds.buildMs,stats:pondsPlan.stats,mesh:ponds.mesh,quayMesh:ponds.quayMesh,inWater:(x,z)=>GARDEN_SHORE.dist(x,z)<0,shoreDist:GARDEN_SHORE.dist},kitTriangles:K.tris,triangles:K.tris+terrain.triangles+paths.triangles+ponds.triangles+bridges.triangles+reeds.triangles+trees.triangles()};
+    // T6: the fence (plan: panels, piers, gates, openings; meshes; colliders), the furniture (plan: benches, bins, lanterns with their ids and moves; the knock records), the monuments (plan + meshes)
+    fence:{plan:fplan,triangles:fence.triangles,draws:fence.draws,colliders:fence.colliders,meshes:fence.meshes,instances:fence.instances,items:fence.items,gateTriangles:fence.gateTriangles,template:fence.template},
+    furniture:{plan:fnplan,benches:fnplan.benches,bins:fnplan.bins,lanterns:fnplan.lanterns,gateLanterns:fnplan.gateLanterns,benchPoints:fnplan.benches.map((b)=>({x:b.x,z:b.z})),triangles:furniture.triangles,draws:furniture.draws,instances:furniture.instances,records:furniture.records,items:furniture.items,meshes:furniture.meshes,pool:furniture.pool,spots:furniture.spots},
+    monuments:{plan:mplan,list:mplan.monuments,photoSpots:mplan.photoSpots,triangles:monuments.triangles,draws:monuments.draws,colliders:monuments.colliders,meshes:monuments.meshes,items:monuments.items,figures:monuments.figures,parts:monuments.parts,fountain:monuments.fountain},
+    terrain:{heightAt:gardenHeight,meshHeight,triangles:terrain.triangles,draws:terrain.draws,cover:true},ground:{mask:mask.stats,maskBytes:mask.data.length,maskBox:mask.box,maskData:mask.data,material:ground.mat},paths:{triangles:paths.triangles,draws:paths.draws,stats:pplan.stats,stairs:pplan.stairs},ponds:{y:PONDS.WATER_Y,triangles:ponds.triangles,waterTriangles:ponds.waterTriangles,quayTriangles:ponds.quayTriangles,quayLength:pondsPlan.quay.length,draws:ponds.draws,colliders:ponds.colliders,buildMs:ponds.buildMs,stats:pondsPlan.stats,mesh:ponds.mesh,quayMesh:ponds.quayMesh,inWater:(x,z)=>GARDEN_SHORE.dist(x,z)<0,shoreDist:GARDEN_SHORE.dist},kitTriangles:K.tris,triangles:K.tris+terrain.triangles+paths.triangles+ponds.triangles+bridges.triangles+reeds.triangles+trees.triangles()+fence.triangles+furniture.triangles+monuments.triangles};
 }

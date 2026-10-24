@@ -18,6 +18,7 @@ const SE = await imp('tools/tauride/lib/stub-env.mjs');
 const eng = await SE.loadEngine(ROOT);
 const GH = await imp('src/world/landmarksTauride/height.js');
 const VG = await imp('src/world/landmarksTauride/vegetation.js');
+const FUR = await imp('src/world/landmarksTauride/furniture.js');
 const DV = await imp('src/world/landmarksTauride/data/vegetation.js');
 const DG = await imp('src/world/landmarksTauride/data/ground.js');
 const GM = await imp('src/world/landmarksTauride/ground-material.js');
@@ -55,7 +56,8 @@ console.log(`  ${list.length} instances (${trees.length} trees, ${shrubs.length}
 const byId = new Map(); for (const g of FAC.GREEN) byId.set(g.id, g);
 const woods = Fo.GARDEN_GREEN.woods.flatMap((w) => (byId.get(w.id) ? byId.get(w.id).polys.map((p) => ({ o: p.o, h: p.h || [] })) : []));
 const play = Fo.GARDEN_GREEN.others.filter((g) => g.kind !== 'wetland').flatMap((w) => (byId.get(w.id) ? byId.get(w.id).polys.map((p) => ({ o: p.o, h: p.h || [] })) : []));
-const inputs = { ...VG.collectVegetationInputs(FAC.GREEN, { keepOut: svc.bridges.keepOut, sites: svc.bridges.sites }, { instances: svc.reeds.list }), level: 'medium' };
+const furnitureDiscs = FUR.keepOutDiscs(svc.furniture.plan, svc.fence.plan);          // T6: the post pass of the planter (no trunk on a bench, a bin, a lantern, a pier, a panel)
+const inputs = { ...VG.collectVegetationInputs(FAC.GREEN, { keepOut: svc.bridges.keepOut, sites: svc.bridges.sites }, { instances: svc.reeds.list }), furniture: furnitureDiscs, level: 'medium' };
 const sig = (l) => JSON.stringify(l.map((t) => [t.zone, t.species, +t.x.toFixed(4), +t.z.toFixed(4), +t.s.toFixed(4), +t.yaw.toFixed(4)]));
 
 // =============================================================== 1. the plan: determinism, the tiers, the shares, the OSM trees, the solitary oaks
@@ -147,7 +149,7 @@ console.log('2. the keep-outs (data/vegetation.js KEEP_OUT) measured against the
     avenue: (t) => mains.some((w) => Math.abs(polyDist(t.x, t.z, w.pts) - w.hw - Z.avenue.offset) <= 0.8 + 1e-6),
     shore: (t) => { const d = shore.dist(t.x, t.z) - crest(t.x, t.z); return d >= Z.shore.d[0] - 0.06 && d <= Z.shore.d[1] + 0.31; },
   };
-  const zoneBad = (l, zone) => l.filter((t) => t.zone === zone && !ZV[zone](t)).length, zoneN = (zone) => list.filter((t) => t.zone === zone).length;
+  const zoneBad = (l, zone) => l.filter((t) => t.zone === zone && !t.fnode && !ZV[zone](t)).length, zoneN = (zone) => list.filter((t) => t.zone === zone).length;
   ok(`every 'grove' tree (${zoneN('grove')}) stands INSIDE an OSM wood polygon (GARDEN_GREEN.woods, the facade's rings; the jittered point itself is tested)`, zoneN('grove') > 200 && zoneBad(list, 'grove') === 0, `${zoneBad(list, 'grove')} outside`);
   ok(`every 'belt' tree (${zoneN('belt')}) stands ${Z.belt.inner} .. ${Z.belt.width} m inside the garden outline`, zoneN('belt') > 100 && zoneBad(list, 'belt') === 0, `${zoneBad(list, 'belt')} off the band`);
   ok(`every 'avenue' tree (${zoneN('avenue')}) stands ${Z.avenue.offset} m (+- 0.8) off the ribbon edge of a '${Z.avenue.classes.join('/')}' alley of ${Z.avenue.minLen} m or more`, zoneN('avenue') > 100 && zoneBad(list, 'avenue') === 0, `${zoneBad(list, 'avenue')} off the offset`);
@@ -159,6 +161,19 @@ console.log('2. the keep-outs (data/vegetation.js KEEP_OUT) measured against the
   { const r = VG.planVegetation({ ...inputs, zones: { ...Z, belt: { ...Z.belt, width: 40 } } }).trees; ok(`mutant: a belt widened to 40 m plants belt trees beyond the ${Z.belt.width} m band (the check can fail)`, zoneBad(r, 'belt') > 0, `${zoneBad(r, 'belt')} off the band, ${r.length} trees`); }
   { const r = VG.planVegetation({ ...inputs, zones: { ...Z, avenue: { ...Z.avenue, offset: 6 } } }).trees; ok('mutant: an avenue offset of 6 m plants the limes off the authored offset (the check can fail)', zoneBad(r, 'avenue') > 0, `${zoneBad(r, 'avenue')} off the offset`); }
 }
+
+// =============================================================== 2c. the furniture post pass (T6): no trunk on a bench, a bin, a lantern, a pier or a panel; nothing else moves
+console.log('2c. the furniture post pass (KEEP_OUT.furniture, T6): no trunk stands on a piece of furniture; the planting is the T5 planting everywhere else');
+{ const KF = K.furniture, KN = K.furnitureNudge;
+  const viol = (l, ds = furnitureDiscs) => l.filter((t) => ds.some((f) => Math.hypot(f.x - t.x, f.z - t.z) < f.r + t.tr + KF - 1e-6));
+  const without = VG.planVegetation({ ...inputs, furniture: [] }).trees, v0 = viol(without), v1 = viol(list);
+  ok(`the planting WITHOUT the furniture breaks the rule ${v0.length} times (trunk surface nearer than ${KF} m to the footprint of one of ${furnitureDiscs.length} discs: 132 benches x 3, 167 bins, ${svc.furniture.lanterns.length} lanterns, the fence piers and panels): the rule has something to do`, v0.length >= 1, `${v0.length} trees`);
+  ok(`the built planting (${list.length} trees) breaks it 0 times, measured with the test's own distance`, v1.length === 0, `${v1.length} trees`);
+  const key = (t) => t.zone + ':' + t.species + ':' + t.x.toFixed(4) + ':' + t.z.toFixed(4), base = new Set(without.map(key));
+  const changed = list.filter((t) => !base.has(key(t))), gone = without.filter((t) => !new Set(list.map(key)).has(key(t))), st = T.stats.furniture;
+  ok(`the planting changes only where a keep-out bites: ${v0.length} trees hit, ${st.moved} moved (at most ${KN} m), ${st.dropped} went; the built list differs from the T5 planting in exactly ${changed.length} trees (the moved ones), every other tree is the same zone, species and place to 0.1 mm`, st.hit === v0.length && changed.length === st.moved && list.length === without.length - st.dropped && changed.every((t) => t.fnode && t.fnode.d <= KN + 1e-9) && gone.length === st.moved + st.dropped, `hit ${st.hit}, moved ${st.moved}, dropped ${st.dropped}, by zone ${JSON.stringify(st.byZone)}`);
+  const m = VG.planVegetation({ ...inputs, keepOut: { furniture: 0 } }).trees; ok('mutant: KEEP_OUT.furniture 0 (a trunk may touch a footprint) leaves trunks within 0.5 m of a footprint that the real margin moves (the check can fail)', viol(m).length > v1.length || m.some((t) => t.fnode) === false, `${viol(m).length} trees`);
+  const nn = VG.planVegetation({ ...inputs, keepOut: { furnitureNudge: 0 } }); ok('the nudge matters: with KEEP_OUT.furnitureNudge 0 the hit trees go instead of moving', nn.stats.furniture.moved === 0 && nn.stats.furniture.dropped === st.hit, `${nn.stats.furniture.dropped} dropped`); }
 
 // =============================================================== 3. the crowns over the alleys: the real geometry
 console.log('3. the crowns: no leaf lower than the walker\'s head over a ribbon (the REAL LOD0 geometry), the crown base table pinned to the geometry');
@@ -235,7 +250,8 @@ console.log('5. the ground mask: the litter lies under the planted crowns (groun
   ok(`the litter cells of the mask (R >= ${GM.LOOK.litA}) lie under a planted crown: ${litterUnder} of ${litter} (>= 98 %); the canopy cells (R >= 0.5) within 3.5 m of a crown: ${canopyCells - canopyFar} of ${canopyCells} (all); the interior of the big crowns (3.2 m inside the edge, ${interior} cells) is litter: ${interiorLit} (>= 90 %)`, litter > 10000 && litterUnder >= 0.98 * litter && canopyFar === 0 && interior > 2000 && interiorLit >= 0.9 * interior, `${(litterUnder / litter * 100).toFixed(1)} % / ${canopyFar} far / ${(interiorLit / interior * 100).toFixed(1)} %`);
   ok(`the mask stats say so: canopyTrees ${st.canopyTrees} = the trees of the plan (${trees.length}, the shrubs stamp no litter), the fallback belt stamped 0 cells, litter ${st.litterCells} cells (the byte raster counts ${litter}: the float threshold rounds) = ${(st.litterCells / st.insideCells * 100).toFixed(1)} % of the garden (the OSM woods were 44.7 %)`, st.canopyTrees === trees.length && st.beltCells === 0 && Math.abs(st.litterCells - litter) < 0.02 * litter && st.litterCells / st.insideCells < 0.35 && st.litterCells / st.insideCells > 0.08, '');
   // the mutant: the mask planned WITHOUT the planting (the T3 way: the OSM woods + the belt) has litter far from any crown
-  const GI = GM.collectGroundInputs({ GARDEN: Fo.GARDEN, GARDEN_GREEN: Fo.GARDEN_GREEN, FOOTPRINTS: Fo.FOOTPRINTS, WATER_UNION: Wd.WATER_UNION, PATHS: Pd.PATHS, BENCHES: Fu.BENCHES, GATES: Fu.GATES, MONUMENTS: Fu.MONUMENTS, FOUNTAINS: Fu.FOUNTAINS }, FAC.GREEN, GH.gardenHeight);
+  const GI = GM.collectGroundInputs({ GARDEN: Fo.GARDEN, GARDEN_GREEN: Fo.GARDEN_GREEN, FOOTPRINTS: Fo.FOOTPRINTS, WATER_UNION: Wd.WATER_UNION, PATHS: Pd.PATHS, BENCHES: svc.furniture.plan.benches, GATES: Fu.GATES, MONUMENTS: Fu.MONUMENTS, FOUNTAINS: Fu.FOUNTAINS }, FAC.GREEN, GH.gardenHeight);
+  GI.zones = { worn: FUR.resolveWornSpots(DG.WORN_SPOTS, [...Fu.FOUNTAINS, ...Fu.MONUMENTS, ...Fu.GATES]) };           // T6: the plaza spots follow the furniture data, the benches are the planned ones
   const old = GM.planGroundMask(GI); let oLit = 0, oUnder = 0; for (let j = 0; j < old.box.H; j++) for (let i = 0; i < old.box.W; i++) { const R = old.data[(j * old.box.W + i) * 4]; if (R < LIT) continue; oLit++; if (under(old.box.x0 + (i + 0.5) * res, old.box.z0 + (j + 0.5) * res, 0)) oUnder++; }
   ok(`mutant: the mask planned without the planting (the woods and the belt of T3) has only ${(oUnder / oLit * 100).toFixed(0)} % of its ${oLit} litter cells under a crown (the check can fail)`, oLit > 50000 && oUnder < 0.8 * oLit, '');
   const same = GM.planGroundMask({ ...GI, canopy: T.canopy }); let diff = 0; for (let k = 0; k < md.length; k++) if (md[k] !== same.data[k]) diff++;
