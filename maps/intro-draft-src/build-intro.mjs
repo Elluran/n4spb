@@ -201,6 +201,10 @@ function labelPoint(k) {
   return { p: fromG(bx + x0 + 0.5, by + y0 + 0.5), r: best * CELL };
 }
 
+// save the rasters for the overlap build (build-overlap.mjs): water mask and the municipal district index per cell
+fs.writeFileSync(path.join(here, 'raw', 'grid-water.bin'), Buffer.from(water));
+fs.writeFileSync(path.join(here, 'raw', 'grid-lab.bin'), Buffer.from(lab.buffer, lab.byteOffset, lab.byteLength));
+fs.writeFileSync(path.join(here, 'raw', 'grid.json'), JSON.stringify({ GW, GH, CELL, BBOX, areas: mos.length }));
 // adjacency by shared border (cells)
 const adj = new Map();
 const addAdj = (a, b) => { if (a === b || a < 0 || b < 0) return; const key = a < b ? a * 1000 + b : b * 1000 + a; adj.set(key, (adj.get(key) || 0) + 1); };

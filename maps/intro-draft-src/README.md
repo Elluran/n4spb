@@ -18,6 +18,7 @@ node extract-source-coverage.mjs   # the playable rectangles + sights of the sou
                           # the street names of the centre come from the source project's raw OSM (data/osm-raw/roads.json) when it is present
 node build-intro.mjs      # -> intro-data.json (git-ignored)
 node build-streets.mjs    # adds the named street chains, label anchors and each area's border streets to intro-data.json
+node build-overlap.mjs    # the area overlap rules of docs/AREAS.md section 12: walkable territory (fp), overlap zones (ext), water (wz), shared junctions, bridges between areas
 node assemble.mjs         # -> ../intro-draft.html
 node shot-intro.mjs out "" 1500 900   # a PNG of the page through Edge (puppeteer-core from the repo's node_modules)
 ```

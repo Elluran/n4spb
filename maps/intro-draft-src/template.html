@@ -57,6 +57,7 @@ aside { background: var(--panel-solid); border-right: 1px solid var(--line); dis
 #stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--bg); touch-action: none; cursor: grab; }
 #stage.drag { cursor: grabbing; }
 svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#lab { pointer-events: none; }
 #map path { vector-effect: non-scaling-stroke; }
 .area { stroke: var(--border); stroke-width: 1.1; stroke-linejoin: round; cursor: pointer; transition: filter .12s; }
 .area:hover { filter: brightness(1.08) saturate(1.1); }
@@ -119,7 +120,7 @@ svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
     <button class="btn" id="fitCity"></button><button class="btn" id="fitCenter"></button>
     <span class="seg" id="colorBy"><button data-v="rayon" aria-pressed="true"></button><button data-v="size" aria-pressed="false"></button><button data-v="src" aria-pressed="false"></button></span>
     <span class="seg" id="lang"><button data-v="ru" aria-pressed="true">RU</button><button data-v="en" aria-pressed="false">EN</button></span>
-    <button class="btn" id="theme" aria-label="theme">◐</button>
+    <button class="btn" id="rulesBtn"></button><button class="btn" id="theme" aria-label="theme">◐</button>
   </header>
   <aside id="side">
     <div class="tabs seg" id="tabs"><button data-v="areas" aria-pressed="true"></button><button data-v="streets" aria-pressed="false"></button></div>
@@ -136,6 +137,7 @@ svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
     <div class="hud" id="legend"></div>
     <div class="hud" id="card"></div>
     <div id="tip"></div>
+    <div class="hud" id="rules" style="display:none;left:50%;top:60px;transform:translateX(-50%);width:min(560px,92%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 20px;box-shadow:var(--shadow);max-height:calc(100% - 90px);overflow:auto"></div>
   </main>
 </div>
 <script id="data" type="application/json">__DATA__</script>
@@ -150,6 +152,7 @@ const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag)
 // ------------------------------------------------------------------ strings
 const T = {
   ru: { title: 'Выберите район Петербурга', draft: 'ЧЕРНОВИК', sub: 'Районы = реальные муниципальные округа города. Границы идут по улицам, рекам и каналам. Размер сравнивается с районом B (Север).',
+    rulesBtn: 'Правила', rulesTitle: 'Правила границ районов (черновик)', lOvl: 'Зоны перекрытия всех районов', lJunc: 'Общие перекрёстки', lBrg: 'Мосты между районами', hoverRed: 'красная линия: территория, по которой можно ходить в районе', playable: 'Территория для прогулок', ofWhichOvl: 'из них перекрытия', waterZone: 'Вода района', takes: 'Берёт у соседей', junctionsH: 'Общие перекрёстки (квартал входит во все районы)', bridgesH: 'Мосты (входят в оба района)', junctionT: 'Общий квартал', junctionAreas: 'районов', rulesList: ['Район = муниципальный округ: основная территория. Размеры сравниваются с районом B по основной территории.', 'Граничные улицы входят в оба района, и каждый район заходит на один квартал (не глубже 320 м) за граничную улицу в соседний район.', 'Перекрёсток, площадь или вокзал, где сходятся 3 и больше районов: прилегающие кварталы входят во ВСЕ эти районы (пользователя не выбрасывает в другую сцену у вокзала).', 'Мосты между районами входят в оба района.', 'Вода досягаема (позже: водный транспорт): акватория до 2 км от берега принадлежит району берега; река между двумя районами входит в оба (если её середина не дальше 320 м от второго берега); открытая вода дальше — отдельные акватории (будут позже).', 'Красная линия при наведении на район показывает всю территорию, доступную пользователю в этом районе: основная + перекрытия + мосты; пунктир: вода.'],
     lSrc: 'Покрытие исходного проекта', bySrc: 'По исходнику', srcRow: 'Исходный проект', srcReady: 'готов к переносу', srcPart: 'частично', srcLow: 'почти нет', srcNone: 'данных нет', sightsN: 'достопримечательностей', srcHatch: 'зелёная штриховка: есть в исходном проекте', srcSumm: 'в исходном проекте',
     areasTab: 'Районы', streetsTab: 'Улицы', searchStreet: 'Поиск улицы…', lSnames: 'Названия главных улиц', lBnames: 'Названия улиц-границ', lBhi: 'Подсветить улицы-границы', lPick: 'Выбор улицы кликом', borderStreets: 'Границы по улицам', bwater: 'вода / край города', streetCls: ['скоростная', 'магистраль', 'главная улица', 'улица', 'местная улица', 'река / канал'], bordersOf: 'Границы районов по этой улице', len: 'Длина', isBorder: 'граница', streetsN: 'улиц', km: 'км', m: 'м',
     city: 'Весь город', center: 'Центр', rayon: 'По районам', size: 'По размеру', search: 'Поиск района…', areas: 'районов', km2: 'км²', total: 'всего',
@@ -160,6 +163,7 @@ const T = {
     live: 'работает', wip: 'в разработке', none: 'сцены пока нет', bname: 'район B ≈ 3,95 км²', sq: '= район B · 3,95 км²', gulf: 'Финский залив', bay: 'Невская губа', neva: 'Нева', ladoga: '',
     pickA: 'Нажмите на район, чтобы увидеть сведения', ofB: '× B', cover: 'покрыто' },
   en: { title: 'Choose a part of Saint Petersburg', draft: 'DRAFT', sub: 'Areas = the real municipal districts of the city. Borders follow streets, rivers and canals. Size is compared with area B (North).',
+    rulesBtn: 'Rules', rulesTitle: 'Area border rules (draft)', lOvl: 'Overlap zones of all areas', lJunc: 'Shared junctions', lBrg: 'Bridges between areas', hoverRed: 'red line: the territory a visitor can walk in this area', playable: 'Walkable territory', ofWhichOvl: 'of which overlaps', waterZone: 'Water of the area', takes: 'Takes from neighbours', junctionsH: 'Shared junctions (the block belongs to all areas)', bridgesH: 'Bridges (belong to both areas)', junctionT: 'Shared block', junctionAreas: 'areas', rulesList: ['Area = municipal district: the core territory. Sizes are compared with area B by the core territory.', 'Border streets belong to both areas, and each area reaches ONE block (at most 320 m deep) across the border street into its neighbour.', 'A junction, square or station where 3 or more areas meet: the surrounding blocks belong to ALL of those areas (the visitor is not thrown into another scene at the station).', 'Bridges between areas belong to both areas.', 'Water is reachable (later: water transport): the water up to 2 km from a shore belongs to the shore area; a river between two areas belongs to both (when its middle is within 320 m of the other bank); open water beyond is its own set of water zones (later).', 'The red line on hover shows everything a visitor can walk in that area: core + overlaps + bridges; dashed: water.'],
     lSrc: 'Source project coverage', bySrc: 'By source', srcRow: 'Source project', srcReady: 'ready to port', srcPart: 'partly', srcLow: 'barely', srcNone: 'no data', sightsN: 'sights', srcHatch: 'green hatching: present in the source project', srcSumm: 'in the source project',
     areasTab: 'Areas', streetsTab: 'Streets', searchStreet: 'Search streets…', lSnames: 'Main street names', lBnames: 'Border street names', lBhi: 'Highlight border streets', lPick: 'Pick a street by click', borderStreets: 'Borders along streets', bwater: 'water / city edge', streetCls: ['expressway', 'trunk road', 'main street', 'street', 'local street', 'river / canal'], bordersOf: 'Area borders along this street', len: 'Length', isBorder: 'border', streetsN: 'streets', km: 'km', m: 'm',
     city: 'Whole city', center: 'Centre', rayon: 'By district', size: 'By size', search: 'Search areas…', areas: 'areas', km2: 'km²', total: 'total',
@@ -206,6 +210,8 @@ const map = $('map'), lab = $('lab'), stage = $('stage');
 const defs = el('defs', {}, map);
 defs.innerHTML = `<pattern id="hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="9" stroke="rgba(176,40,30,.55)" stroke-width="2.4"/></pattern>
 <pattern id="srcp" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><line x1="0" y1="0" x2="0" y2="10" stroke="rgba(20,120,60,.55)" stroke-width="3"/></pattern>
+<pattern id="ovlp" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="rgba(30,30,40,.5)" stroke-width="1.6"/></pattern>
+<pattern id="ovlr" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><line x1="0" y1="0" x2="0" y2="7" stroke="rgba(214,40,30,.6)" stroke-width="2"/></pattern>
 <pattern id="hatchL" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="12" stroke="rgba(190,140,0,.4)" stroke-width="1.6"/></pattern>`;
 const world = el('g', { id: 'world' }, map);
 const gLand = el('rect', { x: -90000, y: -90000, width: 180000, height: 180000, fill: 'var(--bg)' }, world);
@@ -250,9 +256,19 @@ for (const e of D.existing) {
   const d = e.rects.map((r) => ringD(r)).join('');
   el('path', { d, fill: 'rgba(255,255,255,.0)', stroke: 'var(--ink)', 'stroke-width': 2.2, 'stroke-dasharray': '7 4' }, gEx);
 }
+const gOvlAll = el('path', { fill: 'url(#ovlp)', stroke: 'none', 'fill-rule': 'evenodd', 'pointer-events': 'none' }, world);
+const gBrg0 = el('path', { fill: 'none', stroke: 'var(--bg)', 'stroke-width': 6, 'stroke-linecap': 'round', 'pointer-events': 'none' }, world);
+const gBrg = el('path', { fill: 'none', stroke: '#8a4fd6', 'stroke-width': 3, 'stroke-linecap': 'round', 'pointer-events': 'none' }, world);
+const gFp = el('path', { fill: 'rgba(214,40,30,.09)', stroke: '#d62a1e', 'stroke-width': 3, 'stroke-linejoin': 'round', 'fill-rule': 'evenodd', 'pointer-events': 'none' }, world);
+const gFpW = el('path', { fill: 'rgba(214,40,30,.05)', stroke: '#d62a1e', 'stroke-width': 1.8, 'stroke-dasharray': '8 5', 'stroke-linejoin': 'round', 'fill-rule': 'evenodd', 'pointer-events': 'none' }, world);
+const gFpX = el('path', { fill: 'url(#ovlr)', stroke: 'none', 'fill-rule': 'evenodd', 'pointer-events': 'none' }, world);
 const gSelPath = el('path', { fill: 'none', stroke: 'var(--ink)', 'stroke-width': 3, 'stroke-linejoin': 'round', 'fill-rule': 'evenodd' }, gSel);
 const gSelPartners = el('path', { fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2.6, 'stroke-dasharray': '6 4', 'fill-rule': 'evenodd' }, gSel);
 const gSelPath2 = el('path', { fill: 'none', stroke: 'var(--bg)', 'stroke-width': 1.2, 'stroke-linejoin': 'round', 'fill-rule': 'evenodd' }, gSel);
+gOvlAll.setAttribute('d', D.areas.map((a) => ringsD(a.ext || [])).join(''));
+const BR = D.bridges || [];
+const brD = BR.map((b) => lineD(b.p)).join('');
+gBrg0.setAttribute('d', brD); gBrg.setAttribute('d', brD);
 
 // ------------------------------------------------------------------ view (pan / zoom)
 let view = { k: 0.01, tx: 0, ty: 0 };
@@ -295,9 +311,9 @@ stage.addEventListener('pointermove', (e) => {
   if (moved) { view.tx += dx; view.ty += dy; apply(); hideTip(); }
 });
 const endPtr = (e) => { ptrs.delete(e.pointerId); pinch0 = null; stage.classList.remove('drag'); };
-stage.addEventListener('pointerup', (e) => { const wasTap = !moved; endPtr(e); if (wasTap && !e.target.closest('.hud, #card')) { const r1 = rect(), sn = streetAt(e.clientX - r1.left, e.clientY - r1.top); if (sn >= 0) { selectStreet(sn, false); return; } const t = document.elementFromPoint(e.clientX, e.clientY); const k = t && t.classList && t.classList.contains('area') ? Number(t.dataset.k) : null; if (k != null) select(k, false); else select(null); } });
+stage.addEventListener('pointerup', (e) => { const wasTap = !moved; endPtr(e); if (wasTap && !e.target.closest('.hud, #card')) { const r1 = rect(), jn = junctionAt(e.clientX - r1.left, e.clientY - r1.top); if (jn >= 0) { renderJunctionCard(D.junctions[jn]); return; } const sn = streetAt(e.clientX - r1.left, e.clientY - r1.top); if (sn >= 0) { selectStreet(sn, false); return; } const t = document.elementFromPoint(e.clientX, e.clientY); const k = t && t.classList && t.classList.contains('area') ? Number(t.dataset.k) : null; if (k != null) select(k, false); else select(null); } });
 stage.addEventListener('pointercancel', endPtr);
-stage.addEventListener('pointerleave', hideTip);
+stage.addEventListener('pointerleave', () => { hideTip(); setHover(null); });
 stage.addEventListener('selectstart', (e) => { if (!e.target.closest || !e.target.closest('#card')) e.preventDefault(); });
 stage.addEventListener('dragstart', (e) => e.preventDefault());
 stage.addEventListener('dblclick', (e) => { if (!e.target.closest('#card')) e.preventDefault(); });
@@ -315,11 +331,19 @@ function clearStreet() { selStreet = null; gStrHi.setAttribute('d', ''); gStrHi0
 function selectStreet(nid, zoom = true) {
   selected = null; for (const p of pathOf.values()) p.classList.remove('on');
   gSelPath.setAttribute('d', ''); gSelPath2.setAttribute('d', ''); gSelPartners.setAttribute('d', ''); document.querySelectorAll('.item:not(.st)').forEach((i) => i.classList.remove('on'));
+  updateFp();
   selStreet = nid; const o = NM[nid]; const d = o.chains.map((si) => lineD(SC[si].p)).join('');
   gStrHi.setAttribute('d', d); gStrHi0.setAttribute('d', d);
   renderStreetCard(o);
   document.querySelectorAll('.item.st').forEach((i) => i.classList.toggle('on', Number(i.dataset.i) === nid));
   if (zoom) { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const si of o.chains) for (const p of SC[si].p) { const q = pm(p); x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); } fitBox(x0, y0, x1, y1, 0.6); }
+}
+function renderJunctionCard(j) {
+  const s = S();
+  card.innerHTML = `<button class="x" aria-label="close">×</button><h2>${s.junctionT}</h2><div class="en">${j.near ? j.near + ' · ' : ''}${j.n} ${s.junctionAreas}</div><div class="plan">${s.rulesList[2]}</div><div class="chips">${j.areas.map((k) => `<a href="#" data-go="${k}">${nm(D.areas[k])}</a>`).join('')}</div>`;
+  card.classList.add('show');
+  card.querySelector('.x').onclick = () => select(null);
+  card.querySelectorAll('[data-go]').forEach((l) => { l.onclick = (e) => { e.preventDefault(); select(Number(l.dataset.go)); }; });
 }
 function renderStreetCard(o) {
   const s = S(), areas = [...o.areas].sort((p, q) => q[1] - p[1]);
@@ -347,6 +371,17 @@ function streetAt(sx, sy) {
   return best >= 0 ? SC[best].s : -1;
 }
 
+// ------------------------------------------------------------------ the territory of an area (red line)
+let hoverK = null;
+function showFp(k) {
+  if (k == null) { gFp.setAttribute('d', ''); gFpW.setAttribute('d', ''); gFpX.setAttribute('d', ''); return; }
+  const a = D.areas[k];
+  if (a.fpD === undefined) { a.fpD = ringsD(a.fp || []); a.wzD = ringsD(a.wz || []); a.extD = ringsD(a.ext || []); }
+  gFp.setAttribute('d', a.fpD); gFpW.setAttribute('d', a.wzD); gFpX.setAttribute('d', a.extD);
+}
+const updateFp = () => showFp(hoverK != null ? hoverK : selected);
+function setHover(k) { if (k === hoverK) return; hoverK = k; updateFp(); }
+
 // ------------------------------------------------------------------ hover tooltip
 const tip = $('tip');
 function hideTip() { tip.style.display = 'none'; }
@@ -355,17 +390,22 @@ function hoverMove(e) {
   const sn = streetAt(e.clientX - r0.left, e.clientY - r0.top);
   if (sn >= 0) { tip.textContent = sname(SN[sn]) + ' · ' + S().streetCls[SN[sn].c]; tip.style.display = 'block'; tip.style.left = Math.min(e.clientX - r0.left + 14, r0.width - tip.offsetWidth - 8) + 'px'; tip.style.top = (e.clientY - r0.top + 16) + 'px'; stage.style.cursor = 'pointer'; return; }
   stage.style.cursor = '';
+  const jn = junctionAt(e.clientX - r0.left, e.clientY - r0.top);
+  if (jn >= 0) { const j = D.junctions[jn]; tip.textContent = S().junctionT + ' · ' + j.n + ' ' + S().junctionAreas + (j.near ? ' · ' + j.near : ''); tip.style.display = 'block'; tip.style.left = Math.min(e.clientX - r0.left + 14, r0.width - tip.offsetWidth - 8) + 'px'; tip.style.top = (e.clientY - r0.top + 16) + 'px'; stage.style.cursor = 'pointer'; return; }
   if (t.classList && t.classList.contains('area')) {
+    setHover(Number(t.dataset.k));
     const a = D.areas[Number(t.dataset.k)]; const r = rect();
     tip.textContent = nm(a) + ' · ' + fmt(a.km2) + ' ' + S().km2; tip.style.display = 'block';
     tip.style.left = Math.min(e.clientX - r.left + 14, r.width - tip.offsetWidth - 8) + 'px'; tip.style.top = (e.clientY - r.top + 16) + 'px';
-  } else hideTip();
+  } else { hideTip(); setHover(null); }
 }
 
 // ------------------------------------------------------------------ labels (screen space, collision-free)
+const JPOS = [];
+function junctionAt(sx, sy) { for (const p of JPOS) if (Math.hypot(sx - p[0], sy - p[1]) <= p[3]) return p[2]; return -1; }
 let labTimer = 0;
 function scheduleLabels() { if (!labTimer) labTimer = requestAnimationFrame(() => { labTimer = 0; drawLabels(); }); }
-const layerOn = { src: true, snames: true, bnames: true, bhi: true, pick: true, roads: true, rayon: true, plan: true, labels: true, parks: false, exist: true, sq: true };
+const layerOn = { junc: true, brg: true, ovl: false, src: true, snames: true, bnames: true, bhi: true, pick: true, roads: true, rayon: true, plan: true, labels: true, parks: false, exist: true, sq: true };
 const cpos = (a) => { const q = pm(a.label); return [q[0] * view.k + view.tx, q[1] * view.k + view.ty]; };
 const WATERLAB = [{ k: 'gulf', p: [29.62, 60.03] }, { k: 'bay', p: [30.03, 59.955] }, { k: 'neva', p: [30.435, 59.905] }];
 function drawLabels() {
@@ -424,6 +464,16 @@ function drawLabels() {
       }
     }
   }
+  // junctions where 3 or more areas meet
+  JPOS.length = 0;
+  if (layerOn.junc && view.k > 0.007) for (let n = 0; n < D.junctions.length; n++) {
+    const j = D.junctions[n], q = pm(j.p), x = q[0] * view.k + view.tx, y = q[1] * view.k + view.ty;
+    if (x < -20 || y < -20 || x > r.width + 20 || y > r.height + 20) continue;
+    const rad = view.k > 0.03 ? 11 : 8;
+    const g = el('g', { class: 'chip' }, lab); el('circle', { cx: x, cy: y, r: rad, fill: '#d62a1e', stroke: '#fff', 'stroke-width': 2 }, g);
+    const t = el('text', { x, y: y + rad * 0.38, 'font-size': rad * 1.15, 'font-weight': 800 }, g); t.textContent = j.n; t.style.fill = '#fff';
+    JPOS.push([x, y, n, rad + 3]);
+  }
   // water names
   for (const w of WATERLAB) { const q = pm(w.p), x = q[0] * view.k + view.tx, y = q[1] * view.k + view.ty; if (view.k > 0.06 && w.k !== 'neva') continue; if (x < 0 || y < 0 || x > r.width || y > r.height) continue; const g = el('g', { class: 'water' }, lab); const t = el('text', { x, y, 'font-size': w.k === 'neva' ? 11 : 14 }, g); t.textContent = S()[w.k]; }
 }
@@ -443,7 +493,8 @@ function select(k, zoom = true) {
   selected = k;
   for (const [kk, p] of pathOf) { p.classList.toggle('on', kk === k); }
   document.querySelectorAll('.item').forEach((i) => i.classList.toggle('on', Number(i.dataset.k) === k));
-  if (k == null) { card.classList.remove('show'); gSelPath.setAttribute('d', ''); gSelPath2.setAttribute('d', ''); gSelPartners.setAttribute('d', ''); return; }
+  if (k == null) { card.classList.remove('show'); gSelPath.setAttribute('d', ''); gSelPath2.setAttribute('d', ''); gSelPartners.setAttribute('d', ''); updateFp(); return; }
+  updateFp();
   const a = D.areas[k]; gSelPath.setAttribute('d', a.d); gSelPath2.setAttribute('d', a.d);
   gSelPartners.setAttribute('d', a.kind === 'small' && a.mergeGroup ? a.mergeGroup.filter((q) => q !== k).map((q) => D.areas[q].d).join('') : '');
   pathOf.get(k).parentNode.appendChild(pathOf.get(k));
@@ -464,10 +515,13 @@ function renderCard(a) {
   const ex = a.exist.map((e) => { const x = D.existing.find((q) => q.id === e.id); return `<span class="tag ${e.id}">${e.id}</span> ${lang === 'ru' ? x.title : x.titleEn} ${e.pct}% ${s.cover} · ${x.status === 'Live' ? s.live : s.wip}`; });
   const goLinks = a.exist.map((e) => { const x = D.existing.find((q) => q.id === e.id); return `<a class="go" href="../${x.key === 'strip' ? 'index.html' : 'north.html'}">${s.open} ${e.id} →</a>`; }).join(' ');
   card.innerHTML = `<button class="x" aria-label="close">×</button><h2>${nm(a)}</h2><div class="en">${other !== nm(a) ? other + ' · ' : ''}${rayName(ray)}${lang === 'ru' ? ' район' : ' district'}</div>
-  <dl><dt>${s.land}</dt><dd>${fmt(a.km2)} ${s.km2} · ${fmt(a.x)} ${s.ofB}</dd><dt>${s.srcRow}</dt><dd>${a.src}% · ${({ ready: s.srcReady, part: s.srcPart, low: s.srcLow, none: s.srcNone })[srcClass(a)]}${a.sights ? ` · ${a.sights} ${s.sightsN}` : ''}</dd>${ex.length ? `<dt>${s.exist}</dt><dd>${ex.join('<br>')}</dd>` : `<dt>${s.exist}</dt><dd style="color:var(--muted)">${s.none}</dd>`}</dl>
+  <dl><dt>${s.land}</dt><dd>${fmt(a.km2)} ${s.km2} · ${fmt(a.x)} ${s.ofB}</dd><dt>${s.playable}</dt><dd>${fmt(a.fpKm2)} ${s.km2} (${s.ofWhichOvl} ${fmt(a.extKm2)})${a.wzKm2 ? ` · ${s.waterZone.toLowerCase()} ${fmt(a.wzKm2)} ${s.km2}` : ''}</dd><dt>${s.srcRow}</dt><dd>${a.src}% · ${({ ready: s.srcReady, part: s.srcPart, low: s.srcLow, none: s.srcNone })[srcClass(a)]}${a.sights ? ` · ${a.sights} ${s.sightsN}` : ''}</dd>${ex.length ? `<dt>${s.exist}</dt><dd>${ex.join('<br>')}</dd>` : `<dt>${s.exist}</dt><dd style="color:var(--muted)">${s.none}</dd>`}</dl>
   ${plan}
   ${a.sightList && a.sightList.length ? `<h3>${s.sightsN} (${s.srcSumm})</h3><div class="chips">${a.sightList.map((c) => `<span style="font-size:12.5px">${c}</span>`).join(' · ')}${a.sights > a.sightList.length ? ' · …' : ''}</div>` : ''}
   ${a.contains.length ? `<h3>${s.contains}</h3><div class="chips">${a.contains.map((c) => `<span style="font-size:12.5px">${lang === 'ru' ? c.ru : c.en}</span>`).join(' · ')}</div>` : ''}
+  ${a.ovl && a.ovl.length ? `<h3>${s.takes}</h3><div class="chips">${a.ovl.map((o) => `<a href="#" data-go="${o.k}">${nm(D.areas[o.k])} ${fmt(o.km2)}</a>`).join('')}</div>` : ''}
+  ${(() => { const js = D.junctions.filter((j) => j.areas.includes(a.k)); return js.length ? `<h3>${s.junctionsH}</h3><div style="font-size:13px">${js.map((j) => `${j.near || '·'} <span style="color:var(--muted)">(${j.n})</span>`).join('<br>')}</div>` : ''; })()}
+  ${(() => { const names = [...new Set(BR.filter((b) => b.areas.includes(a.k) && b.n).map((b) => b.n))]; return names.length ? `<h3>${s.bridgesH}</h3><div style="font-size:13px">${names.slice(0, 12).join(' · ')}${names.length > 12 ? ' · …' : ''}</div>` : ''; })()}
   <h3>${s.neighbours}</h3><div class="chips">${a.nb.slice(0, 6).map((n) => `<a href="#" data-go="${n.k}">${nm(D.areas[n.k])}</a>`).join('')}</div>
   ${(a.bs && a.bs.length) ? `<h3>${s.borderStreets}</h3><ul class="bs">${a.bs.map((b) => `<li>${b.s >= 0 ? `<a href="#" data-st="${b.s}">${sname(SN[b.s])}</a>` : '—'}<span class="len">${fmt(b.len / 1000)} ${s.km}</span>${b.n >= 0 ? ` → <a href="#" data-go="${b.n}">${nm(D.areas[b.n])}</a>` : ` → <span style="color:var(--muted)">${s.bwater}</span>`}</li>`).join('')}</ul>` : ''}${goLinks ? '<div>' + goLinks + '</div>' : ''}`;
   card.classList.add('show');
@@ -490,6 +544,7 @@ function buildList() {
     for (const a of items) {
       const d = document.createElement('div'); d.className = 'item'; d.dataset.k = a.k; d.tabIndex = 0;
       d.innerHTML = `<span class="nm">${nm(a)}</span><span class="km">${fmt(a.km2)}</span><span class="tag ${a.kind}">${a.kind === 'big' ? '÷' + a.split : a.kind === 'small' ? '+' : '≈B'}</span>${a.src >= 90 ? '<span class="tag" style="background:#2b7a49;color:#fff" title="' + s.srcReady + '">✓</span>' : a.src >= 30 ? '<span class="tag" style="background:#6f974a;color:#fff">◐</span>' : ''}`;
+      d.onmouseenter = () => setHover(a.k); d.onmouseleave = () => setHover(null);
       d.onclick = () => { select(a.k); document.getElementById('side').classList.remove('open'); };
       d.onkeydown = (e) => { if (e.key === 'Enter') d.click(); };
       det.appendChild(d);
@@ -524,7 +579,7 @@ document.querySelectorAll('#tabs button').forEach((b) => { b.onclick = () => { t
 // ------------------------------------------------------------------ layers, legend, static texts
 function buildLayers() {
   const s = S(), L = $('layers');
-  const rows = [['src', s.lSrc], ['roads', s.lRoads], ['snames', s.lSnames], ['bnames', s.lBnames], ['bhi', s.lBhi], ['pick', s.lPick], ['rayon', s.lRayon], ['plan', s.lPlan], ['labels', s.lLabels], ['parks', s.lParks], ['exist', s.lExist], ['sq', s.lSq]];
+  const rows = [['junc', s.lJunc], ['brg', s.lBrg], ['ovl', s.lOvl], ['src', s.lSrc], ['roads', s.lRoads], ['snames', s.lSnames], ['bnames', s.lBnames], ['bhi', s.lBhi], ['pick', s.lPick], ['rayon', s.lRayon], ['plan', s.lPlan], ['labels', s.lLabels], ['parks', s.lParks], ['exist', s.lExist], ['sq', s.lSq]];
   L.innerHTML = `<summary><b style="display:inline">${s.layers}</b></summary>` + rows.map(([k, t]) => `<label><input type="checkbox" data-l="${k}" ${layerOn[k] ? 'checked' : ''}> ${t}</label>`).join('');
   L.querySelectorAll('input').forEach((i) => { i.onchange = () => { layerOn[i.dataset.l] = i.checked; applyLayers(); }; });
   $('legend').innerHTML = `<b>${s.legend}</b>
@@ -532,6 +587,7 @@ function buildLayers() {
     <div class="row"><span class="sw" style="background:repeating-linear-gradient(45deg, rgba(190,140,0,.5) 0 2px, transparent 2px 7px)"></span><span><b>${s.cls.large}</b> ${fmt(D.meta.B_HI)}–${fmt(D.meta.B_KM2 * 1.5)}</span></div>
     <div class="row"><span class="sw hatch"></span><span><b>${s.cls.big}</b> &gt; ${fmt(D.meta.B_KM2 * 1.5)} (÷N)</span></div>
     <div class="row"><span class="sw dots"></span><span><b>${s.cls.small}</b> &lt; ${fmt(D.meta.B_LO)} (+)</span></div>
+    <div class="row"><span class="sw" style="border:2px solid #d62a1e;background:rgba(214,40,30,.12)"></span><span><b>${s.hoverRed}</b></span></div>
     <div class="row"><span class="sw" style="background:repeating-linear-gradient(-45deg, rgba(20,120,60,.65) 0 3px, transparent 3px 8px)"></span><span>${s.srcHatch} (${fmt(D.source.km2)} ${s.km2})</span></div>
     <div class="row"><span class="tag A">A</span><span class="tag B">B</span><span>${lang === 'ru' ? 'уже в игре (пунктир)' : 'already in the game (dashed)'}</span></div>`;
 }
@@ -541,12 +597,15 @@ function applyLayers() {
   gRay.style.display = layerOn.rayon ? '' : 'none';
   gPlan.style.display = layerOn.plan ? '' : 'none';
   gSrc.style.display = layerOn.src ? '' : 'none';
+  gOvlAll.style.display = layerOn.ovl ? '' : 'none';
+  gBrg.style.display = gBrg0.style.display = layerOn.brg ? '' : 'none';
   gParks.style.display = layerOn.parks ? '' : 'none';
   gEx.style.display = layerOn.exist ? '' : 'none';
   drawLabels(); updateScale();
 }
 function texts() {
   const s = S();
+  $('rulesBtn').textContent = s.rulesBtn; if ($('rules').style.display !== 'none') showRules();
   document.documentElement.lang = lang; $('ttl').textContent = s.title; $('draft').textContent = s.draft; $('sub').textContent = s.sub;
   $('fitCity').textContent = s.city; $('fitCenter').textContent = s.center; $('search').placeholder = s.search;
   const cb = $('colorBy').children; cb[0].textContent = s.rayon; cb[1].textContent = s.size; cb[2].textContent = s.bySrc;
@@ -557,6 +616,8 @@ function texts() {
 function recolor() { for (const a of D.areas) pathOf.get(a.k).setAttribute('fill', fillOf(a)); buildSide(); }
 document.querySelectorAll('#lang button').forEach((b) => { b.onclick = () => { lang = b.dataset.v; try { localStorage.setItem('intro-lang', lang); } catch (e) {} texts(); }; });
 document.querySelectorAll('#colorBy button').forEach((b) => { b.onclick = () => { colorBy = b.dataset.v; document.querySelectorAll('#colorBy button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); recolor(); }; });
+function showRules() { const s = S(), el0 = $('rules'); el0.style.display = 'block'; el0.innerHTML = `<button class="btn" style="float:right" id="rulesX">×</button><h2 style="margin:0 0 8px;font-size:18px">${s.rulesTitle}</h2><ol style="margin:0;padding-left:20px;line-height:1.5">${s.rulesList.map((t) => `<li style="margin:6px 0">${t}</li>`).join('')}</ol><p style="margin:10px 0 0;color:var(--muted);font-size:12.5px">${lang === 'ru' ? 'Расстояния: один квартал не глубже ' + D.rules.depthM + ' м; перекрёсток: радиус ' + D.rules.junctionRadiusM + ' м; вода: до ' + D.rules.waterReachM / 1000 + ' км от берега, соседний берег если ближе ' + D.rules.waterBankM + ' м.' : 'Distances: one block at most ' + D.rules.depthM + ' m deep; junction radius ' + D.rules.junctionRadiusM + ' m; water: up to ' + D.rules.waterReachM / 1000 + ' km from a shore, the other bank when within ' + D.rules.waterBankM + ' m.'}</p>`; $('rulesX').onclick = () => { el0.style.display = 'none'; }; }
+$('rulesBtn').onclick = () => { const el0 = $('rules'); if (el0.style.display === 'none') showRules(); else el0.style.display = 'none'; };
 const setTheme = (t) => { document.documentElement.dataset.theme = t; try { localStorage.setItem('intro-theme', t); } catch (e) {} recolor(); drawLabels(); };
 $('theme').onclick = () => setTheme(dark() ? 'light' : 'dark');
 $('search').oninput = buildSide;

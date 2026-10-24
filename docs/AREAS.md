@@ -1083,3 +1083,30 @@ exit 0; `knock-stands` strip and North 7 passed, `knock` 16 passed, `northknock`
 * **A strip-visible change that was never named:** `drive.js` `holdInput` holds the car for every open modal panel (the touch Menu and Controls panels included), not only for the gate question: full brake above 0.8 m/s, handbrake at rest (the old `brk 0.4` accelerated a stopped car backwards). Intended, kept.
 * **Tools.** `claims-draw-audit.mjs --strict` (warnings fail; `npm run claims-draw:north` uses it). `tools/tauride/car-keepout-sim.mjs` runs its positive controls without the fence colliders (the fence stops the cars before the hook is asked). `furniture-test`, `ground-test`, `vegetation-test`, `north-hooks-test` carry the new checks of the review.
 * **A new bake is needed** for the North (the module code, the palace parterre and the furniture plan changed; every `src/**/*.js` except the runtime-only files is part of the bake revision).
+
+
+## 12. The world map and the area overlap rules (draft v1, 2026-10-24)
+
+The start screen of the app becomes a MAP of Saint Petersburg (`maps/intro-draft.html`, built by `maps/intro-draft-src/`, README there). A visitor picks the part of the city to walk in, so that no scene has to hold the whole city (the performance problem of the source project). The areas of the map are the REAL municipal districts (okrugs, OSM `admin_level=8`, 111 of them), coloured by the 18 city districts; their borders follow streets and water. Targets: an area is about the size of area B (the North, 3.95 km2, +-20 % = 3.16 .. 4.74 km2); larger ones are split later (`split` in the data), smaller ones merged (`mergeGroup`).
+
+### 12.1 Rules (decided by the project owner, implemented in `build-overlap.mjs`)
+
+1. **Core.** An area is a municipal district; its size is compared with B by this core territory. The walkable territory of an area is the core PLUS the overlaps below (about +33 % on median); memory and bake budgets are counted on the walkable territory.
+2. **Border streets and one block.** A street that is the border of two areas belongs to BOTH. Each area also reaches ONE block (the first row of blocks, at most 320 m deep, a block = a face of the street network) across the border street into its neighbour. So a visitor who walks along or across a border street is not prompted to enter the other area at once.
+3. **Shared junctions.** Where THREE or more areas meet (a junction, a square, a station: found as border street cells with >= 3 areas within 160 m) the blocks around it belong to ALL those areas, including the diagonal block that rule 2 does not give. Example: the Moscow Railway Station / Ploshchad Vosstaniya (30.3603, 59.9311; 139 m from the station) belongs to Smolninskoye, Ligovka-Yamskaya, Vladimirsky and Liteyny. 97 such junctions in the draft (28 with 4 or more areas).
+4. **Bridges.** A bridge whose two ends lie in different areas belongs to both (the bridge cells and their approaches within 160 m of the ends).
+5. **Water is reachable** (water transport comes later). Every water cell belongs to the areas whose shore is nearest, up to 2 km from the shore; an area whose shore is within 320 m of the nearest one also owns the cell (a river or canal between two areas belongs to both). Open water farther than 2 km from any shore is not owned: it will become separate water zones.
+6. **The hover rule on the map:** the red line shows the whole walkable territory of the hovered area (core + overlaps + bridges); the dashed red line shows its water.
+
+### 12.2 What follows for the scenes
+
+* The gates between scenes (section 2) move from the border line to the OUTER edge of the overlap: the prompt appears only when the visitor leaves the walkable territory of the current area, not when he crosses a district border. The 200 m shared band between A and B (section 4) is the first instance of rule 2.
+* A building, bench, car or person that stands in an overlap exists in both scenes (the same claims, the same data: the cut of the area data takes the walkable territory, not the core).
+* Sizes: the classes `b` / `large` / `big` / `small` of the map are computed on the core; the walkable territory is shown next to it in the area card.
+* Data of the first scenes comes from the source project (`D:/git2/agi-fun-tests/102_3d_piter`): the map marks which areas it already covers (19 of 111 fully, the whole historic core) and its authored sights.
+
+### 12.3 Known weaknesses of the draft
+
+* Blocks outside the source's raw OSM box are built from the main streets only (no residential streets), so "one block" there is capped by the 320 m rule rather than by a real block.
+* Unnamed or missing border streets in the data: a few border segments have no street name in the border list.
+* The municipal borders are the official ones; some are odd and will be re-cut together with the split / merge of areas.
