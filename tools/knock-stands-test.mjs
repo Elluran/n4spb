@@ -1,7 +1,7 @@
 // Headless test of the KNOCKABLE stands (props/stands.js + props/west.js, package D of the knock plan): press kiosks, excursion kiosks, ice / souvenir / boat cabins, ticket booths, hot-dog and
 // souvenir carts and the chalk A-frames of the verandas. No GPU.  npm run knock-stands
 // Builds the real chain environment ... props twice (with the real core/knock.js and without ctx.knock) and checks:
-//   1 census: kiosk 17-18, booth 4, cart 17 (10 panel-less + 7 with a fascia), aframe 34-35 (the plan said kiosk 18 / aframe 35: the count follows the placement); no loose instance; every record owns its collider and carries its fascia / poster / chalk board as standalone {obj} parts
+//   1 census: kiosk 17-18, booth 4, cart 16-17 (10 curated west carts, 7 of them with a fascia, + 5-7 ice carts of the shared random stream of props/stands.js: 7 until b5ebcc1 re-dealt the stream, 6 since; M7 polish, docs/AREAS.md 11.3), aframe 34-35 (the plan said kiosk 18 / aframe 35: the count follows the placement); no loose instance; every record owns its collider and carries its fascia / poster / chalk board as standalone {obj} parts
 //   2 no ghost fascia: the merged world-space panels of the build WITHOUT knock = the merged panels WITH knock + the quads that became standalone objects (a thrown stand leaves nothing in the air)
 //   3 without ctx.knock the module builds what it always built: the same service lists (props-probe svc counts), no knock mesh, no standalone panel, the same colliders
 //   4 the attached panels sit on their stand (within 3.5 m, in front of the facade) and keep their pose relative to it through a knock (rigid): kiosk, booth, hot-dog cart, A-frame
@@ -86,13 +86,20 @@ const kiosks = recs('kiosk'), booths = recs('booth'), aframes = recs('aframe'), 
 const cartsFascia = carts.filter((r) => objsOf(r).length), kiosksOf = (n) => kiosks.filter((r) => objsOf(r).length === n);
 if (verbose) console.log('by kind', JSON.stringify(K.knock.stats.byKind), 'objs per kiosk', kiosks.map((r) => objsOf(r).length).join(','), 'stands', JSON.stringify(K.services.props.stats.stands), 'west', JSON.stringify(K.services.props.stats.west));
 
-check('1 census: kiosk 17-18, booth 4, cart 17 (7 with a fascia), aframe 34-35 = every stand the placement made; each owns its collider and its fascia / poster / chalk board as standalone parts', () => {
+check('1 census: kiosk 17-18, booth 4, cart 16-17 (10 curated + 5-7 ice carts; 7 with a fascia), aframe 34-35 = every stand the placement made; each owns its collider and its fascia / poster / chalk board as standalone parts', () => {
   // every placed stand is a record (no instance without a collider within 1 m), the counts follow the placement of the earlier modules (kiosk 17 or 18 and aframe 34 or 35 with the main.js order)
   const svc = K.services.props, st = svc.stats, KIOSK = /^(press|excKiosk|cabin)/, CART = /^(cart|iceCart)/;
   const placed = (re) => svc.kiosks.filter((q) => re.test(q.kind)).length;
   assert.equal(kiosks.length, placed(KIOSK), `kiosks ${kiosks.length} = placed ${placed(KIOSK)}`); if (STRIP) assert(kiosks.length >= 17 && kiosks.length <= 18, `kiosks ${kiosks.length}`);
   assert.equal(booths.length, st.west.booths, `booths ${booths.length}`); if (STRIP) assert.equal(booths.length, 4);
-  assert.equal(carts.length, placed(CART), `carts ${carts.length} = placed ${placed(CART)}`); if (STRIP) { assert.equal(carts.length, 17); assert.equal(cartsFascia.length, 7, `carts with a fascia ${cartsFascia.length}`); }
+  assert.equal(carts.length, placed(CART), `carts ${carts.length} = placed ${placed(CART)}`); if (STRIP) {
+    // the curated carts of props/west.js SITES (cartRed x 2 of 3: the third site is missed since before the placement was re-dealt, cartHot x 3, cartSouv x 4, iceCartHood x 1) are fixed: 10, 7 of them with a fascia (hot-dog + souvenir).
+    // The ice carts (iceCart0 / 1 / 2) are placed by props/stands.js out of the SHARED prop random stream R(): `want` 3 + 2 + 2 = 7, and the count follows what that stream deals (17 carts in all until the strip data grew by the
+    // SG band in b5ebcc1 and re-dealt the stream: 6 ice carts, 16 carts since; docs/AREAS.md 11.3). The old exact `carts === 17` was a snapshot of that stream, red on every tree since b5ebcc1, not a missing cart.
+    const ice = svc.kiosks.filter((q) => /^iceCart[012]$/.test(q.kind)).length;
+    assert.equal(placed(CART) - ice, 10, `curated carts ${placed(CART) - ice}`); assert(ice >= 5 && ice <= 7, `ice carts ${ice} (want 7, the stream deals 5-7)`); assert(carts.length >= 16 && carts.length <= 17, `carts ${carts.length}`);
+    assert.equal(cartsFascia.length, 7, `carts with a fascia ${cartsFascia.length}`);
+  }
   assert.equal(aframes.length, st.stands.aframes, `aframes ${aframes.length}`); if (STRIP) assert(aframes.length >= 34 && aframes.length <= 35);
   if (!STRIP) console.log(`     ${process.env.AREA}: kiosks ${kiosks.length}, booths ${booths.length}, carts ${carts.length} (${cartsFascia.length} with a fascia), aframes ${aframes.length} (the strip's counts are not expected here)`);
   for (const k of ['pressKiosk', 'pressKiosk2', 'excKiosk', 'cabinIce', 'cabinSouv', 'cabinBoats', 'ticketBooth', 'cartHot0', 'cartHot1', 'cartSouv', 'aFrameR', 'aFrameK']) assert(!(st.knockLoose || {})[k], `no loose ${k} (an instance whose collider was not found)`);

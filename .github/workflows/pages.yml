@@ -1,6 +1,6 @@
 # Deploys the static scene to GitHub Pages (https://averkij.github.io/n4spb/): no build step, the deployment whitelist of docs/STRIP.md section 7.
 # A pull request runs the CPU 'verify' job (no npm ci: repository files only) and the 'engine' job (npm ci: three.js in node, the hook set and the Tauride tests); nothing is deployed.
-# A push to main deploys when 'verify' passed ('engine' reports next to it and does not gate the deployment: docs/AREAS.md section 5.3).
+# A push to main deploys when BOTH 'verify' and 'engine' passed (M7 polish: 'engine' ran green on GitHub and became a deploy gate: docs/AREAS.md section 11.3).
 name: Deploy to GitHub Pages
 
 on:
@@ -80,7 +80,7 @@ jobs:
 
   # The CPU tests that build the engine in node (three.js from package-lock.json, no browser, no GPU, no bake): the hook set of M6 with its engine call sites (docs/AREAS.md 9.2, 9.6: `npm run hooks:all`)
   # and the Tauride remake tests of docs/TAURIDE-REMAKE.md section 10 (T2-T4a: the garden floor, the ponds, the relief and the real built module). A separate job so that 'verify' stays free of
-  # 'npm ci' and its steps keep running when the engine part is red; it does not gate 'deploy' (docs/AREAS.md section 5.3). Nothing here reads assets/baked.
+  # 'npm ci' and its steps keep running when the engine part is red; since M7 polish it GATES 'deploy' together with 'verify' (docs/AREAS.md sections 5.3 and 11.3). Nothing here reads assets/baked.
   engine:
     runs-on: ubuntu-latest
     steps:
@@ -108,7 +108,7 @@ jobs:
         run: node tools/area.mjs north tools/north-knock-test.mjs
 
   deploy:
-    needs: verify
+    needs: [verify, engine]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:

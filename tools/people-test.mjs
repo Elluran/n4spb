@@ -8,7 +8,10 @@
 //     'dont', no NaN, a constant head count, at most 45 % hidden (inside / in a train / in the metro),
 //   * pose continuity: no position jump > 0.8 m per step except the known teleports (sit / stand up / emerge / approach / recycle / mass placement, and the two re-placements the sim makes out of
 //     view, recognised by their state transition and counted on their own line: the watchdog snap of a stuck walker to the graph (people/sim.js watchdog: noProg >= 4 -> 0, wx = x, a new route)
-//     and the re-placement of a lagging follower on its leader's trail (stepFollower: the follower lands on a trail point of its leader; the tour groups, M7)), yaw change per step < 0.9 rad,
+//     and the re-placement of a lagging follower on its leader's trail (stepFollower: the follower lands on a trail point of its leader; the tour groups, M7), recognised PRECISELY since M7 polish:
+//     the follower must stand within 0.35 m of a trail point the snap can have used (the leader's trail head (trH - delay) & 63, or trH when the leader stands; 4 heads for the step order) AND have been
+//     where the sim snaps (> 6.5 m from its aim, which the test recomputes with the sim's formula, or stuck > 50 steps); any other jump onto "a point of the trail" is a jump again (the
+//     exemption used to be 0.35 m of ANY of the 64 points); --mutant jump1m proves it), yaw change per step < 0.9 rad, --jumps N lists the first N jumps with the trail hint,
 //     the jump limit is per area: max(8, population x minutes x 0.01) (the population follows the area's DENSITY tables), printed on its own line,
 //   * density: people near the obelisk, people on Nevsky between Mayakovskaya and Vosstaniya (per 10 m of pavement), the number of people in the play area, stuck walkers,
 //   * statistics: crossings started, mean waiting time at the kerb, sit / door counts.
@@ -109,17 +112,55 @@ const upd = ctx._updates;
 const viol = { building: 0, road: 0, nan: 0, jump: 0, turn: 0, signal: 0, hiddenMax: 0, step: 0, water: 0, deep: 0, low: 0 };
 /** a scripted person off street level (the roof walk, a descent landing): really on a walk surface at its own height? */
 const lowOK = (a) => { const yy = a.kind === 'sit' ? a.y + 0.45 : a.y, h = ctx.physics.groundHeight(a.x, a.z, yy + 0.5, false); return Number.isFinite(h) && Math.abs(h - yy) < 0.3; };       // (a sitter on the edge of a landing: the seat is the surface)
-const first = {}; const prev = sim.agents.map((a) => ({ x: a.x, z: a.z, yaw: a.yaw, dyaw: 0, kind: a.kind, hidden: a.hidden, seat: !!a.seat, cross: a.crossIdx, rec: (a.recycled | 0) + (a.leader ? (a.leader.recycled | 0) : 0), noProg: a.noProg, wx: a.wx, wz: a.wz, rt: a.rt }));
+const first = {}; const prev = sim.agents.map((a) => ({ x: a.x, z: a.z, yaw: a.yaw, dyaw: 0, kind: a.kind, hidden: a.hidden, seat: !!a.seat, cross: a.crossIdx, rec: (a.recycled | 0) + (a.leader ? (a.leader.recycled | 0) : 0), noProg: a.noProg, wx: a.wx, wz: a.wz, rt: a.rt, stuck: a.stuck, tu: a.tu }));
 // The two re-placements the sim makes on purpose, out of view (people/sim.js), told apart by the state they leave behind and NOT counted as jumps (each has its own counter, printed below):
 //   watchdog: a free walker that made no progress for 4 checks (noProg 3 -> 4) is snapped to the nearest graph node and given a new route: noProg is 0 again, (wx, wz) is the new position, rt is a new object
-//   trail:    a follower that lags > 7 m behind its leader (or is stuck > 60 steps) is put on the trail point of its leader it was heading for; it then walks at most one step (<= ~0.3 m), so it stands on one of the 64 trail points
-const TRAIL_SNAP = 0.35;
+//   trail:    a follower that lags >= 7 m behind its TARGET (or is stuck > 60 steps) and is out of view is put on the trail point of its leader it was heading for (people/sim.js stepFollower:
+//             i = (l.trH - (moving ? delay : 0)) & 63, a.x = trX[i]); it then walks at most one step (<= ~0.3 m). Until M7 polish ANY of the 64 trail points within 0.35 m exempted a jump, and a
+//             follower walks along those points all the time, so a real teleport onto the trail (a 1 m jump, a hop that is not the snap) was exempt too. Now the jump is the snap only when
+//             (a) the follower stands within 0.35 m of one of the 4 trail points the snap can have used (the leader's trH before this update or one more when the leader stepped first in the same
+//                 micro step, with the follower's delay when the leader moves or 0 when it stands) AND
+//             (b) it was where the sim's own condition holds: more than 6.5 m (the sim's 7 less a step) from its TARGET, which the test recomputes with the sim's formula (the trail point shifted by
+//                 the follower's side / back offsets, or its arc place round a standing leader: a tour member is aimed up to ~5.5 m out and then lands only 2 .. 4 m from where it stood), or
+//                 more than 6.5 m from the trail point itself (the fallbacks pin the target on it), or stuck > 50 steps (the sim's 60).
+const TRAIL_SNAP = 0.35, SNAP_FAR = 6.5, TRAIL_STUCK = 50, TRAIL_WINDOW = 3;
+const JUMPS_SHOWN = args.includes('--jumps') ? Number(flag('jumps', 30)) : 8;
+const MUTANT = args.includes('--mutant') ? String(flag('mutant', '')) : '';          // jump1m: a deliberate 1 m jump of a follower onto a trail point of its leader every ~30 s must be COUNTED as a jump
+if (MUTANT && MUTANT !== 'jump1m') { console.log(`unknown --mutant "${MUTANT}" (only jump1m)`); process.exit(2); }
+const agentIdx = new Map(sim.agents.map((a, k) => [a, k]));
+const lastX = new Float32Array(sim.agents.length), lastZ = new Float32Array(sim.agents.length);
+const lastTrH = new Int16Array(sim.agents.length).fill(-1);                          // each agent's trail head BEFORE this update (prev[] of a leader is overwritten while the loop runs)
+/** the (trail index, leader moving) pairs a snap of this follower can have used */
+const trailTargets = (a) => { const l = a.leader, k = agentIdx.get(l), h0 = k === undefined ? -1 : lastTrH[k]; if (h0 < 0) return []; const out = []; for (let n = 0; n <= TRAIL_WINDOW; n++) for (const moving of [true, false]) out.push({ j: (h0 + n - (moving ? (a.delay || 4) : 0) + 128) & 63, moving }); return out; };
+/** where stepFollower aims the follower for a snap candidate: [x, z] pairs (the side / back place, the arc place round a standing leader, the trail point itself) */
+const aimsOf = (a, c, p) => {
+  const l = a.leader, bx = l.trX[c.j], bz = l.trZ[c.j], by = c.moving ? l.trY[c.j] : l.yaw, fx = Math.sin(by), fz = Math.cos(by), out = [[bx, bz]];
+  const side = [bx - fz * a.side - fx * (c.moving ? 0 : a.back * 0.5), bz + fx * a.side - fz * (c.moving ? 0 : a.back * 0.5)];
+  out.push(side);
+  if (!c.moving && a.arc) { const aa = l.yaw + Math.PI + a.arc.ang; out.push([l.x + Math.sin(aa) * a.arc.rad, l.z + Math.cos(aa) * a.arc.rad]); }
+  // a guard rail between the follower and its place: it heads for the newest point of the leader's trail it can reach in a straight line (stepFollower, before the snap test)
+  const nav = sim.nav;
+  if (p && nav.fenceNear && nav.fenceNear(p.x, p.z) && nav.segBlocked(p.x, p.z, side[0], side[1], 0.03)) for (let q = 1; q < 48; q++) { const j = (c.j - q + 64) & 63; if (!nav.segBlocked(p.x, p.z, l.trX[j], l.trZ[j], 0.03)) { out.push([l.trX[j], l.trZ[j]]); break; } }
+  return out;
+};
+/** was the follower, before the jump, where the sim snaps it (> SNAP_FAR from an aim of the candidate, or stuck)? */
+const lagging = (a, p, c) => p.stuck > TRAIL_STUCK || aimsOf(a, c, p).some(([x, z]) => Math.hypot(p.x - x, p.z - z) > SNAP_FAR);
 const teleportKind = (a, p) => {
   const l = a.leader;
   if (!l && a.kind === 'walk' && p.noProg >= 3 && a.noProg === 0 && a.wx === a.x && a.wz === a.z && a.rt !== p.rt) return 'watchdog';
-  if (l && l.trX) { for (let j = 0; j < l.trX.length; j++) if (Math.hypot(a.x - l.trX[j], a.z - l.trZ[j]) < TRAIL_SNAP) return 'trail'; }
+  if (l && l.trX) { for (const c of trailTargets(a)) if (Math.hypot(a.x - l.trX[c.j], a.z - l.trZ[c.j]) < TRAIL_SNAP && lagging(a, p, c)) return 'trail'; }
   return null;
 };
+/** the exemption as it was until M7 polish (any of the 64 points within 0.35 m), kept to print what the mutant would have got away with */
+const oldTrailRule = (a) => { const l = a.leader; if (l && l.trX) for (let j = 0; j < l.trX.length; j++) if (Math.hypot(a.x - l.trX[j], a.z - l.trZ[j]) < TRAIL_SNAP) return true; return false; };
+/** a hint for a jump line: where the follower stood before / after relative to its leader's trail (the nearest of the 64 points, the candidate indices, the distance it came from) */
+const trailHint = (a, p) => {
+  const l = a.leader; if (!l || !l.trX) return '';
+  let bj = -1, bd = 1e9; for (let j = 0; j < 64; j++) { const d = Math.hypot(a.x - l.trX[j], a.z - l.trZ[j]); if (d < bd) { bd = d; bj = j; } }
+  const cs = trailTargets(a), c0 = cs.find((c) => c.j === bj), aim = c0 ? aimsOf(a, c0, p).map(([x, z]) => Math.hypot(p.x - x, p.z - z).toFixed(1)).join('/') : '-';
+  return ` trail: nearest point ${bj} at ${bd.toFixed(2)} m, snap candidates ${cs.map((c) => c.j + (c.moving ? 'm' : 's')).join('/')}, came from ${Math.hypot(p.x - l.trX[bj], p.z - l.trZ[bj]).toFixed(1)} m (aims ${aim}) away, leader #${agentIdx.get(l)} (${l.kind}) at ${Math.hypot(a.x - l.x, a.z - l.z).toFixed(1)} m, moved ${Math.hypot(l.x - lastX[agentIdx.get(l)], l.z - lastZ[agentIdx.get(l)]).toFixed(2)} m this step, follower tu ${p.tu === undefined ? '-' : (a.tu - p.tu).toFixed(2)} s, delay ${a.delay || 4}, side ${a.side} back ${a.back}, leader speed ${l.speed.toFixed(2)} stuck ${p.stuck}>${a.stuck}`;
+};
+const mut = { injected: 0, counted: 0, exempt: 0, oldWouldExempt: 0, now: new Set() };
 const teleports = { watchdog: 0, trail: 0 };
 const startPos = sim.agents.map((a) => ({ x: a.x, z: a.z })); const progress = sim.agents.map(() => ({ x: 0, z: 0, d: 0, kind: '' }));
 let playerMin = 9, playerNear = 0;
@@ -141,6 +182,15 @@ for (let i = 1; i <= steps; i++) {
   if (PLX) { ctx.player.position.set(PLX[0], 0, PLX[1]); camera.position.set(PLX[0], 1.7, PLX[1]); camera.updateMatrixWorld(true); }
   { const w0 = performance.now(); for (const f of upd) f(dt, t); if (legs.length) { const lg0 = legs[legs.length - 1]; lg0.wall = (lg0.wall || 0) + performance.now() - w0; lg0.ns = (lg0.ns || 0) + 1; } }          // (the wall time of the update callbacks per leg)
   if (TRACE >= 0 && t >= T0 && t <= T1) { const a = sim.agents[TRACE]; console.log(t.toFixed(1), a.kind, 'pos', a.x.toFixed(2), a.z.toFixed(2), 'cov', sim.nav.cover(a.x, a.z).toFixed(2), 'sp', a.speed.toFixed(2), 'cross', a.crossIdx, 'waitCw', a.waitCw, 'seg', a.rt && a.rt.seg + '/' + a.rt.n, 'stuck', a.stuck, 'goal', a.goal && a.goal.type, 'scene', a.scene); }
+  if (MUTANT === 'jump1m' && i % 300 === 0) {          // every 30 s: one visible, walking follower in formation is put 0.9 .. 1.3 m from where it was, ONTO the exact trail point a snap would use (a deliberate teleport bug)
+    for (let k = 0; k < sim.agents.length; k++) {
+      const a = sim.agents[k], p = prev[k], l = a.leader; if (!l || !l.trX || a.hidden || p.hidden || a.kind !== 'walk' || p.kind !== 'walk' || sim.mass > 0 || p.stuck > 5) continue;
+      // a follower IN FORMATION: no aim of the candidate (the trail point, its side / back place, its arc place) is more than SNAP_FAR from it, i.e. the sim itself would not re-place it (a lagging one is a legitimate snap by design)
+      const c = trailTargets(a).find((q) => { const d = Math.hypot(l.trX[q.j] - p.x, l.trZ[q.j] - p.z); return d > 0.9 && d < 1.3 && !lagging(a, p, q); });
+      if (!c) continue;
+      a.x = l.trX[c.j]; a.z = l.trZ[c.j]; mut.injected++; mut.now.add(k); break;
+    }
+  }
   sim.agents.forEach((a, k) => {
     const p = prev[k];
     if (!Number.isFinite(a.x) || !Number.isFinite(a.z) || !Number.isFinite(a.yaw) || !Number.isFinite(a.speed)) { viol.nan++; if (viol.nan < 6) console.log(`  NaN agent ${k} scene=${a.scene} kind=${a.kind} t=${t.toFixed(1)} x=${a.x} z=${a.z} yaw=${a.yaw} speed=${a.speed} leader=${!!a.leader} goal=${a.goal && a.goal.type}`); return; }
@@ -148,9 +198,10 @@ for (let i = 1; i <= steps; i++) {
       const d = Math.hypot(a.x - p.x, a.z - p.z), kindChange = a.kind !== p.kind || (!!a.seat !== p.seat) || ((a.recycled | 0) + (a.leader ? (a.leader.recycled | 0) : 0)) !== p.rec || sim.mass > 0 || a.kind === 'approach' || p.kind === 'approach';
       if (d > 0.8 && !kindChange) {
         if (onPB(a.x, a.z, 3)) { pb.jumps++; if (a.leader) pb.jumpF++; pb.jumpT[Math.min(9, Math.floor(t / (MIN * 6)))]++; if (pb.jumps < 5) console.log(`  jump ON THE PALACE BRIDGE ${d.toFixed(2)} m agent ${k} ${a.kind} (${a.x.toFixed(1)},${a.z.toFixed(1)}) t=${t.toFixed(1)} scene=${a.scene} leader=${!!a.leader}`); }      // (every jump, the re-placements too, as before: the deck line is a strip oracle)
-        const tele = teleportKind(a, p);
+        const tele = teleportKind(a, p), injected = mut.now.has(k);
+        if (injected) { if (tele) mut.exempt++; else mut.counted++; if (oldTrailRule(a)) mut.oldWouldExempt++; }
         if (tele) teleports[tele]++;
-        else { viol.jump++; if (viol.jump < 8) console.log(`  jump ${d.toFixed(2)} m agent ${k} ${a.kind} (${a.x.toFixed(1)},${a.z.toFixed(1)}) t=${t.toFixed(1)} scene=${a.scene} leader=${!!a.leader} stuck=${a.stuck} noProg=${p.noProg}>${a.noProg}`); }
+        else { viol.jump++; if (viol.jump < (JUMPS_SHOWN)) console.log(`  jump ${d.toFixed(2)} m agent ${k} ${a.kind} (${a.x.toFixed(1)},${a.z.toFixed(1)}) t=${t.toFixed(1)} scene=${a.scene} leader=${!!a.leader} stuck=${a.stuck} noProg=${p.noProg}>${a.noProg}${trailHint(a, p)}`); }
       }
       let dy = a.yaw - p.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       if (Math.abs(dy) > 0.9 && !kindChange && d < 0.8) { viol.turn++; if (viol.turn < 6) console.log(`  turn ${dy.toFixed(2)} agent ${k} ${a.kind} t=${t.toFixed(1)}`); }
@@ -166,8 +217,10 @@ for (let i = 1; i <= steps; i++) {
     if (a.kind === 'sit' && p.kind !== 'sit') stats.sits++;
     if (a.hidden && !p.hidden) stats.doors++;
     if (a.hidden !== p.hidden && !a.ug) { for (const e of sim.nav.metroDoors || []) if (Math.hypot(e.x - a.x, e.z - a.z) < 4) { const kk = e.metro.id + (a.hidden ? ' in' : ' out'); metroFlow[kk] = (metroFlow[kk] || 0) + 1; break; } }
-    p.x = a.x; p.z = a.z; p.yaw = a.yaw; p.kind = a.kind; p.hidden = a.hidden; p.seat = !!a.seat; p.cross = a.crossIdx; p.rec = (a.recycled | 0) + (a.leader ? (a.leader.recycled | 0) : 0); p.noProg = a.noProg; p.wx = a.wx; p.wz = a.wz; p.rt = a.rt;
+    p.x = a.x; p.z = a.z; p.yaw = a.yaw; p.kind = a.kind; p.hidden = a.hidden; p.seat = !!a.seat; p.cross = a.crossIdx; p.rec = (a.recycled | 0) + (a.leader ? (a.leader.recycled | 0) : 0); p.noProg = a.noProg; p.wx = a.wx; p.wz = a.wz; p.rt = a.rt; p.stuck = a.stuck; p.tu = a.tu;
   });
+  sim.agents.forEach((a, k) => { lastTrH[k] = a.trX ? a.trH : -1; lastX[k] = a.x; lastZ[k] = a.z; });      // (after the loop: the trail heads of this update are the 'before' of the next)
+  mut.now.clear();
   if (PLX) for (const a of sim.agents) if (!a.hidden) { const d = Math.hypot(a.x - PLX[0], a.z - PLX[1]); if (d < playerMin) playerMin = d; if (d < 1.2) playerNear++; }
   if (i % 10 === 0) {                                              // once per second: containment, density
     let hid = 0, n = 0, sq = 0, ln = 0, pl = 0, pbNow = 0;
@@ -230,5 +283,11 @@ if (viol.jump > jumpLimit) fail(`${viol.jump} position jumps > 0.8 m (limit ${ju
 if (viol.turn > N0 * MIN * 0.05) fail(`${viol.turn} turns > 0.9 rad per step`);
 if (viol.hiddenMax > N0 * (args.includes('--night') ? 0.95 : 0.45)) fail(`${viol.hiddenMax} hidden at once`);
 if (stuck > N0 * 0.12) fail(`${stuck} stuck walkers`);
+if (MUTANT) {
+  const caught = mut.injected > 0 && mut.counted === mut.injected;
+  console.log(`MUTANT jump1m (a follower in formation put 0.9 .. 1.3 m away onto the exact trail point a snap would use, every 30 s): injected ${mut.injected}, counted as a jump ${mut.counted}, exempted ${mut.exempt}; the exemption of M7 (any of the 64 points within ${TRAIL_SNAP} m) would have exempted ${mut.oldWouldExempt} of them`);
+  console.log(caught ? 'MUTANT RESULT: CAUGHT (every deliberate jump was counted)' : 'MUTANT RESULT: MISSED (a deliberate jump onto the trail was exempted or nothing was injected)');
+  process.exit(caught ? 0 : 1);
+}
 console.log(fails ? 'RESULT: FAIL' : 'RESULT: OK');
 process.exit(fails ? 1 : 0);
