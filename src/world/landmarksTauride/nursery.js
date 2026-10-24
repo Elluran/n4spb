@@ -5,7 +5,7 @@
 //     rafters and glazing bars, boxes for the plinth, the eave rails and the ridge), a shallow gable, ~900 panes each of which exists or not by a deterministic hash (about a quarter exist: the photo shows a grey-blue lattice
 //     of ribs with the dark ground showing through); ONE box collider per house (not enterable).
 //   * the three buildings of the lot that the generic city drew as 4-storey yellow blocks (OSM gives no height): two concrete boxes and the long annex along the north edge, CLAIMED (groups.js `tauride-nursery`) and drawn here low
-//     and plain, each with its collider; a few rows of bare young trees between the houses and along the tracks (<= 150 instances, ONE instanced mesh), two piles of earth and two stacks of crates.
+//     and plain, each with its collider; big leafless trees between the houses, inside them and round the lot (<= 260 instances, ONE instanced mesh), the classical buildings of the yard (the real rings, hipped blue-green roofs), two piles of earth and two stacks of crates.
 // planNursery(opts) is PURE and DETERMINISTIC (no three.js object, no Math.random); buildNursery(ctx, parent, plan, noise) draws it in 5 draws (floor, frames, glass, trees, buildings + details).
 import * as THREE from 'three';
 import { registerLOD } from '../../core/spatial.js';
@@ -80,9 +80,12 @@ export function planNursery(o = {}) {
   const colliders = [];
   for (const h of houses) colliders.push({ id: h.id, x: h.cx, z: h.cz, w: h.axis === 'x' ? h.len : h.wid, d: h.axis === 'x' ? h.wid : h.len, rotY: 0, y0: D.HOUSE.collider.y0, y1: D.HOUSE.collider.y1 });
   for (const b of buildings) colliders.push({ id: b.id, x: b.cx, z: b.cz, w: b.len, d: b.dep, rotY: -b.theta, y0: -0.5, y1: b.h + (b.ridge || 0) });
+  // the classical buildings of the yard: the real ring for the walls, one collider box per wing (the courtyard stays open)
+  const yardHouses = (D.YARD_HOUSES || []).map((y) => ({ ...y, rise: y.wings.map((w, i) => Math.min(w[1] - w[0], w[3] - w[2]) / 2 * ((y.slopes && y.slopes[i]) ?? y.slope)) }));
+  for (const y of yardHouses) y.wings.forEach((w, i) => colliders.push({ id: y.id + '#' + i, x: (w[0] + w[1]) / 2, z: (w[2] + w[3]) / 2, w: w[1] - w[0], d: w[3] - w[2], rotY: 0, y0: -0.5, y1: y.h + y.rise[i] }));
   // ---- the trees: rows, jittered by the hash, kept off the houses, the buildings, the tracks, the piles and the crates
   const near = (rects, x, z, m) => rects.some((r) => x > r.x0 - m && x < r.x1 + m && z > r.z0 - m && z < r.z1 + m);
-  const hr = houses.map((h) => h.rect);
+  const hrOf = (skipId) => houses.filter((h) => h.id !== skipId).map((h) => h.rect);
   const inObb = (b, x, z, m) => { const c = Math.cos(b.theta), sn = Math.sin(b.theta), dx = x - b.cx, dz = z - b.cz, u = dx * c + dz * sn, v = -dx * sn + dz * c; return Math.abs(u) < b.len / 2 + m && Math.abs(v) < b.dep / 2 + m; };
   const segD = (x, z, p) => { let m = Infinity; for (let i = 0; i + 3 < p.length; i += 2) { const dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1], l2 = dx * dx + dz * dz, t = l2 ? clamp(((x - p[i]) * dx + (z - p[i + 1]) * dz) / l2, 0, 1) : 0; m = Math.min(m, Math.hypot(x - p[i] - t * dx, z - p[i + 1] - t * dz)); } return m; };
   const trees = [], T = D.TREE; let ti = 0;
@@ -93,17 +96,18 @@ export function planNursery(o = {}) {
       const x = row.from[0] + ux * a - uz * jp, z = row.from[1] + uz * a + ux * jp;
       ti++;
       if (!D.inNursery(x, z)) continue;
-      if (near(hr, x, z, 1.4 + T.crown * 0.5) || buildings.some((b) => inObb(b, x, z, 2))) continue;
+      if (near(hrOf(row.inside), x, z, 1.4 + T.crown * 0.5) || buildings.some((b) => inObb(b, x, z, 2)) || yardHouses.some((y) => y.wings.some((w) => x > w[0] - 3 && x < w[1] + 3 && z > w[2] - 3 && z < w[3] + 3))) continue;
+      if (row.inside) { const r = houses.find((q) => q.id === row.inside).rect; if (!(x > r.x0 + T.crown && x < r.x1 - T.crown && z > r.z0 + T.crown * 0.6 && z < r.z1 - T.crown * 0.6)) continue; }          // an inside tree keeps its crown within the walls
       if (D.TRACKS.some((t) => segD(x, z, t.pts) < t.w / 2 + 0.7)) continue;
       if (D.PILES.some((p) => Math.hypot(x - p.x, z - p.z) < p.r + 1.5) || D.CRATES.some((c) => Math.hypot(x - c.x, z - c.z) < 2.5)) continue;
-      const hgt = T.h0 + (T.h1 - T.h0) * h3(ti, 3, 41);
-      trees.push({ x: +x.toFixed(3), z: +z.toFixed(3), h: +hgt.toFixed(3), rot: +(h3(ti, 5, 43) * Math.PI * 2).toFixed(3), tint: +(0.9 + 0.2 * h3(ti, 7, 47)).toFixed(3), row: row.id });
+      const hr0 = row.h ? row.h[0] : T.h0, hr1 = row.h ? row.h[1] : T.h1, hgt = hr0 + (hr1 - hr0) * h3(ti, 3, 41), wd = T.wide[0] + (T.wide[1] - T.wide[0]) * h3(ti, 9, 53);
+      trees.push({ x: +x.toFixed(3), z: +z.toFixed(3), h: +hgt.toFixed(3), w: +wd.toFixed(3), rot: +(h3(ti, 5, 43) * Math.PI * 2).toFixed(3), tint: +(0.9 + 0.2 * h3(ti, 7, 47)).toFixed(3), row: row.id });
     }
   }
   if (trees.length > T.max) trees.length = T.max;
-  const stats = { houses: houses.length, panes: houses.reduce((s, h) => s + h.paneCount, 0), intact: houses.reduce((s, h) => s + h.intact, 0), trees: trees.length, colliders: colliders.length, buildings: buildings.length, tracks: D.TRACKS.length };
+  const stats = { houses: houses.length, panes: houses.reduce((s, h) => s + h.paneCount, 0), intact: houses.reduce((s, h) => s + h.intact, 0), trees: trees.length, colliders: colliders.length, buildings: buildings.length, yardHouses: yardHouses.length, tracks: D.TRACKS.length };
   stats.intactShare = stats.intact / stats.panes;
-  return { ring: D.LOT_RING.slice(), yard: D.YARD_RING.slice(), houses, buildings, tracks: D.TRACKS, trees, piles: D.PILES, crates: D.CRATES, colliders, stats, design: D.HOUSE, lift: D.FLOOR_LIFT };
+  return { ring: D.LOT_RING.slice(), yard: D.YARD_RING.slice(), houses, buildings, tracks: D.TRACKS, trees, piles: D.PILES, crates: D.CRATES, yardHouses, colliders, stats, design: D.HOUSE, lift: D.FLOOR_LIFT };
 }
 
 // ---------------------------------------------------------------------------------------------------------------- the mask (pure)
@@ -309,7 +313,7 @@ export function plainBuildingGeometry(g, b) {
     g.quad([L / 2 + ov, hh, -Dp / 2 - ov], [-L / 2 - ov, hh, -Dp / 2 - ov], [-L / 2 - ov, hh + rh, 0], [L / 2 + ov, hh + rh, 0], b.roofD);
     g.tri([-L / 2, hh, Dp / 2], [-L / 2, hh + rh, 0], [-L / 2, hh, -Dp / 2], c); g.tri([L / 2, hh, -Dp / 2], [L / 2, hh + rh, 0], [L / 2, hh, Dp / 2], c);
     g.box(-L / 2 - 0.05, L / 2 + 0.05, 0, 0.5, -Dp / 2 - 0.05, Dp / 2 + 0.05, '#8d887c', 'b');                                    // the plinth
-    for (let x = -L / 2 + 3; x < L / 2 - 2; x += 3.6) for (const f of [-1, 1]) win(x, 1.9, 3.3, 2.0, f);
+    if (!b.noWin) for (let x = -L / 2 + 3; x < L / 2 - 2; x += 3.6) for (const f of [-1, 1]) win(x, 1.9, 3.3, 2.0, f);
     for (const f of [-1, 1]) for (const x of [-L / 2 + 14, 0, L / 2 - 14]) { const z = f * (Dp / 2 + 0.07); if (f > 0) g.quad([x - 0.9, 0, z], [x + 0.9, 0, z], [x + 0.9, 2.3, z], [x - 0.9, 2.3, z], '#5a4a3a'); else g.quad([x + 0.9, 0, z], [x - 0.9, 0, z], [x - 0.9, 2.3, z], [x + 0.9, 2.3, z], '#5a4a3a'); }
   } else {
     // a flat roof with a parapet, a dark patch of roofing, a stub (a lift shaft / a vent), a row of small windows
@@ -319,7 +323,7 @@ export function plainBuildingGeometry(g, b) {
     g.box(-L / 2, -L / 2 + 0.25, hh, hh + p, -Dp / 2 + 0.25, Dp / 2 - 0.25, c, 'bfk'); g.box(L / 2 - 0.25, L / 2, hh, hh + p, -Dp / 2 + 0.25, Dp / 2 - 0.25, c, 'bfk');
     g.quad([-L * 0.28, hh + 0.02, Dp * 0.3], [L * 0.1, hh + 0.02, Dp * 0.3], [L * 0.1, hh + 0.02, -Dp * 0.18], [-L * 0.28, hh + 0.02, -Dp * 0.18], b.roofD);
     g.box(L * 0.18, L * 0.18 + 2.0, hh, hh + 1.5, -Dp * 0.1, -Dp * 0.1 + 2.0, '#7a766d', 'b');
-    for (const f of [-1, 1]) for (let i = 0; i < 4; i++) win(-L * 0.36 + i * L * 0.24, 1.5, 2.6, 1.3, f);
+    if (!b.noWin) for (const f of [-1, 1]) for (let i = 0; i < 4; i++) win(-L * 0.36 + i * L * 0.24, 1.5, 2.6, 1.3, f);
     g.quad([-0.6, 0, Dp / 2 + 0.03], [0.6, 0, Dp / 2 + 0.03], [0.6, 2.1, Dp / 2 + 0.03], [-0.6, 2.1, Dp / 2 + 0.03], '#4a4038');
   }
   g.at();
@@ -338,22 +342,73 @@ export function detailGeometry(g, plan) {
   }
 }
 
-/** the tree template: a thin tapering trunk, six bare branches (golden-angle spread, rising, 1.2 .. 1.8 m) with a small light bud at each tip and one at the fork (about 90 triangles; ~5.5 m tall at scale 1) */
+/** the tree template: a leafless crown of a big old tree: a tapering trunk, seven forked branches (golden-angle spread, rising, 1.7 .. 2.5 m) and eleven irregular grey-brown masses of twigs (jittered octahedra) that fill a rounded crown about 5 m across;
+ *  two or three of them carry a muted yellow-green bud tint (spring); 8 m tall at scale 1 */
 export function treeGeometry() {
-  const g = new GB(), trunk = '#5b4b3b', br = '#4b3f34', haze = ['#9aa05a', '#a7a96a', '#8f9a58', '#a39b66', '#8d7f55'];
-  g.cyl(0, 0, 0, 3.2, 0.105, 0.05, 6, trunk);
+  const g = new GB(), trunk = '#5a4c3e', br = '#4a3f35';
+  g.cyl(0, 0, 0, 4.4, 0.17, 0.07, 6, trunk);
+  const stick = (a, b, w, col, full) => {
+    const dx = b[0] - a[0], dz = b[2] - a[2], l = Math.hypot(dx, dz) || 1, px = -dz / l * w, pz = dx / l * w;
+    g.tri([a[0] - px, a[1], a[2] - pz], [a[0] + px, a[1], a[2] + pz], b, col);
+    if (full) g.tri([a[0], a[1] - w, a[2]], [a[0], a[1] + w, a[2]], b, col);
+  };
   const tips = [];
-  for (let k = 0; k < 6; k++) {
-    const ang = 0.4 + k * 2.399963, y = 1.8 + k * 0.28, len = 1.25 + 0.14 * ((k * 5) % 4), dx = Math.cos(ang), dz = Math.sin(ang), ex = dx * len * 0.85, ez = dz * len * 0.85, ey = y + len * (0.85 + 0.08 * (k % 3)), w = 0.035;
-    const px = -dz * w, pz = dx * w;
-    g.tri([dx * 0.05 - px, y, dz * 0.05 - pz], [dx * 0.05 + px, y, dz * 0.05 + pz], [ex, ey, ez], br); g.tri([dx * 0.05 + px, y, dz * 0.05 + pz], [dx * 0.05 - px, y, dz * 0.05 - pz], [ex, ey, ez], br);
-    g.tri([dx * 0.05, y - w, dz * 0.05], [dx * 0.05, y + w, dz * 0.05], [ex, ey, ez], br); g.tri([dx * 0.05, y + w, dz * 0.05], [dx * 0.05, y - w, dz * 0.05], [ex, ey, ez], br);
-    tips.push([ex, ey, ez]);
+  for (let k = 0; k < 7; k++) {
+    const ang = 0.4 + k * 2.399963, y = 3.0 + k * 0.27, len = 1.7 + 0.22 * ((k * 5) % 4), dx = Math.cos(ang), dz = Math.sin(ang);
+    const a = [dx * 0.06, y, dz * 0.06], e = [dx * len * 0.8, y + len * (0.95 + 0.1 * (k % 3)), dz * len * 0.8], mid = [(a[0] + e[0]) / 2, (a[1] + e[1]) / 2, (a[2] + e[2]) / 2];
+    stick(a, e, 0.05, br, true);
+    for (const sgn of [-1, 1]) { const ang2 = ang + sgn * 0.7, f = [mid[0] + Math.cos(ang2) * 0.95, mid[1] + 0.95, mid[2] + Math.sin(ang2) * 0.95]; stick(mid, f, 0.035, br, false); }
+    tips.push(e);
   }
-  const clump = (x, y, z, r, col) => { const P = [[x + r, y, z], [x - r, y, z], [x, y + r * 0.8, z], [x, y - r * 0.7, z], [x, y, z + r], [x, y, z - r]]; const F = [[0, 2, 4], [4, 2, 1], [1, 2, 5], [5, 2, 0], [4, 3, 0], [1, 3, 4], [5, 3, 1], [0, 3, 5]]; for (const f of F) g.tri(P[f[0]], P[f[1]], P[f[2]], col); };
-  tips.forEach((t, i) => clump(t[0], t[1] + 0.08, t[2], 0.46 + 0.05 * (i % 3), haze[i % haze.length]));
-  clump(0.05, 3.35, 0.05, 0.62, haze[1]);
+  const mass = (x, y, z, r, col, seed) => {                                                                                // a rounded, irregular lump (an octahedron with every vertex pushed out by the hash, turned at random): no two lumps share a plane
+    const J = (i) => 0.78 + 0.44 * h3(seed, i, 61), ya = h3(seed, 7, 71) * Math.PI * 2, xt = (h3(seed, 8, 73) - 0.5) * 1.3, cy = Math.cos(ya), sy = Math.sin(ya), cx = Math.cos(xt), sx = Math.sin(xt);
+    const rot = (v) => { const y1 = v[1] * cx - v[2] * sx, z1 = v[1] * sx + v[2] * cx; return [x + v[0] * cy + z1 * sy, y + y1, z + z1 * cy - v[0] * sy]; };
+    const P = [[r * J(0), 0, 0], [-r * J(1), 0, 0], [0, r * 0.95 * J(2), 0], [0, -r * 0.9 * J(3), 0], [0, 0, r * J(4)], [0, 0, -r * J(5)]].map(rot);
+    const F = [[0, 2, 4], [4, 2, 1], [1, 2, 5], [5, 2, 0], [4, 3, 0], [1, 3, 4], [5, 3, 1], [0, 3, 5]];
+    for (const f of F) g.tri(P[f[0]], P[f[1]], P[f[2]], col);
+  };
+  const grey = ['#7b6f60', '#6f6454', '#857968', '#6b6656', '#776b5c'], bud = ['#8f9168', '#979a6c'];
+  tips.forEach((t, i) => mass(t[0] * 1.05, t[1] + 0.25, t[2] * 1.05, 1.15 + 0.1 * (i % 3), i === 2 || i === 5 ? bud[i % 2] : grey[i % grey.length], i + 1));
+  mass(0.1, 7.1, 0.0, 1.45, grey[2], 20); mass(-0.4, 5.6, 0.5, 1.3, grey[0], 21); mass(0.5, 5.4, -0.6, 1.25, bud[0], 22); mass(0.0, 6.3, -0.3, 1.3, grey[3], 23);
   return g.build();
+}
+
+/** the classical buildings of the yard into g: the walls on the real ring (outward quads, a darker foot, two rows of windows, a door on the longest edge), the hipped roofs of the wings. World coordinates (the caller does not place them). */
+export function yardHouseGeometry(g, y) {
+  const o = y.ring, n = o.length / 2;
+  const inside = (px, pz) => { let r = false; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) if ((o[i + 1] > pz) !== (o[j + 1] > pz) && px < (o[j] - o[i]) * (pz - o[i + 1]) / (o[j + 1] - o[i + 1]) + o[i]) r = !r; return r; };
+  const h = y.h, wc = y.wall, win = shade(y.win, 1);
+  let longest = 0, doorEdge = 0;
+  for (let i = 0; i < n; i++) { const j = (i + 1) % n, l = Math.hypot(o[2 * j] - o[2 * i], o[2 * j + 1] - o[2 * i + 1]); if (l > longest) { longest = l; doorEdge = i; } }
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, ax = o[2 * i], az = o[2 * i + 1], bx = o[2 * j], bz = o[2 * j + 1], dx = bx - ax, dz = bz - az, l = Math.hypot(dx, dz);
+    if (l < 0.2) continue;
+    let nx = dz / l, nz = -dx / l; if (inside((ax + bx) / 2 + nx * 0.4, (az + bz) / 2 + nz * 0.4)) { nx = -nx; nz = -nz; }          // the outward normal
+    const out = [nx, 0, nz], ux = dx / l, uz = dz / l;
+    const P = (t, yy, off = 0) => [ax + ux * t + nx * off, yy, az + uz * t + nz * off];
+    oq(g, P(0, 0), P(l, 0), P(l, h), P(0, h), out, wc);
+    oq(g, P(0.2, 0, 0.03), P(l - 0.2, 0, 0.03), P(l - 0.2, 0.9, 0.03), P(0.2, 0.9, 0.03), out, y.wallD);
+    if (l < 3.2) continue;
+    const nw = Math.max(1, Math.floor((l - 1.6) / 3.1)), pitch = (l - 1.6) / nw;
+    for (let k = 0; k < nw; k++) {
+      const t0 = 0.8 + k * pitch + pitch / 2 - 0.6;
+      for (const [y0, y1] of [[1.3, 3.2], [4.4, 6.3]]) if (y1 < h - 0.2) oq(g, P(t0, y0, 0.03), P(t0 + 1.2, y0, 0.03), P(t0 + 1.2, y1, 0.03), P(t0, y1, 0.03), out, win);
+    }
+    if (i === doorEdge) oq(g, P(l / 2 - 0.9, 0, 0.05), P(l / 2 + 0.9, 0, 0.05), P(l / 2 + 0.9, 2.5, 0.05), P(l / 2 - 0.9, 2.5, 0.05), out, '#5a4a3a');
+  }
+  // the hipped roofs (the overhang is 0.35 m; every wing is a rectangle, the ridge runs along its long side)
+  const ov = 0.35;
+  y.wings.forEach((w, k) => {
+    const sl = (y.slopes && y.slopes[k]) ?? y.slope, x0 = w[0] - ov, x1 = w[1] + ov, z0 = w[2] - ov, z1 = w[3] + ov, W = x1 - x0, D = z1 - z0, rise = Math.min(W, D) / 2 * sl, yb = h - ov * sl, yt = yb + rise + ov * sl;
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, half = Math.abs(W - D) / 2;
+    const A = [x0, yb, z0], B = [x1, yb, z0], C = [x1, yb, z1], Dd = [x0, yb, z1];
+    const r0 = W >= D ? [cx - half, yt, cz] : [cx, yt, cz - half], r1 = W >= D ? [cx + half, yt, cz] : [cx, yt, cz + half];
+    const up = (a, b, c2) => norm(cross(sub(b, a), sub(c2, a)))[1] >= 0;
+    const tri = (a, b, c2, col) => { if (up(a, b, c2)) g.tri(a, b, c2, col); else g.tri(a, c2, b, col); };
+    const qd = (a, b, c2, d, col) => { if (up(a, b, c2)) g.quad(a, b, c2, d, col); else g.quad(a, d, c2, b, col); };
+    if (W >= D) { qd(A, B, r1, r0, y.roof); qd(Dd, C, r1, r0, y.roofD); tri(A, Dd, r0, y.roofD); tri(B, C, r1, y.roof); }          // ridge along x: slopes north and south, hips at the x ends
+    else { qd(A, Dd, r1, r0, y.roof); qd(B, C, r1, r0, y.roofD); tri(A, B, r0, y.roof); tri(Dd, C, r1, y.roofD); }                    // ridge along z: slopes west and east, hips at the z ends
+  });
 }
 
 // ---------------------------------------------------------------------------------------------------------------- the build
@@ -388,13 +443,14 @@ export function buildNursery(ctx, parent, plan, noise, opts = {}) {
   if (plan.trees.length) {
     const tg = treeGeometry(), matT = T('#ffffff', { vertexColors: true, side: 'double', paint: 0.03, name: 'tauride-nursery-trees' });
     const im = new THREE.InstancedMesh(tg, matT, plan.trees.length), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), S = new THREE.Vector3(), C = new THREE.Color();
-    plan.trees.forEach((t, i) => { const s = t.h / 5.5; E.set(0, t.rot, 0); Q.setFromEuler(E); M.compose(V.set(t.x, 0, t.z), Q, S.set(s, s, s)); im.setMatrixAt(i, M); C.setRGB(t.tint, t.tint, t.tint); im.setColorAt(i, C); });
+    plan.trees.forEach((t, i) => { const s = t.h / 8, sw = s * (t.w || 1); E.set(0, t.rot, 0); Q.setFromEuler(E); M.compose(V.set(t.x, 0, t.z), Q, S.set(sw, s, sw)); im.setMatrixAt(i, M); C.setRGB(t.tint, t.tint, t.tint); im.setColorAt(i, C); });
     im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.frustumCulled = true;
     reg(im, 'tauride-nursery-trees', { noOutline: true });
   }
   // ---- 4. the buildings of the lot (two concrete boxes, the long annex) and the details (piles, crates): one mesh on the outline layer
   const bg = new GB();
   for (const b of plan.buildings) plainBuildingGeometry(bg, b);
+  for (const y of plan.yardHouses) yardHouseGeometry(bg, y);
   detailGeometry(bg, plan);
   reg(new THREE.Mesh(bg.build(), T('#ffffff', { vertexColors: true, paint: 0.04, name: 'tauride-nursery-buildings' })), 'tauride-nursery-buildings', { shadow: true });
   // ---- colliders: one box per house (not enterable), one per replaced building

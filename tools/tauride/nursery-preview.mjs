@@ -12,6 +12,7 @@ const OUT = path.resolve(String(args.out || 'D:/git2/n4spb-work/tauride/T8b/prev
 const VIEWS = {
   'user-pose': [1041.9, 40.7, -1670.1, 110.8, -28.6],                 // the user's screenshot pose (our scene before the fix: D:/git2/n4spb-work/tauride/user/user-lot-ours-1041.9_-1670.1.png)
   'airphoto-pose': [1180.2, 118.7, -1667.6, -275.2, -39.4],        // the air photo's pose (D:/git2/n4spb-work/tauride/user/user-lot-real-airphoto.png)
+  'user-shot-9': [1362, 174.9, -1540.7, -556.6, -46.1],            // FIX ROUND 1: a second shot the user named (Image #9; the image itself did not reach the fix round: the pose is kept as given)
   'aerial-top': [1040, 300, -1700, 0, -89],
   'aerial-sw': [980, 90, -1590, -35, -32], 'aerial-ne': [1120, 80, -1790, 150, -30],
   'house-near': [1001, 3.2, -1645, -60, -4], 'house-inside': [1012, 1.7, -1639.5, -90, 2], 'lane-trees': [1012, 1.7, -1631.25, -90, 3], 'crossing': [1082, 1.7, -1669, -90, 2], 'house-top': [1040, 20, -1632, 0, -70],

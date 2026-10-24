@@ -23,7 +23,27 @@ export const YARD_RING = [938.6, -1741.2, 994.6, -1739.4, 993.5, -1706.2, 1005.0
 export const SHEDS = [
   { id: 'w1457964048', kind: 'box', o: [1103.2, -1699.6, 1102.7, -1682.4, 1084.6, -1682.9, 1085.1, -1700.1], h: 4.4, wall: '#c3beb0', roof: '#8d877a', roofD: '#6d685e', note: 'the box between the two cross glasshouses: a flat grey-brown roof with debris' },
   { id: 'w1457964049', kind: 'box', o: [1100.8, -1617.1, 1100.3, -1601.2, 1082.1, -1601.7, 1082.5, -1617.6], h: 4.8, wall: '#bdb7a8', roof: '#5f5b54', roofD: '#47443f', note: 'the box at the south-east corner: a dark flat roof, a lift-shaft stub on it' },
+  // FIX ROUND 1 (the yard at the west end, the photo's left part): the three buildings along the yard's south side. OSM gives no height; the generic city drew each as a 4-storey yellow block. The grey flat box of the photo = the office w30324512
+  // (37 x 12 m, one storey, a flat dark-grey roof), the brown-roofed barn = the garage w239884014 (10 x 24 m, a low gable roof of brown tiles), the little yellow cube between the blocks = w259579860 (7 x 6 m, a utility box).
+  { id: 'w30324512', kind: 'box', o: [983.6, -1608.8, 946.5, -1608.8, 946.5, -1620.6, 983.6, -1620.6], h: 5.0, wall: '#b3b3ac', roof: '#6b6f72', roofD: '#55595c', note: 'the grey flat box of the photo: one storey, a flat dark-grey roof' },
+  { id: 'w239884014', kind: 'long', noWin: true, o: [946.5, -1644.1, 956.5, -1644, 956.4, -1620.8, 946.5, -1620.8], h: 3.4, ridge: 2.0, wall: '#b9a98f', roof: '#8a5a40', roofD: '#704633', band: '#5f666c', note: 'the brown-roofed barn of the photo: a low gable of brown tiles' },
+  { id: 'w259579860', kind: 'box', noWin: true, o: [985.2, -1639.7, 984.9, -1633.1, 977.7, -1633.4, 977.9, -1640], h: 3.0, wall: '#bdb8a8', roof: '#77797a', roofD: '#5c5e5f', note: 'the utility box between the yard buildings' },
   { id: 'w30324513', kind: 'long', o: [1104, -1778.8, 986.1, -1781.9, 986.2, -1786.6, 982.9, -1786.6, 982.8, -1796.5, 1104.3, -1793], h: 5.4, ridge: 2.1, wall: '#d6d2c4', roof: '#a9aeb1', roofD: '#8e9498', band: '#5f666c', note: 'the long annex along the north edge: plain walls, a low grey roof' },
+];
+
+/** FIX ROUND 1: the classical buildings of the fenced yard (the photo: low two-storey blocks with blue-green hipped roofs round a courtyard; the generic city drew them as 4-storey yellow blocks). Each is the REAL OSM ring (walls, windows)
+ *  with a hipped roof built from `wings` (axis-aligned rectangles [x0, x1, z0, z1] that tile the ring; a wing's roof runs to the centre line of the wing it joins: the roofs meet in valleys). h = the eave height, slope = rise / run of a roof,
+ *  `slopes` overrides it per wing (the porch and the bay are low). Colliders: one box per wing. */
+export const YARD_HOUSES = [
+  { id: 'w23002928', name: 'north U-block', h: 7.4, slope: 0.46, wall: '#d4d1c1', wallD: '#a8a495', roof: '#7ea39b', roofD: '#678780', win: '#53697c',
+    ring: [946, -1713.5, 946.3, -1731.1, 988.8, -1730.3, 988.5, -1712.4, 979.9, -1712.6, 980, -1721.1, 954.2, -1721.7, 954, -1713.4],
+    wings: [[946.2, 988.7, -1731.1, -1721.4], [946, 954.1, -1726.2, -1713.4], [980, 988.6, -1726.2, -1712.4]] },
+  { id: 'w23002936', name: 'south U-block', h: 7.4, slope: 0.46, wall: '#d6d3c3', wallD: '#aaa697', roof: '#7ba099', roofD: '#648580', win: '#53697c',
+    ring: [943.7, -1656, 943.9, -1673.2, 951.4, -1673.1, 951.3, -1663.3, 977.3, -1663, 977.5, -1672.4, 986.2, -1672.2, 986, -1655.4],
+    wings: [[943.7, 986.1, -1663.2, -1655.7], [943.8, 951.4, -1673.1, -1659.4], [977.4, 986.2, -1672.3, -1659.4]] },
+  { id: 'w23002941', name: 'the pavilion', h: 6.6, slope: 0.4, wall: '#dedacb', wallD: '#b1ad9f', roof: '#8dada5', roofD: '#718f88', win: '#53697c',
+    ring: [971, -1682.9, 971.1, -1687.2, 968.2, -1687.2, 968.4, -1697.8, 971.1, -1697.7, 971.2, -1704.3, 986.9, -1704.1, 986.8, -1697.1, 989.8, -1695.7, 991.1, -1693, 990.6, -1690, 988.6, -1688.5, 986.5, -1687.9, 986.4, -1682.6],
+    wings: [[971.1, 986.8, -1704.3, -1682.7], [968.2, 971.2, -1697.8, -1687.2], [986.4, 991.1, -1697.1, -1687.9]], slopes: [0.4, 0.2, 0.3] },
 ];
 
 /** the glasshouses (DESIGN, from the air photo): c = centre [x, z], len along the long axis, wid across, axis 'x' (east-west) or 'z' (north-south), pIntact = the share of panes that still exist, seed = hash seed.
@@ -66,18 +86,29 @@ export const TRACKS = [
   { id: 'yard-link', w: 3.0, pts: [996.0, -1693.5, 1009.0, -1693.5] },
 ];
 
-/** the rows of young trees (bare, 4 .. 7 m): along a row `from` -> `to` every `step` m, jittered by the hash; the rows keep off the houses (the gaps are 8 m wide, a crown is 1.6 m) */
+/** the rows of trees (bare, 6 .. 11 m, a dense grey-brown crown: the photo shows big leafless trees filling the gaps between the houses, standing INSIDE the houses and ringing the lot): along a row `from` -> `to` every `step` m,
+ *  jittered by the hash; `h: [lo, hi]` overrides the heights of a row, `inside: <house id>` lets a row stand in that house (the other houses, the buildings, the tracks stay clear). */
 export const TREE_ROWS = [
-  { id: 'gap-S12', from: [1016, -1631.25], to: [1066, -1631.25], step: 3.4 },
-  { id: 'gap-S23', from: [1016, -1647.75], to: [1062, -1647.75], step: 3.4 },
-  { id: 'gap-N12', from: [1016, -1711.25], to: [1057, -1711.25], step: 3.4 },
-  { id: 'gap-N23', from: [1016, -1727.75], to: [1066, -1727.75], step: 3.4 },
-  { id: 'edge-mid-w', from: [1073.5, -1752], to: [1073.5, -1616], step: 6.2 },
-  { id: 'edge-mid-e', from: [1081.5, -1752], to: [1081.5, -1616], step: 6.2 },
-  { id: 'edge-north', from: [1015, -1754], to: [1075, -1754], step: 5.0 },
-  { id: 'orchard', from: [1015, -1763], to: [1075, -1763], step: 5.0 },
+  { id: 'gap-S12', from: [1014, -1631.25], to: [1068, -1631.25], step: 3.7 },
+  { id: 'gap-S23', from: [1014, -1647.75], to: [1066, -1647.75], step: 3.7 },
+  { id: 'gap-N12', from: [1014, -1711.25], to: [1062, -1711.25], step: 3.7 },
+  { id: 'gap-N23', from: [1014, -1727.75], to: [1068, -1727.75], step: 3.7 },
+  { id: 'edge-mid-w', from: [1073.5, -1752], to: [1073.5, -1616], step: 4.6 },
+  { id: 'edge-mid-e', from: [1081.5, -1752], to: [1081.5, -1616], step: 4.6 },
+  { id: 'edge-north', from: [1015, -1754], to: [1075, -1754], step: 4.0 },
+  { id: 'orchard', from: [1015, -1763], to: [1075, -1763], step: 4.2 },
+  { id: 'edge-south', from: [1016, -1607.5], to: [1074, -1607.5], step: 5.2 },
+  // in the houses: along the axis, a little off it, lower than the outside trees (the crowns stand out of the lattice roof)
+  { id: 'in-S1', inside: 'gh-S1', from: [1017, -1623.2], to: [1064, -1623.2], step: 5.4, h: [5.8, 8.4] },
+  { id: 'in-S2', inside: 'gh-S2', from: [1017, -1639.8], to: [1064, -1639.8], step: 5.6, h: [5.8, 8.4] },
+  { id: 'in-S3', inside: 'gh-S3', from: [1016, -1656.2], to: [1060, -1656.2], step: 5.4, h: [5.8, 8.4] },
+  { id: 'in-N1', inside: 'gh-N1', from: [1016, -1703.2], to: [1055, -1703.2], step: 5.6, h: [5.8, 8.4] },
+  { id: 'in-N2', inside: 'gh-N2', from: [1015, -1719.6], to: [1063, -1719.6], step: 5.4, h: [5.8, 8.4] },
+  { id: 'in-N3', inside: 'gh-N3', from: [1015, -1736.2], to: [1066, -1736.2], step: 5.6, h: [5.8, 8.4] },
+  { id: 'in-C1', inside: 'gh-C1', from: [1092.2, -1675.5], to: [1092.2, -1625], step: 6.4, h: [5.8, 8.4] },
+  { id: 'in-C2', inside: 'gh-C2', from: [1092.2, -1762], to: [1092.2, -1707], step: 6.4, h: [5.8, 8.4] },
 ];
-export const TREE = Object.freeze({ h0: 5.0, h1: 7.8, crown: 1.9, trunk: 0.09, jitter: 0.5, max: 150 });
+export const TREE = Object.freeze({ h0: 7.0, h1: 11.0, crown: 2.6, trunk: 0.14, jitter: 0.9, max: 260, wide: [0.9, 1.25] });
 
 /** a pile of earth, a stack of crates (cheap details of the photo) */
 export const PILES = [
@@ -106,4 +137,4 @@ export const LOT_BOX = Object.freeze(BOX);
 /** true inside the lot (box first, then the ring); the hooks of the North use it for trees, tufts and props */
 export function inNursery(x, z) { return x >= BOX[0] && x <= BOX[1] && z >= BOX[2] && z <= BOX[3] && ringHas(LOT_RING, x, z); }
 /** the ids the module claims (groups.js `tauride-nursery`) */
-export const CLAIMED_IDS = Object.freeze(SHEDS.map((s) => s.id));
+export const CLAIMED_IDS = Object.freeze([...SHEDS.map((s) => s.id), ...YARD_HOUSES.map((y) => y.id)]);

@@ -334,8 +334,8 @@
     "[hashed]": true,
     "kind": "object",
     "n": 8,
-    "bytes": 11297,
-    "hash": "c9f486f3bf677a4b"
+    "bytes": 11371,
+    "hash": "8918915fa94d5ad1"
    },
    "HERO": {
     "pitch": 10,
@@ -425,8 +425,8 @@
     "[hashed]": true,
     "kind": "object",
     "n": 17,
-    "bytes": 11950,
-    "hash": "b5d3ad96faf5a7c5"
+    "bytes": 12024,
+    "hash": "4bc6c847cd339839"
    },
    "SUN_DIR": [
     -0.473,
@@ -2945,7 +2945,7 @@
     "paradny-quarter": 11,
     "simeon-anna": 2,
     "tauride-garden": 1,
-    "tauride-nursery": 3,
+    "tauride-nursery": 9,
     "tauride-palace": 1
    },
    "osm": {
@@ -3082,9 +3082,9 @@
      "z1": -1750.9
     },
     "tauride-nursery": {
-     "cx": 1043.55,
+     "cx": 1024,
      "cz": -1698.85,
-     "x0": 982.8,
+     "x0": 943.7,
      "x1": 1104.3,
      "z0": -1796.5,
      "z1": -1601.2
@@ -3110,8 +3110,8 @@
    ]
   },
   "claims": {
-   "n": 575,
-   "hash": "211b3bee9587a5bc"
+   "n": 581,
+   "hash": "bc0c14c683b40ce8"
   },
   "buildings": {
    "n": 2016,
