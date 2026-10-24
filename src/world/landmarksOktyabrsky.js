@@ -23,7 +23,7 @@ import { Parts } from './landmarksOktyabrsky/kit.js';
 import { makeMats, addMonumentMats } from './landmarksOktyabrsky/mats.js';
 import { GROUPS_LIST } from './landmarksOktyabrsky/groups.js';
 import { PRUNE_SERVICES } from './lib/area-tables.js';               // the area's table of the services whose door points are read (docs/AREAS.md section 3): the engine never reads area.js directly
-import { doorPoints } from './landmarksNorthFull/doors.js';
+import { doorPoints } from './lib/door-points.js';
 
 const PARTS = [
   ['hall', 'oktyabrsky-hall', () => import('./landmarksOktyabrsky/hall.js')],
@@ -56,7 +56,7 @@ export async function build(ctx) {
     svc.triangles += tris; svc.parts[name] = { tris, ms: Math.round(performance.now() - t1) };
   }
   ctx.addStatic(root);
-  // M7 (docs/AREAS.md 8.7): where the area lists this module in PRUNE_SERVICES (the North does, the strip does not) the hall publishes the door points of its claimed outline (landmarksNorthFull/doors.js:
+  // M7 (docs/AREAS.md 8.7): where the area lists this module in PRUNE_SERVICES (the North does, the strip does not) the hall publishes the door points of its claimed outline (lib/door-points.js:
   // the mapped OSM entrance nodes of w30324279, 0.6 m out, as city/shops.js would) for the door clearings and the services census; elsewhere it keeps the empty list it always published (the strip's
   // services, check counts and bake must not move). The gate is the area's TABLE, read through lib/area-tables.js like every other engine module (no module reads area.js directly).
   if (PRUNE_SERVICES.includes('landmarksOktyabrsky') && claimed.has('oktyabrsky-hall')) svc.entrances.push(...doorPoints(L.groupMembers('oktyabrsky-hall')));

@@ -5,14 +5,19 @@
 //     InstancedMesh, or an object); the knock stats agree with the list
 //   2 landmarksNorthFull registers exactly the PIERS bollards and SPANS chains of landmarksNorthFull/fence.js: each pier owns a box collider 2.34 m high, each span a thin `fence` box; a pier hit at
 //     40 km/h breaks off and takes the spans next to it (the onKnock of the fence); a span hit by itself topples and leaves a low rest box
+//   2b landmarksKirochnaya registers exactly its campus benches (landscape.js BENCHES: 5 placements, 4 drawn - the one at (1258, -1130) lies inside a mapped building and is skipped, as in the source): kind bench, a box collider 2.1 x 0.64 m, 1.1 m high, two mesh parts (iron ends,
+//     green slats), none on a carriageway of streets; a bench hit at 25 km/h is knocked and leaves a low rest box
 //   3 the strip's furniture modules register in the North too: streets (bollards, chains, lamps, signals ...), props (benches, bins ...), landmarksOktyabrsky (26 records as in the strip: 4 lamps,
 //     20 bollards, 2 city lights)
 //   4 services census: entrances / monuments / photoSpots per landmark module and in the shared ctx.services.landmarks (the Smolny photo spot is merged there; landmarksNorthFull and
 //     landmarksOktyabrsky publish door points; the vestibule's door points and their distance to the G3 door (461.05, -1350.15) are printed; PRUNE_SERVICES of the area is printed)
 //   5 the Kirochnaya gate stubs: no vertex of the lmK-asphalt mesh of landmarksKirochnaya lies on a non-campus carriageway of the data (L.roadsNear) nor on the asphalt streets draws (net.cover with
 //     the two campus ways nearest to the vertex skipped: the stubs ran to Kirochnaya's centreline before M7); the clearance of the stub ends to the drawn kerb is printed
-//   6 mutant: the test spawns itself with --mutant (landmarksNorthFull built with a ctx.knock.register that registers nothing); the child must be RED, so a fence that silently stops registering
-//     cannot pass. With --mutant only landmarksNorthFull is built and only check 2 runs.
+//   5b BOTH gate stubs (w515895295 west, w515895296 east) by their geometry against the triangles of the streets asphalt (the mesh pt-asphalt): each stub has asphalt (4 m or more long along its axis,
+//     a vertex count), no stub vertex lies inside a pt-asphalt triangle, and the nearest stub vertex is 0.05 .. 0.45 m from the drawn asphalt (the stub reaches the kerb line; the margin of M7 was 0.94 / 1.03 m);
+//     negative control: the unclipped ends of the two ways (the data points on Kirochnaya's centreline) DO lie inside the road mesh, so the predicate can see a poke
+//   6 mutants: the test spawns itself with --mutant (landmarksNorthFull built with a ctx.knock.register that registers nothing) and --mutant-bench (the same for landmarksKirochnaya); each child must be
+//     RED in its own check (2 / 2b), so a fence or a bench set that silently stops registering cannot pass. With --mutant only landmarksNorthFull and landmarksKirochnaya are built and only checks 2 and 2b run.
 // Exit code 1 when a check fails.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -21,7 +26,7 @@ import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const url = (p) => pathToFileURL(path.join(root, p)).href;
-const verbose = process.argv.includes('--verbose'), MUTANT = process.argv.includes('--mutant');
+const verbose = process.argv.includes('--verbose'), MUTANT_FENCE = process.argv.includes('--mutant'), MUTANT_BENCH = process.argv.includes('--mutant-bench'), MUTANT = MUTANT_FENCE || MUTANT_BENCH;
 const AREA = process.env.AREA || 'strip';
 if (AREA === 'strip') { console.log('north-knock-test: run it as the North: node tools/area.mjs north tools/north-knock-test.mjs'); process.exit(2); }
 
@@ -49,10 +54,12 @@ const L = await import(url('src/world/layout.js'));
 const { mainModules, DYNAMIC } = await import(url('tools/modules-list.mjs'));
 const { PIERS, SPANS } = await import(url('src/world/landmarksNorthFull/fence.js'));
 const { CAMPUS_ROADS } = await import(url('src/world/landmarksKirochnaya/groups.js'));
+const { BENCHES: BENCH_SPOTS, BENCH_W, BENCH_D, BENCH_H } = await import(url('src/world/landmarksKirochnaya/landscape.js'));
+const BENCHES = BENCH_SPOTS.filter(([x, z]) => !L.insideBuilding(x, z, 1.5));           // the placements the module draws: the one at (1258, -1130) lies inside a mapped building and is skipped, as in the source
 const { PRUNE_SERVICES } = await import(url('src/world/lib/area-tables.js'));
 
 const PAGE = mainModules().filter((m) => !DYNAMIC.includes(m));
-const MODULES = MUTANT ? ['landmarksNorthFull'] : PAGE;
+const MODULES = MUTANT ? ['landmarksNorthFull', 'landmarksKirochnaya'] : PAGE;
 const G3 = [461.05, -1350.15];
 let checks = 0, failed = 0;
 const check = (name, fn) => { try { fn(); checks++; console.log('PASS', name); } catch (e) { failed++; console.log('FAIL', name + ':', e && e.message ? e.message.split('\n')[0] : e); if (verbose && e && e.stack) console.log(e.stack); } };
@@ -70,7 +77,7 @@ const t0 = Date.now();
 for (const m of MODULES) {
   const from = ctx.knock.list.length, t1 = Date.now();
   const realRegister = ctx.knock.register;
-  if (MUTANT && m === 'landmarksNorthFull') ctx.knock.register = () => null;            // the mutant: the fence registers nothing
+  if ((MUTANT_FENCE && m === 'landmarksNorthFull') || (MUTANT_BENCH && m === 'landmarksKirochnaya')) ctx.knock.register = () => null;     // the mutants: the fence / the benches register nothing
   try { const mod = await import(url(`src/world/${m}.js`)); await mod.build(ctx); }
   catch (e) { console.log(`module ${m} failed to build: ${e && e.stack}`); process.exit(1); }
   ctx.knock.register = realRegister;
@@ -130,6 +137,32 @@ check(`2 landmarksNorthFull: ${PIERS} knockable piers (bollard, box 2.34 m) + ${
   assert.equal(ctx.physics.items.length, col0, 'every knocked collider was replaced by exactly one rest box');
   console.log(`     ${piers.length} piers, ${spans.length} spans; pier (${pier.x.toFixed(1)}, ${pier.z.toFixed(1)}) knocked with ${mine.length} spans; span (${span.x.toFixed(1)}, ${span.z.toFixed(1)}) toppled`);
 });
+
+// ---------------------------------------------------------------- 2b the Kirochnaya campus benches
+check(`2b landmarksKirochnaya: ${BENCHES.length} knockable campus benches (of ${BENCH_SPOTS.length} placements; bench, box ${BENCH_W} x ${BENCH_D} m, ${BENCH_H} m high), none on a carriageway; a hit bench is knocked and leaves a low rest box`, () => {
+  const c = census.landmarksKirochnaya; assert(c, 'landmarksKirochnaya was built');
+  const benches = c.records.filter((r) => r.kind === 'bench');
+  assert.equal(benches.length, BENCHES.length, `benches ${benches.length}`); assert.equal(c.n, BENCHES.length, `the module registers nothing else (${c.n})`);
+  for (const [x, z, rot] of BENCHES) {
+    const b = benches.find((r) => hyp(r.x - x, r.z - z) < 0.01); assert(b, `the bench at (${x}, ${z}) is a record`);
+    assert(Math.abs(b.rotY - rot) < 1e-6, `bench rotY ${b.rotY} (${rot})`);
+    assert.equal(b.items.length, 1); const it = b.items[0];
+    assert(it.type === 'box' && Math.abs(it.hw * 2 - BENCH_W) < 1e-6 && Math.abs(it.hd * 2 - BENCH_D) < 1e-6 && Math.abs(it.y1 - BENCH_H) < 1e-6 && it.y0 === 0, `bench collider: ${it.type} ${it.hw * 2} x ${it.hd * 2}, y ${it.y0}..${it.y1}`);
+    assert.equal(b.parts.length, 2, 'iron ends + green slats'); assert(b.parts.every((p) => p.mesh && p.mesh.isInstancedMesh), 'instances of the part meshes');
+  }
+  if (MUTANT) return;
+  const net = ctx.services.streets && ctx.services.streets.net; assert(net, 'the streets net');
+  for (const b of benches) assert(net.cover(b.x, b.z, {}) < -1, `the bench at (${b.x}, ${b.z}) stands ${(-net.cover(b.x, b.z, {})).toFixed(1)} m off the asphalt`);
+  const b = benches.find((q) => hyp(q.x - 1304, q.z + 1136) < 0.01), col0 = ctx.physics.items.length;     // the one with the turned frame (-0.65 rad)
+  ctx.knock.hit(b.x, b.z, 25, 1, 0, 'bench');
+  assert.notEqual(b.state, 'stand', `the bench was knocked (${b.state})`);
+  idle(8);
+  assert.equal(b.state, 'rest', `the bench came to rest (${b.state})`);
+  assert(b.items.length === 1 && b.items[0].y1 <= 0.5, `a low rest box replaced the bench collider (top ${b.items[0] && b.items[0].y1})`);
+  assert(benches.filter((q) => q !== b).every((q) => q.state === 'stand'), 'the other benches stand');
+  assert.equal(ctx.physics.items.length, col0, 'the knocked collider was replaced by exactly one rest box');
+  console.log(`     ${benches.length} benches ${benches.map((q) => `(${q.x}, ${q.z})`).join(' ')}; the bench (${b.x}, ${b.z}) knocked at 25 km/h`);
+});
 if (MUTANT) { console.log(failed ? 'MUTANT RED (as it must be)' : 'MUTANT GREEN (the census did not catch the missing registrations)'); process.exit(failed ? 1 : 0); }
 
 // ---------------------------------------------------------------- 3 the strip's furniture in the North
@@ -139,7 +172,8 @@ check('3 the strip\'s furniture modules register in the North: streets, props, l
   assert(census.props && census.props.n > 100 && census.props.byKind.bench > 0, `props ${census.props && JSON.stringify(census.props.byKind)}`);
   // the bollards of the plaza are tested against the asphalt of the page's streets (plaza.js ok()): 20 in the strip, 17 in the North since T1 moved its streets (the M5 figure of docs/AREAS.md 8.7 is older)
   const ok = census.landmarksOktyabrsky.byKind; assert(ok.lamp === 4 && ok.citylight === 2 && ok.bollard >= 15 && ok.bollard <= 20, `landmarksOktyabrsky ${JSON.stringify(ok)}`);
-  for (const m of ['landmarksSmolny', 'landmarksSuvorov', 'landmarksKirochnaya', 'landmarksD']) if (census[m]) console.log(`     ${m}: ${census[m].n} records (nothing knockable is drawn there: no benches / bollards / chains of their own except the 5 campus benches of landmarksKirochnaya/landscape.js, see docs/AREAS.md section 10)`);
+  for (const m of ['landmarksSmolny', 'landmarksSuvorov', 'landmarksD']) if (census[m]) console.log(`     ${m}: ${census[m].n} records ${JSON.stringify(census[m].byKind)}`);
+  console.log(`     landmarksKirochnaya: ${census.landmarksKirochnaya.n} records ${JSON.stringify(census.landmarksKirochnaya.byKind)} (the campus benches, check 2b)`);
 });
 
 // ---------------------------------------------------------------- 4 the services census
@@ -192,12 +226,55 @@ check('5 Kirochnaya: no vertex of the campus asphalt lies on a non-campus carria
   console.log(`     ${verts} vertices, none on a carriageway (${inFillet} inside a junction fillet of a stub's own mouth); the stubs ${stubs.join(', ')}: the vertex nearest to Kirochnaya's asphalt is ${(-worst).toFixed(2)} m off its edge at (${worstAt && worstAt.map((v) => v.toFixed(1)).join(', ')}); ${ends.length} vertices south of z -1236`);
 });
 
-// ---------------------------------------------------------------- 6 the mutant
-check('6 mutant: the fence that registers nothing is caught (the child run with --mutant exits 1)', () => {
-  const r = spawnSync(process.execPath, [path.join(root, 'tools/area.mjs'), AREA, fileURLToPath(import.meta.url), '--mutant'], { encoding: 'utf8', env: { ...process.env }, maxBuffer: 64 << 20 });
+// ---------------------------------------------------------------- 5b both gate stubs by their geometry
+check('5b Kirochnaya: both gate stubs (w515895295 west, w515895296 east) have asphalt, none of it inside a triangle of the streets asphalt, and end 0.05 .. 0.45 m from it', () => {
+  const tris = [], stub = [];
+  scene.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  scene.traverse((o) => {
+    if (!o.isMesh || !o.material) return;
+    const nm = o.material.name; if (nm !== 'pt-asphalt' && nm !== 'lmK-asphalt') return;
+    const p = o.geometry.attributes.position, idx = o.geometry.index, get = (i) => { v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); return [v.x, v.z]; };
+    if (nm === 'lmK-asphalt') { for (let i = 0; i < p.count; i++) stub.push(get(i)); return; }
+    const n = idx ? idx.count : p.count;
+    for (let i = 0; i < n; i += 3) { const t = idx ? [idx.getX(i), idx.getX(i + 1), idx.getX(i + 2)] : [i, i + 1, i + 2]; tris.push(t.map(get)); }
+  });
+  assert(tris.length > 0 && stub.length > 0, `meshes: ${tris.length} pt-asphalt triangles, ${stub.length} stub vertices`);
+  const sideOf = (px, pz, a, b) => (px - b[0]) * (a[1] - b[1]) - (a[0] - b[0]) * (pz - b[1]);
+  const inTri = (px, pz, T) => { const d1 = sideOf(px, pz, T[0], T[1]), d2 = sideOf(px, pz, T[1], T[2]), d3 = sideOf(px, pz, T[2], T[0]); return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0)); };
+  const segDist = (px, pz, a, b) => { const dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (pz - a[1]) * dz) / l2)); return Math.hypot(px - a[0] - dx * t, pz - a[1] - dz * t); };
+  const near = (px, pz) => tris.filter((T) => T.some((q) => Math.hypot(q[0] - px, q[1] - pz) < 30));
+  /** [inside, gap]: 1 when (px, pz) lies strictly inside a triangle (a point on a vertex or an edge is outside), gap = distance to the nearest triangle edge of the triangles it is outside of */
+  const probe = (px, pz) => { let inside = 0, gap = 1e9; for (const T of near(px, pz)) { if (inTri(px, pz, T) && !T.some((q) => Math.hypot(q[0] - px, q[1] - pz) < 1e-6)) inside = 1; else for (let k = 0; k < 3; k++) gap = Math.min(gap, segDist(px, pz, T[k], T[(k + 1) % 3])); } return [inside, gap]; };
+  const rows = [];
+  for (const [id, side] of [['w515895295', 'west'], ['w515895296', 'east']]) {
+    const r = CAMPUS_ROADS.find((q) => q.id === id); assert(r, `${id} is a campus way`);
+    const gx = r.pts[0], gz = r.pts[1];                                                  // the outer end of the stub: on Kirochnaya's centreline
+    const mine = stub.filter(([x, z]) => Math.abs(x - gx) < 3.2 && z < -1236);
+    assert(mine.length >= 8, `${side} stub (${id}): ${mine.length} asphalt vertices`);
+    const zs = mine.map((q) => q[1]), length = Math.max(...zs) - Math.min(...zs);
+    assert(length >= 4, `${side} stub (${id}): asphalt only ${length.toFixed(2)} m long along its axis`);
+    let inside = 0, gap = 1e9;
+    for (const [x, z] of mine) { const [i, g] = probe(x, z); inside += i; gap = Math.min(gap, g); }
+    assert.equal(inside, 0, `${side} stub (${id}): ${inside} of ${mine.length} asphalt vertices lie inside the streets asphalt`);
+    assert(gap >= 0.05 && gap <= 0.45, `${side} stub (${id}): the asphalt ends ${gap.toFixed(3)} m from the streets asphalt (0.05 .. 0.45)`);
+    // negative control: the unclipped ends (the two corners of the stub at the data point on Kirochnaya's centreline) lie inside the road mesh
+    const nx = (r.pts[3] - gz), nz = -(r.pts[2] - gx), nl = Math.hypot(nx, nz), w2 = (r.w || 4) / 2;
+    const poked = [-1, 1].filter((s) => probe(gx + nx / nl * s * w2, gz + nz / nl * s * w2)[0] === 1).length;
+    assert.equal(poked, 2, `${side} stub (${id}): the predicate sees the unclipped corners inside the road mesh (${poked} of 2)`);
+    rows.push(`${side} ${id}: ${mine.length} vertices, ${length.toFixed(2)} m long, nearest ${gap.toFixed(3)} m from the streets asphalt, 0 inside; unclipped corners inside: ${poked}/2`);
+  }
+  for (const r of rows) console.log('     ' + r);
+});
+
+// ---------------------------------------------------------------- 6 the mutants
+for (const [flag, label, red] of [['--mutant', 'the fence that registers nothing', /^FAIL 2 /m], ['--mutant-bench', 'the campus benches that register nothing', /^FAIL 2b /m]]) check(`6 mutant: ${label} is caught (the child run with ${flag} exits 1, red in its own check)`, () => {
+  const r = spawnSync(process.execPath, [path.join(root, 'tools/area.mjs'), AREA, fileURLToPath(import.meta.url), flag], { encoding: 'utf8', env: { ...process.env }, maxBuffer: 64 << 20 });
   const out = (r.stdout || '') + (r.stderr || '');
   assert.equal(r.status, 1, `the mutant child exited ${r.status}: ${out.split('\n').filter((l) => /FAIL|MUTANT/.test(l)).slice(0, 3).join(' | ')}`);
   assert(/MUTANT RED/.test(out), 'the child reported the red census');
+  assert(red.test(out), `the child is red in the expected check ${red}`);
+  assert.equal(out.split('\n').filter((l) => /^FAIL/.test(l)).length, 1, 'and in that check only');
   console.log('     ' + out.split('\n').filter((l) => /^FAIL/.test(l)).slice(0, 2).join(' | '));
 });
 
