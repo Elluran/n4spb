@@ -171,7 +171,7 @@ const lineQuad = (g, p, q, w, y, col) => {
 const taper = (g, cx, cz, yaw, y0, y1, w0, d0, w1, d1, col, top = true) => {
   g.at(cx, 0, cz, yaw);
   const a = [[-w0 / 2, y0, d0 / 2], [w0 / 2, y0, d0 / 2], [w0 / 2, y0, -d0 / 2], [-w0 / 2, y0, -d0 / 2]], b = [[-w1 / 2, y1, d1 / 2], [w1 / 2, y1, d1 / 2], [w1 / 2, y1, -d1 / 2], [-w1 / 2, y1, -d1 / 2]];
-  for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; g.quad(a[j], a[i], b[i], b[j], col); }
+  for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; g.quad(a[i], a[j], b[j], b[i], col); }
   if (top) g.quad(b[0], b[1], b[2], b[3], col);
   g.at();
 };
