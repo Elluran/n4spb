@@ -275,6 +275,28 @@ if (STRIP) {
   if (sh) for (const b of svc.birds) { if (b.dead) continue; sh.getMatrixAt(b.shSlot, m4); v.setFromMatrixPosition(m4); const s = m4.elements[0]; if (Math.abs(s) > 1e-6 && L.inRiver(v.x, v.z)) over++; }
   check(over === 0, 'no bird shadow hangs over the river (' + over + ')');
 }
+// ---------------------------------------------------------------- 9. the garden's own trees (T7: wildlife/world.js names landmarksTauride in its garden tree-list line and feeds its trunk grid)
+if (!STRIP && ctx.services.landmarksTauride && Array.isArray(ctx.services.landmarksTauride.treeList)) {
+  const GT = ctx.services.landmarksTauride.treeList, tall = GT.filter((t) => !t.shrub && t.h >= 9);
+  const gp = svc.perches.filter((p) => p.kind === 'tree' && GT.includes(p.tree));
+  console.log(`garden trees: ${GT.length} listed, ${tall.length} tall, ${gp.length} crown perches (highest ${Math.max(...gp.map((p) => p.y)).toFixed(1)} m)`);
+  check(gp.length >= 30, 'crows can perch on the garden trees (' + gp.length + ' crown perches)');
+  check(gp.every((p) => Math.abs(p.y - ((p.tree.y || 0) + p.tree.h - 0.6)) < 1e-9), 'a crown perch sits 0.6 m under the top of its crown above the terrain under the trunk (the hills lift it)');
+  check(gp.some((p) => p.tree.y > 1), 'some crown perches stand on the hills (terrain under the trunk > 1 m)');
+  let inside = 0, tn = 0; for (const t of GT) { if (t.shrub) continue; tn++; if (W.inTree(t.x, t.z, 0)) inside++; }
+  check(tn > 100 && inside === tn, 'the trunk grid holds every trunk of the garden: a ground bird is refused on it (' + inside + '/' + tn + ')');
+  const spots = tall.filter((t, i) => i % 7 === 0).slice(0, 60); let treesSeen = 0; for (const t of spots) { let f = false; W.treesNear(t.x, t.z, 1, (q) => { if (q === t) f = true; }); if (f) treesSeen++; }
+  check(treesSeen === spots.length, 'treesNear finds the garden trees (the sparrow shelter): ' + treesSeen + '/' + spots.length);
+  // MUTANT: the same world without the garden's list (= the module absent from the tree-list line) must fail all of the above
+  {
+    const { makeWorld } = await import(pathToFileURL(path.join(root, 'src/world/wildlife/world.js')).href);
+    const saved = ctx.services.landmarksTauride; ctx.services.landmarksTauride = { ...saved, treeList: undefined };
+    let W2; try { W2 = makeWorld(ctx); } finally { ctx.services.landmarksTauride = saved; }
+    const gp2 = W2.perches.filter((p) => p.kind === 'tree' && GT.includes(p.tree));
+    let in2 = 0; for (const t of GT) if (!t.shrub && W2.inTree(t.x, t.z, 0)) in2++;
+    check(gp2.length === 0 && in2 < tn * 0.2, 'MUTANT (the garden list left out): no crown perch and (almost) no trunk in the grid (' + gp2.length + ' perches, ' + in2 + ' of ' + tn + ' trunks)');
+  }
+}
 audit();
 check(calls.some((c) => c[0] === 'crow' || c[0] === 'gull'), 'crows / gulls call (audio.play crow / gull)');
 check(calls.some((c) => c[0] === 'wings'), 'pigeons clap their wings at take-off (audio.play wings)');

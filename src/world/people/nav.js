@@ -698,6 +698,16 @@ export function buildNav(ctx, cfg = {}) {
     let kept = 0;
     for (let i = 0; i < all.length && kept < 520; i++) { const e = all[i]; if (hash01(i * 31 + 7) > Math.min(1, 520 / Math.max(1, all.length) * 1.3)) continue; if (addDoor(e, 'door')) kept++; }
   }
+  // T7 (M7b): the door points of the landmark modules that the area lists in HOOKS.doorServices (the North: landmarksNorthFull's 86 and landmarksOktyabrsky's 9, docs/AREAS.md 10.2; the same list that
+  // PRUNE_SERVICES gives the tree clearings, minus the services whose entrances are clearing discs without a facing): a pedestrian walks to such a door like to a city door. A point needs a facing (rotY)
+  // and the same zone test as the city's; the strip names no service, so the union is empty there.
+  nav.stats.landmarkDoors = 0;
+  for (const key of HOOKS.doorServices || []) {
+    for (const e of (svc[key] && Array.isArray(svc[key].entrances)) ? svc[key].entrances : []) {
+      if (!Number.isFinite(e.x) || !Number.isFinite(e.z) || !Number.isFinite(e.rotY) || !inPlay(e.x, e.z, -4) || zoneW(e.x, e.z) <= 0.3) continue;
+      if (addDoor({ x: e.x, z: e.z, rotY: e.rotY, bldg: e.bldg }, 'door', { svc: key })) nav.stats.landmarkDoors++;
+    }
+  }
   for (const e of (svc.metro && svc.metro.entrances) || []) addDoor({ x: e.x, z: e.z, rotY: e.rotY, bldg: e.id }, 'metro', { metro: e, group: 'metro-' + e.station });
   nav.metroDoors = nav.entrances.filter((e) => e.kind === 'metro');
   nav.doorGroups = {}; for (const e of nav.entrances) if (e.group) (nav.doorGroups[e.group] ||= []).push(e);

@@ -492,6 +492,8 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     // heights: interpolated between the heights of the route nodes (pavement 0.12, bridge deck hump, hall 0.03, platform ramps ...); a zebra is asphalt (9 cm lower) between its kerbs
     let yT = PAVE; { const nA = rt.nodes[k], nB = rt.nodes[Math.min(k + 1, rt.n - 1)], sx = rt.x[k + 1] - rt.x[k], sz = rt.z[k + 1] - rt.z[k], sl2 = sx * sx + sz * sz || 1, u = clamp(((a.x - rt.x[k]) * sx + (a.z - rt.z[k]) * sz) / sl2, 0, 1); yT = N.y[nA] + (N.y[nB] - N.y[nA]) * u;
       if (crossing) { const dA = hyp(rt.x[k] - a.x, rt.z[k] - a.z), dB = hyp(rt.x[k + 1] - a.x, rt.z[k + 1] - a.z); if (dA >= 0.9 && dB >= 0.9) yT -= PAVE - ROAD_Y; } }
+    // T7: on the relief of the area (the Tauride Garden's hills) the ground under the walker is asked every step, not interpolated between two nodes that may stand 20 m apart on a curve (the strip and a service deck: reliefY is null, the interpolation stands)
+    if (!crossing) { const ry = nav.reliefY(a.x, a.z); if (ry != null) yT = ry; }
     groundY(a, yT);
     // arrival
     if (k >= rt.n - 2 && hyp(rt.x[rt.n - 1] - a.x, rt.z[rt.n - 1] - a.z) < 0.9) { if (crossing) a.crossIdx = -1; arrive(a, t); }

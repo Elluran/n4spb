@@ -3,8 +3,7 @@
 //   node tools/area.mjs north tools/people-test.mjs --at tauride --eval tools/tauride/people-probe.mjs [--seconds 60] [--spots N,P,...]
 // Per spot (the centre of a hill of data/relief.js): agents within 70 m of the player, sampled once per simulated second; those with ground height > 0.3 m ("on a hill") are graded: error = agent y - gardenHeight(x, z).
 // PASS (RESULT: OK) when (1) every nav node of the garden box that lies on a hill carries the terrain height + 0.02 (+-5 cm), (2) nav.surfaceY answers terrain + 0.02 at 20,000 random hill points whatever y it is given (uphill, downhill,
-// from the street level 0.12 and from the hilltop), (3) the STANDING walkers on a hill (speed < 0.05 m/s; graded per distinct walker: fewer than 25 % off by more than 0.1 m, none by more than 0.3 m; a walker stuck at the end of a stairs way keeps the height it stopped at), (4) every walker in motion is within 0.5 m (sim.js eases the height by 40 % per update, so a walker that is
-// updated rarely lags behind a 1:4.5 slope: measured p50 0.05 m, p90 0.15 m, worst 0.43 m; a property of people/sim.js groundY, not of the terrain hook) and (5) some walkers were seen on hills. The unfixed engine put them at street level (-4.4 m on the north hill) or let them hang
+// from the street level 0.12 and from the hilltop), (3) the STANDING walkers on a hill (speed < 0.05 m/s; graded per distinct walker: fewer than 25 % off by more than 0.1 m, none by more than 0.3 m; a walker stuck at the end of a stairs way keeps the height it stopped at), (4) every walker in motion is within 0.25 m, p90 within 0.1 m (T7: the walking branch of people/sim.js asks nav.reliefY, the ground under the walker, every step instead of interpolating the node heights; T2 measured p50 0.05, p90 0.15, worst 0.43 m; the static MUTANT is the old interpolation) and (5) some walkers were seen on hills. The unfixed engine put them at street level (-4.4 m on the north hill) or let them hang
 // at the hilltop height (nav.surfaceY ignores terrain above feet + 2.45 m and never lowers y).
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -54,7 +53,22 @@ export default async function (ctx, L, THREE) {
   const walkBad = eWalk.filter((e) => e > 0.5).length, sa = [...standAgents.values()], standBadAgents = sa.filter((q) => q.bad > 0), standWorst = Math.max(0, ...sa.map((q) => q.max));
   const standBad = standBadAgents.length >= 0.25 * sa.length || standWorst > 0.3 ? standBadAgents.length : 0;      // PASS: fewer than 25 % of the distinct standing walkers are off by more than 0.1 m, none by more than 0.3 m (a stuck walker at the end of a stairs way keeps the height it stopped at)
   console.log(`standing: ${eStand.length} samples of ${sa.length} distinct walkers, ${standBadAgents.length} of them off by more than 0.1 m at some sample (worst ${standWorst.toFixed(3)} m ${JSON.stringify(standBadAgents.map((q) => q.at).slice(0, 3))}); in motion: ${eWalk.length} samples, ${walkBad} off by more than 0.5 m`);
-  const ok = onHill > 0 && nodesBad === 0 && sBad === 0 && standBad === 0 && walkBad === 0;
+  // T7: groundY eases 40 % per update towards the height the walking branch asks for; the branch used to ask the INTERPOLATION between the two route nodes (a chord under / over the curve of a hill) and asks
+  // nav.reliefY (the ground under the walker) every step since. The gate in motion is 0.25 m (p90 0.1 m; T2 measured up to 0.43 m, T6 0.245 m). The MUTANT is the old line, measured statically on the graph:
+  // the linear interpolation of the node heights against the terrain at 7 points of every edge on a hill must be off by more than 0.1 m somewhere (the memorial plateau: 0.19 m), i.e. the probe is able to
+  // see the difference; the real walkers must not be.
+  const walkBad2 = eWalk.filter((e) => e > 0.25).length, p90 = Number(pc(eWalk, 0.9));
+  let chordN = 0, chordBad = 0, chordMax = 0;
+  { const nav = sim.nav, N = nav.N, E = nav.E, B = R.RELIEF_BOX;
+    for (let e = 0; e < E.length; e++) {
+      const a = E.columns.a[e], b = E.columns.b[e]; if (!(N.x[a] >= B[0] && N.x[a] <= B[1] && N.z[a] >= B[2] && N.z[a] <= B[3])) continue;
+      if (Math.hypot(N.x[b] - N.x[a], N.z[b] - N.z[a]) < 0.5) continue;
+      for (let k = 1; k < 8; k++) { const u = k / 8, x = N.x[a] + (N.x[b] - N.x[a]) * u, z = N.z[a] + (N.z[b] - N.z[a]) * u, h = L.heightAt(x, z); if (!(h > 0.3)) continue; const err = Math.abs(N.y[a] + (N.y[b] - N.y[a]) * u - (h + 0.02)); chordN++; if (err > 0.1) chordBad++; if (err > chordMax) chordMax = err; }
+    } }
+  console.log(`in motion: ${eWalk.length} samples, p90 ${p90} m, ${walkBad2} off by more than 0.25 m;  MUTANT (the interpolation of the node heights, the walking branch before T7): off the terrain by more than 0.1 m at ${chordBad} of ${chordN} points of the graph's edges on hills (largest ${chordMax.toFixed(3)} m)`);
+  const mutOK = chordBad >= 3;
+  if (!mutOK) console.log('FAIL: the interpolation of the node heights is within 0.1 m of the terrain everywhere: the probe cannot tell the walking-branch ground lookup from the old line');
+  const ok = onHill > 0 && nodesBad === 0 && sBad === 0 && standBad === 0 && walkBad === 0 && walkBad2 === 0 && p90 <= 0.1 && mutOK;
   console.log(ok ? 'RESULT: OK' : onHill === 0 ? 'RESULT: FAIL (no walker was seen on a hill: the probe proves nothing)' : 'RESULT: FAIL (a node, a surfaceY answer or a walker is off the ground on a hill)');
   process.exit(ok ? 0 : 1);
 }
