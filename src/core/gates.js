@@ -13,7 +13,7 @@
 //  question; the machine keeps running, so the gate re-arms the moment he steps out. The predicate is a dependency (deps.isIndoors), so the machine stays pure.
 // ============================================================================
 import { REGISTRY, GATES as ALL_GATES, GATES_ENABLED } from '../areas/registry.js';
-import { makeHo, arrivalUrl, decodeHo, parseCamParam, resolveArrival, makeProbe } from './handoff.js';
+import { makeHo, arrivalUrl, decodeHo, parseCamParam, camParam, resolveArrival, makeProbe } from './handoff.js';
 
 // ---------------------------------------------------------------- tuning (m, s, m/s); the registry's zone (walking depth) overrides DEPTH_WALK per gate
 export const DEFAULTS = {
@@ -126,6 +126,17 @@ export function planArrival({ L, A, params }) {
   return { ho, mode, fly, gate, how: r.how, moved: r.moved, pose: { x: r.x, y: fly && r.how !== 'hero' ? cam.y : null, z: r.z, yaw: r.how === 'hero' ? r.yaw : cam.yaw, pitch: r.how === 'hero' ? 8 : cam.pitch } };
 }
 
+/**
+ * The way back to the area the player came from: { text, url } or null (no valid origin, or the origin left no return pose). url is the origin's page at the pose he left from (ho.ret) -
+ * the metro door g3 leaves him within 4 m of the vestibule door, so the strip's arrival card returns him to the North at the door. The same plain ?cam= URL on every page, no new protocol; `qName`
+ * keeps the quality tier. Shown on the arrival card (core/boot-guard.js arrivalLink) and on the fatal card. `ho` is untrusted: 'constructor' must not find a row.
+ */
+export function backLink(ho, { qName = 'medium', base = 'http://localhost/' } = {}) {
+  const row = ho && typeof ho.from === 'string' && Object.hasOwn(REGISTRY, ho.from) ? REGISTRY[ho.from] : null;
+  if (!row || !ho.ret) return null;
+  return { text: `Вернуться: ${row.title} · Back to ${row.titleEn}`, url: new URL(`${row.page}?${new URLSearchParams({ cam: camParam(ho.ret), q: qName })}`, base).href };
+}
+
 // ---------------------------------------------------------------- texts (Russian first, English after the dot)
 /** the texts of the question for area `to`; a door gate brings its own title / sights / scene / fine (registry row `prompt`), a place of CROSS_PLACES names itself in the sights line */
 export function promptTexts(to, { gate = null, place = null } = {}) {
@@ -137,7 +148,7 @@ export function promptTexts(to, { gate = null, place = null } = {}) {
     yes: 'Загрузить · Load', no: 'Не сейчас · Not now', chip: `${a.title} впереди · ${a.titleEn} ahead · N`, travelKicker: 'Загрузка области · Loading the area',
     stalled: 'Версия области устарела: обновите страницу · The area is out of date: reload the page', offline: 'Нет связи с областью · Cannot reach the area', unavailable: 'Область недоступна · The area is not available',
   };
-  if (isDoor(gate) && gate.prompt) for (const k of ['title', 'sights', 'scene', 'fine']) if (gate.prompt[k]) T[k] = gate.prompt[k];
+  if (isDoor(gate) && gate.prompt) for (const k of ['title', 'sights', 'scene', 'fine']) if (gate.prompt[k] && !(place && (k === 'title' || k === 'scene'))) T[k] = gate.prompt[k];      // (a place picked through a door: the door's title and scene describe the metro ride and the rotunda, so the area's own lines stay; its walk-out 'fine' line is true for both)
   if (place) T.sights = `Сразу к месту: ${place.label}${place.labelEn ? ` · Straight to ${place.labelEn}` : ''}`;
   return T;
 }
@@ -254,7 +265,7 @@ export function createGates(deps) {
       return false;
     }
     const here = currentPose(), d = ctx.drive, m0 = mode(), door = isDoor(g);
-    const dest = door ? g.pose : via === 'place' && place ? place : null;
+    const dest = via === 'place' && place ? place : door ? g.pose : null;      // (a place picked from the HUD list wins over the door's own pose: a CROSS_PLACES row may name a door gate, and then the player walks out at the PLACE, not at the metro rotunda)
     const m = door ? 'walk' : dest && m0 === 'fly' ? 'walk' : m0;
     const pose = dest ? { x: dest.x, y: null, z: dest.z, yaw: dest.yaw, pitch: dest.pitch ?? 0 } : here;
     const incoming = ctx.handoff && ctx.handoff.ho ? ctx.handoff.ho.n : 0;
