@@ -156,6 +156,34 @@ for (const e of moAll) {
 }
 log('municipal districts in the city:', mos.length);
 
+// ---------- manual edits of the area division (edits.json): merges of neighbouring districts
+function unionRings(rA, rB) {
+  const key = (p) => p[0].toFixed(7) + ',' + p[1].toFixed(7);
+  const ccw = (r) => (ringAreaM2(r) > 0 ? r : r.slice().reverse());
+  const edges = new Map(), pts = new Map();
+  for (const ring of rA.outer.concat(rB.outer).map(ccw)) for (let i = 0, n = ring.length; i < n; i++) {
+    const a = ring[i], b = ring[(i + 1) % n]; const ka = key(a), kb = key(b); if (ka === kb) continue;
+    pts.set(ka, a); pts.set(kb, b); edges.set(ka + '>' + kb, [ka, kb]);
+  }
+  for (const k of [...edges.keys()]) { const [a, b] = k.split('>'); const rk = b + '>' + a; if (edges.has(k) && edges.has(rk)) { edges.delete(k); edges.delete(rk); } }
+  const out = new Map(); for (const [a, b] of edges.values()) { let l = out.get(a); if (!l) out.set(a, l = []); l.push(b); }
+  const rings = [];
+  for (const [start, ends] of out) while (ends.length) { const ring = [pts.get(start)]; let cur = ends.pop(), g = 0; while (cur !== start && g++ < 1e6) { ring.push(pts.get(cur)); const l = out.get(cur); if (!l || !l.length) break; cur = l.pop(); } if (ring.length >= 4) rings.push(ring); }
+  return { outer: rings, inner: rA.inner.concat(rB.inner) };
+}
+const plainName = (n) => n.replace(/^округ\s+/i, '').replace(/\s+округ$/i, '').trim();
+const EDITS = (() => { try { return JSON.parse(fs.readFileSync(path.join(here, 'edits.json'), 'utf8')); } catch (e) { return { merge: [] }; } })();
+for (const mg of EDITS.merge || []) {
+  const parts = mg.names.map((n) => mos.find((m) => plainName(m.rawName) === n));
+  if (parts.some((p) => !p)) { log('edit: merge skipped, not found:', mg.names.join(' + ')); continue; }
+  const before = parts.map((p) => p.rings.outer.length);
+  let rings = parts[0].rings;
+  for (const p of parts.slice(1)) { rings = unionRings(rings, p.rings); mos.splice(mos.indexOf(p), 1); }
+  parts[0].rings = rings; parts[0].rawName = mg.ru; parts[0].nameEnOsm = mg.en || '';
+  log('edit: merged', mg.names.join(' + '), '->', mg.ru, '| outer rings', before.join('+'), '->', rings.outer.length);
+}
+
+
 // rayon of each
 for (const m of mos) {
   const b = bboxOf(m.rings.outer.flat());

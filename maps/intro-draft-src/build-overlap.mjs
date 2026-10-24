@@ -195,5 +195,5 @@ const kb = (o) => (Buffer.byteLength(JSON.stringify(o)) / 1024) | 0;
 log('KB fp', kb(A.map((a) => a.fp)), 'ext', kb(A.map((a) => a.ext)), 'wz', kb(A.map((a) => a.wz)), 'total', (fs.statSync(path.join(here, 'intro-data.json')).size / 1024) | 0);
 const j4 = junctions.filter((j) => j.n >= 4).sort((p, q) => q.n - p.n);
 log('4+ area junctions:'); for (const j of j4.slice(0, 14)) log('  ', j.p.join(','), j.n, j.near || '-', j.areas.map((k) => A[k].ru).join(' / '));
-const mos = A.find((a) => a.ru === 'Литейный');
-log('Литейный core km2', mos.km2, 'footprint', mos.fpKm2, 'overlap', mos.extKm2, 'water', mos.wzKm2, JSON.stringify(mos.ovl.map((o) => A[o.k].ru + ' ' + o.km2)));
+const mos = A.find((a) => a.ru === 'Дворцовый–Литейный') || A[0];
+log(mos.ru, 'core km2', mos.km2, 'footprint', mos.fpKm2, 'overlap', mos.extKm2, 'water', mos.wzKm2, JSON.stringify(mos.ovl.map((o) => A[o.k].ru + ' ' + o.km2)));
