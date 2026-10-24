@@ -3,13 +3,14 @@
 // leaves standing open, and the green wire-mesh fence of the football pitch (w81524430, 3.5 m, its 5 gates).
 //   planFence(inputs)   PURE and DETERMINISTIC: { panels, piers, gates, pitch, dropped, stats }. The layout is the old garden.js one (every segment of a way is cut into ceil(len / 2.7) equal panels, so the openings of the
 //                       data coincide with panel centres to the millimetre; a panel is open when its centre lies on the segment between the first and the last open centre of an opening of its fence).
-//   buildFence(ctx, parent, plan)   the meshes (3 draws: the panels, the piers, one static mesh with the gates, the leaves and the pitch fence), the colliders (a box per closed panel, per pier, per gate pier; `fence = true`
+//   buildFence(ctx, parent, plan)   the meshes (3 draws: the pickets of the panels (instanced, alpha-cut, no-outline layer), ONE opaque static STONE mesh (plinths, piers, gate piers, pitch posts: on the outline layer), one alpha-cut static mesh (the open leaves, the pitch mesh)), the colliders (a box per closed panel, per pier, per gate pier; `fence = true`
 //                       so that the pedestrians read a wall), the published numbers.
 // THE BASE: the fence stands on the STREET side, y = max(0, gardenHeight): the relief is zero within 8 m of the outline and the floor lies at -0.2 .. -0.45 where the lake and the west pond touch the outline (the quay,
 // T4a); the plinth reaches `skirt` m under the base so that its foot meets the floor there. Where the fence coincides with the water (the lake's north shore, 58 m + the stretch along the west pond) an item that would
 // stand on the water's edge moves outward (to the street) until it is clear of it; the stub w112853216 (1.7 m into the water) is not built.
-// THE MATERIAL: one toon material with vertex colours and an atlas map (alphaTest): the plinth, the piers and the posts sample the opaque band of the atlas, the pickets (spears, two rails, bulbs) and the diamond mesh
-// the alpha-cut bands (the strip's picket pattern of landmarksE / landmarksF, here in one texture so that the whole fence is three draws).
+// THE MATERIALS: the pickets (spears, two rails, bulbs, rings) and the diamond mesh of the pitch fence are alpha-cut bands of ONE atlas (the strip's picket pattern of landmarksE / landmarksF; vertex colours) on the no-outline layer, the outline pass
+// cannot see cut-outs; everything STONE or opaque (the plinths, the piers, the gate piers, the posts and rails of the pitch fence) is ONE static mesh with a plain vertex-colour toon material on the outline layer, so that it hides the
+// outlines of the trees and walkers behind it (QA round 1: they were drawn across the gate piers). Three draws in all.
 import * as THREE from 'three';
 import { registerLOD } from '../../core/spatial.js';
 import { gardenHeight, GARDEN_SHORE } from './height.js';
@@ -240,15 +241,29 @@ export function panelGeometry(D = FENCE) {
   b.quad([0, D.plinthH, L], [0, D.plinthH, -L], [0, D.h, -L], [0, D.h, L], D.iron, [[1, ATLAS.B[0]], [0, ATLAS.B[0]], [0, ATLAS.B[1]], [1, ATLAS.B[1]]]);   // the pickets, facing +x (u runs against z: -L is u = 0 seen from +x)
   return b.build();
 }
-/** the pier template (local frame: centred on x, z; y up from the base): a square base block, the shaft, a cornice, the capstone and a pyramid; ~34 triangles */
-export function pierGeometry(D = FENCE) {
-  const b = new GB(), w = D.pier.w / 2, c = D.pier.cap / 2, h = D.pier.h, ch = D.pier.capH;
+/** the pickets alone (the alpha-cut half of the panel template: 2 triangles; the plinth is part of the opaque stone mesh, see stoneGeometry) */
+export function picketGeometry(D = FENCE) {
+  const b = new GB(), L = D.panelM / 2;
+  b.quad([0, D.plinthH, L], [0, D.plinthH, -L], [0, D.h, -L], [0, D.h, L], D.iron, [[1, ATLAS.B[0]], [0, ATLAS.B[0]], [0, ATLAS.B[1]], [1, ATLAS.B[1]]]);
+  return b.build();
+}
+/** the granite plinth of one panel of length `len`, added to `b` in its current placement (local frame as panelGeometry: along z centred, thickness along x): the two sides and the top, 6 triangles */
+function plinthInto(b, D, len) {
+  const L = len / 2, hw = D.plinthW / 2;
+  b.quad([-hw, -D.skirt, L], [-hw, D.plinthH, L], [-hw, D.plinthH, -L], [-hw, -D.skirt, -L], D.granite);
+  b.quad([hw, -D.skirt, -L], [hw, D.plinthH, -L], [hw, D.plinthH, L], [hw, -D.skirt, L], D.granite);
+  b.quad([-hw, D.plinthH, L], [hw, D.plinthH, L], [hw, D.plinthH, -L], [-hw, D.plinthH, -L], D.graniteL);
+}
+/** one pier (local frame: centred on x, z; y up from the base): a square base block, the shaft, a cornice, the capstone and a pyramid; 34 triangles */
+function pierInto(b, D) {
+  const w = D.pier.w / 2, c = D.pier.cap / 2, h = D.pier.h, ch = D.pier.capH;
   b.box(-w - 0.06, w + 0.06, -D.skirt, 0.55, -w - 0.06, w + 0.06, D.granite, 'b');
   b.box(-w + 0.03, w - 0.03, 0.55, h - 0.1, -w + 0.03, w - 0.03, D.stone, 'b');
   b.box(-c, c, h - 0.1, h - 0.1 + ch * 0.5, -c, c, D.graniteL, 'b');
   b.pyramid(-c + 0.04, c - 0.04, -c + 0.04, c - 0.04, h - 0.1 + ch * 0.5, h + ch + 0.22, D.granite);
-  return b.build();
 }
+/** the pier template (the template of the instanced piers of the first T6 build; the piers are baked into the stone mesh since the fix round) */
+export function pierGeometry(D = FENCE) { const b = new GB(); pierInto(b, D); return b.build(); }
 
 // ---------------------------------------------------------------------------------------------------------------- the build
 /** a merged copy of several geometries (same attributes) */
@@ -263,19 +278,30 @@ export function mergeGeos(list) {
   return m;
 }
 
-/** the static mesh of the gates (stone piers with cornice and capstone), the open leaves and the whole pitch fence (posts, rails, the diamond mesh panels), baked in world coordinates */
-export function gatesGeometry(plan, D = FENCE, GD = GATE, PD = PITCH_FENCE) {
-  const b = new GB(), baseOf = (x, z, g) => (g.gatePiers.length ? Math.max(0, (g.gatePiers[0].y + g.gatePiers[1].y) / 2) : 0);
+/**
+ * the two static meshes of the fence, baked in world coordinates (QA fix round 1: the outline pass reads only the opaque layer-0 meshes, so everything STONE or opaque iron must not be in the alpha-cut mesh that is drawn
+ * on the no-outline layer, or the outlines of the trees and walkers behind a pier scribble across its face):
+ *   stone: the granite plinth of every closed iron panel, the ordinary piers, the gate piers of the 11 gates (cornice, capstone) and the posts and top rails of the pitch fence (opaque, vertex colours)
+ *   alpha: the open iron leaves of the gates and the diamond mesh of the pitch fence (atlas bands B and C, alpha-cut)
+ * returns { stone, alpha, counts } (alpha is null without leaves and pitch panels; counts = triangles by part)
+ */
+export function fenceGeometry(plan, D = FENCE, GD = GATE, PD = PITCH_FENCE) {
+  const s = new GB(), b = new GB(), baseOf = (x, z, g) => (g.gatePiers.length ? Math.max(0, (g.gatePiers[0].y + g.gatePiers[1].y) / 2) : 0), counts = {};
+  for (const p of plan.panels) { if (p.pitch || p.open || p.drop) continue; s.at(p.x, p.y, p.z, p.yaw); plinthInto(s, D, p.len); s.at(); }
+  counts.plinths = s.tris;
+  for (const q of plan.piers) if (q.kind === 'pier') { s.at(q.x, q.y, q.z, q.yaw); pierInto(s, D); s.at(); }
+  counts.piers = s.tris - counts.plinths;
+  let t0 = s.tris;
   for (const g of plan.gates) {
     for (const p of g.gatePiers) {
-      b.at(p.x, p.y, p.z, p.yaw);
+      s.at(p.x, p.y, p.z, p.yaw);
       const w = GD.w / 2, c = GD.corniceW / 2;
-      b.box(-w - 0.08, w + 0.08, -D.skirt, 0.7, -w - 0.08, w + 0.08, D.granite, 'b');
-      b.box(-w, w, 0.7, GD.h - GD.corniceH, -w, w, D.stone, 'b');
-      b.box(-c, c, GD.h - GD.corniceH, GD.h, -c, c, D.graniteL, 'b');
-      b.box(-w * 0.8, w * 0.8, GD.h, GD.h + GD.capH * 0.55, -w * 0.8, w * 0.8, D.stone, 'b');
-      if (!g.lantern) b.pyramid(-w * 0.8, w * 0.8, -w * 0.8, w * 0.8, GD.h + GD.capH * 0.55, GD.h + GD.capH * 1.4, D.granite);
-      b.at();
+      s.box(-w - 0.08, w + 0.08, -D.skirt, 0.7, -w - 0.08, w + 0.08, D.granite, 'b');
+      s.box(-w, w, 0.7, GD.h - GD.corniceH, -w, w, D.stone, 'b');
+      s.box(-c, c, GD.h - GD.corniceH, GD.h, -c, c, D.graniteL, 'b');
+      s.box(-w * 0.8, w * 0.8, GD.h, GD.h + GD.capH * 0.55, -w * 0.8, w * 0.8, D.stone, 'b');
+      if (!g.lantern) s.pyramid(-w * 0.8, w * 0.8, -w * 0.8, w * 0.8, GD.h + GD.capH * 0.55, GD.h + GD.capH * 1.4, D.granite);
+      s.at();
     }
     // the open leaves: from the hinge on the pier's inner face, 2.2 m into the garden, turned 90 degrees to the fence; the pickets with their two rails (one quad per leaf, double sided)
     for (const l of g.leaves) {
@@ -283,15 +309,17 @@ export function gatesGeometry(plan, D = FENCE, GD = GATE, PD = PITCH_FENCE) {
       b.quad([l.hx, y0 + 0.2, l.hz], [ex, y0 + 0.2, ez], [ex, y0 + GD.leafH, ez], [l.hx, y0 + GD.leafH, l.hz], D.iron, PICKET_UV);
     }
   }
-  // the pitch fence: the diamond mesh between the posts, a top rail, posts every panel boundary that is a pier of the plan
+  counts.gatePiers = s.tris - t0; t0 = s.tris;
+  // the pitch fence: the diamond mesh between the posts (alpha), a top rail and the posts at every panel boundary that is a pier of the plan (opaque)
   for (const p of plan.panels) {
     if (!p.pitch || p.drop || p.open) continue;
     const y = p.y, H = PD.h, ax = p.ax, az = p.az, bx = p.bx, bz = p.bz;
     b.quad([ax, y, az], [bx, y, bz], [bx, y + H, bz], [ax, y + H, az], PD.mesh, MESH_UV);
-    b.at(p.x, y, p.z, p.yaw); b.box(-PD.rail / 2, PD.rail / 2, H - PD.rail, H, -p.len / 2, p.len / 2, PD.postColor, 'b'); b.at();
+    s.at(p.x, y, p.z, p.yaw); s.box(-PD.rail / 2, PD.rail / 2, H - PD.rail, H, -p.len / 2, p.len / 2, PD.postColor, 'b'); s.at();
   }
-  for (const q of plan.piers) if (q.kind === 'post') { b.at(q.x, q.y, q.z, q.yaw); b.box(-PD.post / 2, PD.post / 2, -0.2, PD.h + 0.15, -PD.post / 2, PD.post / 2, PD.postColor, 'b'); b.at(); }
-  return b.tris ? b.build() : null;
+  for (const q of plan.piers) if (q.kind === 'post') { s.at(q.x, q.y, q.z, q.yaw); s.box(-PD.post / 2, PD.post / 2, -0.2, PD.h + 0.15, -PD.post / 2, PD.post / 2, PD.postColor, 'b'); s.at(); }
+  counts.pitchPosts = s.tris - t0; counts.alpha = b.tris;
+  return { stone: s.tris ? s.build() : null, alpha: b.tris ? b.build() : null, counts };
 }
 
 export function buildFence(ctx, parent, plan, opts = {}) {
@@ -302,18 +330,18 @@ export function buildFence(ctx, parent, plan, opts = {}) {
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), S = new THREE.Vector3();
   const far = D.far ?? 650;
   const closed = plan.panels.filter((p) => !p.open && !p.drop && !p.pitch);
-  // ---- 1. the panels (instanced)
-  const pg = panelGeometry(D), panels = new THREE.InstancedMesh(pg, matA, Math.max(1, closed.length)); panels.name = 'tauride-fence-panels'; panels.castShadow = true; panels.receiveShadow = true;
+  // ---- 1. the pickets of the panels (instanced, alpha-cut: the no-outline layer, the outline pass cannot see cut-outs)
+  const pg = picketGeometry(D), panels = new THREE.InstancedMesh(pg, matA, Math.max(1, closed.length)); panels.name = 'tauride-fence-panels'; panels.castShadow = true; panels.receiveShadow = true;
   closed.forEach((p, i) => { E.set(0, p.yaw, 0); Q.setFromEuler(E); M.compose(V.set(p.x, p.y, p.z), Q, S.set(1, 1, p.len / D.panelM)); panels.setMatrixAt(i, M); });
   panels.count = closed.length; panels.instanceMatrix.needsUpdate = true; panels.frustumCulled = true;
   ctx.noBatch(panels); ctx.noOutline(panels); parent.add(panels); registerLOD(panels, far);
-  // ---- 2. the piers (instanced)
-  const iron = plan.piers.filter((p) => p.kind === 'pier'), prg = pierGeometry(D), piers = new THREE.InstancedMesh(prg, matS, Math.max(1, iron.length)); piers.name = 'tauride-fence-piers'; piers.castShadow = true; piers.receiveShadow = true;
-  iron.forEach((p, i) => { E.set(0, p.yaw, 0); Q.setFromEuler(E); M.compose(V.set(p.x, p.y, p.z), Q, S.set(1, 1, 1)); piers.setMatrixAt(i, M); });
-  piers.count = iron.length; piers.instanceMatrix.needsUpdate = true; piers.frustumCulled = true;
-  ctx.noBatch(piers); parent.add(piers); registerLOD(piers, far * 0.9);
-  // ---- 3. the gates, the leaves and the pitch fence (one static mesh)
-  const gg = gatesGeometry(plan, D, GATE, PITCH_FENCE), gates = gg ? new THREE.Mesh(gg, matA) : null;
+  // ---- 2. the STONE (one opaque static mesh on layer 0, so that it is in the normal / depth pre-pass the outlines read and hides the lines of the trees and walkers behind a pier: QA round 1 found the outlines of
+  //         the pedestrians and crowns drawn across the faces of the gate piers when they were part of the alpha-cut mesh): the plinths of the panels, the ordinary piers, the gate piers, the posts and rails of the pitch fence
+  // ---- 3. the alpha-cut rest (the iron leaves of the gates, the diamond mesh of the pitch fence): the no-outline layer
+  const fg = fenceGeometry(plan, D, GATE, PITCH_FENCE), iron = plan.piers.filter((p) => p.kind === 'pier');
+  const piers = fg.stone ? new THREE.Mesh(fg.stone, matS) : null;
+  if (piers) { piers.name = 'tauride-fence-piers'; piers.castShadow = true; piers.receiveShadow = true; ctx.noBatch(piers); parent.add(piers); registerLOD(piers, far); }
+  const gates = fg.alpha ? new THREE.Mesh(fg.alpha, matA) : null;
   if (gates) { gates.name = 'tauride-fence-gates'; gates.castShadow = true; gates.receiveShadow = true; ctx.noBatch(gates); ctx.noOutline(gates); parent.add(gates); registerLOD(gates, far); }
   // ---- colliders: a thin box per closed panel (a wall for the pedestrians), a box per pier, per gate pier and per pitch panel / post; the openings stay open
   const col = D.collider, items = { panels: [], piers: [], gates: [], pitch: [] };
@@ -321,7 +349,7 @@ export function buildFence(ctx, parent, plan, opts = {}) {
   for (const p of iron) items.piers.push(ph.addBox(p.x, p.z, D.pier.collider, D.pier.collider, p.yaw, Math.min(0, p.y) - 0.5, p.y + D.pier.h));
   for (const g of plan.gates) for (const p of g.gatePiers) items.gates.push(ph.addBox(p.x, p.z, GATE.collider.w, GATE.collider.w, p.yaw, Math.min(0, p.y) - 0.5, p.y + GATE.h));
   for (const p of plan.panels) if (p.pitch && !p.open && !p.drop) { const it = ph.addBox(p.x, p.z, PITCH_FENCE.collider.thick, p.len + 0.02, p.yaw, Math.min(0, p.y) - 0.5, p.y + PITCH_FENCE.collider.y1); it.fence = true; items.pitch.push(it); }
-  const triangles = (panels.count * pg.index.count + piers.count * prg.index.count) / 3 + (gg ? gg.index.count / 3 : 0);
-  return { meshes: { panels, piers, gates }, triangles, draws: 2 + (gates ? 1 : 0), instances: { panels: panels.count, piers: piers.count }, colliders: items.panels.length + items.piers.length + items.gates.length + items.pitch.length, items,
-    template: { panel: pg.index.count / 3, pier: prg.index.count / 3 }, gateTriangles: gg ? gg.index.count / 3 : 0 };
+  const stoneTris = fg.stone ? fg.stone.index.count / 3 : 0, alphaTris = fg.alpha ? fg.alpha.index.count / 3 : 0, triangles = panels.count * pg.index.count / 3 + stoneTris + alphaTris;
+  return { meshes: { panels, piers, gates, stone: piers }, triangles, draws: 1 + (piers ? 1 : 0) + (gates ? 1 : 0), instances: { panels: panels.count, piers: iron.length }, colliders: items.panels.length + items.piers.length + items.gates.length + items.pitch.length, items,
+    template: { panel: pg.index.count / 3 + 6, pier: pierGeometry(D).index.count / 3 }, gateTriangles: fg.counts.gatePiers + fg.counts.pitchPosts + alphaTris, stoneTriangles: stoneTris, alphaTriangles: alphaTris, parts: fg.counts };
 }

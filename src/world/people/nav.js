@@ -581,6 +581,9 @@ export function buildNav(ctx, cfg = {}) {
   const mainOK = (id) => compSize[comp[id]] >= BIGN;          // 'main' = any big component (the square / station, Nevsky north, the Anichkov bank ...)
   nav.stats.mainSize0 = compSize[main];
 
+  // T6 fix round 1: the height of the relief of the area under (x, z) (a height patch: the Tauride Garden hills, and the bank of a garden pond), null elsewhere (on a service deck too: a garden bridge over the pond has its own height) and always null in the strip (no patch): a point added AFTER the node height pass
+  // below (a bench or photo-spot access node) and a follower of a tour group (people/sim.js: it took the height of its leader) stand on the ground under THEM, not at 0.12 m / the leader's height
+  nav.reliefY = (x, z) => { if (!HEIGHT_PATCHES.length || (DECKS.length && serviceDeck(x, z) != null)) return null; const th = L.heightAt(x, z); return th > 0.06 || (th < -0.06 && HOOKS.inGarden && HOOKS.inGarden(x, z)) ? th + 0.02 : null; };
   // ------------------------------------------------------------------ attach a point to the main graph with a short edge; returns the new node id or -1
   const attach = (x, z, y, kind, maxD = 14, crowd = 0.35) => {
     if (!walkable(x, z) || nav.blocked(x, z) || nav.obstDist(x, z, 0.6) < 0.3) return -1;          // (blocked: the railing rim of the long bridge and the deep ground beside it are no standing place)
@@ -588,6 +591,7 @@ export function buildNav(ctx, cfg = {}) {
     let id = -1, k = 0;
     let tried = 0;
     if (longs.length && x < WEST_X && nav.surfaceY && longDeck(x, z)) y = nav.surfaceY(x, z, y);          // an access node (bench, stop, photo spot) on a long bridge stands at deck height
+    { const ry = nav.reliefY(x, z); if (ry != null) y = ry; }          // ... and on the relief of the area (the memorial plateau: a photo spot stood at 0.12 m on 1.2 m of ground)
     for (const [j] of cand) {
       if (k >= 2 || tried++ > 8) break;
       if (edgeOK(x, z, N.x[j], N.z[j]) && (N.k[j] !== 'a' || segFree(x, z, N.x[j], N.z[j], crowd))) { if (id < 0) { id = addNode(x, z, y, kind); gridAdd(id); comp[id] = main; } addEdge(id, j, 0, -1, 0, 1.0); k++; }

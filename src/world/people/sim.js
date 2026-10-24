@@ -545,7 +545,7 @@ export function createSim(ctx, nav, crowd, opts = {}) {
     if ((d > 7 || a.stuck > 60) && !visible(a.x, a.z) && !cross && nav.cover(bx, bz) < -0.5) { a.x = bx; a.z = bz; a.stuck = 0; a.blk = 0; }
     turnAndGo(a, dt, dx, dz, v, cross);
     if (d < 0.4 && !moving) { const toL = a.arc ? Math.atan2(l.x - a.x, l.z - a.z) : l.yaw, dy = wrap(toL - a.yaw); a.yaw += clamp(dy, -2.5 * dt, 2.5 * dt); }
-    groundY(a, longK && a.x < -600 && nav.longDeck(a.x, a.z) ? nav.surfaceY(a.x, a.z, l.y) : l.y);
+    groundY(a, nav.reliefY(a.x, a.z) ?? (longK && a.x < -600 && nav.longDeck(a.x, a.z) ? nav.surfaceY(a.x, a.z, l.y) : l.y));          // (on the relief of the area the follower stands on the ground under it, not at the height of its leader 3 m up the slope; the strip: reliefY is null)
   };
   // children in the dry fountain
   const stepPlay = (a, t, dt) => {
