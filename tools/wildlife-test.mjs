@@ -283,6 +283,23 @@ if (!STRIP && ctx.services.landmarksTauride && Array.isArray(ctx.services.landma
   check(gp.length >= 30, 'crows can perch on the garden trees (' + gp.length + ' crown perches)');
   check(gp.every((p) => Math.abs(p.y - ((p.tree.y || 0) + p.tree.crown[Math.min(p.tree.lod | 0, 2)] + 0.05)) < 1e-9), 'a crown perch sits ON the drawn crown (the raycast top of the canopy of the family at the level on the screen x the height stretch of the tree, +0.05 m) above the terrain under the trunk');
   { const q = gp.find((p) => p.tree.crown), t = q && q.tree, l0 = t && t.lod; if (t) { t.lod = 0; const y0 = q.y; t.lod = 1; const y1 = q.y; t.lod = l0; check(Math.abs(y1 - y0) > 0.3 && gp.every((p) => p.tree.crown.every((v) => v > p.tree.h * 0.5)), 'the crown perch follows the level of detail the tree is drawn at (LOD0 ' + y0.toFixed(2) + ' m / LOD1 ' + y1.toFixed(2) + ' m) and no crown is lower than half the nominal height'); } }
+  // T7 fix round 2: a crow that LANDED at one level and then sees the camera come into another level stays on the crown that is drawn now (the pose follows the perch every frame)
+  {
+    const B = svc.debug.birds, crow = svc.birds.find((b) => b.sp === 'crow' && !b.dead);
+    const cands = gp.filter((p) => p.tree.crown && !p.occ && Math.abs(p.tree.crown[1] - p.tree.crown[0]) > 0.4);
+    const p = cands.find((q) => Math.hypot(q.x - L.HERO.x, q.z - L.HERO.z) > 300) || cands[0], tr = p && p.tree;
+    if (crow && p) {
+      // the camera drives the level of the tree (the vegetation module's own assign): 100 m = LOD1, 20 m = LOD0 (and back to 100 m = LOD1)
+      const at = (d) => { player(p.x + d, p.z, 0, 0); run(1.2); return tr.lod; };
+      const lA = at(100); B.setPerch(crow, p, t); const yLand = crow.y;
+      const lB = at(20), y0 = crow.y, d0 = (tr.y || 0) + tr.crown[0] + 0.05;
+      const lC = at(100), y2 = crow.y, d2 = (tr.y || 0) + tr.crown[1] + 0.05;
+      check(lA === 1 && lB === 0 && lC === 1, 'the probe camera drives the tree through LOD1, LOD0, LOD1 (' + lA + ',' + lB + ',' + lC + ')');
+      check(crow.st === 'perch' && crow.perch === p && Math.abs(yLand - ((tr.y || 0) + tr.crown[1] + 0.05)) < 1e-9 && Math.abs(y0 - d0) < 1e-9 && Math.abs(y2 - d2) < 1e-9 && Math.abs(y0 - yLand) > 0.3,
+        'a crow landed at LOD1 and left alone follows the crown when the level pops (landed ' + yLand.toFixed(2) + ' m, LOD0 ' + y0.toFixed(2) + ' m = crown ' + d0.toFixed(2) + ', back at LOD1 ' + y2.toFixed(2) + ' m = crown ' + d2.toFixed(2) + ')');
+      B.setPerch(crow, p, t); crow.perch.occ = null; crow.perch = null; crow.st = 'ground';
+    } else check(false, 'no crow / free crown perch for the level-follow probe');
+  }
   check(gp.some((p) => p.tree.y > 1), 'some crown perches stand on the hills (terrain under the trunk > 1 m)');
   let inside = 0, tn = 0; for (const t of GT) { if (t.shrub) continue; tn++; if (W.inTree(t.x, t.z, 0)) inside++; }
   check(tn > 100 && inside === tn, 'the trunk grid holds every trunk of the garden: a ground bird is refused on it (' + inside + '/' + tn + ')');

@@ -498,6 +498,7 @@ export function buildBirds(ctx, W, say, opts = {}) {
 
   function updPerch(b, t, dt) {
     const c = b.cfg;
+    if (b.perch && b.perch.kind === 'tree' && b.perch.tree && b.perch.tree.crown) b.y = b.perch.y;                  // a garden crown perch rides the LOD of the crown the camera draws (the y getter of wildlife/world.js): the crow stays on the leaves when the level pops (T7 fix round 2)
     if (!NOFEAR && dist3(b) < scareR(b, true) * (b.perch?.kind === 'tree' ? 0.8 : 1)) { if (flee(b, t, { r0: 18, r1: 70 })) return; }
     if (c.call && t >= b.nextCall && b.act !== 'call') startCall(b, t);
     if (b.act === 'call' && t > b.callT0 + b.callDur) { b.act = 'idle'; b.actT0 = t; }
