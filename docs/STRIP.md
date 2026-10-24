@@ -123,7 +123,7 @@ index.html
 manifest.webmanifest       (PWA: fullscreen + landscape for add-to-home-screen, docs/MOBILE.md)
 src/                       (all .js; every module in MODULES is imported at page start)
 vendor/rapier/rapier.js    (+ vendor/rapier/LICENSE: Apache-2.0)
-assets/                    (assets/baked/manifest.json + *.bin.gz, assets/splash/*.jpg, assets/icons/*.png (the PWA icons), assets/bibliotechka.png)
+assets/                    (assets/baked/manifest.json + *.bin.gz, assets/splash/*.jpg, assets/icons/*.png (the PWA icons), assets/bibliotochka.png)
 ```
 
 Not needed at run time: `tools/`, `docs/`, `node_modules/`, `shots/`, `package*.json`, `.git`. LICENSE, NOTICE.md, README.md and LICENSE-sakuragaoka-station.txt are good to ship next to them.

@@ -1,5 +1,5 @@
 // drive - a red sports car parked at the Moscow Railway Station that the player can get into ([E] next to it) and drive through the city, with a "Need for Speed, but simpler"
-// interface. The car carries the Bibliotechka logo (the user's reader app, assets/bibliotechka.png) on the roof as an easter egg.
+// interface. The car carries the Bibliotechka logo (the user's reader app, assets/bibliotochka.png) on the roof as an easter egg.
 //
 // FILES (code in drive/):  model.js the car (body, glass, wheels, lamps, driver, wing, logo decals, nitro flames, neon underglow);  handling.js the arcade physics + collisions;
 //   hud.js speedometer / tacho / gear / nitro / drift counter / speed streaks / key hints;  fx.js tyre smoke + sparks + exhaust glow (the Roadster: cold-gas cloud);  sound.js engine / tyres / wind / nitro / crash.

@@ -1,7 +1,7 @@
 // drive/model.js - the player's car: a low red sports coupe ("Б-Спорт") built with the traffic module's vertex-colour builder, so it shares the look of the fleet
 // (soft-bevelled side-profile extrusion, wheel arches, hollow dark interior under a transparent glass volume). It is NOT part of the fleet: one dynamic Group with its own
 // wheels (they roll and steer), emissive head / tail lamps (the tail lamps brighten on braking), a driver, a steering wheel, a rear wing, exhausts with nitro flames,
-// a neon underglow at night and the Bibliotechka logo ("Б." on the four brand colours, assets/bibliotechka.png) on the roof only (an easter egg
+// a neon underglow at night and the Bibliotechka logo ("Б." on the four brand colours, assets/bibliotochka.png) on the roof only (an easter egg
 // for the user's reader app).
 // Car frame: forward +Z, origin on the ground midway between the axles, +X = the car's LEFT (like every vehicle of the traffic module).
 // Z-FIGHTING: decals stand 1.2-1.6 cm proud of the surface and carry a negative polygonOffset, every other part keeps >= 2 cm from its neighbours (same rules as traffic/models.js).
@@ -19,7 +19,7 @@ export const SPEC = {
 const RED = '#dd2230', RED_DK = '#a8141f', BLACK = '#17191d', SILVER = '#d6dae0';
 export const PAINT_RED = RED;
 
-export const LOGO_URL = './assets/bibliotechka.png';
+export const LOGO_URL = './assets/bibliotochka.png';
 const _logoTextures = new Map();
 /** One shared logo texture per url (the three garage cars carry the same decal). */
 export function sharedLogoTexture(url = LOGO_URL) { let t = _logoTextures.get(url); if (!t) _logoTextures.set(url, (t = logoTexture(url))); return t; }
@@ -92,7 +92,7 @@ function beamTexture() {
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; return tex;
 }
 
-export function createCarModel(ctx, { logoUrl = './assets/bibliotechka.png', plate = ['Б 001 КА', '78'] } = {}) {
+export function createCarModel(ctx, { logoUrl = './assets/bibliotochka.png', plate = ['Б 001 КА', '78'] } = {}) {
   const { mat } = ctx, S = SPEC;
   const s = { W: S.W, R: S.R, tw: S.tw, track: S.track, yb: S.yb, Ra: S.R + 0.07, bev: 0.04, zr: -S.wb / 2, zf: S.wb / 2, front: S.front, rear: S.rear };
   s.arches = [s.zr, s.zf];
