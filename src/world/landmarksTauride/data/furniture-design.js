@@ -123,9 +123,12 @@ export const PLAY = {
  *  polygon is the garden outline). The fence leaves the lane open (the private gate's opening, 8.1 m on w10903027 and 2.7 m on w418967228) and the gate piers there are plain. */
 export const SERVICE_LANE_DECISION = { claimed: false, drawnBy: 'streets', cars: 'HOOKS.carKeepOut' };
 
+/** the knock cell of the furniture meshes (m): lib/knock-inst.js splits each part into cells of this size; the garden (560 x 450 m) lies in ONE cell of 4000 m, so each part is one draw (the strip's 384 m cells made 14 draws of 4 parts) */
+export const FURNITURE_CELL = 4000;
+
 /** BUDGETS (tools/tauride/furniture-test.mjs asserts them on the built module; triangles at the template x the instance count) */
 export const BUDGET = {
   fence: { triangles: 30000, draws: 3 },
-  furniture: { benchesBins: 15000, lanterns: 12000, draws: 5 },       // 5 draws as built without ctx.knock: bench, bin, lantern body, lantern glow, the shared light pool (the knock build splits each part into the 384 m cells)
+  furniture: { triangles: 15000, draws: 4, drawsNight: 5 },            // plan C6 "furniture 15 k instanced / 4", read STRICTLY (T6 fix round 2): all of furniture.js (benches + bins + lanterns with glow and light pool) <= 15 k triangles, and 4 draws (bench, bin, lantern body, lantern glow) in the page build too; the 5th, the shared additive light pool, draws at night only (it is hidden by day)
   monuments: { triangles: 40000, draws: 12 },
 };

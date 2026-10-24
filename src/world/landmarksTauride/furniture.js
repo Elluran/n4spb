@@ -8,14 +8,14 @@
 // Vertex-coloured toon models built with streets/vb.js (the strip's lamp and car builder): a bench 72 triangles (black cast ends and back posts, orange-brown slats: props/furniture.js benchPark), a bin 36 (the black cast-iron
 // urn of the Petersburg parks, hexagonal), a lantern 96 + a 16-triangle glow.
 import * as THREE from 'three';
-import { VB } from '../streets/vb.js';
+import { VB, cg, mtx } from '../streets/vb.js';
 import { registerLOD } from '../../core/spatial.js';
 import { knockInstances } from '../lib/knock-inst.js';
 import { gardenHeight, GARDEN_SHORE } from './height.js';
 import { PATHS } from './data/paths.js';
 import { BENCHES, BINS, FENCES, GATES } from './data/furniture.js';
 import { GARDEN, FOOTPRINTS } from './data/footprints.js';
-import { BENCH, BIN, LANTERN } from './data/furniture-design.js';
+import { BENCH, BIN, LANTERN, FURNITURE_CELL } from './data/furniture-design.js';
 import { CLEARINGS } from './data/vegetation.js';
 
 // ---------------------------------------------------------------------------------------------------------------- geometry helpers
@@ -141,18 +141,23 @@ export function planFurniture(o = {}) {
 
 // ---------------------------------------------------------------------------------------------------------------- the models
 let _models = null;
+/** a unit box without the faces nobody can see (0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z: the BoxGeometry order, 2 triangles each): the same pixels as the whole box for 2 triangles a face less (T6 fix round 2: the furniture gate 15 k) */
+const openBox = (skip) => cg('tauride-obox|' + skip.join(''), () => { const g = new THREE.BoxGeometry(1, 1, 1), a = Array.from(g.index.array), keep = []; for (let f = 0; f < 6; f++) if (!skip.includes(f)) keep.push(...a.slice(f * 6, f * 6 + 6)); g.setIndex(keep); return g; });
+const obox = (vb, skip, w, h, d, color, pos, rot) => vb.add(openBox(skip), color, mtx(pos, rot, [w, h, d]));
+/** the hexagonal frustum of the bin without its bottom cap (it stands on the ground): torso 12 + top cap 6 triangles */
+const binGeo = (rt, rb, h) => cg('tauride-bin|' + [rt, rb, h].join(), () => { const g = new THREE.CylinderGeometry(rt, rb, h, 6, 1, false); g.setIndex(Array.from(g.index.array).slice(0, 12 * 3 + 6 * 3)); return g; });
 /** the three vertex-coloured geometries (cached): bench, bin, lantern body + glow */
 export function furnitureModels(B = BENCH, N = BIN, L = LANTERN) {
   if (_models) return _models;
   const bench = new VB(), len = B.len, hl = len / 2 - 0.12;
   for (const s of [-1, 1]) {
-    bench.box(0.07, 0.44, 0.5, B.iron, [s * hl, 0.22, 0]);                                                 // the cast end
-    bench.box(0.07, 0.5, 0.07, B.iron, [s * hl, 0.68, -0.23], [-10 * Math.PI / 180, 0, 0]);               // the back post
+    obox(bench, [3], 0.07, 0.44, 0.5, B.iron, [s * hl, 0.22, 0]);                                           // the cast end (no bottom)
+    obox(bench, [3], 0.07, 0.5, 0.07, B.iron, [s * hl, 0.68, -0.23], [-10 * Math.PI / 180, 0, 0]);         // the back post (no bottom: it stands inside the end)
   }
-  bench.box(len - 0.2, 0.04, 0.42, B.wood, [0, 0.46, 0.04]);                                                // the seat slats (one block)
-  bench.box(len - 0.2, 0.26, 0.035, B.wood, [0, 0.76, -0.25], [-10 * Math.PI / 180, 0, 0]);               // the back slats
+  obox(bench, [0, 1, 3], len - 0.2, 0.04, 0.42, B.wood, [0, 0.46, 0.04]);                                                // the seat slats (one block)
+  obox(bench, [0, 1, 3], len - 0.2, 0.26, 0.035, B.wood, [0, 0.76, -0.25], [-10 * Math.PI / 180, 0, 0]);               // the back slats
   const bin = new VB();
-  bin.cyl(0.31, 0.13, 0.76, N.iron, [0, 0.38, 0], null, 6);                                                // the vase with its flared lip (hexagonal, one frustum)
+  bin.add(binGeo(0.31, 0.13, 0.76), N.iron, mtx([0, 0.38, 0]));                                                // the vase with its flared lip (hexagonal, one frustum)
   const body = new VB(), glow = new VB(), H = L.h;
   body.cyl(0.22, 0.17, 0.28, L.iron, [0, 0.14, 0], null, 8, null, true);                                   // the plinth
   body.cyl(0.075, 0.1, H - 1.78, L.iron, [0, 0.28 + (H - 1.78) / 2, 0], null, 6, null, true);              // the pole
@@ -160,7 +165,7 @@ export function furnitureModels(B = BENCH, N = BIN, L = LANTERN) {
   body.cyl(0.2, 0.16, 0.2, L.ironL, [0, H - 1.4, 0], null, 6, null, true);                                 // the cup under the lantern
   body.cyl(0.03, 0.5, 0.5, L.iron, [0, H - 0.35, 0], null, 4, null, true);                                 // the pyramid roof
   body.ball(0.06, L.ironL, [0, H - 0.03, 0], null, 'oct');                                                   // the finial
-  for (const [x, z] of [[0, 0.36], [0, -0.36], [0.36, 0], [-0.36, 0]]) body.box(0.035, 0.74, 0.035, L.iron, [x, H - 0.95, z]);   // the frame ribs
+  for (const [x, z] of [[0, 0.36], [0, -0.36], [0.36, 0], [-0.36, 0]]) obox(body, [2, 3], 0.035, 0.74, 0.035, L.iron, [x, H - 0.95, z]);   // the frame ribs
   glow.cyl(0.4, 0.3, 0.7, L.glass, [0, H - 0.95, 0], null, 4, null, true);                                  // the glass (glows at night)
   _models = { bench: bench.build(), bin: bin.build(), body: body.build(), glow: glow.build() };
   return _models;
@@ -179,11 +184,11 @@ export function buildFurniture(ctx, parent, plan, opts = {}) {
   const yRange = (y, top) => [Math.min(0, y) - 0.5, y + top];
   // ---- benches
   { const spots = plan.benches.map((b) => ({ x: b.x, y: b.y, z: b.z, rotY: b.rotY })), items = plan.benches.map((b) => { const [y0, y1] = yRange(b.y, B.h); return ph.addBox(b.x, b.z, B.len, B.depth, b.rotY, y0, y1); });
-    const r = knockInstances(ctx, { name: 'tauride-benches', parts: [{ geo: models.bench, mat: mVC, name: 'bench' }], spots, items, far: B.far, rec: { kind: 'bench', mass: B.mass, h: B.h, w: B.len, d: B.depth, hitK: B.hitK, minDv: 0.5 } });
+    const r = knockInstances(ctx, { name: 'tauride-benches', parts: [{ geo: models.bench, mat: mVC, name: 'bench' }], spots, items, far: B.far, cell: FURNITURE_CELL, rec: { kind: 'bench', mass: B.mass, h: B.h, w: B.len, d: B.depth, hitK: B.hitK, minDv: 0.5 } });
     out.records.bench = r.records; out.items.bench = items; out.meshes.push(...r.meshes); out.triangles += triOf(models.bench) * spots.length; out.instances.bench = spots.length; }
   // ---- bins
   { const spots = plan.bins.map((b) => ({ x: b.x, y: b.y, z: b.z, rotY: b.rotY })), items = plan.bins.map((b) => { const [y0, y1] = yRange(b.y, N.h); return ph.addCylinder(b.x, b.z, N.r, y0, y1); });
-    const r = knockInstances(ctx, { name: 'tauride-bins', parts: [{ geo: models.bin, mat: mVC, name: 'bin' }], spots, items, far: N.far, rec: { kind: 'bin', mass: N.mass, h: N.h, r: N.r, hitK: N.hitK, metal: true } });
+    const r = knockInstances(ctx, { name: 'tauride-bins', parts: [{ geo: models.bin, mat: mVC, name: 'bin' }], spots, items, far: N.far, cell: FURNITURE_CELL, rec: { kind: 'bin', mass: N.mass, h: N.h, r: N.r, hitK: N.hitK, metal: true } });
     out.records.bin = r.records; out.items.bin = items; out.meshes.push(...r.meshes); out.triangles += triOf(models.bin) * spots.length; out.instances.bin = spots.length; }
   // ---- lanterns: the garden's own (a collider each, knockable) and the ones on the gate piers (a visual on the pier, no record)
   const spots = [...plan.lanterns.map((l) => ({ x: l.x, y: l.y, z: l.z, rotY: l.rotY, s: 1, own: true })), ...plan.gateLanterns.map((l) => ({ x: l.x, y: l.y, gy: l.gy, z: l.z, rotY: l.rotY, s: 0.5, own: false, gate: l.gate }))];
@@ -204,7 +209,7 @@ export function buildFurniture(ctx, parent, plan, opts = {}) {
       pool.instanceMatrix.needsUpdate = true; pool.frustumCulled = false; pool.renderOrder = 5; ctx.noOutline(pool); ctx.noBatch(pool); parent.add(pool); pool.visible = false; registerLOD(pool, L.farGlow);
     }
     const r = knockInstances(ctx, { name: 'tauride-lanterns', parts: [{ geo: models.body, mat: mVC, name: 'body', far: L.far }, { geo: models.glow, mat: mGlow, shadow: false, noOutline: true, hide: true, far: L.farGlow, name: 'glow' }],
-      spots, items: (i) => items[i], far: L.far, rec: (s) => (s.own ? { kind: 'lamp', mass: L.mass, h: L.h, r: 0.17, anchored: L.anchored, hitK: L.hitK, metal: true } : null),
+      spots, items: (i) => items[i], far: L.far, cell: FURNITURE_CELL, rec: (s) => (s.own ? { kind: 'lamp', mass: L.mass, h: L.h, r: 0.17, anchored: L.anchored, hitK: L.hitK, metal: true } : null),
       extraParts: pool ? (i, s) => [{ mesh: pool, index: s.pool, hide: true }] : null });
     out.records.lamp = r.records; out.items.lamp = items; out.meshes.push(...r.meshes); out.triangles += (triOf(models.body) + triOf(models.glow)) * spots.length + 2 * spots.length; out.instances.lamp = spots.length;
     ctx.onUpdate(() => {
