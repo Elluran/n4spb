@@ -23,7 +23,7 @@ export const REGISTRY = {
     id: 'strip', page: 'index.html', bake: 'baked/', requireBake: false,
     title: 'Невский проспект', titleEn: 'Nevsky strip',
     sights: ['Московский вокзал', 'Невский проспект', 'Дворцовая площадь', 'Адмиралтейство'],
-    approxMB: 48, remap: {}, dev: false,
+    approxMB: 51, remap: {}, dev: false,
     play: [
       { name: 'OLD', x0: -595, x1: 835, z0: -405, z1: 1060 },
       { name: 'W1', x0: -1750, x1: -595, z0: -1000, z1: 160 },
@@ -86,7 +86,7 @@ export const GATES = [
       label: 'Метро: одна остановка до «Площади Восстания»', labelEn: 'Metro: one stop to Ploshchad Vosstaniya (the Nevsky strip)',
       title: 'Метро «Чернышевская» → «Площадь Восстания» · Metro: Chernyshevskaya → Ploshchad Vosstaniya',
       sights: 'Одна остановка по первой линии, 1 560 м, около двух минут · One stop on line 1, 1,560 m, about two minutes',
-      scene: 'Невский проспект — отдельная сцена, около 48 МБ, 25–40 с; страница перезагрузится, и вы выйдете из метро у ротонды на площади Восстания · The Nevsky strip is a separate scene, about 48 MB, 25–40 s; the page reloads and you come out of the metro at the rotunda on Vosstaniya Square',
+      scene: 'Невский проспект — отдельная сцена, около 51 МБ, 25–40 с; страница перезагрузится, и вы выйдете из метро у ротонды на площади Восстания · The Nevsky strip is a separate scene, about 51 MB, 25–40 s; the page reloads and you come out of the metro at the rotunda on Vosstaniya Square',
       fine: 'Пешком: машина останется здесь; время суток и звук поедут с вами · On foot: the car stays here; time of day and sound come along',
     } },
 ];
