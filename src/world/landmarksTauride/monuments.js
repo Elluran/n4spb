@@ -304,7 +304,8 @@ function buildFountain(ctx, parent, f, out, add) {
   v.rod([bx, top + 0.42, bzc + 0.3], [bx, top + 0.56, bzc + 0.36], 0.025, bz, 5);                               // neck
   v.sph(0.04, bz, [bx, top + 0.59, bzc + 0.38], 6);                                                             // head
   v.rod([bx, top + 0.59, bzc + 0.4], [bx, top + 0.575, bzc + 0.47], 0.015, '#8a7a3a', 4);                      // beak
-  const bronze = v.build();
+  const bronze = v.build(), BK = D.boyScale ?? 1;
+  if (BK !== 1) { bronze.translate(-bx, -top, -bzc); bronze.scale(BK, BK, BK); bronze.translate(bx, top, bzc); }          // T7: the boy and his duck larger (the whole group about its foot on the pedestal)
   add(mergeGeos([g.build(), withUv(bronze)]), 'tauride-fountain');
   // the water: a disc just under the rim; the spout: an animated thin cone and a few droplets
   const wg = new THREE.CircleGeometry(R, 24); wg.rotateX(-Math.PI / 2);
@@ -312,7 +313,7 @@ function buildFountain(ctx, parent, f, out, add) {
   const spray = ctx.mat.toon(D.spray, { paint: 0.08, name: 'tauride-fountain-spray' }), jet = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.03, 1, 6, 1), spray);
   const drops = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), spray, 8);
   jet.name = 'tauride-fountain-jet'; drops.name = 'tauride-fountain-drops'; ctx.noOutline(jet); ctx.noOutline(drops);
-  const beakY = top + 0.575, bzz = bzc + 0.46, M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V3 = new THREE.Vector3(), S3 = new THREE.Vector3();
+  const beakY = top + 0.575 * BK, bzz = bzc + 0.46 * BK, M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V3 = new THREE.Vector3(), S3 = new THREE.Vector3();
   const update = (t) => {
     const h = D.jetH * (0.92 + 0.08 * Math.sin(t * 2.1));
     jet.position.set(bx, beakY + h / 2, bzz); jet.scale.set(1, h, 1);
@@ -331,7 +332,8 @@ function buildOrangery(ctx, parent, o, out, add) {
   g.at(o.cx, y, o.cz, o.yaw);                                                              // local frame: z along the long axis (u), x across (v)
   const bayLen = o.length / o.bays, t = 0.42, w = D.wallH, ph = D.plinth, rh = D.ridgeH - D.wallH;
   // the brick plinth round the building (with the door gap in the middle of the entry end), 0.4 m thick
-  const brick = (x0, x1, z0, z1) => g.box(x0, x1, 0, ph, z0, z1, D.brick, 'b');
+  // T7: the plinth is no flat brick slab any more: a darker course at a third of its height, a stone coping on top (the glass wall stands behind it)
+  const brick = (x0, x1, z0, z1) => { g.box(x0, x1, 0, ph, z0, z1, D.brick, 'b'); g.box(x0 - 0.03, x1 + 0.03, ph * 0.3, ph * 0.38, z0 - 0.03, z1 + 0.03, D.brickD, 'b'); g.box(x0 - 0.05, x1 + 0.05, ph, ph + 0.08, z0 - 0.05, z1 + 0.05, D.coping, 'b'); };
   brick(-hw, -hw + t, -hl + t, hl - t); brick(hw - t, hw, -hl + t, hl - t);
   const gap = D.door / 2, entryZ = o.entry.end > 0 ? 1 : -1;
   if (entryZ > 0) { brick(-hw, -gap, hl - t, hl); brick(gap, hw, hl - t, hl); } else { brick(-hw, -gap, -hl, -hl + t); brick(gap, hw, -hl, -hl + t); }
@@ -350,7 +352,12 @@ function buildOrangery(ctx, parent, o, out, add) {
   for (let i = 0; i < 10; i++) {
     const u = -hl + (i + 0.5) * o.length / 10, v = (i % 2 ? 1 : -1) * hw * 0.35 * (0.5 + hashXZ(i, 1, 9)), h = 3.2 + hashXZ(i, 2, 9) * 2.6;
     g.cyl(v, u, ph, ph + h, 0.16, 0.11, 6, '#6b4f36');
-    for (let k = 0; k < 7; k++) { const a = k / 7 * TAU, dx = Math.cos(a), dz = Math.sin(a); const A = [v, ph + h, u], Bp = [v + dx * 1.7, ph + h - 0.5, u + dz * 1.7], Cp = [v + dx * 1.7 - dz * 0.25, ph + h - 0.55, u + dz * 1.7 + dx * 0.25], Dp = [v - dz * 0.15, ph + h, u + dx * 0.15]; g.quad(A, Bp, Cp, Dp, '#3e7a3a'); g.quad(A, Dp, Cp, Bp, '#356b34'); }
+    // T7: nine drooping fronds, each a leaf of two segments (a stalk widening to 0.32 m at the bend, a tip), both sides (the T6 fronds were single bars: a skeleton)
+    for (let k = 0; k < 9; k++) {
+      const a = (k + 0.37 * (i % 3)) / 9 * TAU, dx = Math.cos(a), dz = Math.sin(a), px = -dz, pz = dx, top = ph + h, cg = k % 2 ? '#3e7a3a' : '#4a8a42', cg2 = k % 2 ? '#356b34' : '#3d7838';
+      const A0 = [v - px * 0.07, top, u - pz * 0.07], A1 = [v + px * 0.07, top, u + pz * 0.07], M0 = [v + dx * 0.95 - px * 0.34, top + 0.28, u + dz * 0.95 - pz * 0.34], M1 = [v + dx * 0.95 + px * 0.34, top + 0.28, u + dz * 0.95 + pz * 0.34], T = [v + dx * 2.0, top - 0.7, u + dz * 2.0];
+      g.quad(A0, M0, M1, A1, cg); g.quad(A1, M1, M0, A0, cg2); g.tri(M0, T, M1, cg); g.tri(M1, T, M0, cg2);
+    }
   }
   g.at();
   // the glass: the long walls above the plinth, the roof halves, the gable ends (transparent quads, one material)
@@ -393,7 +400,8 @@ function playgroundGeometry(g, p) {
       const t = S.tower / 2;
       for (const [x, z] of [[-t, -t], [t, -t], [t, t], [-t, t]]) g.box(x - 0.04, x + 0.04, 0, S.h, z - 0.04, z + 0.04, S.post, 'b');
       g.box(-t, t, S.h - 0.06, S.h, -t, t, S.color, 'b'); g.pyramid(-t - 0.1, t + 0.1, -t - 0.1, t + 0.1, S.h + 0.02, S.h + 0.6, S.color);
-      const ex = t + S.len; g.quad([t, S.h - 0.05, -0.22], [ex, 0.15, -0.22], [ex, 0.15, 0.22], [t, S.h - 0.05, 0.22], S.slideColor);
+      const ex = t + S.len; g.quad([t, S.h - 0.05, 0.22], [ex, 0.15, 0.22], [ex, 0.15, -0.22], [t, S.h - 0.05, -0.22], S.slideColor);      // T7: the chute bed faces UP (it was wound downwards: only the two red rails showed); a second quad under it faces down, so it reads from below too
+      g.quad([t, S.h - 0.06, -0.22], [ex, 0.14, -0.22], [ex, 0.14, 0.22], [t, S.h - 0.06, 0.22], S.color);
       g.box(t, ex, 0.15, 0.3, -0.26, -0.22, S.color, 'b'); g.box(t, ex, 0.15, 0.3, 0.22, 0.26, S.color, 'b');
     } else if (it.kind === 'swing') {
       const hw = W.w / 2;

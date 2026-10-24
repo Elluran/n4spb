@@ -260,6 +260,10 @@ function buildSiteSolids(K, KW, rec, D, P, G, shore) {
     const M = DAM_DATA.mouthOnLake, lakeSide = ((M[0] - q.x) * p[0] + (M[1] - q.z) * p[1]) >= 0 ? 1 : -1, spill = DM.spillToLake ? lakeSide : -lakeSide, base = bed - DM.bodyBelowBed, crest = h(um);
     // the stone body across the channel: from under the bed up to the crest, the deck width + bodyOut on the upstream face: the granite stands crest - WATER_Y above the water, not the slab edge
     K.obb(q.x - p[0] * spill * DM.bodyOut / 2, q.z - p[1] * spill * DM.bodyOut / 2, q.dx, q.dz, hl, hw + DM.bodyOut / 2, base, crest - 0.01, cols.body);
+    // T7 (the GPU QA of the lake face: 'a plain grey slab'): the lake face gets a low coping kerb 7 cm over the walkway (a stone edge the rail stands behind) and a darker wet course at the waterline, so the mass reads as laid stone
+    { const face = hw + (spill === lakeSide ? 0 : DM.bodyOut), wet = cols.abutment.map((c) => c * 0.72), kw = Math.min(0.25, face - hw + 0.1) / 2;
+      K.obb(q.x + p[0] * lakeSide * (hw + kw - 0.02), q.z + p[1] * lakeSide * (hw + kw - 0.02), q.dx, q.dz, hl, kw, base, crest + 0.07, cols.coping);
+      K.obb(q.x + p[0] * lakeSide * (face + 0.008), q.z + p[1] * lakeSide * (face + 0.008), q.dx, q.dz, hl, 0.01, base, P.WATER_Y + 0.12, wet); }
     // the coping on the SPILL face: from under the bed to copingRise ABOVE the crest, copingW beyond the deck edge (overlapping the slab side by 2 cm): the overflow sill, seen from the deck and from the water it falls into
     const vIn = hw - 0.02, vOut = hw + DM.copingW, lipY = crest + DM.copingRise;
     K.obb(q.x + p[0] * spill * (vIn + vOut) / 2, q.z + p[1] * spill * (vIn + vOut) / 2, q.dx, q.dz, hl, (vOut - vIn) / 2, base, lipY, cols.coping);

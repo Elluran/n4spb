@@ -24,7 +24,11 @@ export function makeWorld(ctx) {
   // ---------------------------------------------------------------- trunks grid (trees / shrubs the animals must not stand in)
   const tgrid = new Map(); const TC = 8;
   const tk = (i, j) => i * 40009 + j;
-  for (const t of env?.trees || []) { const k = tk(Math.floor(t.x / TC), Math.floor(t.z / TC)); (tgrid.get(k) || tgrid.set(k, []).get(k)).push(t); }
+  // the landmark gardens that plant their own trees publish services.<module>.treeList = [{ x, z, h, tr, r, shrub?, y? }] (y = the terrain under the trunk; absent = 0): their trunks join the grid
+  // (the ground birds keep out of them, the sparrows find their shelter) and their crowns are perches. An absent module = an empty list = the grid of the environment alone.
+  const GARDEN_TREE_MODULES = ['landmarksE', 'landmarksF', 'landmarksH', 'landmarksJ', 'landmarksTauride'];
+  const gardenTrees = GARDEN_TREE_MODULES.flatMap((k) => (Array.isArray(svc[k]?.treeList) ? svc[k].treeList : []));
+  for (const t of [...(env?.trees || []), ...gardenTrees]) { const k = tk(Math.floor(t.x / TC), Math.floor(t.z / TC)); (tgrid.get(k) || tgrid.set(k, []).get(k)).push(t); }
   const inTree = (x, z, pad = 0.3) => {
     const ci = Math.floor(x / TC), cj = Math.floor(z / TC);
     for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) for (const t of tgrid.get(tk(i, j)) || []) {
@@ -152,12 +156,13 @@ export function makeWorld(ctx) {
   }
   // tree tops (lime / maple / elm crowns of the side streets, the embankments and the gardens): a bird sits just under the top of a tall crown. The trees of the landmark gardens are
   // drawn by their modules: they may publish services.landmarksX.treeList = [{ x, z, h }] (not yet: the Alexander Garden, Kazan and St Isaac's gardens then have lamps only)
-  const gardenTrees = ['landmarksE', 'landmarksF', 'landmarksH', 'landmarksJ'].flatMap((k) => (Array.isArray(svc[k]?.treeList) ? svc[k].treeList : []));
   for (const t of [...(env?.trees || []), ...gardenTrees]) {
     if (t.shrub || t.h < 9) continue;
     if (hash2(Math.round(t.x * 7), Math.round(t.z * 7)) > 0.22) continue;
     if (!L.inPlay(t.x, t.z, 0)) continue;
-    addPerch({ kind: 'tree', x: t.x, y: t.h - 0.6, z: t.z, yaw: hash2(Math.round(t.x), Math.round(t.z)) * 6.283, size: 2, tree: t });
+    const p = addPerch({ kind: 'tree', x: t.x, y: (t.y || 0) + t.h - 0.6, z: t.z, yaw: hash2(Math.round(t.x), Math.round(t.z)) * 6.283, size: 2, tree: t });
+    // a garden tree publishes crown = [the drawn crown top above its terrain at LOD0, 1, 2, 3] and lod (the level on the screen now): the crow stands ON the crown that is drawn (T7 fix round 1; the nominal t.h lay 0.6 .. 2 m inside it)
+    if (Array.isArray(t.crown)) Object.defineProperty(p, 'y', { enumerable: true, get: () => (t.y || 0) + t.crown[Math.min(t.lod | 0, 2)] + 0.05, set() { /* the crown decides */ } });
   }
   lap('lamps+trees');
   // the quay: granite posts of the Fontanka parapet (a post every ~3.2 m), the posts / railing tops of the canals, the roll parapet of the Neva: the gulls' favourites. quay.js publishes

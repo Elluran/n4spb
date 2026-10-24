@@ -241,7 +241,7 @@ export function pondMaterial(ctx, field, P = PONDS, zones = []) {
         float bankK = 1.0 - smoothstep(0.4, uDuck.x, dsh);
         float dwn = vn(vW.xz * 0.7) * 0.55 + vn(vW.xz * 2.3 + 9.0) * 0.45;
         float weed = smoothstep(0.38, 0.62, dwn + 0.30 * bankK - 0.12) * bankK * smallW * uDuck.y;
-        col = mix(col, vec3(0.36, 0.52, 0.17) * mix(1.0, 0.42, uNight), weed * 0.8);
+        col = mix(col, vec3(0.31, 0.45, 0.16) * mix(1.0, 0.42, uNight), weed * 0.65);
         `;
   if (!withUniforms.includes('gl_FragColor = vec4(col, 1.0);') || withUniforms === fs) throw new Error('ponds.js pondMaterial: the fragment shader of environment/water.js changed (cannot place the duckweed)');
   m.fragmentShader = withUniforms.replace('gl_FragColor = vec4(col, 1.0);', mat + 'gl_FragColor = vec4(col, 1.0);');

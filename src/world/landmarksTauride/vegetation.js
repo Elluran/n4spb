@@ -229,8 +229,14 @@ export function planVegetation(o = {}) {
   // ---- 6. the groves on the wood polygons: a jittered lattice thinned by a slow noise (clearings and dense knots, not a plantation)
   woodsBox.forEach((w, wi) => {
     const R = rngOf('tauride-veg:grove:' + wi), b = w.b, G = Z.grove, st = G.step, j = G.jitter, C = G.clump;
-    for (let z = Math.floor(b[2] / st) * st; z < b[3]; z += st) for (let x = Math.floor(b[0] / st) * st; x < b[1]; x += st) {
-      const px = x + st / 2 + R.range(-j, j), pz = z + st / 2 + R.range(-j, j), shrub = R() < G.shrub, key = shrub ? 'shrub' : pick(R, G.mix, zs('grove').species), u = R();
+    // T7 (the T5 GPU QA: 'the groves show a near-regular trunk lattice'): each wood's lattice is TURNED by its own angle (G.turn) about the box centre and its points are carried by a slow warp (G.warp m), so no two woods
+    // share a row direction and the rows bend; the cells are the same size, the clump noise and the jitter are as they were
+    const wc = [(b[0] + b[1]) / 2, (b[2] + b[3]) / 2], hd = Math.hypot(b[1] - b[0], b[3] - b[2]) / 2 + st, th = G.turn ? R.range(0, G.turn) * Math.PI / 180 : 0, ct = Math.cos(th), sn = Math.sin(th), WP = G.warp || 0;
+    for (let v0 = -Math.floor(hd / st) * st; v0 < hd; v0 += st) for (let u0 = -Math.floor(hd / st) * st; u0 < hd; u0 += st) {
+      const lu = u0 + st / 2 + R.range(-j, j), lv = v0 + st / 2 + R.range(-j, j);
+      let px = wc[0] + lu * ct - lv * sn, pz = wc[1] + lu * sn + lv * ct;
+      if (WP) { const wx = noise2(px / 37, pz / 37, 53) - 0.5, wz = noise2(px / 37 + 11, pz / 37 - 7, 59) - 0.5; px += wx * 2 * WP; pz += wz * 2 * WP; }
+      const shrub = R() < G.shrub, key = shrub ? 'shrub' : pick(R, G.mix, zs('grove').species), u = R();
       if (!polyHas(px, pz, w.p)) continue;
       if (C) { const n = noise2(px / C.period, pz / C.period, 31), keep = C.keep[0] + (C.keep[1] - C.keep[0]) * n; if (u > keep) continue; }
       plant('grove', key, px, pz, R);
@@ -330,12 +336,12 @@ export function buildVegetation(ctx, parent, plan, o = {}) {
     const n = byFam[fam].length, F = rows[fam]; M[fam] = []; TR[fam] = [];
     if (!barkMat[F.bark]) barkMat[F.bark] = trunkMaterial(ctx, barkTexture(ctx, F.bark), 'env-bark-pb-' + F.bark);
     for (let l = 0; l < 4; l++) {
-      const im = new T.InstancedMesh(canopyGeometry(fam, l, F), F.kind === 'tiers' ? matTier : matLobe, n);
+      const im = new T.InstancedMesh(canopyGeometry(F.geo || fam, l, F), F.kind === 'tiers' ? matTier : matLobe, n);
       im.instanceMatrix.setUsage(T.DynamicDrawUsage); im.setColorAt(0, col.setRGB(1, 1, 1)); im.instanceColor.setUsage(T.DynamicDrawUsage);
       im.count = 0; im.frustumCulled = false; im.castShadow = l <= 1; im.receiveShadow = l <= 1; im.name = `tauride-tree-${fam}-${l}`; im.visible = false;
       group.add(im); M[fam].push(im); meshes.push(im);
       if (l <= 1) {
-        const tg = trunkGeometry(fam, l, F);
+        const tg = trunkGeometry(F.geo || fam, l, F);
         if (tg) { const tm = new T.InstancedMesh(tg, barkMat[F.bark], n); tm.instanceMatrix = im.instanceMatrix; tm.count = 0; tm.frustumCulled = false; tm.castShadow = true; tm.receiveShadow = true; tm.name = `tauride-trunk-${fam}-${l}`; tm.visible = false; group.add(tm); TR[fam].push(tm); meshes.push(tm); }
         else TR[fam].push(null);
       }
@@ -355,6 +361,7 @@ export function buildVegetation(ctx, parent, plan, o = {}) {
   for (const t of list) if (inPlay(t.x, t.z, -5)) { t.col = ctx.physics.addCylinder(t.x, t.z, t.tr, Math.min(0, t.y) - 0.5, t.y + (t.shrub ? 1.3 : 4.5)); colliders++; }
   // the LOD assignment (the environment's rule without the view cone: the garden is small): re-packed when the camera moves
   const state = new Int8Array(list.length).fill(-1);
+  const lodSink = { list: null };
   const writer = createTreeInstanceWriter(list, (t) => ({ y: t.y, sx: t.s, sy: t.sy, sz: t.s, rgb: t.rgb }));
   const buckets = {}; for (const f in M) buckets[f] = M[f].map((m) => writer.bucket(m));
   function assign(cx, cz) {
@@ -363,7 +370,7 @@ export function buildVegetation(ctx, parent, plan, o = {}) {
       let l = d < LOD_D[0] ? 0 : d < LOD_D[1] ? 1 : d < LOD_D[2] ? 2 : 3;
       const pv = state[i];
       if (pv >= 0 && pv !== l) { const lo = pv === 0 ? 0 : LOD_D[pv - 1] * 0.9, hi = pv === 3 ? 1e9 : LOD_D[pv] * 1.1; if (d >= lo && d < hi) l = pv; }
-      state[i] = l;
+      state[i] = l; if (lodSink.list) lodSink.list[i].lod = l;
       if (pv !== l) writer.assign(buckets[t.fam][l], i);
     }
     writer.finish();
@@ -379,6 +386,19 @@ export function buildVegetation(ctx, parent, plan, o = {}) {
   const draws = () => meshes.filter((m) => m.count > 0).length + (blobs ? 1 : 0);
   /** every instance of every bucket as { fam, lod, x, y, z, sx, sy } (the matrices as uploaded) */
   const readBack = () => { const out = []; for (const fam of fams) M[fam].forEach((m, l) => { const a = m.instanceMatrix.array; for (let i = 0; i < m.count; i++) { const q = i * 16; out.push({ fam, lod: l, x: a[q + 12], y: a[q + 13], z: a[q + 14], sx: Math.hypot(a[q], a[q + 2]), sy: a[q + 5] }); } }); return out; };
-  const treeList = list.map((t) => ({ x: t.x, z: t.z, y: t.y, r: t.r, h: t.h, tr: t.tr, sp: t.sp, ...(t.shrub ? { shrub: true } : {}) }));
+  // T7 fix round 1 (QA: the crows on the crowns sat 2 m inside them): a perch for a bird is the DRAWN crown, not t.h (the nominal height of the family x s; the instance is stretched by sy, the lobes of LOD0 stand 1 .. 3 m lower than those
+  // of LOD1 / 2). crown = [top above the terrain under the trunk at LOD0, 1, 2, 3] = the highest of five rays dropped on the family's REAL canopy geometry within 0.3 m of the trunk axis, x sy; `lod` = the level the tree is drawn at now
+  // (assign() keeps it), so wildlife/world.js can seat a crow on the crown that is on the screen
+  const famTop = {}, rcast = new T.Raycaster(), rdir = new T.Vector3(0, -1, 0), rorg = new T.Vector3();
+  const topOf = (fam, l) => { const k = fam + l; if (k in famTop) return famTop[k]; const m = new T.Mesh(M[fam][l].geometry, new T.MeshBasicMaterial({ side: T.DoubleSide })); m.updateMatrixWorld(); let best = NaN;
+    for (const [dx, dz] of [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]]) { rcast.set(rorg.set(dx, 200, dz), rdir); const h = rcast.intersectObject(m)[0]; if (h && !(h.point.y <= best)) best = h.point.y; }
+    m.material.dispose(); return (famTop[k] = best); };
+  const treeList = list.map((t, i) => {
+    const row = { x: t.x, z: t.z, y: t.y, r: t.r, h: t.h, tr: t.tr, sp: t.sp, lod: Math.max(0, state[i]) };
+    if (t.shrub) row.shrub = true;
+    else row.crown = [0, 1, 2, 3].map((l) => { const v = topOf(t.fam, l); return Number.isFinite(v) ? v * t.sy : t.h * 0.8; });
+    return row;
+  });
+  lodSink.list = treeList;
   return { group, meshes, instances: list.length, colliders, blobs, triangles, trianglesWorst: worst, draws, assign, readBack, treeList, families: fams, materials: [matLobe, matTier, ...Object.values(barkMat)] };
 }

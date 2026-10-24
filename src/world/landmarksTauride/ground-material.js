@@ -382,7 +382,7 @@ const FOG = /* glsl */`
 export const GROUND_COLORS = Object.freeze({
   uGA: '#5f8a34', uGB: '#78a043', uGC: '#4a7430', uGD: '#8ba84a', uClover: '#74a350', uEarth: '#7a6a50',
   uLA: '#5c7832', uLB: '#6a6e3a', uLC: '#4b6a2c', uLD: '#8b8048',
-  uMA: '#6c5b42', uMB2: '#564630', uBed: PONDS.BED_COLORS.mud, uSilt: PONDS.BED_COLORS.silt, uSand: PONDS.BED_COLORS.sand, uWet: PONDS.BED_COLORS.wet, uWA: '#988462', uWB: '#a69370', uWC: '#b4a686',
+  uMA: '#6c5b42', uMB2: '#564630', uBed: PONDS.BED_COLORS.mud, uSilt: PONDS.BED_COLORS.silt, uSand: PONDS.BED_COLORS.sand, uWet: PONDS.BED_COLORS.wet, uWA: '#9a7f6e', uWB: '#a88b79', uWC: '#b69a88',
 });
 
 /** the direction TO the sun on the ground plane (x, z), normalised: the engine's own sun (ctx.sunDir = layout.SUN_DIR at the day preset), LOOK.sun when the context has none */

@@ -19,11 +19,11 @@ export const WALK_LIFT = 0.02;
 /** the three types of the kit (data/bridges.js BRIDGE_SITES[].type) and the dam. Heights are relative to the ground at the approach ends (+ HEAD_LIFT), spans to the water crossing of the axis. */
 export const TYPES = {
   /** No.3 and No.4: a shallow arched iron deck between granite abutments at the shore, approach ramps on the banks, marble terminal posts at the abutments, cast-iron balustrade, iron arch ribs under the deck */
-  'iron-arch': { headRise: 0.35, crown: 0.40, abutmentFace: 0.4, abutmentLen: 2.0, deckThick: 0.22, railH: 1.05, ribs: 4, ribDrop: 0.35, postMarble: 1.2, color: { deck: '#4a4d50', rail: '#2f3234', rib: '#3a3d40', abutment: '#8b8a84', post: '#d9d6cc', ramp: '#c9a98a' } },
+  'iron-arch': { headRise: 0.35, crown: 0.40, abutmentFace: 0.4, abutmentLen: 2.0, deckThick: 0.22, railH: 1.05, ribs: 4, ribDrop: 0.35, postMarble: 1.2, color: { deck: '#a77f6e', rail: '#dcdad3', rib: '#c3c2bc', abutment: '#8b8a84', post: '#d9d6cc', ramp: '#bd927e' } },
   /** No.1: the humped wooden bridge, planks by colour, wooden rails, the T3 stairs at both ends rise `headRise` to the deck heads (docs/TAURIDE-REMAKE.md 7.1: the 4 + 4 steps say the deck ends stand 0.6 m above the lawn) */
-  'wood-humped': { headRise: 0.6, crown: 0.45, deckThick: 0.18, railH: 1.0, plank: 0.5, color: { deck: '#8a6446', deck2: '#7a583c', rail: '#6b4a30', beam: '#5e3f28', abutment: '#8b8a84' } },
+  'wood-humped': { headRise: 0.6, crown: 0.45, deckThick: 0.18, railH: 1.0, plank: 0.5, color: { deck: '#8a6446', deck2: '#7a583c', rail: '#6b4a30', beam: '#5e3f28', abutment: '#625648' } },
   /** No.2 and No.5: a flat metal footbridge on granite abutments, short ramps at the ends, simple rails */
-  'metal-flat': { headRise: 0.30, rampMin: 2.0, abutmentFace: 0.4, abutmentLen: 1.6, deckThick: 0.16, railH: 1.0, color: { deck: '#5a5e63', rail: '#3a3d40', abutment: '#8b8a84', post: '#d9d6cc' } },
+  'metal-flat': { headRise: 0.30, rampMin: 2.0, abutmentFace: 0.4, abutmentLen: 1.6, deckThick: 0.16, railH: 1.0, color: { deck: '#9d7a6a', rail: '#d6d4cd', abutment: '#8b8a84', post: '#d9d6cc' } },
   /** the dam: a solid granite body across the channel, standing proud of the water on both faces up to the walkway on its crest, a coping (the overflow sill) above the deck line on the spill face (the Small Pond, north: fix round 2), iron rails (see DAM below).
    *  Fix round 1: the body and the coping are a warm light granite, the walkway a dark paving: the stone mass reads against the deck and the rails (the GPU QA saw a flat grey slab like No.2 / No.5 and no stone at all) */
   weir: { deckThick: 0.0, railH: 1.0, color: { body: '#a39b8e', coping: '#b7b0a3', deck: '#6b6a66', rail: '#3a3d40', abutment: '#a39b8e' } },

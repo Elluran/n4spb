@@ -24,6 +24,7 @@ const DG = await imp('src/world/landmarksTauride/data/ground.js');
 const GM = await imp('src/world/landmarksTauride/ground-material.js');
 const PD = await imp('src/world/landmarksTauride/paths-draped.js');
 const TG = await imp('src/world/environment/treegeo.js');
+const T3 = await import(pathToFileURL(path.join(ROOT, 'node_modules/three/build/three.module.js')).href);
 const Pd = await imp('src/world/landmarksTauride/data/paths.js');
 const Fo = await imp('src/world/landmarksTauride/data/footprints.js');
 const Fu = await imp('src/world/landmarksTauride/data/furniture.js');
@@ -178,7 +179,7 @@ console.log('2c. the furniture post pass (KEEP_OUT.furniture, T6): no trunk stan
 // =============================================================== 3. the crowns over the alleys: the real geometry
 console.log('3. the crowns: no leaf lower than the walker\'s head over a ribbon (the REAL LOD0 geometry), the crown base table pinned to the geometry');
 { const SPT = VG.speciesTable(), minY = {};
-  for (const [k, sp] of Object.entries(SPT)) { const g = TG.canopyGeometry(sp.fam, 0, sp.F); g.computeBoundingBox(); minY[k] = g.boundingBox.min.y; }
+  for (const [k, sp] of Object.entries(SPT)) { const g = TG.canopyGeometry(sp.F.geo || sp.fam, 0, sp.F); g.computeBoundingBox(); minY[k] = g.boundingBox.min.y; }
   const baseBad = Object.entries(SPT).filter(([k, sp]) => Math.abs(minY[k] - sp.base) > 0.02 * Math.max(1, sp.base) + 1e-6);
   ok('GARDEN_SPECIES.base equals the lowest leaf of the family\'s LOD0 canopy (within 2 %)', baseBad.length === 0, Object.entries(minY).map(([k, v]) => `${k} ${v.toFixed(2)}/${SPT[k].base}`).join(' '));
   const ways = Pd.PATHS.filter((p) => p.cls !== 'bridge' && p.cls !== 'steps').map((p) => ({ pts: p.pts, hw: p.w / 2 + PD.PATHS_DRAPED.pad }));
@@ -299,6 +300,13 @@ console.log('6. the couplings: HOOKS.treeReject answers \'garden\', the clearing
   }
   const tl = T.treeList[0];
   ok('treeList rows have the shape of environment.trees ({ x, z, r, h, tr, sp, shrub? } + y): what wildlife/world.js reads from a landmark garden\'s treeList', tl && ['x', 'z', 'y', 'r', 'h', 'tr', 'sp'].every((k) => Number.isFinite(tl[k]) || k === 'sp') && typeof tl.sp === 'string', JSON.stringify(tl));
+  // T7 fix round 1: a crow's perch is the DRAWN crown (the QA found the crows 2 m inside it): every tree row carries crown[4] = the top of the real canopy at the trunk axis per LOD x sy, and lod
+  { const rows = T.treeList.map((r, k) => ({ r, t: list[k] })).filter((q) => !q.r.shrub);
+    const bad = rows.filter(({ r, t }) => !(Array.isArray(r.crown) && r.crown.length === 4 && r.crown.every((v) => Number.isFinite(v) && v > t.h * 0.5 && v < t.h * 1.35 * (t.sy / t.s)) && r.lod >= 0 && r.lod <= 3));
+    const lowThanNominal = rows.filter(({ r, t }) => r.crown[1] < t.h * 0.7 * (t.sy / t.s)).length;
+    ok(`every tree row of treeList carries crown = [LOD0, 1, 2, 3 canopy top above the terrain at the trunk axis (ray cast on the real geometry) x sy] and lod: ${rows.length} rows, ${bad.length} bad, ${lowThanNominal} with a LOD1 crown lower than 0.7 of the nominal height`, rows.length > 500 && bad.length === 0 && lowThanNominal === 0, JSON.stringify(rows[0].r.crown));
+    const q = rows.find(({ t }) => t.fam === 'limeA'), ref = q && TG.canopyGeometry('limeA', 1, VG.speciesTable().lime.F); let hit = NaN; if (ref) { const m = new (T3.Mesh)(ref, new T3.MeshBasicMaterial({ side: T3.DoubleSide })); const rc = new T3.Raycaster(new T3.Vector3(0, 200, 0), new T3.Vector3(0, -1, 0)); const h = rc.intersectObject(m)[0]; hit = h ? h.point.y : NaN; }
+    ok('the LOD1 crown top of a lime is its canopy geometry hit at the axis (within 0.35 m after the sy stretch: five rays within 0.3 m, the highest wins)', !!q && Number.isFinite(hit) && Math.abs(q.r.crown[1] - hit * q.t.sy) < 0.35 * q.t.sy + 0.3, q ? `${q.r.crown[1].toFixed(2)} vs ${(hit * q.t.sy).toFixed(2)}` : 'no lime'); }
 }
 
 console.log(`\n${total} checks, ${failed} failed`);

@@ -51,7 +51,7 @@ export const BED_COLORS = { mud: '#5a5236', silt: '#6c6340', wet: '#625c3c', san
 /** The water surface (ponds.js) and its material (environment/water.js LOOK key `tauride-pond`) */
 export const WATER_LOOK_KEY = 'tauride-pond';
 /** the duckweed band of the Small Pond: a green mat on the water that is within `band` m of the bank, `cover` its share at the bank (0 .. 1) */
-export const DUCKWEED = { band: 6, cover: 0.85 };
+export const DUCKWEED = { band: 4.5, cover: 0.55 };      // T7: 6 m / 0.85 made the water at bridges No.1 / No.2 (the canal and the Small Pond arm) a green carpet (the GPU QA); the photos: the water is black-green with a thin edge of weed
 /** T4b: the look tune of the pond water (ponds.js pondMaterial patches the engine's water shader with it; the T4a GPU QA read the narrow east and south arms, 8 .. 12 m wide, as pale speckled gravel / cracked ice from 50 .. 250 m: the olive
  *  shallow tint of the shader reaches 5 m from either bank, its ripple iso-lines and sun glints cover a whole arm): `shallowBand` m from the bank over which the shallow tint fades out, `shallowMix` its strength, `lines` and `glint` the
  *  factors on the ripple iso-lines and the sun glints (1 = the engine's canals), `soffit` the darkening under a bridge deck (a factor on the colour; the engine: a near-black 0.16 .. 0.26 for a street bridge), `soffitFade` m beyond the deck.

@@ -25,7 +25,7 @@ export const CANOPY_BELT = { width: 12, k: 0.30, feather: 4, gateClear: 9 };
 /** WORN SPOTS: places that feet and benches wear to bare earth besides the ones the generator finds itself (a bench r 2.6 m, a gate r 5.5 m, a junction of three ways r 2.8 m, a monument or the fountain r 7 m,
  *  the apron of a building 2.6 m): x, z, radius r (m), wear k (0..1; 0.34 .. 0.5 is the first trampled patches, above 0.72 packed earth). */
 export const WORN_SPOTS = [
-  { id: 'central-round',   x: 1130, z: -1455, r: 12, k: 0.42 },     // the great round of the middle of the garden (the ring path with its ring of benches); no furniture node of its own
+  { id: 'central-round',   x: 1127, z: -1452.3, r: 17, k: 0.9 },    // the great round gravel plaza of the middle of the garden (T7: the user's photo and the satellite: a bare pink-brown disc of ~40 m inside the trees, the low rail fence on it, the benches round it); no furniture node of its own
   // T6: the three plaza spots FOLLOW the furniture data (data/furniture.js FOUNTAINS / MONUMENTS / GATES: `follow` = the OSM node id, dx / dz the hand offset from it; the landmarksTauride.js entry resolves x, z from the node, the x, z written here are what the node gives today and are asserted equal by tools/tauride/furniture-test.mjs)
   { id: 'fountain-plaza',  x: 1282.6, z: -1400.5, follow: 'n950150577', dx: 0, dz: 0, r: 9, k: 0.6 },       // the fountain "Boy with a duck"
   { id: 'south-gate',      x: 1226, z: -1272, follow: 'n828488069', dx: 0, dz: -4.2, r: 9, k: 0.75 },    // the south gate (the people hot spot), 4.2 m inside the fence

@@ -17,6 +17,7 @@
 //      carKeepOut           -> ((x, z) => boolean) | undefined                                     T2a  the garden outline is closed to cars (drive/handling.js solidBlocked); undefined unless MODULES has 'landmarksTauride'
 //      inGarden             -> ((x, z) => boolean) | undefined                                     H08  the Tauride Garden polygon, for the people crowd cap (the North always gives a function; the strip: absent)
 //      deckServices         -> ['landmarksTauride']                                                H09  names of ctx.services whose deckY(x, z) is consulted FIRST (cars, pedestrians)
+//      doorServices         -> ['landmarksNorthFull', 'landmarksOktyabrsky']                       T7   names of ctx.services whose `entrances` ({ x, z, rotY, bldg }) are pedestrian doors besides the city's (people/nav.js; points without rotY are clearing discs and are skipped)
 //      groundHoles          -> (() => [flat ring, ...]) | undefined                                T3a  the rings cut out of the environment ground (environment/ground.js groundCuts): the garden outline moved in by 6 cm; undefined unless MODULES has 'landmarksTauride'
 //      groundWayReject      -> ((road) => boolean) | undefined                                     T3b  the ways that the ground class mask does not paint (environment/field.js buildField): the 120 garden ways; undefined unless MODULES has 'landmarksTauride'
 //      waterBodies          -> (() => [{ id, o, h }]) | undefined                                  T4a  the ponds of the garden as water bodies of the field's water mask (environment/field.js buildField, after the river polygons): env.waterAt / shoreDist / the water shader's distance atlas; undefined unless MODULES has 'landmarksTauride'
@@ -39,6 +40,9 @@ import { makeWaterBodies, makeNoLanding, makeDuckPonds } from './hooks/water.js'
 /** The services whose own deckY(x, z) (a podium, stairs, garden bridges) is consulted before the bridge decks by the drive handling and the pedestrian navigation (H09). An absent service is skipped. */
 const DECK_SERVICES = Object.freeze(['landmarksTauride']);
 
+/** T7 (M7b): the landmark services of PRUNE_SERVICES whose entrances carry a facing (the door points of lib/door-points.js: landmarksNorthFull 86, landmarksOktyabrsky 9); the others (Smolny, Suvorov, Kirochnaya) publish clearing discs only. */
+const DOOR_SERVICES = Object.freeze(['landmarksNorthFull', 'landmarksOktyabrsky']);
+
 /** HOOKS of the North for the page whose module list is MODULES (area.js passes its own list). */
 export function makeHooks(MODULES) {
   return {
@@ -47,6 +51,7 @@ export function makeHooks(MODULES) {
     carKeepOut: makeCarKeepOut(MODULES),            // T2: the garden is closed to cars (a plain function, gated by the module list like parkingReject)
     inGarden,
     deckServices: DECK_SERVICES,
+    doorServices: DOOR_SERVICES,                    // T7: the door points of the landmark modules are doors for the pedestrians (people/nav.js)
     groundHoles: makeGroundHoles(MODULES),          // T3: the environment ground is cut out under the garden's own floor (a plain function, gated by the module list like parkingReject)
     groundWayReject: makeGroundWayReject(MODULES),  // T3: the garden's ways are not painted into the ground class mask (the garden draws them)
     waterBodies: makeWaterBodies(MODULES),          // T4a: the garden's ponds enter the field's water mask (env.waterAt, shoreDist, the water shader's distance atlas)
