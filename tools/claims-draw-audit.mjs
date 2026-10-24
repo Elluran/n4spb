@@ -78,6 +78,7 @@ const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf('--' + k); return i >= 0 && argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') ? argv[i + 1] : d; };
 const INSET = Number(opt('inset', 1.0)), DEEP = Number(opt('deep', 1.5)), ABOVE = Number(opt('above', 1.5)), MIN_UNCLAIMED = Number(opt('min-unclaimed', 50)), MIN_GENERIC = Number(opt('min-generic', 5)), VERBOSE = argv.includes('--verbose');
 const WHERE = new Set(String(opt('where', '')).split(',').filter(Boolean));
+const STRICT = argv.includes('--strict');      // review fix: a warning (a claimed point / way / lawn that its owner draws nothing in) fails; the North has 0 warnings today, the strip's 10 are the castle's footways, so the strip does not run it
 const mutantIds = new Set(), undrawIds = new Set(), citydrawIds = new Set(), LOOSE_RULE1 = argv.includes('--loose-rule1');
 for (const m of String(opt('mutant', '')).split(',').filter(Boolean)) { const [kind, id] = m.split(':'); if (!['unclaim', 'undraw', 'citydraw'].includes(kind) || !id) { console.log(`unknown --mutant "${m}" (unclaim:<id> | undraw:<id> | citydraw:<id>)`); process.exit(2); } (kind === 'unclaim' ? mutantIds : kind === 'undraw' ? undrawIds : citydrawIds).add(id); }
 /** a mesh whose name (or an ancestor's) says it is a plant: its centroids are never "the claimed building" (rule 1) */
@@ -314,5 +315,6 @@ for (const n of notes) console.log('NOTE:', n);
 for (const w of VERBOSE ? warnings : warnings.slice(0, 12)) console.log('WARNING:', w);
 if (!VERBOSE && warnings.length > 12) console.log(`WARNING: ... and ${warnings.length - 12} more claimed points nobody draws (--verbose lists them)`);
 for (const p of problems) console.log('PROBLEM:', p);
+if (STRICT && warnings.length) { failed = true; console.log(`STRICT: ${warnings.length} warnings count as failures (a claimed id that nobody draws leaves a hole)`); }
 console.log(failed ? `RESULT: FAIL (${problems.length} problems, ${warnings.length} warnings)` : `RESULT: OK (${warnings.length} warnings, ${notes.length} notes)`);
 process.exit(failed ? 1 : 0);

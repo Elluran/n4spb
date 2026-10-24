@@ -1,6 +1,7 @@
 // CPU test of the gate geometry and state machine (src/core/gates.js, docs/AREAS.md section "Arming, hysteresis"). node tools/gates-test.mjs
 // Synthetic gate: the border is the segment z = 0, x 0..200; "inward" (0, +1) points into the gate's own area (z > 0). A player at z = d is d metres inside.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DEFAULTS, depthFor, chipFor, gateCoords, createGateMachine, createGates, planArrival, promptTexts, crossPlaces, isDoor, backLink } from '../src/core/gates.js';
@@ -295,6 +296,53 @@ check('the strip\'s table lists 4-6 places of the North through g1, every row wi
   check('a driver who picks a place takes the car along to the place (the arrival resolves the viewpoint as a walker\'s, drive.arrive parks the car beside it: tools/cross-places-test.mjs)', () => { const q = new URLSearchParams(url3.split('?')[1]); assert.equal(q.get('cam'), '2335,-1833,-90,21'); const ho = decodeHo(q.get('ho'), { to: 'north' }).ho; assert.equal(ho.car.id, 'coupe'); assert.equal(ho.ret.x, 579); });
   let url4 = null; const apiG = mkGates({ ui: fakeUi(), player, ctx: { onUpdate() {}, drive }, A: stripA }, new URLSearchParams('devgates=1&baked=0')); apiG.navigate = (u) => { url4 = u; }; await apiG.go(G1, 'gate');
   check('a border crossing (via gate) is unchanged: cam = the car\'s own pose, the car along', () => { const q = new URLSearchParams(url4.split('?')[1]); assert.equal(q.get('cam').split(',')[0], '579'); assert.equal(decodeHo(q.get('ho'), { to: 'north' }).ho.via, 'gate'); });
+}
+
+// review fix: the per-frame update() of the machine no longer allocates (it runs every frame on the strip too). The old implementation is kept here as the oracle: same chips and offers, step for step, over a long random drive of the three modes
+{
+  const legacy = ({ gates, config = {} }) => {
+    const C = { ...DEFAULTS, ...config }; const st = new Map(gates.map((g) => [g.id, { until: -1e9, needExit: false, open: false }]));
+    let clock = 0, lastX = null, lastZ = null, vx = 0, vz = 0, holdUntil = 0, graceUntil = C.graceS;
+    return { st, update(inp) {
+      const { dt, x, z, mode } = inp, blocked = inp.blocked || !!inp.indoors; clock += dt;
+      if (lastX === null) { lastX = x; lastZ = z; } else if (dt > 0) { const dx = x - lastX, dz = z - lastZ;
+        if (inp.teleported || Math.hypot(dx, dz) > 40 + 80 * dt) { vx = vz = 0; holdUntil = clock + C.holdS; } else { const k = Math.min(1, dt / C.emaS); vx += (dx / dt - vx) * k; vz += (dz / dt - vz) * k; } lastX = x; lastZ = z; }
+      const held = clock < holdUntil, v = held ? 0 : Math.hypot(vx, vz); let chip = null, offer = null;
+      for (const g of gates) { const s = st.get(g.id), c = gateCoords(g, x, z);
+        const depth = depthFor(mode, v, { ...C, depthWalk: g.zone || C.depthWalk }), chipD = chipFor(mode, v, { ...C, depthWalk: g.zone || C.depthWalk, chipWalk: Math.max(C.chipWalk, (g.zone || C.depthWalk) * 3) });
+        const tol = mode === 'fly' ? C.flyTol : C.lateralTol, lateral = c.s >= -tol && c.s <= c.len + tol;
+        if (!lateral || c.d > depth + C.exitMargin) s.needExit = false;
+        if (blocked || !lateral || c.d < -C.behind || c.d > chipD) continue;
+        if (!chip || c.d < chip.d) chip = { gate: g, d: c.d, depth };
+        if (s.open || clock < graceUntil) continue;
+        const vIn = held ? 0 : vx * g.inward[0] + vz * g.inward[1];
+        if (c.d <= depth && (vIn <= -C.approachV || c.d <= C.nearD) && clock >= s.until && !s.needExit && !offer) offer = g; }
+      return { chip, offer, v }; },
+      decline(g) { const s = st.get(g.id); s.open = false; s.until = clock + C.cooldownS; s.needExit = true; } };
+  };
+  check('the machine (allocation-free update) answers exactly like the previous implementation over 60,000 random steps (walk / fly / car, declines, jumps)', () => {
+    const gs = GATES.filter((g) => g.from === 'strip' && g.seg && g.inward), gz = gs.map((g, i) => (i % 2 ? { ...g, zone: 55 } : g));
+    assert.ok(gz.length >= 2, 'border gates: ' + gz.length);
+    const a = createGateMachine({ gates: gz }), b = legacy({ gates: gz });
+    let seed = 12345; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const mid = gz[0].seg[0]; let x = mid[0] + 20, z = mid[1] + 20, offers = 0, chips = 0;
+    for (let i = 0; i < 60000; i++) {
+      const mode = ['walk', 'fly', 'car'][Math.floor(i / 2000) % 3], sp = mode === 'walk' ? 6 : mode === 'fly' ? 40 : 30, dt = 1 / 60;
+      const jump = rnd() < 0.0005; if (jump) { const g = gz[Math.floor(rnd() * gz.length)]; x = g.seg[0][0] + g.inward[0] * (rnd() * 120 - 20); z = g.seg[0][1] + g.inward[1] * (rnd() * 120 - 20); }
+      else { const ang = (i % 600 < 300 ? 0 : Math.PI) + (rnd() - 0.5) * 2.4 + Math.floor(i / 300); x += Math.cos(ang) * sp * dt; z += Math.sin(ang) * sp * dt; }
+      const inp = { dt, x, z, mode, blocked: i % 5000 > 4800, indoors: false, teleported: jump };
+      const ra = a.update(inp), rb = b.update(inp);
+      assert.equal(ra.offer && ra.offer.id, rb.offer && rb.offer.id, 'offer at step ' + i); assert.equal(ra.chip && ra.chip.gate.id, rb.chip && rb.chip.gate.id, 'chip at step ' + i);
+      if (ra.chip) { assert.equal(ra.chip.d, rb.chip.d); assert.ok(Math.abs(ra.chip.depth - rb.chip.depth) < 1e-9); chips++; }
+      assert.ok(Math.abs(ra.v - rb.v) < 1e-9, 'speed at step ' + i);
+      if (ra.offer) { offers++; a.decline(ra.offer); b.decline(rb.offer); }
+    }
+    assert.ok(offers >= 5 && chips >= 200, offers + ' offers, ' + chips + ' chips: the drive must exercise the machine');
+  });
+  check('createGateMachine update() has no object spread and no Math.hypot (the allocation of the old loop)', () => {
+    const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/core/gates.js'), 'utf8'), i = src.indexOf('update(inp) {'), j = src.indexOf('markOpen(g)', i), body = src.slice(i, j);
+    assert.ok(i > 0 && j > i); assert.ok(!/\{\s*\.\.\./.test(body) && !/Math\.hypot/.test(body) && !/gateCoords\(/.test(body), 'a spread, Math.hypot or gateCoords is back in the per-frame loop');
+  });
 }
 
 console.log(`gates-test: ${passes} passed, ${fails} failed`);
