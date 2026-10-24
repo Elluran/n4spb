@@ -911,3 +911,55 @@ the bake (stale until M8).
   (Potemkin's 1791 feast, the First Duma of 1906, February 1917, Rastrelli / Stasov 1748-1835, the Smolny tar yard, the II Congress of Soviets, Stasov 1827-1829 «построил» vs «перестроил», the captured Turkish cannons of 1828-1829, the
   Liteyny and Shpalernaya name origins, Chernyshevsky's novel, the Neva's 74 km).
 * **Decisions for the user**: the `engine` CI job as a deploy gate; the strip registry's `approxMB: 48` vs the page's 51; Bolshaya Morskaya 37 (`landmarksJ` claims it or leaves it to `city`); the night look of the vestibule signs.
+
+
+## 11. M7 polish
+
+### 11.3 Tools and oracles (cluster C-tools-oracles, branch `m7p-tools`; `tools/` + CI only, no engine file)
+
+Closes the tool gaps of 10.5-10.7. Nothing under `src/` changed: the strip's `npm run check` (25 modules), layout golden, streets / city signatures and environment regress are identical to the M6 baselines and to the
+clean `feat/areas` (3bbdf8e), `check:north` (14 modules) identical to the clean tree in every column.
+
+* **`claims-draw-audit` rule 1 grades the building itself.** The first version counted any centroid inside the footprint at any height, so a tree whose centroid fell in it, a floor or a neighbour's cornice satisfied
+  "the owner draws". Now, for a claimed BUILDING of 5 m2 or more, an owner centroid counts only when it is (a) not foliage (the mesh-name chain matches `FOLIAGE_RE`: tree / trunk / hedge / lilac / reed ...),
+  (b) higher than `--above` and deeper than `--inset` (the band of rules 2 and 3; both scale down for a small building: the inset to 0.3 x the deepest point of the footprint, the height to 0.4 x its mapped
+  height, so a 5 m2 kiosk or a 1.2 m flight of steps is not graded by the band of a house), and (c) not deeper inside a building of another claim group (a neighbour's wall inside the shared outline, overlapping
+  data outlines). A PART without a centroid of its own is covered by a drawn parent (`rec.part` / `parent`; the owner draws the wall on the shared outline): one `NOTE` line, ids with `--verbose`. Points, ways, lawns and
+  tiny parts keep the loose count (warnings). A red message carries the breakdown of the centroids that do not count (`N foliage, N taken by a deeper neighbour, N within 1 m of the outline, N below the band`);
+  `--verbose` rows show it per id (`[fol .. stolen .. shallow .. low ..]`, `LOOSE-ONLY` = loose centroids but none of its own). `--loose-rule1` grades the old way.
+  Results: strip `RESULT: OK (10 warnings, 6 notes)` + 34 covered parts (was 43 warnings: 33 tiny parts moved from warning to the covered NOTE), North `OK (79 warnings, 3 notes)` (79 = garden points, benches and bins
+  that the Tauride phases have not drawn yet). No claimed building of 5 m2 or more is drawn by foliage alone in either area today; the mutants prove that the rule would see it (all commands: `node tools/claims-draw-audit.mjs ...`,
+  the North through `tools/area.mjs north`):
+
+  | mutant | what it does | new rule | `--loose-rule1` (the old rule) |
+  |---|---|---|---|
+  | `--mutant undraw:r1453436` (strip, the General Staff: 11,265 centroids in the footprint, 185 its own, 11,026 on the outline) | the owner's OWN centroids of the building are left out of the audit's view | RED: `draws none of its own geometry ... (11080 centroids ... 11026 within 1 m of the outline, 54 below the band)` | **OK** (fooled) |
+  | `--mutant undraw:w96364627` (North, a corridor house, the neighbours' walls on its outline) | same | RED (1838 centroids, 1833 on the outline) | **OK** |
+  | `--mutant undraw:r3127704` (North, Kirochnaya: 1,942 centroids of which 1,491 are the campus trees) | same | RED (`1491 foliage`) | **OK** |
+  | `--mutant citydraw:r1453436` / `w96364627` | the same centroids are moved to `city` (the claimed building drawn by the generic module, its neighbour still drawn by the owner) | RED twice: rule 1 and rule 2 (`city draws 185 / 6 triangles above 1.5 m ...`) | - |
+  | `--mutant unclaim:r5802451` (North) / `unclaim:r1453436` (strip) | the old rule 3 mutant | RED (13,605 triangles / 128) | - |
+
+* **`check.mjs` budgets per area.** `BUDGET` (keyed by module) keeps the strip's values; `BUDGET_AREA.north` overrides `landmarksOktyabrsky` (North 47,001 triangles measured, 57e3 = + 20 %); `budgetOf(name)` reads the area
+  `tools/area.mjs` sets. The strip's tripwire is back to 27,542 + 10 % = 30.3e3 (the single 57e3 of M7 was twice its measure). The stale "47,307" of the comment is the measured 47,001 (10.3). The North-only modules and
+  the `landmarksTauride` line (and its comment) are untouched, byte for byte (the T6 branch edits that line; the nearest changed line is the Oktyabrsky entry, with the unchanged comment line of the Tauride entry between).
+* **`knock-stands-test` carts 16 !== 17 is a stale snapshot, not a missing cart.** Bisect (`git archive` of the commits, the test run in each): green at 53f303b (the test's own commit, 17 carts), red from b5ebcc1 (the SG band
+  of the strip data: trees 983 -> 1253, buildings +24, roads +166). The 10 curated west carts of `props/west.js` are unchanged at both ends (cartRed x 2 of 3 - the third site `cartRed@-1468,-314` is missed at 53f303b too -,
+  cartHot x 3, cartSouv x 4, iceCartHood x 1; 7 with a fascia). The ice carts (`iceCart0/1/2`, `props/stands.js`, `want` 3 + 2 + 2) come out of the single prop random stream `R()` and the stream was re-dealt by the data growth:
+  7 -> 6 (`stats.carts` 7 -> 6). The test now asserts the curated carts (10), the ice-cart range (5-7), the total (16-17) and the 7 fascia carts. `npm run knock-stands` (both areas) added; strip and North 7 checks green.
+* **`people-test` trail exemption is precise.** The M7 rule excused any jump that ended within 0.35 m of ANY of the leader's 64 trail points, and a follower walks along those points all the time. Now the jump is the
+  sim's re-placement (`stepFollower`: `a.x = trX[i]` when `d > 7` or `stuck > 60`, out of view) only when the follower stands within 0.35 m of a trail point the snap can have used (`(trH - delay) & 63` for a moving
+  leader, `trH` for a standing one, over the 4 heads the leader's step order allows) AND was where the sim snaps it: more than 6.5 m from one of its aims, recomputed with the sim's formula (the trail point shifted by the
+  follower's side / back offsets, the arc place round a standing leader - a tour member is aimed up to 5.5 m out and then lands only 2-4 m from where it stood -, the guard-rail retrace to the newest reachable trail point), or
+  stuck > 50 steps. `--jumps N` lists the first N jumps with a trail hint. `--mutant jump1m` puts a follower in formation 0.9-1.3 m onto the exact trail point a snap would use, every 30 s: strip and North 20 of 20 counted
+  as jumps, the old exemption would have excused all 20 (`npm run people:mutant`; exit 0 = caught). Same counts as the old rule on clean trees (jump 0): strip watchdog 15 + trail 162 (the rest of the log identical),
+  North hero 293 + 203, `--at tauride` 56 + 193, `--at smolny` 4 + 122, `--at preobrazhenskaya` 7 + 207. (The first attempt, "within 5.5 m of the trail point", counted 60 legitimate tour snaps in the strip: the aim of a
+  tour follower is far from the trail point, so the aim is recomputed.)
+* **CI: the `engine` job gates the deploy.** `deploy` now `needs: [verify, engine]`; the job's steps are untouched. The workflow parses as YAML (jobs `verify`, `engine`, `deploy`); the only `npm run` it calls
+  (`hooks:all`) exists and its five scripts and every `node tools/...` file of the workflow and of `package.json` exist. A red `engine` job on a push to main now stops the deployment; a pull request still deploys nothing.
+  Not verified here: that `engine` ran green on GitHub (no `gh`, no network run in this session: taken from the brief); `npm run hooks:all` and the audits it runs are green locally (324 hook checks, claims draw both areas).
+* **Not changed, for the lead**: the `check.mjs` warnings that predate M7 and keep printing (exit 0): `streets` and `city` over budget in both areas, `environment` over budget and `metro` over 24M canvas pixels in the strip; `claims-draw-audit` is still blind to a
+  claimed building that is drawn by the owner only on its outline (walls) and nowhere else (a wall-only model passes with a few interior centroids): rule 1 needs one centroid deeper than the (scaled) inset.
+
+Verification of 11.3 (CPU only, no GPU): `take.sh` lanes strip-light, north-light, checks into `compare.mjs` against `m6-baselines` (strip: check 25 modules, golden, streets / city / environment signatures all `same`);
+`check:north` equal to the clean `feat/areas` run; `npm run claims-draw` both areas OK; `hooks:all` 324 checks; `areas`, `importlint`, `runtimelint`, `areahtml:check`, `layout`, `landmarks`, `garage` (both), `views-check`
+exit 0; `knock-stands` strip and North 7 passed, `knock` 16 passed, `northknock` 6 passed; people-test strip / North hero / tauride / smolny / preobrazhenskaya jump 0, mutant caught in both areas.
