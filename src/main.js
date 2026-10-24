@@ -28,8 +28,7 @@ import { createTouchControls } from './core/touch.js';      // phones / tablets:
 import { installBootGuard } from './core/boot-guard.js';      // fatal card, lost-context handler, phone warning + crash-loop guard
 import { HOOKS } from './world/lib/area-tables.js';      // the validated hook table of the area module (docs/AREAS.md section 9): the engine reads it only through this file
 import { REGISTRY } from './areas/registry.js';      // runtime-only (tools/baked-revision.mjs): only this file may import it and core/gates.js / core/handoff.js
-import { createGates, planArrival } from './core/gates.js';      // the area gates: the question near a border, the navigation to the neighbour's page (docs/AREAS.md)
-import { camParam } from './core/handoff.js';
+import { createGates, planArrival, backLink } from './core/gates.js';      // the area gates: the question near a border, the navigation to the neighbour's page (docs/AREAS.md)
 
 export const MODULES = [
   // order matters: later modules read services of earlier ones (see docs/DESIGN.md)
@@ -471,8 +470,7 @@ async function main() {
     if (h && h.invalid) console.warn('[handoff] ignored:', h.invalid);
     else if (h) {
       ctx.handoff = h;
-      const row = Object.hasOwn(REGISTRY, h.ho.from) ? REGISTRY[h.ho.from] : null;      // (ho is untrusted: 'constructor' must not find a row)
-      if (row && h.ho.ret) guard.back = { text: `Вернуться: ${row.title} · Back to ${row.titleEn}`, url: new URL(`${row.page}?${new URLSearchParams({ cam: camParam(h.ho.ret), q: qName })}`, location.href).href };
+      guard.back = backLink(h.ho, { qName, base: location.href });      // the way back to the area he came from: the arrival card and the fatal card offer it (core/gates.js; ho is untrusted)
     } }
   const initial = ctx.handoff ? null : params.get('cam')?.split(',').map(Number);
   ctx.initialPosition = ctx.handoff ? { x: ctx.handoff.pose.x, z: ctx.handoff.pose.z } : initial ? { x: initial[0], z: initial.length === 4 ? initial[1] : initial[2] } : L.HERO;
@@ -528,7 +526,7 @@ async function main() {
   document.body.classList.add('loaded');
   if (ctx.regions) { stats.regions = ctx.regions.stats; ctx.regions.start(); }
   ctx.gates = createGates({ ctx, player, camera, ui: ctx.ui, tod, audio, guard, params, A, isStarted: () => started, toast: showToast }); window.__gates = ctx.gates;      // null when this area has no gate (or ?gates=0)
-  const go = $('go'); if (go) { go.disabled = false; if (ctx.handoff) go.textContent = 'Продолжить · Continue'; go.focus(); go.addEventListener('click', start); }
+  const go = $('go'); if (go) { go.disabled = false; if (ctx.handoff) { go.textContent = 'Продолжить · Continue'; guard.arrivalLink(); } go.focus(); go.addEventListener('click', start); }
   canvas.addEventListener('click', () => { if (started) player.requestLock(); });
   document.addEventListener('pointerlockchange', () => { document.body.classList.toggle('locked', document.pointerLockElement === canvas); });
   addEventListener('keydown', (e) => {

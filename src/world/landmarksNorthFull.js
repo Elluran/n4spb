@@ -7,7 +7,7 @@
 // docs/research/north-corridor.md. All custom solids have closed geometry. Renamed from the source: the import paths (./landmarksNorthFull/...), root.name and the ctx.services key.
 // M7 (docs/AREAS.md section 10): the captured-cannon fence of the cathedral is knockable (landmarksNorthFull/fence.js: piers and chain spans as ctx.knock instances with colliders, the strip's
 // pattern), the three signs of the vestibule glow at night (litFascia: the sign texture as its emissive map on the kit's uNight list, like the strip's lit signs), the module publishes the door
-// points of its claimed buildings (landmarksNorthFull/doors.js, from the facade's entrance nodes) and merges its monuments / photo spots into ctx.services.landmarks like the strip's modules.
+// points of its claimed buildings (lib/door-points.js, from the facade's entrance nodes) and merges its monuments / photo spots into ctx.services.landmarks like the strip's modules.
 import * as THREE from 'three';
 import * as L from './layout.js';
 import { makeKit } from './landmarksD/common.js';
@@ -17,7 +17,7 @@ import { muruzi } from './landmarksNorthFull/muruzi.js';
 import { dome, drum, cross, ringWindows, roundCornice, portico } from './landmarksD/parts.js';
 import { CORRIDOR_ADDRESSES, GROUPS_LIST } from './landmarksNorthFull/groups.js';
 import { cannonFence } from './landmarksNorthFull/fence.js';
-import { doorPoints } from './landmarksNorthFull/doors.js';
+import { doorPoints } from './lib/door-points.js';
 export const OWNS_GROUPS = true;
 
 function cathedral(K) {
@@ -150,7 +150,7 @@ export function build(ctx){
   K.svc={houses:[],entrances:[],monuments:[],photoSpots:[]};K.extraTris=0;
   for(const [name,fn] of [['preobrazhensky',cathedral],['podpisnye',bookstore],['chernyshevskaya',metro],['corridor',corridor],['muruzi',muruzi]]){K.begin();fn(K);K.flush(root,'north-'+name);}
   ctx.addStatic(root);
-  // M7: the door points of every claimed building (landmarksNorthFull/doors.js: the facade's entrance nodes, else the city's parade-door rule) and the merge into the shared landmark services,
+  // M7: the door points of every claimed building (lib/door-points.js: the facade's entrance nodes, else the city's parade-door rule) and the merge into the shared landmark services,
   // as the strip's modules do (landmarksD.js:41); the service also lists the instanced triangles of the knockable fence (extraTris) as it listed the merged one
   K.svc.entrances.push(...doorPoints(GROUPS_LIST.flatMap((g)=>L.groupMembers(g.key))));
   const S=(ctx.services.landmarks||={});

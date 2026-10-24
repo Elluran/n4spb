@@ -82,11 +82,19 @@ let failed = false;
 // A module that catches a failing sub-part logs '[module] part failed ...' and goes on: the page then shows a scene with a hole. The check must not print OK for that.
 const caught = [];
 for (const k of ['error', 'warn']) { const orig = console[k].bind(console); console[k] = (...args) => { const line = args.map((x) => (x && x.stack) || String(x)).join(' '); if (/failed|is not a function|is not defined|Cannot read/.test(line) && !line.startsWith('[textures]')) caught.push(line.split(String.fromCharCode(10))[0].slice(0, 220)); orig(...args); }; }
+// The triangle tripwires (the measure + 10 .. 20 %). BUDGET is keyed by MODULE, the strip's value for a module both pages build; BUDGET_AREA overrides it for ONE area, because a module can
+// build different geometry per area (M7 polish, docs/AREAS.md 11.3: landmarksOktyabrsky also builds the Kapodistrias monument where the area claims it, 47.0 k in the North against 27,5 k in the
+// strip, and the single 57e3 entry loosened the strip's tripwire to twice its measure). The area is the one tools/area.mjs sets (AREA; the strip when run directly). Modules that only one
+// area builds (the North's landmarks below) stay in BUDGET: no other page lists them.
+const AREA = process.env.AREA || 'strip';
+const BUDGET_AREA = { north: { landmarksOktyabrsky: 57e3 } };       // North: 47,001 triangles measured (the comment of M7 said 47,307: stale; 10.3 and the M7 polish re-measure say 47,001) + 20 %, rounded up
+const budgetOf = (name) => (BUDGET_AREA[AREA] && BUDGET_AREA[AREA][name]) || BUDGET[name] || null;
 const BUDGET = { environment: 500e3, streets: 500e3, city: 600e3, landmarksA: 400e3, landmarksB: 500e3, landmarksC: 500e3, landmarksD: 300e3, traffic: 400e3, props: 300e3, people: 200e3, wildlife: 100e3,
   // the North's landmark modules (M5, measured 2026-10-21: NorthFull 583 k incl. Dom Muruzi 241 k, Smolny 433 k, Kirochnaya 121 k, Suvorov 47 k, Oktyabrsky 27.5 k)
   landmarksNorthFull: 600e3, landmarksSmolny: 450e3, landmarksKirochnaya: 130e3, landmarksSuvorov: 55e3,
-  // M7 C-landmarks (measured 2026-10-23, + 20 %): Oktyabrsky 47,307 in the North with the Kapodistrias monument, its apron and its 8 trees (27,542 in the strip, which does not claim it); the Church of Simeon and Anna 27,955
-  landmarksOktyabrsky: 57e3, landmarksBelinskyNorth: 34e3,
+  // Oktyabrsky: the STRIP's value (27,542 measured, + 10 %); the North builds 47,001 with the Kapodistrias monument, its apron and its trees and has its own entry in BUDGET_AREA above.
+  // landmarksBelinskyNorth (M7 C-landmarks, measured 2026-10-23, + 20 %): the Church of Simeon and Anna 27,955
+  landmarksOktyabrsky: 30.3e3, landmarksBelinskyNorth: 34e3,
   // the Tauride Palace + the Paradny quarter (T1 of docs/TAURIDE-REMAKE.md, measured: 621,713 incl. the courts 29 k and the palace 23 k; the garden is not in it, it comes with the later phases and gets its own allowance)
   landmarksTauride: 765e3 };      // T5 (the Tauride remake): measured 695,273 after the trees and the reeds (T4b 668,023 + the 996 trees at the HERO's LOD3 + their contact shadows + the 700 reed clumps), the tripwire = the measure + 10 %
 
@@ -131,7 +139,7 @@ for (const name of names) {
   } catch (e) { updErr = e; failed = true; }
   const report = {
     module: name, ok: !err && !updErr, buildMs: ms,
-    triangles: Math.round(tris), budget: BUDGET[name] || null, meshes, instancedMeshes: inst, instances,
+    triangles: Math.round(tris), budget: budgetOf(name), meshes, instancedMeshes: inst, instances,
     materials: mats.size, materialTypes: matTypes,
     canvasPixels: ctx.tex.pixels - texBefore, colliders: ctx.physics.count - colBefore, wires: ctx.wires.count - wiresBefore,
     updateFns: upd.length, services: Object.keys(ctx.services),

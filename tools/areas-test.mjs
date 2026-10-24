@@ -254,6 +254,80 @@ check('TEST contract fixtures (what layout-test / landmarks-groups-check read fr
   assert.throws(() => resolveTest({ ID: 'fix' }, fakeL), /exports no TEST/); assert.throws(() => resolveTest({ ID: 'fix', TEST: { claimed: [] } }, fakeL), /malformed/);
 });
 
+// ---------------------------------------------------------------------------------------------- the texts of the boot guard follow the page (M7 polish, docs/AREAS.md 11.1)
+console.log('boot-guard texts per area (the size, the card title and the way back follow the page; the strip keeps its text):');
+{
+  const BG = await import(pathToFileURL(path.join(root, 'src/core/boot-guard.js')).href), GT = await import(pathToFileURL(path.join(root, 'src/core/gates.js')).href);
+  const unesc = (s) => s.replaceAll('&quot;', '"').replaceAll('&gt;', '>').replaceAll('&lt;', '<').replaceAll('&amp;', '&');
+  /** the part of the DOM that pageSizes reads, over the text of a page: every <span class="tk" ...>...</span> */
+  const docOf = (html) => ({ querySelectorAll: () => [...html.matchAll(/<span class="tk"([^>]*)>([^<]*)<\/span>/g)].map((m) => ({ textContent: unesc(m[2]), getAttribute: (k) => { const a = new RegExp(`\\s${k}="([^"]*)"`).exec(m[1]); return a ? unesc(a[1]) : null; } })) });
+  const STRIP_TITLE = 'Прогулка по Невскому · Before you start';
+  check('the strip: index.html carries no data-card-title, pageSizes gives 51 MB / 1 GB and the strip\'s card title byte for byte, equal to the registry row', () => {
+    assert(!/data-card-title/.test(indexHtml), 'index.html must stay as it was'); const s = BG.pageSizes(docOf(indexHtml));
+    assert.deepEqual(s, { mb: 51, gb: 1, title: STRIP_TITLE }); assert.equal(BG.STRIP_CARD_TITLE, STRIP_TITLE); assert.equal(REGISTRY.strip.approxMB, s.mb, 'registry strip approxMB vs the page note');
+    assert.deepEqual(BG.pageSizes({ querySelectorAll: () => [] }), s, 'a page without a note falls back to the strip numbers and text');
+  });
+  for (const row of Object.values(REGISTRY)) {
+    if (row.id === 'strip' || row.status === 'planned' || (only && row.id !== only)) continue;
+    check(`area ${row.id}: ${row.page} says the registry's ${row.approxMB} MB and its own card title (the intro kicker up to the colon, not the strip's)`, () => {
+      const html = fs.readFileSync(path.join(root, row.page), 'utf8').replaceAll('\r\n', '\n'), page = JSON.parse(fs.readFileSync(pageJsonFile(root, row.id), 'utf8')), s = BG.pageSizes(docOf(html));
+      assert.equal(s.mb, row.approxMB); assert.equal(s.gb, page.heavy.ramGB); assert.equal(s.title, `${page.intro.kicker.split(':')[0].trim()} · Before you start`); assert.notEqual(s.title, STRIP_TITLE);
+    });
+  }
+  check('every door gate that names a size says the registry\'s MB of its destination (Russian and English)', () => {
+    for (const g of GATES.filter((q) => q.kind === 'door' && q.prompt)) {
+      const mb = REGISTRY[g.to].approxMB, ru = /около\s+(\d+)\s+МБ/.exec(g.prompt.scene), en = /about\s+(\d+)\s+MB/.exec(g.prompt.scene);
+      assert(ru && en, `${g.id}: the scene line names no size`); assert.equal(Number(ru[1]), mb, `${g.id} Russian`); assert.equal(Number(en[1]), mb, `${g.id} English`);
+    }
+    for (const a of Object.values(REGISTRY)) if (a.status !== 'planned') assert(GT.promptTexts(a.id).scene.includes(`${a.approxMB} МБ`) && GT.promptTexts(a.id).scene.includes(`${a.approxMB} MB`), a.id);
+  });
+  check('generator fixture: the heavy note carries data-card-title (the kicker up to the colon + the English half); a kicker without a colon is taken whole; the markup stays valid for pageSizes', () => {
+    const FP = { ...FIX_PAGE, heavy: { ramGB: 2, ru: 'Тяжёлая сцена: ~{mb} МБ и ~{ram} ГБ памяти', en: 'Heavy scene: ~{mb} MB and ~{ram} GB' } };      // (the Russian note is what pageSizes reads)
+    const out = generatePage(indexHtml, FIX_ROW, { ...FP, intro: { kicker: 'Fixture walk: a place and "another" one', title: 'T' } });
+    assert(out.includes('<span class="tk" data-card-title="Fixture walk · Before you start">'), 'attribute'); assert.deepEqual(BG.pageSizes(docOf(out)), { mb: 20, gb: 2, title: 'Fixture walk · Before you start' });
+    const whole = generatePage(indexHtml, FIX_ROW, { ...FP, intro: { kicker: 'Quote " & <b> kicker', title: 'T' } }); assert.equal(BG.pageSizes(docOf(whole)).title, 'Quote " & <b> kicker · Before you start', 'escaped in the attribute, read back whole');
+    assert.equal(whole.split('data-card-title').length, 2, 'once');
+  });
+  // a small DOM for the card (ids searched through the tree; .after / .append / .remove / listeners)
+  const mkDom = ({ withIntro = false } = {}) => {
+    const mk = (tag) => { const e = { tag, children: [], parent: null, className: '', textContent: '', _id: '', style: {}, listeners: {}, attrs: {},
+      get id() { return this._id; }, set id(v) { this._id = v; },
+      append(...k) { for (const c of k) { c.parent = this; this.children.push(c); } }, appendChild(c) { this.append(c); return c; }, replaceChildren() { this.children = []; },
+      after(n) { const i = this.parent.children.indexOf(this); n.parent = this.parent; this.parent.children.splice(i + 1, 0, n); }, remove() { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); },
+      setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(t, f) { (this.listeners[t] ||= []).push(f); },
+      querySelector(sel) { return find(this, sel); } }; return e; };
+    const find = (root, sel) => { let hit = null; const cls = sel.startsWith('.') ? sel.slice(1) : null; (function walk(n) { if (hit) return; for (const c of n.children) { if (cls ? c.className.split(' ').includes(cls) : false) { hit = c; return; } walk(c); } })(root); return hit; };
+    const body = mk('body'); body.classList = { contains: () => false }; const head = mk('head');
+    const byId = (n, id) => { for (const c of n.children) { if (c._id === id) return c; const r = byId(c, id); if (r) return r; } return null; };
+    const doc = { body, head, createElement: mk, getElementById: (id) => byId(body, id), querySelectorAll: () => [], querySelector(sel) { return sel === '#intro .card' ? (doc._card || null) : null; } };
+    if (withIntro) { const intro = mk('div'); intro.id = 'intro'; const card = mk('div'); card.className = 'card'; const row = mk('div'); row.className = 'row'; card.append(row); intro.append(card); body.append(intro); doc._card = card; }
+    return doc;
+  };
+  const mkWin = (replaced) => ({ addEventListener() {}, location: { origin: 'http://h', href: 'http://h/x.html', replace: (u) => replaced.push(u), reload() {} }, sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} }, localStorage: { getItem: () => null, setItem() {} }, screen: { width: 400, height: 800 }, navigator: {}, dispatchEvent() {}, CustomEvent: class {} });
+  const phoneCardTitle = (html) => {
+    const doc = mkDom(); doc.querySelectorAll = docOf(html).querySelectorAll; const g = BG.installBootGuard({ canvas: null, params: new URLSearchParams('guard=0'), isTouch: true, qName: 'performance', win: mkWin([]), doc }); g.gate();
+    const card = doc.getElementById('fatal'); const h2 = card && card.children[0].children[0]; return { title: h2 && h2.textContent, paragraph: card && card.children[0].children[1].textContent };
+  };
+  check('the phone\'s pre-start card: the strip shows its own title and 51 MB (as before), the North its own title and 36 MB', () => {
+    const s = phoneCardTitle(indexHtml); assert.equal(s.title, STRIP_TITLE); assert(s.paragraph.includes('около 51 МБ'), s.paragraph);
+    const html = fs.readFileSync(path.join(root, 'north.html'), 'utf8').replaceAll('\r\n', '\n'), n = phoneCardTitle(html);
+    assert.equal(n.title, 'Прогулка по северу города · Before you start'); assert(n.paragraph.includes('около 36 МБ'), n.paragraph);
+  });
+  check('backLink: the origin page at the pose he left from, the quality tier kept; no origin, an unknown origin ("constructor") or no return pose gives none', () => {
+    const ret = { x: 458, z: -1350, yaw: -90, pitch: 0 }, b = GT.backLink({ from: 'north', ret }, { qName: 'performance', base: 'http://h/index.html?x=1' });
+    assert.equal(b.url, 'http://h/north.html?cam=458%2C-1350%2C-90%2C0&q=performance'); assert.equal(b.text, `Вернуться: ${REGISTRY.north.title} · Back to ${REGISTRY.north.titleEn}`);
+    assert.equal(GT.backLink({ from: 'constructor', ret }), null); assert.equal(GT.backLink({ from: 'north', ret: null }), null); assert.equal(GT.backLink(null), null); assert.equal(GT.backLink({ from: 5, ret }), null);
+  });
+  check('arrivalLink: the arrival card gets ONE link «Вернуться: … · Back to …» under the Continue row to guard.back.url; a click replaces the page; nothing without a back, a card or on a second call', () => {
+    const replaced = [], doc = mkDom({ withIntro: true }), g = BG.installBootGuard({ canvas: null, params: new URLSearchParams('guard=0'), isTouch: false, qName: 'performance', win: mkWin(replaced), doc });
+    assert.equal(g.arrivalLink(), null, 'no guard.back yet'); g.back = GT.backLink({ from: 'north', ret: { x: 458, z: -1350, yaw: -90, pitch: 0 } }, { qName: 'performance', base: 'http://h/index.html' });
+    const a = g.arrivalLink(); assert(a && a.id === 'backlink'); assert.equal(a.href, g.back.url); assert.equal(a.textContent, 'Вернуться: Север · Back to North');
+    const kids = doc._card.children; assert.equal(kids[0].className, 'row'); assert.equal(kids[1], a, 'right after the row'); assert.equal(g.arrivalLink(), null, 'a second call adds nothing');
+    let prevented = false; a.listeners.click[0]({ preventDefault() { prevented = true; } }); assert(prevented); assert.deepEqual(replaced, [g.back.url]);
+    const bare = BG.installBootGuard({ canvas: null, params: new URLSearchParams('guard=0'), win: mkWin([]), doc: mkDom() }); bare.back = g.back; assert.equal(bare.arrivalLink(), null, 'a page without the intro card');
+  });
+}
+
 // ---------------------------------------------------------------------------------------------- gate geometry (tools/lib/gate-geometry.mjs)
 console.log('gate geometry fixtures (the checks must pass a good synthetic gate pair and catch every way a gate can be wrong):');
 const R = (x0, x1, z0, z1) => ({ x0, x1, z0, z1 });

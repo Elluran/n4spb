@@ -3,9 +3,9 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { DEFAULTS, depthFor, chipFor, gateCoords, createGateMachine, createGates, planArrival, promptTexts, crossPlaces, isDoor } from '../src/core/gates.js';
+import { DEFAULTS, depthFor, chipFor, gateCoords, createGateMachine, createGates, planArrival, promptTexts, crossPlaces, isDoor, backLink } from '../src/core/gates.js';
 import { REGISTRY, GATES } from '../src/areas/registry.js';
-import { decodeHo, makeHo, encodeHo, camParam } from '../src/core/handoff.js';
+import { decodeHo, makeHo, encodeHo, camParam, parseCamParam } from '../src/core/handoff.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -192,6 +192,11 @@ check('the prompt texts of the door name the metro and the page load; a border g
   const T = promptTexts('strip', { gate: G3 }); assert(/Чернышевская/.test(T.title) && /Восстания/.test(T.title), T.title); assert(/25–40/.test(T.scene) && /перезагруз/.test(T.scene), T.scene); assert(/Пешком/.test(T.fine));
   const U = promptTexts('strip', { gate: G2 }); assert(/Новая область/.test(U.title)); assert.equal(U.scene, promptTexts('strip').scene);
 });
+check('a PLACE asked through the door keeps the area title / scene (no metro ride, no rotunda), names the place and keeps the door\'s walk-out line', () => {
+  const place = { key: 'p', label: 'Площадь Восстания', labelEn: 'Vosstaniya Square' }, T = promptTexts('strip', { gate: G3, place }), A = promptTexts('strip');
+  assert.equal(T.title, A.title); assert.equal(T.scene, A.scene); assert(/Сразу к месту: Площадь Восстания · Straight to Vosstaniya Square/.test(T.sights), T.sights); assert.equal(T.fine, G3.prompt.fine);
+  assert(/Чернышевская/.test(promptTexts('strip', { gate: G3 }).title), 'the door itself still names the metro');
+});
 {
   const items = [], interact = { add(d) { items.push(d); return d; } };
   const ctx = { onUpdate() {}, drive: null, interact };
@@ -222,6 +227,13 @@ check('the prompt texts of the door name the metro and the page load; a border g
     const q = new URLSearchParams(url2.split('?')[1]); assert.equal(q.get('cam'), '534,125,28.61,10'); const ho = decodeHo(q.get('ho'), { to: 'strip' }).ho; assert.equal(ho.car, null); assert.equal(ho.ret.x, 470);
   });
   const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);
+  check('the strip page entered through g3 offers the way back to the North AT THE DOOR: backLink(ho) is north.html?cam=<where he stood> (within the use radius of the door point), the quality tier kept', () => {
+    const ho = decodeHo(new URLSearchParams(url.split('?')[1]).get('ho'), { to: 'strip' }).ho, b = backLink(ho, { qName: 'performance', base: 'http://h/index.html' });
+    assert(b, 'no link'); const u = new URL(b.url); assert.equal(u.pathname, '/north.html'); assert.equal(u.searchParams.get('q'), 'performance');
+    const [x, z, yaw, pitch] = u.searchParams.get('cam').split(',').map(Number); assert.deepEqual([x, z, yaw, pitch], [458, -1350, -90, 0]);
+    assert(Math.hypot(x - G3.at.x, z - G3.at.z) <= G3.r, 'the return pose is not within the door radius'); assert(/Север/.test(b.text) && /North/.test(b.text), b.text);
+    assert.equal(parseCamParam(u.searchParams.get('cam')).x, 458, 'the URL parses back with the page\'s own ?cam= reader');
+  });
   check('planArrival on the strip accepts ho=g3 and places the player at that pose on foot (direct, no rectangle, no car even if a forged ho carries one)', () => {
     const q = new URLSearchParams(url.split('?')[1]);
     const h = planArrival({ L, A: { ID: 'strip' }, params: q }); assert(h && !h.invalid, JSON.stringify(h)); assert.equal(h.mode, 'walk'); assert.equal(h.how, 'direct'); assert.equal(h.gate.id, 'g3');

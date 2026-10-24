@@ -1,16 +1,21 @@
 // Browser flows of the area gates (docs/AREAS.md, milestones M2/M3): the REAL page in headless Edge, real key presses, the dev gate g0 (?devgates=1: a gate across the Nevsky approach to
 // Vosstaniya Square that leads back to the same page) or the real strip>north gates. Fast harness (a drive-only build, ~6 s per page; baked=0, so the preflight accepts without a bake).
-//   node tools/areas-flow-test.mjs [--root <repo dir>] [--only prompt,decline,accept,arrival,car,fly,fail,arming,pingpong] [--out shots/areas]
+//   node tools/areas-flow-test.mjs [--root <repo dir>] [--only prompt,decline,accept,arrival,car,fly,fail,arming,pingpong,g3fast,g3] [--out shots/areas] [--software]
+// --software: the browser renders with SwiftShader on the CPU instead of the GPU (slow; the sections run the same).
+// The sections g3fast and g3 (M7 polish) are the metro door of the North: [E] at the Chernyshevskaya vestibule, the door question, the arrival on the strip at the AltDigit1 pose on foot, the arrival card's
+// «Вернуться» link and what it leads to. g3fast runs on the fast harness (no bake). g3 is the same on the REAL pages with the real preflight and bakes, so it needs the bake of BOTH areas
+// (assets/baked/manifest.json and assets/baked/north/manifest.json); without them it is SKIPPED with a clear line ("needs a bake") and starts no browser for it.
 // Not asserted here (headless cannot): pointer lock, audio unlock, the user gesture. GPU job: run it alone.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
+import { GATES } from '../src/areas/registry.js';
 
 const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = {}; for (let i = 2; i < process.argv.length; i++) { const a = process.argv[i]; if (a.startsWith('--')) { args[a.slice(2)] = process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[++i] : '1'; } }
-const SECTIONS = ['prompt', 'arming', 'decline', 'accept', 'arrival', 'required', 'car', 'fly', 'fail', 'pingpong'];
+const SECTIONS = ['prompt', 'arming', 'decline', 'accept', 'arrival', 'required', 'car', 'fly', 'fail', 'pingpong', 'g3fast', 'g3'];
 const root = path.resolve(args.root || here), ONLY = args.only ? new Set(args.only.split(',')) : null, OUT = path.resolve(root, args.out || 'shots/areas');
 if (ONLY) for (const k of ONLY) if (!SECTIONS.includes(k)) { console.error(`unknown section "${k}" (known: ${SECTIONS.join(', ')})`); process.exit(2); }
 fs.mkdirSync(OUT, { recursive: true });
@@ -26,15 +31,18 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const ORIGIN = `http://127.0.0.1:${server.address().port}`;
 const FAST = 'baked=0&only=drive&noroof=1&gate=0&guard=0&devgates=1&q=performance';
 const EDGE = ['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe'].find((p) => fs.existsSync(p));
-const browser = await puppeteer.launch({ executablePath: EDGE, headless: true, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox', '--no-first-run', '--disable-extensions', '--window-size=1280,720'] });
+let browser = null;      // launched on the first page (a run that only skips, the g3 section without a bake, starts none)
+const GL_ARGS = args.software ? ['--disable-gpu', '--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox'];      // --software: SwiftShader on the CPU (slow, but no GPU is touched)
+const getBrowser = async () => browser || (browser = await puppeteer.launch({ executablePath: EDGE, headless: true, args: [...GL_ARGS, '--no-first-run', '--disable-extensions', '--window-size=1280,720'] }));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-let fails = 0, passes = 0;
+let fails = 0, passes = 0, skipped = 0;
+const skip = (name, why) => { skipped++; console.log(`  skip ${name}  -> ${why}`); };
 const check = (name, ok, detail = '') => { if (ok) { passes++; console.log('  ok   ' + name); } else { fails++; console.log('  FAIL ' + name + (detail !== '' ? '  -> ' + (typeof detail === 'string' ? detail : JSON.stringify(detail)) : '')); } };
 const threeRoot = path.join(here, 'node_modules', 'three');
 
 /** a fresh incognito page on the page URL; `start`: press Start (the button) and wait until the first frames ran */
 async function open(url, { start = true } = {}) {
-  const ctxB = await browser.createBrowserContext(); const page = await ctxB.newPage();
+  const ctxB = await (await getBrowser()).createBrowserContext(); const page = await ctxB.newPage();
   await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
   await page.setRequestInterception(true);
   page.on('request', (req) => {
@@ -61,6 +69,51 @@ const fastCooldown = (page) => page.evaluate(() => { window.__gates.machine.conf
 async function walkUntilOpen(page, ms = 25000) { await page.keyboard.down('KeyW'); try { await page.waitForFunction("!!document.querySelector('#panel:not([hidden]) .confirm')", { timeout: ms, polling: 100 }); } catch (e) { /* reported by the caller */ } await page.keyboard.up('KeyW'); }
 const want = (k) => !ONLY || ONLY.has(k);
 const ARRIVE_URL = (cam, ho) => `index.html?${FAST}&cam=${cam}&ho=${ho}`;
+
+/**
+ * The metro door g3 (docs/AREAS.md 8.7 / 11.1) end to end: the North page 3 m west of the Chernyshevskaya vestibule door, [E] (the interact chip), the door question, accept, the URL, the strip page it
+ * hands over to (the AltDigit1 pose on foot, direct), the arrival card's «Вернуться: Север · Back to North» link and what it leads to. `flags` are the page's query flags (FAST: the dev harness; the
+ * real form: no dev flags, the bakes on disk); full: the real preflight ran, so the link is clicked through to the North page itself (fast: only the request to north.html is observed).
+ */
+async function g3flow(title, flags, { full }) {
+  console.log(title + ':');
+  const G3 = GATES.find((g) => g.id === 'g3'), nearDoor = (x, z) => Math.hypot(x - G3.at.x, z - G3.at.z) <= G3.r;
+  const north = await open(`north.html?${flags}&cam=458,-1350,-90,0`);      // 3 m west of the door, facing east
+  await sleep(1000);
+  const chip = await north.evaluate(() => { const c = document.getElementById('interact'); return { show: c.classList.contains('show'), text: c.textContent }; });
+  check('3 m west of the vestibule door the interact chip offers [E] with the Russian and English metro label', chip.show && /\[E\]/.test(chip.text) && /Метро/.test(chip.text) && /Metro/.test(chip.text), chip);
+  await hookNav(north); await north.keyboard.press('KeyE');
+  try { await north.waitForFunction("!!document.querySelector('#panel:not([hidden]) .confirm')", { timeout: 5000, polling: 50 }); } catch (e) { /* reported below */ }
+  const s = await S(north);
+  check('E opens the door question with the metro title; nothing navigated yet', s.open && /Чернышевская/.test(s.title) && /Восстания/.test(s.title) && (await north.evaluate(() => window.__navUrls.length)) === 0, s);
+  await sleep(900); await north.keyboard.press('Enter'); await sleep(full ? 1500 : 800);
+  const r = await north.evaluate(() => ({ urls: window.__navUrls, traveling: window.__gates.traveling, veil: !document.getElementById('travel').hidden }));
+  check('accepted: ONE navigation' + (full ? ' (the real preflight passed)' : '') + ', the travel veil is up', r.urls.length === 1 && r.traveling && r.veil, r);
+  const u = new URL(r.urls[0], ORIGIN), q = u.searchParams;
+  check('the URL is index.html at the AltDigit1 pose on foot (cam = the registry pose, no fly), the page flags kept', u.pathname.endsWith('/index.html') && q.get('cam') === `${G3.pose.x},${G3.pose.z},${G3.pose.yaw},${G3.pose.pitch}` && !q.has('fly') && q.get('q') === 'performance', r.urls[0]);
+  const ho = JSON.parse(Buffer.from(q.get('ho').replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+  check('ho: via door, gate g3, north -> strip, no car, the return pose within the door radius', ho.via === 'door' && ho.gate === 'g3' && ho.from === 'north' && ho.to === 'strip' && ho.car === null && nearDoor(ho.ret.x, ho.ret.z), ho);
+  const arr = await open(r.urls[0], { start: false });
+  const a = await arr.evaluate(() => { const l = document.getElementById('backlink'), c = window.__ctx; return { area: c.area.ID, h: c.handoff && { how: c.handoff.how, mode: c.handoff.mode, gate: c.handoff.gate && c.handoff.gate.id, via: c.handoff.ho.via }, x: c.playerObj.pos.x, z: c.playerObj.pos.z, go: document.getElementById('go').textContent, link: l && { href: l.href, text: l.textContent, inCard: !!l.closest('#intro .card') } }; });
+  check('the strip page boots at the AltDigit1 pose, on foot, direct (no rectangle, no car)', a.area === 'strip' && a.h && a.h.via === 'door' && a.h.gate === 'g3' && a.h.mode === 'walk' && a.h.how === 'direct' && Math.abs(a.x - G3.pose.x) < 0.5 && Math.abs(a.z - G3.pose.z) < 0.5, a);
+  check('the arrival card says Continue and offers the link «Вернуться: Север · Back to North»', /Продолжить/.test(a.go) && a.link && a.link.inCard && a.link.text === 'Вернуться: Север · Back to North', a);
+  const back = a.link ? new URL(a.link.href) : null, bc = back ? (back.searchParams.get('cam') || '').split(',').map(Number) : [];
+  check('... which leads to north.html at the pose he left from (within the door radius), the quality tier kept', !!back && back.pathname.endsWith('/north.html') && back.searchParams.get('q') === 'performance' && bc.length === 4 && nearDoor(bc[0], bc[1]), a.link);
+  await arr.screenshot({ path: path.join(OUT, full ? 'g3-arrival-card.png' : 'g3fast-arrival-card.png') });
+  if (full) {
+    await Promise.all([arr.waitForNavigation({ waitUntil: 'load', timeout: 120000 }), arr.click('#backlink')]);
+    await arr.waitForFunction("document.body.classList.contains('loaded') || (document.getElementById('fatal') && document.getElementById('fatal').textContent)", { timeout: 120000, polling: 250 });
+    const b = await arr.evaluate(() => ({ area: window.__ctx.area.ID, x: window.__ctx.playerObj.pos.x, z: window.__ctx.playerObj.pos.z, fatal: !!document.getElementById('fatal') }));
+    check('the link goes back to the North page, no error card, standing at the door (within its radius)', b.area === 'north' && !b.fatal && nearDoor(b.x, b.z), b);
+  } else {
+    const asked = arr.waitForRequest((req) => /\/north\.html\?/.test(req.url()), { timeout: 15000 }).then((req) => req.url(), () => null);
+    await arr.click('#backlink'); const url = await asked;
+    check('a click on the link requests north.html at the pose he left from (the page itself needs its bake: not followed on the fast harness)', !!url && url === a.link.href, url);
+  }
+  const errs = [...north.errors, ...arr.errors].filter((e) => !/Failed to load resource/.test(e));      // (the blocked Google Fonts)
+  check('no page errors on the pages', errs.length === 0, errs);
+  await arr.close(); await north.close();
+}
 
 try {
   if (want('prompt')) {
@@ -247,8 +300,14 @@ try {
     await sleep(3000); const s = await S(page); check('standing inside the zone but not approaching: no question', !s.open && s.chip, s);
     await page.close();
   }
+  if (want('g3fast')) await g3flow('g3fast: the metro door g3 and the way back on the fast harness (baked=0, only=drive: no bake needed)', `${FAST}`, { full: false });
+  if (want('g3')) {
+    const missing = [['assets/baked/north/manifest.json', 'the North'], ['assets/baked/manifest.json', 'the strip']].filter(([f]) => !fs.existsSync(path.join(root, f)));
+    if (missing.length) { console.log('g3: the metro door and the way back on the REAL pages and baked worlds:'); skip('g3 (the real pages)', `needs a bake: ${missing.map(([f, n]) => `${n} (${f})`).join(' and ')} missing (node tools/bake-scene.mjs --area all, then --only g3 alone); no browser started for it. The CPU pins of the door: gates-test, cross-places-test, areas-test`); }
+    else await g3flow('g3: the metro door g3 and the way back on the REAL pages and baked worlds (the real preflight, no dev flags)', 'q=performance&noroof=1&guard=0', { full: true });
+  }
 } catch (e) { fails++; console.log('TEST ERROR:', e.stack || e.message); }
-finally { await browser.close(); server.close(); }
-console.log(`areas-flow-test: ${passes} passed, ${fails} failed`);
-console.log(fails || !passes ? 'RESULT: FAIL' : 'RESULT: OK');
-process.exit(fails || !passes ? 1 : 0);
+finally { if (browser) await browser.close(); server.close(); }
+console.log(`areas-flow-test: ${passes} passed, ${fails} failed${skipped ? `, ${skipped} skipped` : ''}`);
+console.log(fails || (!passes && !skipped) ? 'RESULT: FAIL' : 'RESULT: OK');
+process.exit(fails || (!passes && !skipped) ? 1 : 0);
