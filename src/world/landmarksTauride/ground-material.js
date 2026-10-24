@@ -1,7 +1,7 @@
 // landmarksTauride/ground-material.js - THE GROUND OF THE TAURIDE GARDEN (docs/TAURIDE-REMAKE.md, phase T3): a garden-owned, painterly toon ground and the mask that drives it.
 //   planGroundMask(inputs)       PURE and DETERMINISTIC (no three.js object, no Math.random, nothing committed as a binary): one RGBA8 raster of the garden box at 1 m from the authored zones
 //                                (data/ground.js), the relief (gardenHeight), the water outline (data/water.js), the woods, the ways, the benches, the gates and the footprints:
-//                                  R  canopy weight        0 open .. 1 deep wood: the shader paints the dim shade fringe below 0.5 and the leaf litter above it (T5 plants the trees that this shade belongs to)
+//                                  R  canopy weight        0 open .. 1 under a crown: the shader paints the dim shade fringe below 0.5 and the leaf litter above it (T5: from the PLANTED crowns of vegetation.js, so the litter lies under the trees that are there; the OSM woods + the belt only for a mask planned without a planting)
 //                                  G  shore                128 = the waterline, +12 per metre on land, -12 per metre in the water (signed distance, +-10.6 m): the muddy shore band, the 0.5 m wet band of T4,
 //                                                          and for now the bed of the future ponds
 //                                  B  wear                 0 grass .. 1 packed earth: benches, gates, junctions, plazas, the verge of every path, the apron of a building, the playgrounds
@@ -39,7 +39,7 @@ function hash2(ix, iz, seed = 0) { let h = (Math.imul(ix, 374761393) + Math.imul
 // ------------------------------------------------------------------------------------------------ the mask (pure)
 /**
  * inputs: { garden: ring, woods: [{ o, h }], water: [{ o, h }], paths: [{ id, cls, w, pts }], benches: [{ x, z }], gates: [{ x, z }], monuments: [{ x, z }], footprints: [ring], playRings: [{ o, h }],
- *           gh: (x, z) => number | null (the relief), zones: { meadows, belt, worn, tuning } (default: data/ground.js) }
+ *           gh: (x, z) => number | null (the relief), zones: { meadows, belt, worn, tuning } (default: data/ground.js), canopy: [{ x, z, r }] (T5: the planted crowns; present = the canopy class comes from them, not from the woods and the belt) }
  * -> { box: { x0, z0, x1, z1, W, H, res }, data: Uint8Array(W * H * 4), stats }
  */
 export function planGroundMask(inp, T = GROUND) {
@@ -110,12 +110,20 @@ export function planGroundMask(inp, T = GROUND) {
   // deep water cells (polySigned gives 99 for "deep inside": the sign must survive): mark them with the lowest byte
   { const deep = new Uint8Array(N); for (const w of inp.water || []) fillRings([w.o, ...(w.h || [])], (j, a, b) => { for (let i = a; i <= b; i++) deep[j * W + i] = 1; }); for (let k = 0; k < N; k++) if (deep[k] && dWater[k] === 99) { shore[k] = 0; dWater[k] = -99; } }
 
-  // ---- canopy: the woods (leaf litter), the authored belt along the fence
+  // ---- canopy: T5: the PLANTED CROWNS (inp.canopy = [{ x, z, r }], vegetation.js plan.canopy): a disc per tree, weight 0.5 at the crown edge, 1 at canopyFeather / 2 inside it, 0 the same distance outside (the litter of the shader,
+  //      LOOK.litA .. litB, starts about 1.5 m inside the crown edge); without a planting (a mask planned alone, the T3 way) the OSM woods and the authored belt along the fence stand in for the canopy
   const can = new Float32Array(N);
   const F = TU.canopyFeather;
-  for (const w of inp.woods || []) polySigned([w.o, ...(w.h || [])], F * 0.5, (k, d) => { const c = clamp(0.5 + d / F, 0, 1); if (c > can[k]) can[k] = c; });
+  let canopyTrees = 0;
+  if (inp.canopy) {
+    for (const t of inp.canopy) {
+      const R = t.r + F * 0.5, i0 = Math.max(0, Math.floor((t.x - R - x0) / res)), i1 = Math.min(W - 1, Math.ceil((t.x + R - x0) / res)), j0 = Math.max(0, Math.floor((t.z - R - z0) / res)), j1 = Math.min(H - 1, Math.ceil((t.z + R - z0) / res));
+      canopyTrees++;
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const d = t.r - Math.hypot(x0 + (i + 0.5) * res - t.x, z0 + (j + 0.5) * res - t.z), c = clamp(0.5 + d / F, 0, 1); if (c > can[j * W + i]) can[j * W + i] = c; }
+    }
+  } else for (const w of inp.woods || []) polySigned([w.o, ...(w.h || [])], F * 0.5, (k, d) => { const c = clamp(0.5 + d / F, 0, 1); if (c > can[k]) can[k] = c; });
   let beltCells = 0;
-  if (BELT && BELT.k > 0) {
+  if (!inp.canopy && BELT && BELT.k > 0) {
     const dOut = new Float32Array(N).fill(99), reach = BELT.width + BELT.feather + 1;
     for (let e = 0; e < ring.length; e += 2) { const f = (e + 2) % ring.length; nearSeg(ring[e], ring[e + 1], ring[f], ring[f + 1], reach, (k, d) => { if (d < dOut[k]) dOut[k] = d; }); }
     const gates = inp.gates || [];
@@ -185,7 +193,7 @@ export function planGroundMask(inp, T = GROUND) {
   const cnt = (f) => { let n = 0; for (let k = 0; k < N; k++) if (ins[k] && f(k)) n++; return n; };
   const stats = {
     W, H, bytes: data.length, cells: N, insideCells: cnt(() => true),
-    canopyCells: cnt((k) => can[k] >= 0.5), shadeCells: cnt((k) => can[k] >= 0.12 && can[k] < 0.5), beltCells,
+    canopyCells: cnt((k) => can[k] >= 0.5), shadeCells: cnt((k) => can[k] >= 0.12 && can[k] < 0.5), beltCells, canopyTrees, litterCells: cnt((k) => can[k] >= 0.62),
     mudCells: cnt((k) => dWater[k] >= 0 && dWater[k] < TU.shoreBand), waterCells: cnt((k) => dWater[k] < 0), wetCells: cnt((k) => dWater[k] >= 0 && dWater[k] < 0.5),
     wornCells: cnt((k) => wear[k] >= 0.5), packedCells: cnt((k) => wear[k] >= 0.8), stripeCells, slopeCut, junctions, ms: Date.now() - t0,
   };

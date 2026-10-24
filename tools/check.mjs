@@ -88,7 +88,7 @@ const BUDGET = { environment: 500e3, streets: 500e3, city: 600e3, landmarksA: 40
   // M7 C-landmarks (measured 2026-10-23, + 20 %): Oktyabrsky 47,307 in the North with the Kapodistrias monument, its apron and its 8 trees (27,542 in the strip, which does not claim it); the Church of Simeon and Anna 27,955
   landmarksOktyabrsky: 57e3, landmarksBelinskyNorth: 34e3,
   // the Tauride Palace + the Paradny quarter (T1 of docs/TAURIDE-REMAKE.md, measured: 621,713 incl. the courts 29 k and the palace 23 k; the garden is not in it, it comes with the later phases and gets its own allowance)
-  landmarksTauride: 700e3 };
+  landmarksTauride: 765e3 };      // T5 (the Tauride remake): measured 695,273 after the trees and the reeds (T4b 668,023 + the 996 trees at the HERO's LOD3 + their contact shadows + the 700 reed clumps), the tripwire = the measure + 10 %
 
 for (const name of names) {
   const before = snapshot();

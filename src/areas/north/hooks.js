@@ -9,7 +9,7 @@
 //  THE CONTRACT (frozen by the foundation commit; the H.. ids are the items of the table in docs/AREAS.md 9.5):
 //    HOOKS = {
 //      treeCleared(ctx)     -> ((x, z) => boolean) | null                                          H02  soft tree clearing (cleared() runs only under !o.force; no caller forces, so mapped OSM trees are cleared too)
-//      treeReject(ctx)      -> ((x, z) => 'paradny' | 'campus' | 'suvorov' | null) | null          H03  hard reject, mapped trees included; the string is the debug reason
+//      treeReject(ctx)      -> ((x, z) => 'paradny' | 'garden' | 'campus' | 'suvorov' | null) | null   H03  hard reject, mapped trees included; the string is the debug reason (T5: 'garden' = the Tauride Garden outline, the garden plants its own)
 //      tuftReject(ctx)      -> ((x, z) => boolean) | null                                          H04  no grass tufts
 //      propReject(ctx)      -> ((cx, cz) => boolean) | null                                        H05  no bench / bin / kiosk stamped
 //      pedestrianOnly(ctx)  -> ((way) => boolean) | null                                           H06  way.rank, way.x[], way.z[]

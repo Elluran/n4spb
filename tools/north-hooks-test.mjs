@@ -152,22 +152,26 @@ const PODIUM = [744, -884, 741, -970, 777, -995, 777, -1095, 839, -1095, 840, -1
 const CAMPUS_RING = CAMPUS.flat();                                                  // landmarksKirochnaya/groups.js (M5): the embedded polygon of keep-out.js must equal it
 const SUVOROV = [1384, 1442, -1226, -1208];                                          // the Suvorov strip (source trees.js plant())
 const SMOLNY_A = [2320, 2440, -1847, -1820], SMOLNY_B = [2400, 2520, -1553, -1533];   // Smolny's mapped ceremonial approaches (source trees.js cleared())
-const PROBES = { podium: [900, -1000], campus: [1230, -1150], suvorov: [1413, -1217], smolnyA: [2380, -1833], smolnyB: [2460, -1543] };
+const PARTERRE = [1356, 1404, -1660, -1606];                                         // the palace parterre of the Tauride remake (T5 fix round 1: hooks/keep-out.js PALACE_PARTERRE, a soft clearing in front of the palace's garden front)
+const PROBES = { podium: [900, -1000], campus: [1230, -1150], suvorov: [1413, -1217], smolnyA: [2380, -1833], smolnyB: [2460, -1543], garden: [1200, -1500], parterre: [1380, -1630] };
+/** the Tauride Garden park ring of the facade (GREEN r1582734), the independent oracle of the T5 'garden' reason of treeReject */
+const GARDEN_PARK = C.GREEN.find((q) => q.id === 'r1582734').polys[0].o;
 const EPS = 0.3;                                                                     // boundaries are not probed: an answer within 0.3 m of an edge is not graded
 const S = { sm: 'landmarksSmolny', su: 'landmarksSuvorov', ki: 'landmarksKirochnaya', ta: TAURIDE };
 /** expected answers for the build list `bl` at (x, z); null = not graded (on an edge) */
 const near = (x, z) => rectDist(SMOLNY_A, x, z) < EPS && (rectHas([SMOLNY_A[0] - EPS, SMOLNY_A[1] + EPS, SMOLNY_A[2] - EPS, SMOLNY_A[3] + EPS], x, z))
   || rectDist(SMOLNY_B, x, z) < EPS && rectHas([SMOLNY_B[0] - EPS, SMOLNY_B[1] + EPS, SMOLNY_B[2] - EPS, SMOLNY_B[3] + EPS], x, z)
   || rectDist(SUVOROV, x, z) < EPS && rectHas([SUVOROV[0] - EPS, SUVOROV[1] + EPS, SUVOROV[2] - EPS, SUVOROV[3] + EPS], x, z)
-  || ringDist(PODIUM, x, z) < EPS || ringDist(CAMPUS_RING, x, z) < EPS;
+  || rectDist(PARTERRE, x, z) < EPS && rectHas([PARTERRE[0] - EPS, PARTERRE[1] + EPS, PARTERRE[2] - EPS, PARTERRE[3] + EPS], x, z)
+  || ringDist(PODIUM, x, z) < EPS || ringDist(CAMPUS_RING, x, z) < EPS || ringDist(GARDEN_PARK, x, z) < EPS;
 const expect = {
-  treeCleared: (bl, x, z) => bl.includes(S.sm) && (rectHas(SMOLNY_A, x, z) || rectHas(SMOLNY_B, x, z)),
-  treeReject: (bl, x, z) => (bl.includes(S.ta) && ringHas(PODIUM, x, z) ? 'paradny' : bl.includes(S.ki) && ringHas(CAMPUS_RING, x, z) ? 'campus' : bl.includes(S.su) && rectHas(SUVOROV, x, z) ? 'suvorov' : null),
+  treeCleared: (bl, x, z) => (bl.includes(S.sm) && (rectHas(SMOLNY_A, x, z) || rectHas(SMOLNY_B, x, z))) || (bl.includes(S.ta) && rectHas(PARTERRE, x, z)),      // T5 fix round 1: the palace parterre is cleared with landmarksTauride
+  treeReject: (bl, x, z) => (bl.includes(S.ta) && ringHas(PODIUM, x, z) ? 'paradny' : bl.includes(S.ta) && ringHas(GARDEN_PARK, x, z) ? 'garden' : bl.includes(S.ki) && ringHas(CAMPUS_RING, x, z) ? 'campus' : bl.includes(S.su) && rectHas(SUVOROV, x, z) ? 'suvorov' : null),      // T5: 'garden' = the OSM park ring of the facade (the garden plants its own trees, the 7 mapped ones too)
   tuftReject: (bl, x, z) => (bl.includes(S.ta) && ringHas(PODIUM, x, z)) || (bl.includes(S.ki) && ringHas(CAMPUS_RING, x, z)),
   propReject: (bl, x, z) => bl.includes(S.ta) && ringHas(PODIUM, x, z),
 };
 /** the modules each (ctx) factory serves (docs/AREAS.md 9.1) */
-const SERVES = { treeCleared: [S.sm], treeReject: [S.ta, S.ki, S.su], tuftReject: [S.ta, S.ki], propReject: [S.ta], pedestrianOnly: [S.ta] };
+const SERVES = { treeCleared: [S.sm, S.ta], treeReject: [S.ta, S.ki, S.su], tuftReject: [S.ta, S.ki], propReject: [S.ta], pedestrianOnly: [S.ta] };
 const FACTORIES = Object.keys(SERVES);
 const OTHER = ['environment', 'landmarksNorthFull', 'landmarksD', 'landmarksOktyabrsky', 'streets', 'city', 'props', 'traffic', 'people', 'wildlife', 'drive'];
 const grids = (() => {                                                                // points: a grid round every place (step 6 m, offset .37) and a coarse lattice over the play area (step 41.3 m)
@@ -245,7 +249,7 @@ for (const [label, bl] of Object.entries(LISTS)) {
   }
 }
 for (const [name, [x, z]] of Object.entries(PROBES)) {
-  const all = ctxOf([...OTHER, ...Object.values(S)]), want = { podium: ['paradny', false, true, true], campus: ['campus', false, true, false], suvorov: ['suvorov', false, false, false], smolnyA: [null, true, false, false], smolnyB: [null, true, false, false] }[name];
+  const all = ctxOf([...OTHER, ...Object.values(S)]), want = { podium: ['paradny', false, true, true], campus: ['campus', false, true, false], suvorov: ['suvorov', false, false, false], smolnyA: [null, true, false, false], smolnyB: [null, true, false, false], garden: ['garden', false, false, false], parterre: [null, true, false, false] }[name];
   const call = (k, ...a) => { const f = HK[k](all); return f ? f(...a) : '(factory is null)'; };
   const got = [call('treeReject', x, z), call('treeCleared', x, z), call('tuftReject', x, z), call('propReject', x, z)];
   check(`probe ${name} (${x}, ${z}): treeReject ${want[0]}, treeCleared ${want[1]}, tuftReject ${want[2]}, propReject ${want[3]}`, eq(got, want), JSON.stringify(got));

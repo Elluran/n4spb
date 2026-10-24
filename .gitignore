@@ -1,6 +1,7 @@
 node_modules/
 shots/
 *.log
+.playwright-mcp/
 
 # The repository-wide (Python template) .gitignore ignores folders named lib/, parts/, env/, build/, dist/, var/ ...
 # This JavaScript project uses such names for source folders, so re-include them.
