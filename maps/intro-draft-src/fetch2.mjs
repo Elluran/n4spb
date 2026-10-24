@@ -13,6 +13,9 @@ const Q = {
   mo_tags: `${H}relation["boundary"="administrative"]["admin_level"="8"](${BBOX});out tags center;`,
   places2: `${H}(node["place"~"^(suburb|neighbourhood|quarter|island|city|town|village|locality)$"](${BBOX}););out tags;`,
   main_roads: `${H}way["highway"~"^(trunk|primary)$"](${BBOX});out geom;`,
+  secondary: `${H}way["highway"="secondary"]["name"](${BBOX});out geom;`,
+  tertiary: `${H}way["highway"="tertiary"]["name"](59.80,30.10,60.06,30.60);out geom;`,
+  primary_names: `${H}way["highway"~"^(trunk|primary)$"]["name"](${BBOX});out geom;`,
   railways: `${H}way["railway"="rail"]["service"!~"."](59.55,29.40,60.25,30.90);out geom;`,
 };
 const only = process.argv.slice(2);

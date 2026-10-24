@@ -249,6 +249,27 @@ for (const [key, letter, st] of [['strip', 'A', 'Live'], ['north', 'B', 'In deve
   existing.push({ id: letter, key, title: row.title, titleEn: row.titleEn, status: st, km2: Math.round(km2 * 100) / 100, rects, overlap });
 }
 
+// ---------- the source project's coverage (the playable rectangles of D:/git2/agi-fun-tests/102_3d_piter, same frame) and its authored sights
+let srcCov = null;
+try { srcCov = JSON.parse(fs.readFileSync(path.join(here, 'raw', 'source-coverage.json'), 'utf8')); } catch (e) { log('no source coverage file'); }
+const srcCnt = new Float64Array(mos.length), sightN = new Int16Array(mos.length), sightList = mos.map(() => []);
+let srcRects = [], srcKm2 = 0;
+if (srcCov) {
+  srcRects = srcCov.regions.map((rg) => { const p = rg.playRect; return [unproj(p.x0, p.z0), unproj(p.x1, p.z0), unproj(p.x1, p.z1), unproj(p.x0, p.z1)].map(rpt); });
+  const mark = new Uint8Array(GW * GH);
+  for (const rc of srcRects) fillRings([rc], (x, y) => { mark[y * GW + x] = 1; });
+  let n = 0;
+  for (let i = 0; i < mark.length; i++) if (mark[i]) { n++; if (lab[i] >= 0 && !water[i]) srcCnt[lab[i]]++; }
+  srcKm2 = Math.round(n * cellKm2 * 10) / 10;
+  for (const sg of srcCov.sights) {
+    const ll = unproj(sg.at[0], sg.at[1]); const g = toG(ll); const x = Math.floor(g[0]), y = Math.floor(g[1]);
+    if (x < 0 || y < 0 || x >= GW || y >= GH) continue;
+    const k = lab[y * GW + x]; if (k < 0) continue;
+    sightN[k]++; sightList[k].push({ n: sg.name, b: sg.buildings || 0 });
+  }
+  log('source coverage: rectangles', srcRects.length, 'union km2', srcKm2, 'sights', srcCov.sights.length);
+}
+
 // ---------- output per area
 const out = { meta: { cell: CELL, B_KM2, B_LO, B_HI, bbox: BBOX }, areas: [], rayons: [], existing: [], layers: {} };
 const rayNames = [...new Set(mos.map((m) => m.rayon))];
@@ -272,6 +293,8 @@ mos.forEach((m, k) => {
     kind, split: kind === 'big' ? Math.max(2, Math.round(km2 / B_KM2)) : 0,
     label: [r5(lp.p[0]), r5(lp.p[1])], lr: Math.round(lp.r),
     outer, inner,
+    src: Math.round(100 * srcCnt[k] / Math.max(1, cnt[k])), srcKm2: Math.round(srcCnt[k] * cellKm2 * 100) / 100,
+    sights: sightN[k], sightList: sightList[k].sort((p, q) => q.b - p.b).slice(0, 8).map((x) => x.n),
     contains: m.contains.slice(0, 8).map((p) => ({ ru: p.n, en: p.ne || translit(p.n) })),
     exist: existing.map((e) => ({ id: e.id, pct: Math.round((e.overlap[k] / Math.max(1, cnt[k])) * 100) })).filter((e) => e.pct > 0),
     nb: m.nb.slice(0, 6).map(([j, v]) => ({ k: j, len: Math.round(v * CELL) })),
@@ -321,6 +344,7 @@ for (const a of [...out.areas].sort((p, q) => q.nb.length - p.nb.length)) {
   let s = 0; while (used.has(s)) s++; a.shade = s;
 }
 out.rayons = rayNames.map((r, i) => ({ id: i, ru: r.replace(' район', ''), ruFull: r, en: RAY_EN[r] || translit(r), hue: HUES[i % HUES.length], n: out.areas.filter((a) => a.rayon === r).length, km2: Math.round(out.areas.filter((a) => a.rayon === r).reduce((s, a) => s + a.km2, 0) * 10) / 10 }));
+out.source = { rects: srcRects, km2: srcKm2, regions: srcRects.length, sights: srcCov ? srcCov.sights.length : 0 };
 out.existing = existing.map((e) => ({ id: e.id, key: e.key, title: e.title, titleEn: e.titleEn, status: e.status, km2: e.km2, rects: e.rects }));
 
 // ---------- base layers (simplified)
