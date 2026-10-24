@@ -102,4 +102,7 @@ export const GROUPS_LIST = [
   {key:'tauride-palace',name:'Таврический дворец',nameEn:'Tauride Palace',ids:['r3801092'],osm:[],at:[1380,-1735]},
   {key:'paradny-quarter',name:'Парадный квартал',nameEn:'Paradny Quarter',ids:['w102153008','w102153013','w145419644','r1452259','r1967088','r3304715','r3304716','w102153007','w134638076','w134638078','w134638079'],osm:['w1501496505','w1501496506'],at:[944,-1038]},
   {key:'tauride-garden',name:'Таврический сад',nameEn:'Tauride Garden',ids:[GARDEN_ORANGERY],osm:[...GARDEN_GREEN_IDS,...GARDEN_WAYS,...GARDEN_AREAS,...GARDEN_BENCHES,...GARDEN_BINS,...GARDEN_FENCES,...GARDEN_GATES,...GARDEN_MONUMENTS,...GARDEN_OTHERS,...GARDEN_HEDGES],at:[1210,-1520]},
+  // T8b (a user fix): the buildings of the garden nursery lot north-west of the garden: SHEDS (two concrete boxes, the long annex along the north edge; FIX ROUND 1: the grey office box, the barn and a utility cube of the yard) and YARD_HOUSES (the three classical blocks of the yard, drawn low with blue-green hipped roofs). OSM gives them no height and the generic city drew each as a
+  // 4-storey yellow block; the air photo shows low plain buildings, which nursery.js draws (with colliders): `city` no longer draws them. The ids are the literal copy of data/nursery.js CLAIMED_IDS (nursery-test pins the equality).
+  {key:'tauride-nursery',name:'Питомник Таврического сада',nameEn:'Tauride Garden nursery',ids:['w1457964048','w1457964049','w30324512','w239884014','w259579860','w30324513','w23002928','w23002936','w23002941'],osm:[],at:[1060,-1740]},
 ];

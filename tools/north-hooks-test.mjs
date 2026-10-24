@@ -153,9 +153,11 @@ const CAMPUS_RING = CAMPUS.flat();                                              
 const SUVOROV = [1384, 1442, -1226, -1208];                                          // the Suvorov strip (source trees.js plant())
 const SMOLNY_A = [2320, 2440, -1847, -1820], SMOLNY_B = [2400, 2520, -1553, -1533];   // Smolny's mapped ceremonial approaches (source trees.js cleared())
 const PARTERRE = [1356, 1436, -1660, -1598];                                         // the palace parterre of the Tauride remake (T5 fix round 1: hooks/keep-out.js PALACE_PARTERRE, a soft clearing in front of the palace's garden front)
-const PROBES = { podium: [900, -1000], campus: [1230, -1150], suvorov: [1413, -1217], smolnyA: [2380, -1833], smolnyB: [2460, -1543], garden: [1200, -1500], parterre: [1380, -1630] };
+const PROBES = { podium: [900, -1000], campus: [1230, -1150], suvorov: [1413, -1217], smolnyA: [2380, -1833], smolnyB: [2460, -1543], garden: [1200, -1500], parterre: [1380, -1630], nursery: [1040, -1700] };
 /** the Tauride Garden park ring of the facade (GREEN r1582734), the independent oracle of the T5 'garden' reason of treeReject */
 const GARDEN_PARK = C.GREEN.find((q) => q.id === 'r1582734').polys[0].o;
+/** T8b: the ring of the garden nursery lot, an INDEPENDENT literal copy of landmarksTauride/data/nursery.js LOT_RING (this test pins the equality below): the lot north-west of the garden between Potemkinskaya, Shpalernaya and the garden fence */
+const LOT_LIT = [938.4, -1819.1, 940.6, -1821.0, 943.1, -1822.4, 945.8, -1822.9, 950.9, -1823.0, 955.4, -1822.7, 969.3, -1822.4, 969.6, -1797.5, 1104.3, -1797.5, 1104.3, -1788.6, 1113.4, -1788.1, 1112.2, -1737.8, 1112.8, -1618.5, 1101.2, -1600.0, 1080.6, -1600.6, 982.4, -1604.2, 982.0, -1595.5, 931.7, -1597.0, 934.6, -1649.2, 936.3, -1692.9, 938.6, -1741.2, 938.9, -1751.9];
 const EPS = 0.3;                                                                     // boundaries are not probed: an answer within 0.3 m of an edge is not graded
 const S = { sm: 'landmarksSmolny', su: 'landmarksSuvorov', ki: 'landmarksKirochnaya', ta: TAURIDE };
 /** expected answers for the build list `bl` at (x, z); null = not graded (on an edge) */
@@ -166,9 +168,9 @@ const near = (x, z) => rectDist(SMOLNY_A, x, z) < EPS && (rectHas([SMOLNY_A[0] -
   || ringDist(PODIUM, x, z) < EPS || ringDist(CAMPUS_RING, x, z) < EPS || ringDist(GARDEN_PARK, x, z) < EPS;
 const expect = {
   treeCleared: (bl, x, z) => (bl.includes(S.sm) && (rectHas(SMOLNY_A, x, z) || rectHas(SMOLNY_B, x, z))) || (bl.includes(S.ta) && rectHas(PARTERRE, x, z)),      // T5 fix round 1: the palace parterre is cleared with landmarksTauride
-  treeReject: (bl, x, z) => (bl.includes(S.ta) && ringHas(PODIUM, x, z) ? 'paradny' : bl.includes(S.ta) && ringHas(GARDEN_PARK, x, z) ? 'garden' : bl.includes(S.ki) && ringHas(CAMPUS_RING, x, z) ? 'campus' : bl.includes(S.su) && rectHas(SUVOROV, x, z) ? 'suvorov' : null),      // T5: 'garden' = the OSM park ring of the facade (the garden plants its own trees, the 7 mapped ones too)
-  tuftReject: (bl, x, z) => (bl.includes(S.ta) && ringHas(PODIUM, x, z)) || (bl.includes(S.ki) && ringHas(CAMPUS_RING, x, z)),
-  propReject: (bl, x, z) => bl.includes(S.ta) && ringHas(PODIUM, x, z),
+  treeReject: (bl, x, z) => (bl.includes(S.ta) && ringHas(PODIUM, x, z) ? 'paradny' : bl.includes(S.ta) && ringHas(GARDEN_PARK, x, z) ? 'garden' : bl.includes(S.ta) && ringHas(LOT_LIT, x, z) ? 'nursery' : bl.includes(S.ki) && ringHas(CAMPUS_RING, x, z) ? 'campus' : bl.includes(S.su) && rectHas(SUVOROV, x, z) ? 'suvorov' : null),      // T5: 'garden' = the OSM park ring of the facade (the garden plants its own trees, the 7 mapped ones too)
+  tuftReject: (bl, x, z) => (bl.includes(S.ta) && (ringHas(PODIUM, x, z) || ringHas(LOT_LIT, x, z))) || (bl.includes(S.ki) && ringHas(CAMPUS_RING, x, z)),      // T8b: no grass tufts on the nursery's earth
+  propReject: (bl, x, z) => bl.includes(S.ta) && (ringHas(PODIUM, x, z) || ringHas(LOT_LIT, x, z)),      // T8b: no bench / bin / kiosk stamped in the nursery lot
 };
 /** the modules each (ctx) factory serves (docs/AREAS.md 9.1) */
 const SERVES = { treeCleared: [S.sm, S.ta], treeReject: [S.ta, S.ki, S.su], tuftReject: [S.ta, S.ki], propReject: [S.ta], pedestrianOnly: [S.ta] };
@@ -249,7 +251,7 @@ for (const [label, bl] of Object.entries(LISTS)) {
   }
 }
 for (const [name, [x, z]] of Object.entries(PROBES)) {
-  const all = ctxOf([...OTHER, ...Object.values(S)]), want = { podium: ['paradny', false, true, true], campus: ['campus', false, true, false], suvorov: ['suvorov', false, false, false], smolnyA: [null, true, false, false], smolnyB: [null, true, false, false], garden: ['garden', false, false, false], parterre: [null, true, false, false] }[name];
+  const all = ctxOf([...OTHER, ...Object.values(S)]), want = { podium: ['paradny', false, true, true], campus: ['campus', false, true, false], suvorov: ['suvorov', false, false, false], smolnyA: [null, true, false, false], smolnyB: [null, true, false, false], garden: ['garden', false, false, false], parterre: [null, true, false, false], nursery: ['nursery', false, true, true] }[name];
   const call = (k, ...a) => { const f = HK[k](all); return f ? f(...a) : '(factory is null)'; };
   const got = [call('treeReject', x, z), call('treeCleared', x, z), call('tuftReject', x, z), call('propReject', x, z)];
   check(`probe ${name} (${x}, ${z}): treeReject ${want[0]}, treeCleared ${want[1]}, tuftReject ${want[2]}, propReject ${want[3]}`, eq(got, want), JSON.stringify(got));
@@ -422,6 +424,7 @@ section('pure');
       const spec = m[1] || m[2] || m[3], target = path.posix.normalize(path.posix.join(path.posix.dirname(f), spec));
       if (target === 'src/world/landmarksTauride/height.js' && f === 'src/areas/north/hooks/height.js') continue;      // T2: the garden relief, itself pure (checked below)
       if (target === 'src/world/landmarksTauride/data/paths.js' && f === 'src/areas/north/hooks/ground.js') continue;     // T3: the ids of the garden ways, pure data with no import (checked below)
+      if (target === 'src/world/landmarksTauride/data/nursery.js' && (f === 'src/areas/north/hooks/ground.js' || f === 'src/areas/north/hooks/keep-out.js')) continue;     // T8b: the ring of the nursery lot and inNursery, pure data with no import (checked below)
       if (target === 'src/world/landmarksTauride/data/water.js' && f === 'src/areas/north/hooks/water.js') continue;     // T4a: the union outline of the ponds, pure data with no import (checked below)
       if ((target === 'src/world/landmarksTauride/height.js' || target === 'src/world/landmarksTauride/data/ponds.js') && f === 'src/areas/north/hooks/water.js') continue;      // T4a fix 1: noLanding reads the pure terrain function and the datum table (both checked below)
       if (target === 'src/world/landmarksTauride/data/bridges.js' && f === 'src/areas/north/hooks/water.js') continue;      // T4b: duckPonds reads the bridge sites (pure data with no import: the deck keep-outs of the lanes)
@@ -430,6 +433,9 @@ section('pure');
     if (/\bctx\.services\b|\bdocument\b|\bwindow\b|THREE|three/.test(src)) bad.push(`${f} reads services / DOM / three`);
   }
   check('the hooks files are pure data + pure functions: they import only each other (no three.js, layout.js, data facade, world module; the exceptions: hooks/height.js imports the pure landmarksTauride/height.js, T2, hooks/ground.js the pure data landmarksTauride/data/paths.js, T3, and hooks/water.js the pure data landmarksTauride/data/water.js, T4a, and, T4a fix 1, the pure height.js and data/ponds.js), no ctx.services', bad.length === 0, bad.join('; '));
+  // T8b: data/nursery.js (the lot ring, inNursery) is pure data with no import, and its ring equals the literal of this test
+  { const nz = stripComments(read('src/world/landmarksTauride/data/nursery.js')), N = await imp('src/world/landmarksTauride/data/nursery.js');
+    check('landmarksTauride/data/nursery.js imports nothing (pure: no three.js, layout.js, facade, ctx, DOM) and its LOT_RING equals the independent literal of this test; inNursery equals the ring test on the probe', !/(?:^|\s)import\s|import\s*\(|ctx|document|window|THREE/.test(nz) && eq(N.LOT_RING, LOT_LIT) && N.inNursery(...PROBES.nursery) && !N.inNursery(1200, -1500) && !N.inNursery(900, -1000), String(N.LOT_RING.length)); }
   // the relief module the garden patch calls: pure too (T2): height.js imports only data/relief.js, relief.js imports nothing; neither touches three.js, layout.js, a facade, ctx or the DOM
   { const hs = stripComments(read('src/world/landmarksTauride/height.js')), rs = stripComments(read('src/world/landmarksTauride/data/relief.js')), imps = (t) => [...t.matchAll(/(?:^|\s)(?:import|export)\s[^;'"]*?from\s*['"]([^'"]+)['"]|\bimport\s*\(|(?:^|\s)import\s+['"]([^'"]+)['"]/gm)].map((m) => m[1] || m[2] || 'dynamic import');
     check('landmarksTauride/height.js imports only the pure data modules data/relief.js, data/water.js, data/footprints.js and data/ponds.js, and they import nothing (pure: no three.js, layout.js, facade, ctx, DOM)', eq(imps(hs), ['./data/relief.js', './data/water.js', './data/footprints.js', './data/ponds.js']) && imps(rs).length === 0 && ['data/water.js', 'data/footprints.js', 'data/ponds.js'].every((n) => imps(stripComments(read('src/world/landmarksTauride/' + n))).length === 0) && !/\bctx\b|\bdocument\b|\bwindow\b|THREE|three|Math\.random|Date\.now/.test(hs + rs), JSON.stringify([imps(hs), imps(rs)])); }

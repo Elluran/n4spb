@@ -8,8 +8,8 @@
 //  ctx.buildList counts as "not built", as in the source: `ctx.buildList?.includes(name)`); the engine calls the returned function per candidate. THE SIGNATURES ARE FROZEN.
 //    treeCleared(ctx)      -> ((x, z) => boolean) | null    H02  environment/trees.js cleared(): SOFT clearing (cleared() runs only under `!o.force`; no caller forces, so mapped OSM trees are cleared too: none lies in the rectangles).  Serves landmarksSmolny (the two ceremonial approaches),
 //                              landmarksTauride (T5 fix round 1: the palace parterre, PALACE_PARTERRE: the vista from the garden's lake to the palace's garden front)
-//    treeReject(ctx)       -> ((x, z) => 'paradny' | 'garden' | 'campus' | 'suvorov' | null) | null    H03  environment/trees.js plant(): HARD reject, mapped trees too; the reason string is the ENV_DEBUG
-//                              counter.  Serves landmarksTauride (the podium; T5: the garden outline too, the garden plants its own trees), landmarksKirochnaya (the CAMPUS polygon, embedded here), landmarksSuvorov (x 1384 .. 1442, z -1226 .. -1208)
+//    treeReject(ctx)       -> ((x, z) => 'paradny' | 'garden' | 'nursery' | 'campus' | 'suvorov' | null) | null    H03  environment/trees.js plant(): HARD reject, mapped trees too; the reason string is the ENV_DEBUG
+//                              counter.  Serves landmarksTauride (the podium; T5: the garden outline too, the garden plants its own trees; T8b: 'nursery' = the nursery lot north-west of the garden, landmarksTauride/data/nursery.js inNursery: the module plants its own young trees there; tuftReject and propReject cover the lot too), landmarksKirochnaya (the CAMPUS polygon, embedded here), landmarksSuvorov (x 1384 .. 1442, z -1226 .. -1208)
 //    tuftReject(ctx)       -> ((x, z) => boolean) | null    H04  environment/lawns.js buildTufts() live(): no grass tufts.  Serves landmarksTauride, landmarksKirochnaya
 //    propReject(ctx)       -> ((cx, cz) => boolean) | null    H05  props/world.js fits(): no bench / bin / kiosk stamped.  Serves landmarksTauride
 //    pedestrianOnly(ctx)   -> ((way) => boolean) | null    H06  streets.js build(): way.pedestrianOnly (no lanes, no lamps, no parking); uses way.rank, way.x[], way.z[] (the source: rank 0 and more than 60 % of the
@@ -23,6 +23,7 @@
 // ============================================================================
 import { inParadny } from './paradny.js';
 import { inGarden } from './people.js';
+import { inNursery } from '../../../world/landmarksTauride/data/nursery.js';        // T8b: the nursery lot (pure data, no imports): the module plants its own trees, draws its own earth and stamps no prop there
 
 const built = (ctx, name) => !!(ctx && ctx.buildList && ctx.buildList.includes(name));
 /** strictly inside the box [x0, x1, z0, z1] (the open rectangles of the source) */
@@ -66,19 +67,19 @@ export function treeCleared(ctx) {
 export function treeReject(ctx) {
   const tauride = built(ctx, 'landmarksTauride'), campus = built(ctx, 'landmarksKirochnaya'), suvorov = built(ctx, 'landmarksSuvorov');
   if (!tauride && !campus && !suvorov) return null;
-  return (x, z) => (tauride && inParadny(x, z) ? 'paradny' : tauride && inGarden(x, z) ? 'garden' : campus && inCampus(x, z) ? 'campus' : suvorov && inBox(SUVOROV_STRIP, x, z) ? 'suvorov' : null);
+  return (x, z) => (tauride && inParadny(x, z) ? 'paradny' : tauride && inGarden(x, z) ? 'garden' : tauride && inNursery(x, z) ? 'nursery' : campus && inCampus(x, z) ? 'campus' : suvorov && inBox(SUVOROV_STRIP, x, z) ? 'suvorov' : null);
 }
 
 /** H04: no grass tufts on the podium or in the campus. */
 export function tuftReject(ctx) {
   const tauride = built(ctx, 'landmarksTauride'), campus = built(ctx, 'landmarksKirochnaya');
   if (!tauride && !campus) return null;
-  return (x, z) => (tauride && inParadny(x, z)) || (campus && inCampus(x, z));
+  return (x, z) => (tauride && (inParadny(x, z) || inNursery(x, z))) || (campus && inCampus(x, z));
 }
 
 /** H05: nothing is stamped on the podium (props/world.js fits(); the mapped OSM furniture of props/osm.js does not go through fits() and stays). */
 export function propReject(ctx) {
-  return built(ctx, 'landmarksTauride') ? (cx, cz) => inParadny(cx, cz) : null;
+  return built(ctx, 'landmarksTauride') ? (cx, cz) => inParadny(cx, cz) || inNursery(cx, cz) : null;
 }
 
 /** H06: a rank-0 way with MORE than 60 % of its points in the podium is the module's to draw (no lanes, lamps, parking). */

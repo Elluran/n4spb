@@ -9,7 +9,7 @@
 //  THE CONTRACT (frozen by the foundation commit; the H.. ids are the items of the table in docs/AREAS.md 9.5):
 //    HOOKS = {
 //      treeCleared(ctx)     -> ((x, z) => boolean) | null                                          H02  soft tree clearing (cleared() runs only under !o.force; no caller forces, so mapped OSM trees are cleared too)
-//      treeReject(ctx)      -> ((x, z) => 'paradny' | 'garden' | 'campus' | 'suvorov' | null) | null   H03  hard reject, mapped trees included; the string is the debug reason (T5: 'garden' = the Tauride Garden outline, the garden plants its own)
+//      treeReject(ctx)      -> ((x, z) => 'paradny' | 'garden' | 'campus' | 'suvorov' | null) | null   H03  hard reject, mapped trees included; the string is the debug reason (T5: 'garden' = the Tauride Garden outline, the garden plants its own; T8b: 'nursery' = the nursery lot, the module plants its own)
 //      tuftReject(ctx)      -> ((x, z) => boolean) | null                                          H04  no grass tufts
 //      propReject(ctx)      -> ((cx, cz) => boolean) | null                                        H05  no bench / bin / kiosk stamped
 //      pedestrianOnly(ctx)  -> ((way) => boolean) | null                                           H06  way.rank, way.x[], way.z[]
@@ -18,7 +18,7 @@
 //      inGarden             -> ((x, z) => boolean) | undefined                                     H08  the Tauride Garden polygon, for the people crowd cap (the North always gives a function; the strip: absent)
 //      deckServices         -> ['landmarksTauride']                                                H09  names of ctx.services whose deckY(x, z) is consulted FIRST (cars, pedestrians)
 //      doorServices         -> ['landmarksNorthFull', 'landmarksOktyabrsky']                       T7   names of ctx.services whose `entrances` ({ x, z, rotY, bldg }) are pedestrian doors besides the city's (people/nav.js; points without rotY are clearing discs and are skipped)
-//      groundHoles          -> (() => [flat ring, ...]) | undefined                                T3a  the rings cut out of the environment ground (environment/ground.js groundCuts): the garden outline moved in by 6 cm; undefined unless MODULES has 'landmarksTauride'
+//      groundHoles          -> (() => [flat ring, ...]) | undefined                                T3a  the rings cut out of the environment ground (environment/ground.js groundCuts): the garden outline moved in by 6 cm and (T8b) the nursery lot's ring moved in by 6 cm; undefined unless MODULES has 'landmarksTauride'
 //      groundWayReject      -> ((road) => boolean) | undefined                                     T3b  the ways that the ground class mask does not paint (environment/field.js buildField): the 120 garden ways; undefined unless MODULES has 'landmarksTauride'
 //      waterBodies          -> (() => [{ id, o, h }]) | undefined                                  T4a  the ponds of the garden as water bodies of the field's water mask (environment/field.js buildField, after the river polygons): env.waterAt / shoreDist / the water shader's distance atlas; undefined unless MODULES has 'landmarksTauride'
 //      noLanding            -> ((x, z) => boolean) | undefined                                     T4a1 a flight landing on the ponds is refused as 'water' (core/player.js landingBlocked reads player.noLanding, set by main.js); true where the terrain is at or below the contour of the shore colliders; undefined unless MODULES has 'landmarksTauride'
