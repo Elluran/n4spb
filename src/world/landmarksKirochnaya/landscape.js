@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import * as L from '../layout.js';
 import { CAMPUS,CAMPUS_ROADS,inCampus } from './groups.js';
+import { Parts } from '../landmarksD/kit.js';
+import { knockInstances } from '../lib/knock-inst.js';
 
 // M7 (docs/AREAS.md 8.7, the M5 GPU QA finding 1): the two gate stubs across Kirochnaya's pavement (w515895295 / w515895296) ran to the centreline of the street, so 1-3 m of their asphalt lay on the
 // carriageway. The asphalt of a campus lane is now clipped where it enters a carriageway that is NOT a campus lane: the longest stretch of the segment whose two edges (+-w/2) stay KERB_CLEAR m off every
-// other drivable road of the data (L.roadsNear). streets is built after this module, so the data's half width (w/2) is the only kerb this module can read; streets widens Kirochnaya by its parking
-// pockets (measured with net.cover at the two stubs: 4.31 m and 3.82 m of asphalt from the centreline against w/2 = 3.6), hence the 1 m margin: the stub ends 0.3-0.8 m before the drawn kerb.
-// Proof: tools/north-knock-test.mjs (no vertex of the lmK-asphalt mesh on the asphalt of streets, measured with net.cover).
-const CAMPUS_SET=new Set(CAMPUS_ROADS), KERB_CLEAR=1.0;
+// other drivable road of the data (L.roadsNear). streets is built after this module, so the data's half width (w/2) is the only kerb this module can read. M7 polish: the first margin was 1.0 m (chosen when
+// net.cover measured 4.31 / 3.82 m of asphalt from the centreline at the two stubs against w/2 = 3.6: the parking pockets); the North's streets of T1 draw Kirochnaya without those pockets, so the stubs stopped
+// 0.94 m (west) / 1.03 m (east) short of the drawn asphalt (bare ground between the stub and the street). With KERB_CLEAR 0.3 the stub ends 0.25 m (west) / 0.34 m (east) before the triangles of the
+// streets asphalt (pt-asphalt) and no vertex lies on it. Proof: tools/north-knock-test.mjs check 5 (both stubs by their geometry: the asphalt exists, no vertex inside a pt-asphalt triangle or on net.cover, the gap
+// to the pt-asphalt triangles under 0.45 m; the unclipped segment ends as the negative control).
+const CAMPUS_SET=new Set(CAMPUS_ROADS), KERB_CLEAR=0.3;
 const onOtherRoad=(x,z,r)=>L.roadsNear(x,z,KERB_CLEAR,{drivable:true}).some((h)=>h.road!==r&&!CAMPUS_SET.has(h.road));
 /** [u0, u1] along the segment (x, z) -> (bx, bz) of way r (u = 0 at the middle) of the longest stretch whose two edges stay clear of every other non-campus carriageway; the whole segment when nothing is near */
 export function clipToKerb(x,z,bx,bz,len,w,r) {
@@ -22,6 +26,17 @@ export function clipToKerb(x,z,bx,bz,len,w,r) {
   }
   return best;
 }
+
+// The campus bench (M7): drawn at the origin facing local +z (backrest at z -0.32 .. -0.23), iron ends and green slats; 2.1 m wide, 0.64 m deep, 1.1 m to the top slat. The five placements are [x, z, rotY].
+export const BENCHES=[[1198,-1113,0],[1258,-1130,0],[1304,-1136,-.65],[1169,-1135,Math.PI/2],[1260,-1183,0]];
+export const BENCH_W=2.1, BENCH_D=0.64, BENCH_H=1.1;
+function bench(P,M) {
+  for(const u of [-.82,.82]){P.box(M.iron,u-.055,u+.055,0,.68,-.3,.3);P.box(M.iron,u-.05,u+.05,.35,1.05,-.32,-.24);}
+  for(const zz of [-.22,0,.22])P.box(M.roofGreen,-1.05,1.05,.47,.54,zz-.07,zz+.07);
+  for(const y of [.77,.98])P.box(M.roofGreen,-1.05,1.05,y,y+.12,-.3,-.23);
+}
+/** the template geometries of a small model drawn by draw(P) at the origin, one per material (landmarksF/util.js templateOf, with the kit of this module) */
+const templateOf=(draw)=>{const P=new Parts(),g=new THREE.Group();draw(P);return P.build(g,{}).map((m)=>({geo:m.geometry,mat:m.material}));};
 
 export function campusLandscape(K) {
   const P=K.P,M=K.mats,ctx=K.ctx;
@@ -60,11 +75,19 @@ export function campusLandscape(K) {
     ctx.physics.addCylinder(px,pz,.27,0,h*.65);trunks.push([px,pz]);
   }
   // Garden benches beside mapped access paths, never in the carriageway.
-  for(const [x,z,rot] of [[1198,-1113,0],[1258,-1130,0],[1304,-1136,-.65],[1169,-1135,Math.PI/2],[1260,-1183,0]]){
-    if(L.insideBuilding(x,z,1.5))continue;P.push(x,0,z,rot);
-    for(const u of [-.82,.82]){P.box(M.iron,u-.055,u+.055,0,.68,-.3,.3);P.box(M.iron,u-.05,u+.05,.35,1.05,-.32,-.24);}
-    for(const zz of [-.22,0,.22])P.box(M.roofGreen,-1.05,1.05,.47,.54,zz-.07,zz+.07);
-    for(const y of [.77,.98])P.box(M.roofGreen,-1.05,1.05,y,y+.12,-.3,-.23);P.pop();
+  // M7 (docs/AREAS.md section 10): with ctx.knock the 5 benches are KNOCKABLE instances with a collider each (the pattern of landmarksF/garden.js: the same bench model as iron ends + green slats, a
+  // record per bench, a 2.1 x 0.64 m box 1.1 m high); without ctx.knock (tools/check.mjs, the headless probes) they are drawn merged as ever and have no collider, the structure the module had.
+  const benchSpots=[];
+  for (const [x,z,rot] of BENCHES){
+    if(L.insideBuilding(x,z,1.5))continue;
+    if(ctx.knock)benchSpots.push({x,y:0,z,rotY:rot});else{P.push(x,0,z,rot);bench(P,M);P.pop();}
+  }
+  if(benchSpots.length){
+    const parts=templateOf((T)=>bench(T,M));
+    knockInstances(ctx,{name:'lmK-bench',parts:parts.map((t)=>({geo:t.geo,mat:t.mat,name:t.mat===M.iron?'iron':'slats'})),spots:benchSpots,far:220,
+      items:(i,s)=>ctx.physics.addBox(s.x,s.z,BENCH_W,BENCH_D,s.rotY,0,BENCH_H),
+      rec:{kind:'bench',mass:50,h:BENCH_H,w:BENCH_W,d:BENCH_D,hitK:0.25,minDv:0.5}});
+    K.tris+=parts.reduce((n,{geo})=>n+(geo.index?geo.index.count:geo.attributes.position.count)/3,0)*benchSpots.length;     // the module's triangle service counts the instances as it counted the merged benches
   }
   // North garden and Paradnaya frontage: diamond-pattern iron panels from the
   // photographed fence. OSM access gates stay open at x1155 and x1312.
