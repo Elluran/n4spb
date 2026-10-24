@@ -203,11 +203,14 @@ const evaluate = (list) => {
 /** the garden outline as the independent oracle of the T5 'garden' reason: a winding-number test on the facade's own GREEN record r1582734 (not hooks/people.js inGarden) */
 const GARDEN_PARK = (await imp('src/areas/north/data/city.js')).GREEN.find((q) => q.id === 'r1582734').polys[0].o;
 const inGardenRef = (x, z) => { if (!(x > 915 && x < 1500 && z > -1800 && z < -1250)) return false; let w = 0; const o = GARDEN_PARK; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const x0 = o[j], z0 = o[j + 1], x1 = o[i], z1 = o[i + 1], cr = (x1 - x0) * (z - z0) - (x - x0) * (z1 - z0); if (z0 <= z) { if (z1 > z && cr > 0) w++; } else if (z1 <= z && cr < 0) w--; } return w !== 0; };
+/** T8b: the ring of the garden nursery lot, an INDEPENDENT literal copy of landmarksTauride/data/nursery.js LOT_RING (north-hooks-test pins the equality), tested by the winding number */
+const LOT_LIT = [938.4, -1819.1, 940.6, -1821.0, 943.1, -1822.4, 945.8, -1822.9, 950.9, -1823.0, 955.4, -1822.7, 969.3, -1822.4, 969.6, -1797.5, 1104.3, -1797.5, 1104.3, -1788.6, 1113.4, -1788.1, 1112.2, -1737.8, 1112.8, -1618.5, 1101.2, -1600.0, 1080.6, -1600.6, 982.4, -1604.2, 982.0, -1595.5, 931.7, -1597.0, 934.6, -1649.2, 936.3, -1692.9, 938.6, -1741.2, 938.9, -1751.9];
+const inLotRef = (x, z) => { let w = 0; const o = LOT_LIT; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const x0 = o[j], z0 = o[j + 1], x1 = o[i], z1 = o[i + 1], cr = (x1 - x0) * (z - z0) - (x - x0) * (z1 - z0); if (z0 <= z) { if (z1 > z && cr > 0) w++; } else if (z1 <= z && cr < 0) w--; } return w !== 0; };
 const expected = (built, x, z) => ({
   cleared: (built.has(MODS.smolny) && (SMOLNY[0](x, z) || SMOLNY[1](x, z))) || (built.has(MODS.tauride) && PARTERRE(x, z)),      // T5 fix round 1: the parterre with landmarksTauride
-  reject: built.has(MODS.tauride) && inPodium(x, z) ? 'paradny' : built.has(MODS.tauride) && inGardenRef(x, z) ? 'garden' : built.has(MODS.kirochnaya) && inCampusRef(x, z) ? 'campus' : built.has(MODS.suvorov) && SUVOROV(x, z) ? 'suvorov' : null,      // T5: 'garden' inside the Tauride Garden outline (the garden plants its own trees)
-  tuft: (built.has(MODS.tauride) && inPodium(x, z)) || (built.has(MODS.kirochnaya) && inCampusRef(x, z)),
-  prop: built.has(MODS.tauride) && inPodium(x, z),
+  reject: built.has(MODS.tauride) && inPodium(x, z) ? 'paradny' : built.has(MODS.tauride) && inGardenRef(x, z) ? 'garden' : built.has(MODS.tauride) && inLotRef(x, z) ? 'nursery' : built.has(MODS.kirochnaya) && inCampusRef(x, z) ? 'campus' : built.has(MODS.suvorov) && SUVOROV(x, z) ? 'suvorov' : null,      // T5: 'garden' inside the Tauride Garden outline (the garden plants its own trees)
+  tuft: (built.has(MODS.tauride) && (inPodium(x, z) || inLotRef(x, z))) || (built.has(MODS.kirochnaya) && inCampusRef(x, z)),      // T8b: no tufts in the nursery lot
+  prop: built.has(MODS.tauride) && (inPodium(x, z) || inLotRef(x, z)),
   parking: built.has(MODS.tauride) && inPodium(x, z),
 });
 const got = (h, x, z) => ({ cleared: !!(h.cleared && h.cleared(x, z)), reject: h.reject ? h.reject(x, z) : null, tuft: !!(h.tuft && h.tuft(x, z)), prop: !!(h.prop && h.prop(x, z)), parking: !!(h.parking && h.parking(x, z)) });
@@ -239,7 +242,8 @@ const PROBES = [
   { name: 'Suvorov (1413, -1217)', at: [1413, -1217], module: MODS.suvorov, fires: { reject: 'suvorov' } },
   { name: 'Smolny (2380, -1833)', at: [2380, -1833], module: MODS.smolny, fires: { cleared: true } },
   { name: 'Smolny (2460, -1543)', at: [2460, -1543], module: MODS.smolny, fires: { cleared: true } },
-  { name: 'parterre (1380, -1630)', at: [1380, -1630], module: MODS.tauride, fires: { cleared: true } },      // T5 fix round 1: outside the garden outline (the quay is at z -1622 there), in front of the palace
+  { name: 'parterre (1380, -1630)', at: [1380, -1630], module: MODS.tauride, fires: { cleared: true } },
+  { name: 'nursery (1040, -1700)', at: [1040, -1700], module: MODS.tauride, fires: { reject: 'nursery', tuft: true, prop: true } },      // T8b: the garden nursery lot north-west of the garden      // T5 fix round 1: outside the garden outline (the quay is at z -1622 there), in front of the palace
 ];
 const NOTHING = { cleared: false, reject: null, tuft: false, prop: false, parking: false };
 check('the fixed probes fire exactly the hooks of their region with exactly their module built, and nothing without it', () => {
@@ -358,6 +362,7 @@ const regionRings = (built, only) => {
   if (built.has(MODS.suvorov) && only.suvorov) rings.push(box2ring([1384, 1442, -1226, -1208]));
   if (built.has(MODS.kirochnaya) && only.campus) rings.push(KO.CAMPUS.flat());
   if (built.has(MODS.tauride) && only.podium) rings.push(PD.PARADNY_PODIUM.o.slice());
+  if (built.has(MODS.tauride) && only.nursery) rings.push(LOT_LIT.slice());      // T8b: the nursery lot (treeReject 'nursery', tuftReject, propReject)
   if (built.has(MODS.tauride) && only.parterre) rings.push(box2ring([1356, 1404, -1660, -1606]));      // T5 fix round 1: the palace parterre (the wood w1274934137 overlaps it: its stream re-rolls)
   return rings;
 };
@@ -432,7 +437,7 @@ check('trees: `real` has no tree in any declared region (the podium too); a diff
   ok(offIn.length > 0, 'vacuous: `off` has no tree in the podium');
   // T4a: HOOKS.waterBodies puts the garden ponds into the field's water mask in `real` (the hook is deleted in `off`): a tree that stood in the water is gone, and the trees of the same random stream (the record
   // that overlaps the ponds) re-roll. Such a difference is legitimate when the tree lies within 4 m of the shore or in a record that overlaps the water outline.
-  const rings = regionRings(built, { smolny: 1, suvorov: 1, campus: 1, podium: 1, parterre: 1 }), zones = touchedRecords(rings), pondZones = (() => { const zs = [], near = (o) => { for (let i = 0; i < o.length; i += 2) { const j = (i + 2) % o.length, l = Math.hypot(o[j] - o[i], o[j + 1] - o[i + 1]), n = Math.max(1, Math.ceil(l / 2)); for (let k = 0; k < n; k++) if (GHm.GARDEN_SHORE.dist(o[i] + (o[j] - o[i]) * k / n, o[i + 1] + (o[j + 1] - o[i + 1]) * k / n) < 7) return true; } return false; }; for (const g of D.GREEN) for (const q of g.polys) if (near(q.o)) zs.push({ what: 'GREEN ' + g.id + ':' + g.kind + ' (within 7 m of the ponds)', o: q.o, h: q.h || [] }); for (const bb of D.BUILDINGS) for (const q of bb.polys) for (const h of q.h || []) if (near(h)) zs.push({ what: 'courtyard of ' + bb.id, o: h, h: [] }); return zs; })(), stray = [];
+  const rings = regionRings(built, { smolny: 1, suvorov: 1, campus: 1, podium: 1, parterre: 1, nursery: 1 }), zones = touchedRecords(rings), pondZones = (() => { const zs = [], near = (o) => { for (let i = 0; i < o.length; i += 2) { const j = (i + 2) % o.length, l = Math.hypot(o[j] - o[i], o[j + 1] - o[i + 1]), n = Math.max(1, Math.ceil(l / 2)); for (let k = 0; k < n; k++) if (GHm.GARDEN_SHORE.dist(o[i] + (o[j] - o[i]) * k / n, o[i + 1] + (o[j + 1] - o[i + 1]) * k / n) < 7) return true; } return false; }; for (const g of D.GREEN) for (const q of g.polys) if (near(q.o)) zs.push({ what: 'GREEN ' + g.id + ':' + g.kind + ' (within 7 m of the ponds)', o: q.o, h: q.h || [] }); for (const bb of D.BUILDINGS) for (const q of bb.polys) for (const h of q.h || []) if (near(h)) zs.push({ what: 'courtyard of ' + bb.id, o: h, h: [] }); return zs; })(), stray = [];
   for (const t of [...gone, ...came]) if (!recordOf(zones, rings, t[0], t[1]) && !(GHm.GARDEN_SHORE.dist(t[0], t[1]) < 4) && !recordOf(pondZones, [], t[0], t[1])) stray.push(t);
   console.log(`       off ${S.off.trees.length} trees, real ${S.real.trees.length}: ${offIn.length} stood in the podium, ${gone.length - offIn.length} more gone and ${came.length} came in records that overlap a region; rejections by reason: ${JSON.stringify(reasons(S.real))}`);
   ok(stray.length === 0, `${stray.length} tree differences outside every region and every record that overlaps one: ${describe(stray)}`);
@@ -451,7 +456,7 @@ check('tufts: no tuft stands in a keep-out (campus; with landmarksTauride the po
       removed += gone.length;
     }
   };
-  const campus = (x, z) => inCampusRef(x, z), podiumOnly = (x, z) => inPodium(x, z), both = (x, z) => campus(x, z) || podiumOnly(x, z);
+  const campus = (x, z) => inCampusRef(x, z), podiumOnly = (x, z) => inPodium(x, z), both = (x, z) => campus(x, z) || podiumOnly(x, z) || inLotRef(x, z);
   cmp(S.off0, S.dormant, 'dormant vs off0', campus);
   cmp(S.off, S.real, 'real vs off', both);
   for (const [v, reg] of [['dormant', campus], ['real', both]]) for (const [name, pts] of Object.entries(S[v].tufts)) ok(!pts.some((p) => reg(p[0], p[1])), `${v}: a tuft stands in a keep-out at ${name}`);

@@ -169,7 +169,7 @@ const BODY = /* glsl */`
   float mpp = max(length(dFdx(P)), length(dFdy(P)));
   float patF = 1.0 - smoothstep(0.012, 0.085, mpp);                         // fine detail fades out with distance (no shimmer)
   vec4 M = texture2D(uMask, (P - uMB.xy) * uMB.zw);                          // R track, G soil under the houses, B yard, A dry grass
-  vec2 Pw = P + (gz(P + vec2(17.0, 43.0), 0.019).rg - 0.5) * 9.0;           // the clump fields are read in a warped domain (the tile repeats every 2.7 m at 0.37 per metre)
+  vec2 Pw = P + (gz(P + vec2(17.0, 43.0), 0.019).rg - 0.5) * 5.0;           // the clump fields are read in a warped domain (the tile repeats every 2.7 m at 0.37 per metre)
   vec4 n2 = gz(Pw, 0.083);
   vec4 n3 = gz(vec2(Pw.x * 0.857 - Pw.y * 0.515, Pw.x * 0.515 + Pw.y * 0.857), 0.37);
   vec4 n4 = gz(P, 0.17);
@@ -338,21 +338,21 @@ export function detailGeometry(g, plan) {
   }
 }
 
-/** the tree template: a thin tapering trunk, four bare branches and a few light haze clumps (about 60 triangles; ~5.5 m tall at scale 1) */
+/** the tree template: a thin tapering trunk, six bare branches (golden-angle spread, rising, 1.2 .. 1.8 m) with a small light bud at each tip and one at the fork (about 90 triangles; ~5.5 m tall at scale 1) */
 export function treeGeometry() {
-  const g = new GB(), trunk = '#5b4b3b', br = '#4b3f34', haze = ['#9aa05a', '#a7a96a', '#8f9a58', '#a39b66'];
-  g.cyl(0, 0, 0, 3.4, 0.105, 0.05, 6, trunk);
-  const arms = [[0.4, 2.2, 1.7], [2.7, 2.6, 1.9], [4.5, 2.9, 1.6], [5.6, 3.1, 1.4]], tips = [];
-  for (const [ang, y, len] of arms) {
-    const dx = Math.cos(ang), dz = Math.sin(ang), ex = dx * len * 0.8, ez = dz * len * 0.8, ey = y + len * 0.95, w = 0.035;
+  const g = new GB(), trunk = '#5b4b3b', br = '#4b3f34', haze = ['#9aa05a', '#a7a96a', '#8f9a58', '#a39b66', '#8d7f55'];
+  g.cyl(0, 0, 0, 3.2, 0.105, 0.05, 6, trunk);
+  const tips = [];
+  for (let k = 0; k < 6; k++) {
+    const ang = 0.4 + k * 2.399963, y = 1.8 + k * 0.28, len = 1.25 + 0.14 * ((k * 5) % 4), dx = Math.cos(ang), dz = Math.sin(ang), ex = dx * len * 0.85, ez = dz * len * 0.85, ey = y + len * (0.85 + 0.08 * (k % 3)), w = 0.035;
     const px = -dz * w, pz = dx * w;
     g.tri([dx * 0.05 - px, y, dz * 0.05 - pz], [dx * 0.05 + px, y, dz * 0.05 + pz], [ex, ey, ez], br); g.tri([dx * 0.05 + px, y, dz * 0.05 + pz], [dx * 0.05 - px, y, dz * 0.05 - pz], [ex, ey, ez], br);
     g.tri([dx * 0.05, y - w, dz * 0.05], [dx * 0.05, y + w, dz * 0.05], [ex, ey, ez], br); g.tri([dx * 0.05, y + w, dz * 0.05], [dx * 0.05, y - w, dz * 0.05], [ex, ey, ez], br);
     tips.push([ex, ey, ez]);
   }
   const clump = (x, y, z, r, col) => { const P = [[x + r, y, z], [x - r, y, z], [x, y + r * 0.8, z], [x, y - r * 0.7, z], [x, y, z + r], [x, y, z - r]]; const F = [[0, 2, 4], [4, 2, 1], [1, 2, 5], [5, 2, 0], [4, 3, 0], [1, 3, 4], [5, 3, 1], [0, 3, 5]]; for (const f of F) g.tri(P[f[0]], P[f[1]], P[f[2]], col); };
-  tips.forEach((t, i) => clump(t[0], t[1] + 0.1, t[2], 0.62 + 0.1 * (i % 2), haze[i % haze.length]));
-  clump(0.05, 3.7, 0.05, 0.85, haze[0]); clump(-0.2, 4.6, 0.25, 0.65, haze[2]);
+  tips.forEach((t, i) => clump(t[0], t[1] + 0.08, t[2], 0.46 + 0.05 * (i % 3), haze[i % haze.length]));
+  clump(0.05, 3.35, 0.05, 0.62, haze[1]);
   return g.build();
 }
 
