@@ -10,7 +10,7 @@ const imp = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 const args = new Set(process.argv.slice(2));
 let failed = 0, total = 0;
 const ok = (name, cond, detail = '') => { total++; if (!cond) failed++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}${detail ? ' - ' + detail : ''}`); };
-const t6Colliders = (s) => (s.fence?.colliders || 0) + (s.furniture?.colliders || 0) + (s.monuments?.colliders || 0);          // T6: the fence, the furniture and the monuments add their colliders to the module's
+const t6Colliders = (s) => (s.fence?.colliders || 0) + (s.furniture?.colliders || 0) + (s.monuments?.colliders || 0) + (s.nursery?.colliders || 0);          // T8b: + the 12 of the nursery (9 houses, 3 replaced buildings)          // T6: the fence, the furniture and the monuments add their colliders to the module's
 
 const SE = await imp('tools/tauride/lib/stub-env.mjs');
 const eng = await imp('tools/tauride/lib/stub-env.mjs').then((m) => m.loadEngine(ROOT));

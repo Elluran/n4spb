@@ -13,6 +13,7 @@
 // ============================================================================
 import { GARDEN_RING } from './people.js';
 import { PATHS } from '../../../world/landmarksTauride/data/paths.js';
+import { LOT_RING } from '../../../world/landmarksTauride/data/nursery.js';        // T8b: pure data, no imports (the ring of the nursery lot)
 
 /** metres: the hole in the ground is the garden outline moved in by this much (the terrain overlaps the ground by it all round) */
 export const GROUND_HOLE_INSET = 0.06;
@@ -41,7 +42,10 @@ export function insetRing(ring, d) {
 export function makeGroundHoles(MODULES) {
   if (!(Array.isArray(MODULES) && MODULES.includes('landmarksTauride'))) return undefined;
   const hole = insetRing(GARDEN_RING, GROUND_HOLE_INSET);
-  return () => [hole.slice()];
+  // T8b (a user fix): the garden nursery lot north-west of the garden draws its own brown floor (landmarksTauride/nursery.js); it shares the garden's west edge (the outline vertices 56 .. 60), so the two holes
+  // are 12 cm apart there and both floors cover the strip between them
+  const lot = insetRing(LOT_RING, GROUND_HOLE_INSET);
+  return () => [hole.slice(), lot.slice()];
 }
 
 /** T3b: a road record of the facade (`{ id, ... }`) that the garden draws itself */

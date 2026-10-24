@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tauride nursery preview (software GL)</title>
+<!-- The harness of tools/tauride/nursery-preview.mjs (T8b): the garden nursery (floor, nine glasshouses, the three replaced buildings, the young trees) built with the REAL module and rendered with the real three.js on software GL, with the neighbouring
+     buildings of the data as plain boxes and a flat grey ground round the lot. No environment, no outline pass, no post-processing: a CPU stand-in for the look, not the GPU frame. -->
+<script type="importmap">
+{ "imports": {
+  "/src/world/data/city.js": "/src/areas/north/data/city.js",
+  "/src/world/area.js": "/src/areas/north/area.js",
+  "/src/world/city/known-data.js": "/src/areas/north/known-data.js",
+  "three": "/node_modules/three/build/three.module.js",
+  "three/addons/": "/node_modules/three/examples/jsm/"
+} }
+</script>
+<style>html,body{margin:0;background:#888}canvas{display:block}</style></head>
+<body><canvas id="c" width="1280" height="720"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { createContext } from '/src/core/ctx.js';
+import * as L from '/src/world/layout.js';
+import { BUILDINGS } from '/src/world/data/city.js';
+import { planNursery, buildNursery } from '/src/world/landmarksTauride/nursery.js';
+import { makeNoiseTexture } from '/src/world/landmarksTauride/ground-material.js';
+import { CLAIMED_IDS, LOT_RING } from '/src/world/landmarksTauride/data/nursery.js';
+const errors = [];
+const origErr = console.error; console.error = (...a) => { errors.push(a.map(String).join(' ').slice(0, 2000)); origErr(...a); };
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(1280, 720, false);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(62, 1280 / 720, 0.25, 3000);
+camera.layers.enable(1);
+const sunDir = new THREE.Vector3(...L.SUN_DIR).normalize();
+scene.background = new THREE.Color('#a9c4e0'); scene.fog = new THREE.FogExp2('#b7cde6', 0.00045);
+const sun = new THREE.DirectionalLight('#fff2dc', 2.6); sun.position.copy(sunDir.clone().multiplyScalar(500)); const hemi = new THREE.HemisphereLight('#cfe3ff', '#7a8a60', 1.1); scene.add(sun, hemi);
+const ctx = createContext({ scene, camera, renderer, audio: null, quality: { name: 'medium', pixelRatio: 1, msaa: 4, shadowMap: 2048, shadowSize: 70, petals: 0.6 }, sunDir });
+const T = {}; const t0 = performance.now(); const lap = (n) => { T[n] = +(performance.now() - t0).toFixed(0); };
+const root = new THREE.Group(); scene.add(root);
+// the stand-in ground: a flat grey-green plane everywhere, with the lot cut out (the module's floor is the only ground inside the ring)
+{ const shape = new THREE.Shape([new THREE.Vector2(800, -1950), new THREE.Vector2(1300, -1950), new THREE.Vector2(1300, -1450), new THREE.Vector2(800, -1450)]);
+  const hole = new THREE.Path(); for (let i = 0; i < LOT_RING.length; i += 2) { const p = new THREE.Vector2(LOT_RING[i], LOT_RING[i + 1]); i === 0 ? hole.moveTo(p.x, p.y) : hole.lineTo(p.x, p.y); } hole.closePath(); shape.holes.push(hole);
+  const g = new THREE.ShapeGeometry(shape); g.rotateX(Math.PI / 2); const pos = g.attributes.position; for (let i = 0; i < pos.count; i++) pos.setY(i, 0);
+  const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: '#6f7a5c', side: THREE.DoubleSide })); scene.add(m); }
+// the buildings of the data round the lot as plain boxes (12 m, one of two warm tones), except the three the module replaces
+{ const claimed = new Set(CLAIMED_IDS), mat = new THREE.MeshLambertMaterial({ color: '#d8c8a0' }), mat2 = new THREE.MeshLambertMaterial({ color: '#b9b2a4' });
+  for (const b of BUILDINGS) {
+    if (claimed.has(b.id) || b.part || !b.polys || !b.polys[0]) continue; const o = b.polys[0].o; let near = false;
+    for (let i = 0; i < o.length; i += 2) if (o[i] > 880 && o[i] < 1200 && o[i + 1] > -1900 && o[i + 1] < -1540) near = true; if (!near) continue;
+    const s = new THREE.Shape(); for (let i = 0; i < o.length; i += 2) i === 0 ? s.moveTo(o[i], -o[i + 1]) : s.lineTo(o[i], -o[i + 1]);
+    const h = b.h || 12, g = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: false }); g.rotateX(-Math.PI / 2); g.translate(0, 0, 0);
+    // ExtrudeGeometry in (x, -z) -> after rotateX(-90deg): x stays, y = depth, z = -(-z) = z
+    const m = new THREE.Mesh(g, b.id === 'w23002927' ? mat2 : mat); scene.add(m);
+  } }
+lap('stand-in');
+const noise = makeNoiseTexture();
+const plan = planNursery(); lap('plan');
+const nursery = buildNursery(ctx, root, plan, noise); lap('build');
+const view = (x, y, z, yaw, pitch) => { camera.position.set(x, y, z); camera.rotation.order = 'YXZ'; camera.rotation.set(THREE.MathUtils.degToRad(pitch), THREE.MathUtils.degToRad(yaw), 0); camera.updateMatrixWorld(true); renderer.info.reset(); renderer.render(scene, camera); window.__last = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, programs: renderer.info.programs.length }; return canvas.toDataURL('image/png'); };
+window.__api = { view, errors, T, stats: { nursery: nursery.triangles, draws: nursery.draws, colliders: nursery.colliders, plan: plan.stats, mask: nursery.mask.stats }, programs: () => renderer.info.programs.length };
+window.__done = true;
+</script></body></html>

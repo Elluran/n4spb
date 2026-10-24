@@ -10,7 +10,7 @@ const imp = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 const args = new Set(process.argv.slice(2));
 let failed = 0, total = 0;
 const ok = (name, cond, detail = '') => { total++; if (!cond) failed++; console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}${detail ? ' - ' + detail : ''}`); };
-const t6Colliders = (s) => (s.fence?.colliders || 0) + (s.furniture?.colliders || 0) + (s.monuments?.colliders || 0);          // T6: the fence, the furniture and the monuments add their colliders to the module's
+const t6Colliders = (s) => (s.fence?.colliders || 0) + (s.furniture?.colliders || 0) + (s.monuments?.colliders || 0) + (s.nursery?.colliders || 0);          // T8b: + the 12 of the nursery (9 houses, 3 replaced buildings)          // T6: the fence, the furniture and the monuments add their colliders to the module's
 const hashOf = (...arrs) => { const h = createHash('sha1'); for (const a of arrs) h.update(Buffer.from(a.buffer, a.byteOffset, a.byteLength)); return h.digest('hex').slice(0, 16); };
 
 const C = await imp('tools/tauride/lib/common.mjs');
@@ -26,6 +26,7 @@ const Wd = await imp('src/world/landmarksTauride/data/water.js');
 const Pd = await imp('src/world/landmarksTauride/data/paths.js');
 const Fu = await imp('src/world/landmarksTauride/data/furniture.js');
 const HG = await imp('src/areas/north/hooks/ground.js');
+const NURSERY_RING = (await imp('src/world/landmarksTauride/data/nursery.js')).LOT_RING;      // T8b: the nursery lot's ring
 const HP = await imp('src/areas/north/hooks/people.js');
 const AT = await imp('src/world/lib/area-tables.js');
 const FAC = await imp('src/areas/north/data/city.js');
@@ -93,7 +94,7 @@ console.log('2. the hole in the environment ground (HOOKS.groundHoles, HOOKS.gro
   ok('mutants: an inset of 0 touches the outline (margin check red) and an outset puts vertices outside it (inside check red)', minD0 < 0.8 * HG.GROUND_HOLE_INSET && outN > 0, `inset 0: ${minD0.toExponential(1)} m, outset: ${outN} vertices outside`);
   const page = AT.HOOKS;
   ok('the page\'s HOOKS has groundHoles and groundWayReject (functions); the list without the module has neither', typeof page.groundHoles === 'function' && typeof page.groundWayReject === 'function' && HG.makeGroundHoles(['environment']) === undefined && HG.makeGroundWayReject(['environment']) === undefined && HG.makeGroundHoles(undefined) === undefined);
-  ok('groundHoles hands out one ring (a copy) equal to the inset outline', (() => { const r = page.groundHoles(); return r.length === 1 && r[0].length === hole.length && r[0].every((v, i) => v === hole[i]) && r[0] !== page.groundHoles()[0]; })());
+  ok('groundHoles hands out the garden ring (a copy) equal to the inset outline, then (T8b) the nursery lot ring moved in by the same 6 cm', (() => { const r = page.groundHoles(); return r.length === 2 && r[0].length === hole.length && r[0].every((v, i) => v === hole[i]) && r[0] !== page.groundHoles()[0] && r[1].length === NURSERY_RING.length && r[1] !== page.groundHoles()[1]; })());
   const claimed = new Set((await imp('src/world/landmarksTauride/groups.js')).GROUPS_LIST.flatMap((g) => g.osm || []));
   const garden = [...HG.GARDEN_WAY_IDS];
   ok('the 120 ways the ground does not paint are exactly the garden ways that the module claims', garden.length === 120 && garden.every((id) => claimed.has(id)) && page.groundWayReject({ id: 'w81524425' }) === true && page.groundWayReject({ id: 'w1' }) === false);

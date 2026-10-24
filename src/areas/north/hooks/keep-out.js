@@ -23,6 +23,7 @@
 // ============================================================================
 import { inParadny } from './paradny.js';
 import { inGarden } from './people.js';
+import { inNursery } from '../../../world/landmarksTauride/data/nursery.js';        // T8b: the nursery lot (pure data, no imports): the module plants its own trees, draws its own earth and stamps no prop there
 
 const built = (ctx, name) => !!(ctx && ctx.buildList && ctx.buildList.includes(name));
 /** strictly inside the box [x0, x1, z0, z1] (the open rectangles of the source) */
@@ -66,19 +67,19 @@ export function treeCleared(ctx) {
 export function treeReject(ctx) {
   const tauride = built(ctx, 'landmarksTauride'), campus = built(ctx, 'landmarksKirochnaya'), suvorov = built(ctx, 'landmarksSuvorov');
   if (!tauride && !campus && !suvorov) return null;
-  return (x, z) => (tauride && inParadny(x, z) ? 'paradny' : tauride && inGarden(x, z) ? 'garden' : campus && inCampus(x, z) ? 'campus' : suvorov && inBox(SUVOROV_STRIP, x, z) ? 'suvorov' : null);
+  return (x, z) => (tauride && inParadny(x, z) ? 'paradny' : tauride && inGarden(x, z) ? 'garden' : tauride && inNursery(x, z) ? 'nursery' : campus && inCampus(x, z) ? 'campus' : suvorov && inBox(SUVOROV_STRIP, x, z) ? 'suvorov' : null);
 }
 
 /** H04: no grass tufts on the podium or in the campus. */
 export function tuftReject(ctx) {
   const tauride = built(ctx, 'landmarksTauride'), campus = built(ctx, 'landmarksKirochnaya');
   if (!tauride && !campus) return null;
-  return (x, z) => (tauride && inParadny(x, z)) || (campus && inCampus(x, z));
+  return (x, z) => (tauride && (inParadny(x, z) || inNursery(x, z))) || (campus && inCampus(x, z));
 }
 
 /** H05: nothing is stamped on the podium (props/world.js fits(); the mapped OSM furniture of props/osm.js does not go through fits() and stays). */
 export function propReject(ctx) {
-  return built(ctx, 'landmarksTauride') ? (cx, cz) => inParadny(cx, cz) : null;
+  return built(ctx, 'landmarksTauride') ? (cx, cz) => inParadny(cx, cz) || inNursery(cx, cz) : null;
 }
 
 /** H06: a rank-0 way with MORE than 60 % of its points in the podium is the module's to draw (no lanes, lamps, parking). */
