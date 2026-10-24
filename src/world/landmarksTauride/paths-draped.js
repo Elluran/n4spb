@@ -31,6 +31,7 @@ export const PATHS_DRAPED = Object.freeze({
   endFade: 2.5,                  // m: the tonal bands fade out this close to a junction
   riser: 0.15, kerbW: 0.2, kerbH: 0.16,       // (T4b: the rise of a bridge-head stair comes from the deck: ground.deckAt; bridgeRise is gone)
   discSegments: 8,
+  levelStep: 0.0004, levelMax: 4, levelCell: 0.5,   // T8a: two ways of one class that cover the same ground (a way that ends on another, an acute fork) were coplanar and z-fought (diagonal hatching at the west gate): each gets its own LEVEL, +0.4 mm per level (at most 4 = 1.6 mm, under the 2 mm between the classes)
   trianglesMax: 12000, drawsMax: 4,
 });
 export const PATH_COLORS = Object.freeze({ gravel: '#bf9884', earth: '#917658', paved: '#aaa7a1', wood: '#8a6446', metal: '#6d747c', unknown: '#bf9884' });      // T7: the alleys are a warm PINK-BROWN gravel (the user's photos of the round plaza and the roses bridge), not pale beige
@@ -59,6 +60,46 @@ function smoothLine(pts, pinned, P) {
 }
 
 /**
+ * T8a: the LEVELS of overlapping ways. Two ribbons of ONE class that cover the same ground lie exactly in one plane (the draping gives the same height to both: mesh height + 0.03 + the class bias), and their different tonal
+ * bands (the dark centre line, the ragged edge) then fight pixel by pixel: the diagonal hatching on the alley at the west gate, where the south alley ends on the main alley and the two run together for 5 m. A way of a
+ * different class is 2 mm above or under, which the depth buffer resolves. Here: the ground is cut into cells of `levelCell` m (the centre of the cell inside a triangle = covered), two ways of the same class that share a
+ * cell are neighbours, and the ways are coloured greedily (stubs first: a way whose end lies on another goes UNDER it, then narrow first, then by index: deterministic) so that neighbours never share a level; a level is `levelStep` m of height. Returns { level: Int8Array per way, maxLevel,
+ * neighbours (pairs), overflow (ways that needed more than levelMax levels: their tie stays), cells }.
+ *   pos / idx / wayOf: the ribbon arrays (wayOf < 0 = a junction disc: not a way), ways: [{ bias, w, stub? }] indexed like wayOf.
+ */
+export function overlapLevels(pos, idx, wayOf, ways, P = PATHS_DRAPED) {
+  const cell = P.levelCell, cells = new Map();
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = idx[t], b = idx[t + 1], c = idx[t + 2], w = wayOf[a]; if (w < 0) continue;
+    const ax = pos[3 * a], az = pos[3 * a + 2], bx = pos[3 * b], bz = pos[3 * b + 2], cx = pos[3 * c], cz = pos[3 * c + 2];
+    const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz); if (Math.abs(d) < 1e-12) continue;
+    const i0 = Math.floor(Math.min(ax, bx, cx) / cell), i1 = Math.floor(Math.max(ax, bx, cx) / cell), j0 = Math.floor(Math.min(az, bz, cz) / cell), j1 = Math.floor(Math.max(az, bz, cz) / cell);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+      const x = (i + 0.5) * cell, z = (j + 0.5) * cell;
+      const l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d, l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
+      if (l1 < 0 || l2 < 0 || 1 - l1 - l2 < 0) continue;
+      const k = i * 262144 + j; let set = cells.get(k); if (!set) cells.set(k, (set = new Set())); set.add(w);
+    }
+  }
+  const adj = ways.map(() => new Set());
+  for (const set of cells.values()) {
+    if (set.size < 2) continue;
+    const arr = [...set];
+    for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) if (ways[arr[i]].bias === ways[arr[j]].bias) { adj[arr[i]].add(arr[j]); adj[arr[j]].add(arr[i]); }
+  }
+  const order = ways.map((_, i) => i).sort((p, q) => ((ways[q].stub ? 1 : 0) - (ways[p].stub ? 1 : 0)) || (ways[p].w - ways[q].w) || (p - q));        // a way that ends on another (a stub) first = lowest: the through way lies over its end
+  const level = new Int8Array(ways.length), done = new Uint8Array(ways.length);
+  let maxLevel = 0, overflow = 0;
+  for (const w of order) {
+    const used = new Set(); for (const n of adj[w]) if (done[n]) used.add(level[n]);
+    let l = 0; while (used.has(l)) l++;
+    if (l > P.levelMax) { overflow++; l = P.levelMax; }
+    level[w] = l; done[w] = 1; maxLevel = Math.max(maxLevel, l);
+  }
+  return { level, maxLevel, neighbours: adj.reduce((s, a) => s + a.size, 0) / 2, overflow, cells: cells.size };
+}
+
+/**
  * paths: [{ id, hw, cls, w, surfaceClass, steps?, pts: [x, z, ...] }] (data/paths.js PATHS), ground: { meshHeight(x, z) -> number | null, gh(x, z) -> number | null }
  * -> { ribbons: { pos, nrm, col, path (vec3: across, end fade, geometric half width), idx, wayOf }, steps: { pos, nrm, col, idx }, ways: [{ id, cls, surfaceClass, w, rows, length, from, to }], junctions, stats }
  */
@@ -77,8 +118,10 @@ export function planPaths(paths, ground, P = PATHS_DRAPED) {
   }
   const junctions = [...inc.values()].filter((e) => new Set(e.list.map((l) => l.p.id)).size >= 2 && e.list.some((l) => l.p.cls !== 'steps'));
   const junctionKey = new Set(junctions.map((e) => keyOf(e.x, e.z)));
+  const segDist = (px, pz, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz, t = l2 ? clamp(((px - ax) * dx + (pz - az) * dz) / l2, 0, 1) : 0; return Math.hypot(px - ax - t * dx, pz - az - t * dz); };
+  const endOnWay = (pt, self) => ways.some((q) => { if (q === self) return false; const a = q.pts, lim = q.w / 2 + P.pad; for (let i = 0; i + 3 < a.length; i += 2) if (segDist(pt[0], pt[1], a[i], a[i + 1], a[i + 2], a[i + 3]) < lim) return true; return false; });
   // ---- the ribbons
-  const pos = [], nrm = [], col = [], pth = [], idx = [], wayOf = [], outWays = [];
+  const pos = [], nrm = [], col = [], pth = [], idx = [], wayOf = [], outWays = [], stubOf = [];       // stubOf[wi]: an end of the way lies on another way (T8a: it goes under the through way in the levels)
   let rowsTotal = 0, foldedDropped = 0;
   const colOf = (p) => col3(PATH_COLORS[p.surfaceClass] || PATH_COLORS.gravel);
   const push = (x, y, z, c, a, e, hw, w) => { pos.push(x, y, z); nrm.push(0, 1, 0); col.push(c[0], c[1], c[2]); pth.push(a, e, hw); wayOf.push(w); return pos.length / 3 - 1; };
@@ -124,7 +167,9 @@ export function planPaths(paths, ground, P = PATHS_DRAPED) {
       rows = next;
     }
     // the end fade of the tonal bands: only at a junction end
-    const fadeA = junctionKey.has(keyOf(raw[0][0], raw[0][1])), fadeB = junctionKey.has(keyOf(raw[raw.length - 1][0], raw[raw.length - 1][1]));
+    // T8a: an end that lies ON another way (a T: the south alley ends on the main alley at the west gate, no shared vertex) is a junction end too: its bands fade out, so the overlap shows one tone (no seam of the ribbon's edge across the other)
+    const onA = endOnWay(raw[0], p), onB = endOnWay(raw[raw.length - 1], p); stubOf[wi] = onA || onB;
+    const fadeA = junctionKey.has(keyOf(raw[0][0], raw[0][1])) || onA, fadeB = junctionKey.has(keyOf(raw[raw.length - 1][0], raw[raw.length - 1][1])) || onB;
     // three vertices across (left, centre, right); five where the terrain is curved ACROSS the ribbon at THIS row (a crest or a flank, the bank of a pond: the chord of three would dip under the mesh by more than the chord rule).
     // T4b: per row (T3 made the whole way wide); two rows of different width are zipped; a triangle that folds over (clockwise seen from above) is dropped.
     const WIDE = [-1, -0.5, 0, 0.5, 1], NARROW = [-1, 0, 1];
@@ -217,11 +262,15 @@ export function planPaths(paths, ground, P = PATHS_DRAPED) {
     }
     stairInfo.push({ id: p.id, n, level, riser: (hHigh - hLow) / n, treadDepth: d, width: hw * 2, hLow, hHigh, bridgeHead, tops, from: lowEnd, to: highEnd, drop: hHigh - hLow });
   }
+  // T8a: the levels of overlapping ways of one class (see overlapLevels): the vertices of a way at level k are lifted by k x levelStep
+  const lv = overlapLevels(pos, idx, wayOf, ways.map((p, i) => ({ bias: P.classBias[p.cls] || 0, w: p.w, stub: !!stubOf[i] })), P);
+  for (let v = 0; v < wayOf.length; v++) { const w = wayOf[v]; if (w >= 0 && lv.level[w]) pos[3 * v + 1] += lv.level[w] * P.levelStep; }
+  for (const ow of outWays) ow.level = lv.level[ow.index];
   const R = { pos: Float32Array.from(pos), nrm: Float32Array.from(nrm), col: Float32Array.from(col), path: Float32Array.from(pth), wayOf: Int16Array.from(wayOf) };
   R.idx = pos.length / 3 > 65535 ? Uint32Array.from(idx) : Uint16Array.from(idx);
   const stairs3 = { pos: Float32Array.from(S.pos), nrm: Float32Array.from(S.nrm), col: Float32Array.from(S.col) };
   stairs3.idx = S.pos.length / 3 > 65535 ? Uint32Array.from(S.idx) : Uint16Array.from(S.idx);
-  const stats = { ways: outWays.length, rows: rowsTotal, wideRows: outWays.reduce((s, w) => s + w.wideRows, 0), foldedDropped, ribbonTriangles: R.idx.length / 3, discTriangles: discTris, stairTriangles: stairs3.idx.length / 3, stairs: stairInfo.length, bridgeHeadStairs: stairInfo.filter((s) => s.bridgeHead).length, junctions: junctions.length, bridgesSkipped: bridges.length, vertices: R.pos.length / 3 + stairs3.pos.length / 3, ms: Date.now() - t0 };
+  const stats = { levels: lv.maxLevel + 1, levelOverflow: lv.overflow, levelNeighbours: lv.neighbours, ways: outWays.length, rows: rowsTotal, wideRows: outWays.reduce((s, w) => s + w.wideRows, 0), foldedDropped, ribbonTriangles: R.idx.length / 3, discTriangles: discTris, stairTriangles: stairs3.idx.length / 3, stairs: stairInfo.length, bridgeHeadStairs: stairInfo.filter((s) => s.bridgeHead).length, junctions: junctions.length, bridgesSkipped: bridges.length, vertices: R.pos.length / 3 + stairs3.pos.length / 3, ms: Date.now() - t0 };
   return { ribbons: R, steps: stairs3, ways: outWays, stairs: stairInfo, junctions, stats };
 }
 
@@ -246,7 +295,7 @@ const BODY = /* glsl */`
   float tone = 0.93 + 0.11 * n2.g;                                              // patches of the gravel
   tone *= 1.0 - 0.10 * (1.0 - smoothstep(0.0, 0.50, a)) * vPath.y;              // the darker worn centre line (fades out at junctions)
   tone *= 1.0 + 0.05 * smoothstep(0.55, 0.92, a) * vPath.y;                     // lighter edges
-  tone *= 1.0 - 0.07 * smoothstep(lim - 0.10 / hwG, lim, a);                    // a thin darker rim
+  tone *= 1.0 - 0.07 * smoothstep(lim - 0.10 / hwG, lim, a) * vPath.y;          // a thin darker rim (T8a: gone at a junction end too: the rim of a way that ends on another would draw a line across it)
   tone *= 1.0 + (n6.a - 0.5) * 0.07 * patF;                                     // the fine grain, gone at distance
   diffuseColor.rgb *= tone;
 }
@@ -275,7 +324,7 @@ export function pathMaterial(ctx, noiseTexture, P = PATHS_DRAPED) {
       .replace('#include <map_fragment>', '#include <map_fragment>\n' + BODY)
       .replace('#include <fog_fragment>', FOG);
   };
-  mat.customProgramCacheKey = () => 'paint|tauride-paths-t3';
+  mat.customProgramCacheKey = () => 'paint|tauride-paths-t8a';
   mat.userData.tauride = 'paths';
   return { mat, uniforms: U };
 }
