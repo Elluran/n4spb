@@ -27,6 +27,7 @@ const VIEWS = {
   'bug3-user-pose-down': [1005.6, 1.5, -1359.9, -229.2, -42],
   'bug3-plate-3m': [1005.5, 1.6, -1363.4, 180, -18],
   'bug3-plate-5m': [1007.5, 1.6, -1364.5, 168, -12],
+  'user-aerial-real': [1362, 174.9, -1540.7, -556.6, -46.1],      // the owner's extra aerial pose (the real photo: D:/git2/n4spb-work/tauride/user/user-aerial-real-1362_174.9_-1540.7.png)
 };
 const views = { ...VIEWS };
 if (args.views) for (const v of String(args.views).split(';')) { const [n, c] = v.split(':'); views[n] = c.split(',').map(Number); }
