@@ -99,16 +99,18 @@ export const TREE_ROWS = [
   { id: 'orchard', from: [1015, -1763], to: [1075, -1763], step: 4.2 },
   { id: 'edge-south', from: [1016, -1607.5], to: [1074, -1607.5], step: 5.2 },
   // in the houses: along the axis, a little off it, lower than the outside trees (the crowns stand out of the lattice roof)
-  { id: 'in-S1', inside: 'gh-S1', from: [1017, -1623.2], to: [1064, -1623.2], step: 5.4, h: [5.8, 8.4] },
-  { id: 'in-S2', inside: 'gh-S2', from: [1017, -1639.8], to: [1064, -1639.8], step: 5.6, h: [5.8, 8.4] },
-  { id: 'in-S3', inside: 'gh-S3', from: [1016, -1656.2], to: [1060, -1656.2], step: 5.4, h: [5.8, 8.4] },
-  { id: 'in-N1', inside: 'gh-N1', from: [1016, -1703.2], to: [1055, -1703.2], step: 5.6, h: [5.8, 8.4] },
-  { id: 'in-N2', inside: 'gh-N2', from: [1015, -1719.6], to: [1063, -1719.6], step: 5.4, h: [5.8, 8.4] },
-  { id: 'in-N3', inside: 'gh-N3', from: [1015, -1736.2], to: [1066, -1736.2], step: 5.6, h: [5.8, 8.4] },
-  { id: 'in-C1', inside: 'gh-C1', from: [1092.2, -1675.5], to: [1092.2, -1625], step: 6.4, h: [5.8, 8.4] },
-  { id: 'in-C2', inside: 'gh-C2', from: [1092.2, -1762], to: [1092.2, -1707], step: 6.4, h: [5.8, 8.4] },
+  { id: 'in-S1', inside: 'gh-S1', from: [1017, -1623.2], to: [1064, -1623.2], step: 5.4, h: [5.2, 8.6] },
+  { id: 'in-S2', inside: 'gh-S2', from: [1017, -1639.8], to: [1064, -1639.8], step: 5.6, h: [5.2, 8.6] },
+  { id: 'in-S3', inside: 'gh-S3', from: [1016, -1656.2], to: [1060, -1656.2], step: 5.4, h: [5.2, 8.6] },
+  { id: 'in-N1', inside: 'gh-N1', from: [1016, -1703.2], to: [1055, -1703.2], step: 5.6, h: [5.2, 8.6] },
+  { id: 'in-N2', inside: 'gh-N2', from: [1015, -1719.6], to: [1063, -1719.6], step: 5.4, h: [5.2, 8.6] },
+  { id: 'in-N3', inside: 'gh-N3', from: [1015, -1736.2], to: [1066, -1736.2], step: 5.6, h: [5.2, 8.6] },
+  { id: 'in-C1', inside: 'gh-C1', from: [1092.2, -1675.5], to: [1092.2, -1625], step: 6.4, h: [5.2, 8.6] },
+  { id: 'in-C2', inside: 'gh-C2', from: [1092.2, -1762], to: [1092.2, -1707], step: 6.4, h: [5.2, 8.6] },
 ];
-export const TREE = Object.freeze({ h0: 7.0, h1: 11.0, crown: 2.6, trunk: 0.14, jitter: 0.9, max: 260, wide: [0.9, 1.25] });
+/** FIX ROUND 2: the rows are only a loose guide (the photo's trees stand in irregular clumps): jitter = the scatter along and across a row (m), skip = the share of row places left empty (a hash), pair = the share of places that get a
+ *  second tree 1.7 .. 2.8 m away (a clump), h0 .. h1 = the heights (m, the crown starts low: the trunk is ~2.4 m of 8), wide = the width factor of a crown */
+export const TREE = Object.freeze({ h0: 6.2, h1: 11.2, crown: 2.6, trunk: 0.14, jitter: 3.0, skip: 0.16, pair: 0.22, pairMin: 1.7, pairMax: 2.8, max: 260, wide: [0.78, 1.3] });
 
 /** a pile of earth, a stack of crates (cheap details of the photo) */
 export const PILES = [

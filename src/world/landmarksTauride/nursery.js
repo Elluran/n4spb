@@ -89,19 +89,32 @@ export function planNursery(o = {}) {
   const inObb = (b, x, z, m) => { const c = Math.cos(b.theta), sn = Math.sin(b.theta), dx = x - b.cx, dz = z - b.cz, u = dx * c + dz * sn, v = -dx * sn + dz * c; return Math.abs(u) < b.len / 2 + m && Math.abs(v) < b.dep / 2 + m; };
   const segD = (x, z, p) => { let m = Infinity; for (let i = 0; i + 3 < p.length; i += 2) { const dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1], l2 = dx * dx + dz * dz, t = l2 ? clamp(((x - p[i]) * dx + (z - p[i + 1]) * dz) / l2, 0, 1) : 0; m = Math.min(m, Math.hypot(x - p[i] - t * dx, z - p[i + 1] - t * dz)); } return m; };
   const trees = [], T = D.TREE; let ti = 0;
+  const free = (row, x, z) => {                                                                                                // a place is free when it is in the lot and clear of the houses (but the row's own), the buildings, the yard, the tracks, the piles and the crates
+    if (!D.inNursery(x, z)) return false;
+    if (near(hrOf(row.inside), x, z, 1.4 + T.crown * 0.5) || buildings.some((b) => inObb(b, x, z, 2)) || yardHouses.some((y) => y.wings.some((w) => x > w[0] - 3 && x < w[1] + 3 && z > w[2] - 3 && z < w[3] + 3))) return false;
+    if (row.inside) { const r = houses.find((q) => q.id === row.inside).rect; if (!(x > r.x0 + T.crown && x < r.x1 - T.crown && z > r.z0 + T.crown * 0.6 && z < r.z1 - T.crown * 0.6)) return false; }          // an inside tree keeps its crown within the walls
+    if (D.TRACKS.some((t) => segD(x, z, t.pts) < t.w / 2 + 0.7)) return false;
+    if (D.PILES.some((p) => Math.hypot(x - p.x, z - p.z) < p.r + 1.5) || D.CRATES.some((c) => Math.hypot(x - c.x, z - c.z) < 2.5)) return false;
+    return true;
+  };
+  const plant = (row, x, z) => {
+    ti++;
+    const hr0 = row.h ? row.h[0] : T.h0, hr1 = row.h ? row.h[1] : T.h1, hgt = hr0 + (hr1 - hr0) * h3(ti, 3, 41), wd = T.wide[0] + (T.wide[1] - T.wide[0]) * h3(ti, 9, 53);
+    trees.push({ x: +x.toFixed(3), z: +z.toFixed(3), h: +hgt.toFixed(3), w: +wd.toFixed(3), rot: +(h3(ti, 5, 43) * Math.PI * 2).toFixed(3), tint: +(0.86 + 0.26 * h3(ti, 7, 47)).toFixed(3), warm: +(h3(ti, 11, 59) - 0.5).toFixed(3), row: row.id });
+  };
   for (const row of D.TREE_ROWS) {
     const dx = row.to[0] - row.from[0], dz = row.to[1] - row.from[1], len = Math.hypot(dx, dz), n = Math.floor(len / row.step) + 1, ux = dx / len, uz = dz / len;
     for (let i = 0; i < n; i++) {
       const j = (h3(i, ti, 31) - 0.5) * T.jitter, jp = (h3(i, ti, 37) - 0.5) * T.jitter, a = i * row.step + j;
       const x = row.from[0] + ux * a - uz * jp, z = row.from[1] + uz * a + ux * jp;
       ti++;
-      if (!D.inNursery(x, z)) continue;
-      if (near(hrOf(row.inside), x, z, 1.4 + T.crown * 0.5) || buildings.some((b) => inObb(b, x, z, 2)) || yardHouses.some((y) => y.wings.some((w) => x > w[0] - 3 && x < w[1] + 3 && z > w[2] - 3 && z < w[3] + 3))) continue;
-      if (row.inside) { const r = houses.find((q) => q.id === row.inside).rect; if (!(x > r.x0 + T.crown && x < r.x1 - T.crown && z > r.z0 + T.crown * 0.6 && z < r.z1 - T.crown * 0.6)) continue; }          // an inside tree keeps its crown within the walls
-      if (D.TRACKS.some((t) => segD(x, z, t.pts) < t.w / 2 + 0.7)) continue;
-      if (D.PILES.some((p) => Math.hypot(x - p.x, z - p.z) < p.r + 1.5) || D.CRATES.some((c) => Math.hypot(x - c.x, z - c.z) < 2.5)) continue;
-      const hr0 = row.h ? row.h[0] : T.h0, hr1 = row.h ? row.h[1] : T.h1, hgt = hr0 + (hr1 - hr0) * h3(ti, 3, 41), wd = T.wide[0] + (T.wide[1] - T.wide[0]) * h3(ti, 9, 53);
-      trees.push({ x: +x.toFixed(3), z: +z.toFixed(3), h: +hgt.toFixed(3), w: +wd.toFixed(3), rot: +(h3(ti, 5, 43) * Math.PI * 2).toFixed(3), tint: +(0.9 + 0.2 * h3(ti, 7, 47)).toFixed(3), row: row.id });
+      if (h3(i, ti, 83) < (T.skip || 0)) continue;                                                                             // an empty place of the row
+      if (!free(row, x, z)) continue;
+      plant(row, x, z);
+      if ((T.pair || 0) > 0 && h3(i, ti, 89) < T.pair) {                                                                        // a clump: a second tree close by
+        const ang = h3(i, ti, 97) * Math.PI * 2, d = T.pairMin + (T.pairMax - T.pairMin) * h3(i, ti, 101), x2 = x + Math.cos(ang) * d, z2 = z + Math.sin(ang) * d;
+        if (free(row, x2, z2)) plant(row, x2, z2);
+      }
     }
   }
   if (trees.length > T.max) trees.length = T.max;
@@ -342,34 +355,39 @@ export function detailGeometry(g, plan) {
   }
 }
 
-/** the tree template: a leafless crown of a big old tree: a tapering trunk, seven forked branches (golden-angle spread, rising, 1.7 .. 2.5 m) and eleven irregular grey-brown masses of twigs (jittered octahedra) that fill a rounded crown about 5 m across;
- *  two or three of them carry a muted yellow-green bud tint (spring); 8 m tall at scale 1 */
+/** the tree template (FIX ROUND 2): a big old leafless tree whose crown starts LOW (the trunk is ~2.2 m of 8) and is full: a tapering trunk, six forked boughs and fourteen small irregular grey-brown twig masses (an octahedron with every
+ *  vertex pushed by the hash and turned at random: no two share a plane) spread over an egg-shaped crown ~4.4 m across (wide low, narrower at the top, lighter towards the sky); ONE mass carries a muted spring tint. 8 m tall at scale 1 */
 export function treeGeometry() {
   const g = new GB(), trunk = '#5a4c3e', br = '#4a3f35';
-  g.cyl(0, 0, 0, 4.4, 0.17, 0.07, 6, trunk);
+  g.cyl(0, 0, 0, 3.4, 0.17, 0.08, 6, trunk);
   const stick = (a, b, w, col, full) => {
     const dx = b[0] - a[0], dz = b[2] - a[2], l = Math.hypot(dx, dz) || 1, px = -dz / l * w, pz = dx / l * w;
     g.tri([a[0] - px, a[1], a[2] - pz], [a[0] + px, a[1], a[2] + pz], b, col);
     if (full) g.tri([a[0], a[1] - w, a[2]], [a[0], a[1] + w, a[2]], b, col);
   };
-  const tips = [];
-  for (let k = 0; k < 7; k++) {
-    const ang = 0.4 + k * 2.399963, y = 3.0 + k * 0.27, len = 1.7 + 0.22 * ((k * 5) % 4), dx = Math.cos(ang), dz = Math.sin(ang);
-    const a = [dx * 0.06, y, dz * 0.06], e = [dx * len * 0.8, y + len * (0.95 + 0.1 * (k % 3)), dz * len * 0.8], mid = [(a[0] + e[0]) / 2, (a[1] + e[1]) / 2, (a[2] + e[2]) / 2];
+  for (let k = 0; k < 6; k++) {                                                                                                  // boughs from the top of the trunk into the crown
+    const ang = 0.4 + k * 2.399963, y = 2.4 + k * 0.28, len = 1.6 + 0.3 * ((k * 5) % 4), dx = Math.cos(ang), dz = Math.sin(ang);
+    const a = [dx * 0.05, y, dz * 0.05], e = [dx * len * 0.8, y + len * (1.1 + 0.12 * (k % 3)), dz * len * 0.8];
     stick(a, e, 0.05, br, true);
-    for (const sgn of [-1, 1]) { const ang2 = ang + sgn * 0.7, f = [mid[0] + Math.cos(ang2) * 0.95, mid[1] + 0.95, mid[2] + Math.sin(ang2) * 0.95]; stick(mid, f, 0.035, br, false); }
-    tips.push(e);
+    const mid = [(a[0] + e[0]) / 2, (a[1] + e[1]) / 2, (a[2] + e[2]) / 2], ang2 = ang + (k % 2 ? 0.7 : -0.7);
+    stick(mid, [mid[0] + Math.cos(ang2) * 0.9, mid[1] + 0.9, mid[2] + Math.sin(ang2) * 0.9], 0.035, br, false);
   }
-  const mass = (x, y, z, r, col, seed) => {                                                                                // a rounded, irregular lump (an octahedron with every vertex pushed out by the hash, turned at random): no two lumps share a plane
-    const J = (i) => 0.78 + 0.44 * h3(seed, i, 61), ya = h3(seed, 7, 71) * Math.PI * 2, xt = (h3(seed, 8, 73) - 0.5) * 1.3, cy = Math.cos(ya), sy = Math.sin(ya), cx = Math.cos(xt), sx = Math.sin(xt);
+  const mass = (x, y, z, r, col, seed) => {
+    const J = (i) => 0.76 + 0.46 * h3(seed, i, 61), ya = h3(seed, 7, 71) * Math.PI * 2, xt = (h3(seed, 8, 73) - 0.5) * 1.3, cy = Math.cos(ya), sy = Math.sin(ya), cx = Math.cos(xt), sx = Math.sin(xt);
     const rot = (v) => { const y1 = v[1] * cx - v[2] * sx, z1 = v[1] * sx + v[2] * cx; return [x + v[0] * cy + z1 * sy, y + y1, z + z1 * cy - v[0] * sy]; };
-    const P = [[r * J(0), 0, 0], [-r * J(1), 0, 0], [0, r * 0.95 * J(2), 0], [0, -r * 0.9 * J(3), 0], [0, 0, r * J(4)], [0, 0, -r * J(5)]].map(rot);
+    const P = [[r * J(0), 0, 0], [-r * J(1), 0, 0], [0, r * 0.9 * J(2), 0], [0, -r * 0.8 * J(3), 0], [0, 0, r * J(4)], [0, 0, -r * J(5)]].map(rot);
     const F = [[0, 2, 4], [4, 2, 1], [1, 2, 5], [5, 2, 0], [4, 3, 0], [1, 3, 4], [5, 3, 1], [0, 3, 5]];
     for (const f of F) g.tri(P[f[0]], P[f[1]], P[f[2]], col);
   };
-  const grey = ['#7b6f60', '#6f6454', '#857968', '#6b6656', '#776b5c'], bud = ['#8f9168', '#979a6c'];
-  tips.forEach((t, i) => mass(t[0] * 1.05, t[1] + 0.25, t[2] * 1.05, 1.15 + 0.1 * (i % 3), i === 2 || i === 5 ? bud[i % 2] : grey[i % grey.length], i + 1));
-  mass(0.1, 7.1, 0.0, 1.45, grey[2], 20); mass(-0.4, 5.6, 0.5, 1.3, grey[0], 21); mass(0.5, 5.4, -0.6, 1.25, bud[0], 22); mass(0.0, 6.3, -0.3, 1.3, grey[3], 23);
+  const lerpC = (a, b, t) => { const A = new THREE.Color(a), B = new THREE.Color(b); return '#' + A.lerp(B, t).getHexString(); };
+  const NM = 14, y0 = 2.5, y1 = 7.2;
+  for (let i = 0; i < NM; i++) {
+    const f = (i + 0.5) / NM, fy = 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, f * 1.15)), ang = i * 2.399963 + 0.7, R = (0.35 + 0.9 * Math.sin(Math.PI * (0.12 + 0.82 * fy))) * (1.15 + 0.9 * (1 - fy)) * (0.75 + 0.5 * h3(i, 1, 79));   // egg: wide low, narrow at the top
+    const y = y0 + (y1 - y0) * fy + 0.35 * (h3(i, 2, 79) - 0.5), r = (1.25 - 0.3 * fy) * (0.82 + 0.34 * h3(i, 3, 79));
+    const col = i === 6 ? '#7c7b60' : lerpC(['#6a6050', '#6d6252', '#655b4d', '#716656'][i % 4], ['#8a7e6c', '#857a68', '#8d8170'][i % 3], fy);
+    mass(Math.cos(ang) * R, y, Math.sin(ang) * R, r, col, i + 1);
+  }
+  mass(0.05, 7.35, 0.0, 1.05, '#847868', 30);                                                                                    // the top
   return g.build();
 }
 
@@ -443,7 +461,7 @@ export function buildNursery(ctx, parent, plan, noise, opts = {}) {
   if (plan.trees.length) {
     const tg = treeGeometry(), matT = T('#ffffff', { vertexColors: true, side: 'double', paint: 0.03, name: 'tauride-nursery-trees' });
     const im = new THREE.InstancedMesh(tg, matT, plan.trees.length), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), S = new THREE.Vector3(), C = new THREE.Color();
-    plan.trees.forEach((t, i) => { const s = t.h / 8, sw = s * (t.w || 1); E.set(0, t.rot, 0); Q.setFromEuler(E); M.compose(V.set(t.x, 0, t.z), Q, S.set(sw, s, sw)); im.setMatrixAt(i, M); C.setRGB(t.tint, t.tint, t.tint); im.setColorAt(i, C); });
+    plan.trees.forEach((t, i) => { const s = t.h / 8, sw = s * (t.w || 1); E.set(0, t.rot, 0); Q.setFromEuler(E); M.compose(V.set(t.x, 0, t.z), Q, S.set(sw, s, sw)); im.setMatrixAt(i, M); C.setRGB(t.tint * (1 + 0.07 * (t.warm || 0)), t.tint, t.tint * (1 - 0.07 * (t.warm || 0))); im.setColorAt(i, C); });
     im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.frustumCulled = true;
     reg(im, 'tauride-nursery-trees', { noOutline: true });
   }
