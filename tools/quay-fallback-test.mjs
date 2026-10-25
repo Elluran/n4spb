@@ -52,8 +52,8 @@ const driveApproach = ctx => {
 for (const list of [['environment', 'bridges'], undefined]) {
   const { ctx } = built(list);
   for (const zone of owned) assert(!fallbackAt(ctx.physics, zone), `duplicate deck at owned ${zone.id}`);
-  const bridge = buildPalace({ ctx, P: new Parts(), M: makeMats(ctx), rails: makeRailBatch(ctx), waterY: -3.4 });
-  bridge.colliders();
+  const rails = makeRailBatch(ctx), bridge = buildPalace({ ctx, P: new Parts(), M: makeMats(ctx), rails, waterY: -3.4 });
+  bridge.colliders(); rails.flush(ctx.staticRoot);      // (the rails are breakable bays since the water rule: the batch builds their colliders at the flush)
   ctx.services.bridges = { deckY: bridge.deckAt };
   const mid = toWorld(PALACE, 127.25, 0), side = toWorld(PALACE, 127.25, 13.71);
   const height = bridge.deckAt(mid.x, mid.z);
@@ -70,6 +70,6 @@ const { ctx } = built(['environment']);
 const palace = owned.find(z => z.id === 'palace');
 assert(fallbackAt(ctx.physics, palace), 'environment-only crossing retains its fallback floor');
 const fallbackDrive = driveApproach(ctx);
-assert(fallbackDrive.distance < 10 && fallbackDrive.hits > 0, 'unowned fallback keeps its safety parapet');
-console.log('RESULT: OK - owned/default road clearance and environment-only fallback safety.');
+assert(fallbackDrive.distance > 10, 'unowned fallback has no invisible safety parapet any more (water is reachable: a wall exists only where a fence is drawn)');
+console.log('RESULT: OK - owned/default road clearance and environment-only fallback without an invisible wall.');
 
