@@ -5,11 +5,11 @@
 // The SPLIT: the `bridges` module (bridges/palace.js) still draws the whole bridge and every collider of it, EXCEPT the central span between the pier faces (u 96.5 .. 153.9) when this module is in the page's build list
 // (`leaves`); this module draws and moves exactly that span. The strip (this module is not in its list) keeps the closed bridge, byte for byte.
 // Files: landmarksPalaceBridge/frame.js (frame, profile, the leaf descriptions, the gates: pure) schedule.js (the clock constants) service.js (the bridge description for lib/bascule.js, the published service, the floor ramps,
-// the dynamic boxes: pure) leaf.js (the two moving groups, their floor and dynamic colliders) gates.js (the barrier arms) groups.js (claims nothing); the generic kinematics / service / carry / NPC hooks are lib/bascule.js.
+// the bay layout: pure) leaf.js (the two moving groups, their floor and the breakable rail / kerb bays, lib/bascule-bays.js) gates.js (the barrier arms) groups.js (claims nothing); the generic kinematics / service / carry / NPC hooks are lib/bascule.js.
 // Publishes ctx.services.landmarksPalaceBridge = { state(), deckY(x, z), deckLift(x, z), setMode(m), mode(), stop, theta, gates, stepBlocked(...), onLeaf(x, z), leafAt(x, z), clock, stats ... } (also in HOOKS.deckServices:
 // the cars and the walkers ask it first; bridges/palace.js deckAt asks it for the central span, so services.bridges.deckY / traffic / parked cars see the live leaves too). Dev switch ?palacebridge=open|closed|auto
-// (auto = the schedule of schedule.js, the default). NO flags / flagpoles, no alarm sounds (user rules). Objects stay movable and breakable: the fixed part of the bridge keeps its breakable railing bays; the railing of a MOVING
-// leaf is a dynamic collider that blocks (13.10).
+// (auto = the schedule of schedule.js, the default). NO flags / flagpoles, no alarm sounds (user rules). Objects stay movable and breakable: the fixed part of the bridge keeps its breakable railing bays; the rail panels and barrier kerb pieces of the
+// MOVING leaves are breakable knock records too (13.10).
 export const OWNS_GROUPS = [];
 
 import { makeMats } from './bridges/mats.js';
@@ -29,7 +29,7 @@ export async function build(ctx) {
   leaf.colliders(); leaf.set(0);
   const gv = buildGates({ ctx, M, gates: svc.gates });
   svc.leaf = leaf;
-  svc.stats = { tris: leaf.tris, leafTris: leaf.tris, rails: leaf.info.rails, arms: gv.arms, ramps: leaf.items().length };
+  svc.stats = { tris: leaf.tris, leafTris: leaf.tris, rails: leaf.info.rails, kerbs: leaf.info.kerbs, arms: gv.arms, ramps: leaf.items().length };
   svc.deckAt = svc.deckY;
   Object.defineProperty(svc.stats, 'swept', { get: () => swept, enumerable: true });      // NPC people set down off a steep leaf (see the frame loop)
   ctx.services.landmarksPalaceBridge = svc;
@@ -49,7 +49,8 @@ export async function build(ctx) {
     const r = svc.advance(dt > 0 ? Math.min(dt, 5) : 0, night);
     if (first || r.th1 !== r.th0) leaf.set(r.th1);
     gv.set(svc.clock.barrier, t);
-    for (const ev of r.events) {
+    for (let i = 0; i < r.events.length; i++) {
+      const ev = r.events[i];
       if (ev === 'warn' && pp) { const w = toWorld(UM, 0); if (Math.hypot(pp.x - w.x, pp.z - w.z) < TOAST_R && ctx.ui && ctx.ui.toast) ctx.ui.toast('Дворцовый мост разводят · The Palace Bridge is opening'); }
     }
     if (!peopleHooked) hook();
