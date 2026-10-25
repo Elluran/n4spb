@@ -228,7 +228,7 @@ export async function build(ctx) {
 function CULL_RADIUS(ctx) { return CULL_R * ((ctx.quality && ctx.quality.cull) || 1); }
 
 /** height of the road deck under (x, z) or null: the humped decks of every bridge (services.bridges.deckY wraps landmarksC.bridge.deckY), with a coarse prefilter by the bridge positions */
-function bridgeDeck(ctx) {
+function westBridgeDeck(ctx) {
   const lc = ctx.services.landmarksC && ctx.services.landmarksC.bridge && ctx.services.landmarksC.bridge.deckY;
   const br = ctx.services.bridges;
   const fn = (br && br.deckY) || lc || null;
@@ -237,6 +237,13 @@ function bridgeDeck(ctx) {
   if (!sites) return fn;
   const R2 = 190 * 190;
   return (x, z) => { for (let i = 0; i < sites.length; i++) { const b = sites[i], dx = b.x - x, dz = b.z - z; if (dx * dx + dz * dz < R2) return fn(x, z); } return lc ? lc(x, z) : null; };
+}
+
+/** the decks under a vehicle: the raised decks of the module northBridges (the Bolsheokhtinsky Bridge of Smolninskoye; the source asks them first, they lie far from the west bridges) before the west decks above */
+function bridgeDeck(ctx) {
+  const west = westBridgeDeck(ctx), nb = ctx.services.northBridges && ctx.services.northBridges.deckY;
+  if (!nb) return west;
+  return west ? (x, z) => { const d = nb(x, z); return d !== null && d !== undefined ? d : west(x, z); } : nb;
 }
 
 /** the Palace Bridge (docs/research/vo-roster-metro.md 3.1, OSM 2026 mapper state [L]): street (lane name) -> [trolleybus refs, bus refs] of the flow that runs to Vasilievsky Island (the stop data of the bridge knows only a few relations) */

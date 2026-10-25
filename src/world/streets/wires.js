@@ -49,8 +49,9 @@ export function buildWires(ctx, net, lamps, opts = {}) {
   const service = { height: H0, pairs: [], spans: [], arcs: [], masts: [], anchors: [] };
   const add = (pts, width, color, kind, grp) => { ctx.wires.add(pts, { width, color, kind, grp }); };
   const refsOf = (w) => (w.rec && w.rec.trolley) || [];
-  // a bridge way that the east bridges own (skipDraw) and that starts on their deck carries the module's own contact wires (eastBridges.js), as in the source
-  const tw = net.ways.filter((w) => refsOf(w).length && w.rank >= 1 && w.L > 6 && !(w.skipDraw && ctx.services.eastBridges?.deckY(w.x[0], w.z[0]) != null));
+  // a bridge way that the east bridges or the north bridges own (skipDraw) and that starts on their raised deck carries the module's own contact wires (eastBridges.js) or none at street height (northBridges: they would hang inside the deck), as in the source
+  const onOwnDeck = (w) => w.skipDraw && (ctx.services.eastBridges?.deckY(w.x[0], w.z[0]) != null || ctx.services.northBridges?.deckY(w.x[0], w.z[0]) != null);
+  const tw = net.ways.filter((w) => refsOf(w).length && w.rank >= 1 && w.L > 6 && !onOwnDeck(w));
   if (!tw.length) return { stats, service };
   for (const w of tw) prepWay(w);
 
