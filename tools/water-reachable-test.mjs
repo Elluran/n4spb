@@ -22,6 +22,7 @@ const t0 = Date.now();
 const { ctx, L, THREE, built, marks, errors } = await buildWorld({ log: (s) => console.log(s) });
 console.log(`area ${AREA}: built ${built.length} modules in ${((Date.now() - t0) / 1000).toFixed(0)} s: ${built.join(' ')}; ${ctx.physics.items.length} colliders, ${ctx.knock.stats.registered} knock records ${JSON.stringify(ctx.knock.stats.byKind)}`);
 const ph = ctx.physics;
+const troitskyItems = marks.landmarksTroitsky ? ph.items.slice(marks.landmarksTroitsky[0], marks.landmarksTroitsky[1]) : [];      // (taken before any test knocks something: knocking splices ph.items)
 const { Player } = await import('../src/core/player.js');
 const { createHandling } = await import('../src/world/drive/handling.js');
 const { SPEC } = await import('../src/world/drive/model.js');
@@ -79,7 +80,7 @@ check('0 the modules built without a module error (headless)', () => { const bad
 check('0 the fences are knock records with colliders: every fence record owns its box, every box of a record is in the physics grid', () => {
   const fs = fences(); assert(fs.length > 200, 'fence records: ' + fs.length);
   const inGrid = new Set(ph.items);
-  let noItem = 0, lost = 0; for (const r of fs) { if (!r.items.length) noItem++; for (const it of r.items) if (!inGrid.has(it)) lost++; }
+  let noItem = 0, lost = 0; for (const r of fs) { if (!r.items.length && !r.dynamic) noItem++; for (const it of r.items) if (!inGrid.has(it)) lost++; }
   assert.equal(noItem, 0, noItem + ' fence records without a collider'); assert.equal(lost, 0, lost + ' collider handles missing from the physics');
 });
 
@@ -326,6 +327,7 @@ const ALLOW = [
   { why: 'the railing round the Krylov monument and a shut leaf of the Neva gate (inside the garden, not at the water)', ok: (m, it, t) => m === 'landmarksGarden' && it.y1 <= 1.3 && t.thin <= 0.12 },
   { why: 'the pier-head bastions of the Palace Bridge (granite blocks of the bridge structure, 2.8 m long, 1.6 m over the deck)', ok: (m, it) => m === 'bridges' && it.y1 >= 2.5 },
   { why: 'the barrier kerbs of the Palace Bridge (a 0.3 m granite kerb between the roadway and the pavement, inside the deck)', ok: (m, it, t) => m === 'bridges' && t.thin <= 0.31 && t.len >= 5 && it.y1 <= 2.5 },
+  { why: 'the two granite obelisks at the south entrance of the Troitsky Bridge (monument blocks 2 x 2 m, 8 m tall, on the Mars Field embankment: a structure, not a fence; the audit below names them)', ok: (m, it) => m === 'landmarksTroitsky' && it.type === 'box' && it.y1 >= 7 },
   { why: 'the café terrace fences of props/stands.js (1 m, a terrace beside a building)', ok: (m) => m === 'props' },
   { why: 'the bollard rings round the Kutuzov / Barclay monuments (landmarksF)', ok: (m, it) => m === 'landmarksF' && it.type === 'cyl' },
 ];
@@ -346,6 +348,32 @@ check('6 AUDIT: every thin tall collider within 12 m of water is a knock record 
   for (const [k, e] of bad) console.log(`  NOT BREAKABLE: ${k} x ${e.n} (${e.len.toFixed(0)} m) ${JSON.stringify(e.ex)}`);
   assert.equal(bad.size, 0, 'not breakable: ' + [...bad.entries()].map(([k, e]) => k + ' x' + e.n).join(', '));
 });
+
+// The Troitsky Bridge (module landmarksTroitsky, docs/AREAS.md 13.8) is audited WHOLE, not only what is thin and tall: the 554 m deck lies over the Neva, so every solid it made must be breakable
+// (a railing panel, a granite parapet section, a barrier kerb piece, a candelabrum, a contact-wire pole), whatever its size, except the structure listed here; and the MOVING leaf has no physics item at all:
+// its rails and kerbs are knock records whose box is a dynamic one (the record's own source), checked through the dynamic providers.
+const TROITSKY_STRUCTURE = [
+  { why: 'the two granite obelisks with rostra at the south entrance (monument blocks 2 x 2 m, 8 m tall, on the Mars Field embankment beside the roadway: they keep no one from the water)', ok: (it) => it.type === 'box' && Math.abs(it.hw - 1) < 1e-6 && Math.abs(it.hd - 1) < 1e-6 && it.y1 === 8 },
+];
+if (built.includes('landmarksTroitsky')) {
+  check('6 AUDIT (the Troitsky Bridge): every box and post of the module is a knock record except the listed structure; the leaf\'s rails and kerbs are knock records with a dynamic box, none is a plain solid', () => {
+    const own = troitskyItems.filter((it) => it.type === 'box' || it.type === 'cyl'); assert(own.length > 600, 'the module made ' + own.length + ' boxes and posts');
+    const kinds = {}, plain = [];
+    for (const it of own) { const k = it.source && it.source.knock; if (k) { const key = k.kind + (it.type === 'cyl' ? ' post' : k.mass >= 2000 ? ' candelabrum' : k.mass >= 900 ? ' kerb/parapet' : ' bay'); kinds[key] = (kinds[key] || 0) + 1; } else plain.push(it); }
+    const left = [], bad = [];
+    for (const it of plain) { const a = TROITSKY_STRUCTURE.find((q) => q.ok(it)); (a ? left : bad).push(it); }
+    console.log(`  troitsky: ${own.length} boxes and posts: ${JSON.stringify(kinds)}; structure left solid: ${left.length} (${TROITSKY_STRUCTURE.map((q) => q.why.slice(0, 40)).join('; ')})`);
+    assert.equal(bad.length, 0, 'not breakable: ' + bad.slice(0, 4).map((it) => `${it.type} at ${it.cx.toFixed(0)}, ${it.cz.toFixed(0)} y ${it.y0.toFixed(1)}..${it.y1.toFixed(1)} ${(it.hw * 2).toFixed(1)} x ${(it.hd * 2).toFixed(1)}`).join('; '));
+    assert.equal(left.length, 2, 'exactly the two obelisks stay solid: ' + left.length);
+    const T = ctx.services.landmarksTroitsky; assert(T && T.leaf, 'the module published its leaf');
+    const bays = T.leaf.bays; assert(bays.length === 56 && bays.every((b) => b.rec && b.rec.dynamic && b.rec.kind === 'fence'), 'the leaf has 56 bays (34 rail panels, 22 kerb pieces), every one a knock record of kind fence');
+    const pp = ctx.player && ctx.player.position, keep = pp ? pp.clone() : null, c = T.frame.toWorld(36, 0); if (pp) pp.set(c.x, 0, c.z);
+    try {
+      ph.refreshDynamic(); const on = ph._dynItems.filter((b) => T.inSpan(b.cx, b.cz, 3));
+      assert(on.length >= 56 && on.every((b) => b.source && b.source.knock && b.source.knock.kind === 'fence'), `the dynamic boxes on the leaf are knock sources: ${on.length}, plain ${on.filter((b) => !(b.source && b.source.knock)).length}`);
+    } finally { if (pp && keep) pp.copy(keep); ph.refreshDynamic(); }
+  });
+}
 
 // ---------------------------------------------------------------- 7 ponds (the Tauride Garden of the North)
 if (built.includes('landmarksTauride')) {

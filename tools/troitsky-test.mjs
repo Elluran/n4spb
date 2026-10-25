@@ -215,8 +215,12 @@ const T = ctx.services.landmarksTroitsky, ph = ctx.physics;
 {
   ok(!!T && typeof T.deckY === 'function' && typeof T.state === 'function' && typeof T.setMode === 'function', 'ctx.services.landmarksTroitsky = { state, deckY, setMode, ... }');
   say(`  built in ${Date.now() - t0} ms: ${T.stats.tris} triangles (static ${T.stats.staticTris}, leaf ${T.stats.leafTris}), ${T.stats.colliders} colliders, ${T.stats.lamps} knockable lamps, ${T.stats.arms} barrier arms`);
-  ok(T.stats.tris >= 60e3 && T.stats.tris <= 120e3, `triangles ${T.stats.tris} within 60 .. 120 k`);
-  ok(T.stats.lamps === 22 && ctx.knock.stats.registered === 22, `22 one-globe lamps are registered with the knock system (${ctx.knock.stats.registered})`);
+  // (the Parts count T.stats.tris leaves out everything that is an instance of a knock mesh now: count what is drawn, instances included, as tools/check.mjs does)
+  let drawn = 0; for (const root of [ctx.staticRoot, ctx.dynamicRoot]) root.traverse((o) => { if ((o.isMesh || o.isInstancedMesh) && o.geometry) drawn += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1); });
+  ok(drawn >= 60e3 && drawn <= 120e3, `triangles drawn ${Math.round(drawn)} within 60 .. 120 k (Parts ${T.stats.tris})`);
+  ok(T.stats.lamps === 22 && T.stats.candelabra === 16 && T.stats.poles === 20, `22 one-globe lamps, 16 candelabra and 20 contact poles are registered with the knock system (${T.stats.lamps} / ${T.stats.candelabra} / ${T.stats.poles})`);
+  ok(T.stats.kerbBays >= 200 && T.stats.leafBays === 56, `the barrier kerb of the fixed deck (${T.stats.kerbBays} bays) and the 56 bays of the leaf (34 rail panels, 22 kerb pieces) are knock records`);
+  { const k = ctx.knock.stats.byKind, batch = k.fence - T.stats.kerbBays - T.stats.leafBays; ok(batch >= 300 && k.lamp === T.stats.lamps + T.stats.candelabra + T.stats.poles, `the rail batch adds ${batch} bays (whip panels, granite parapet sections, the wing parapets); knock kinds ${JSON.stringify(k)}`); }
   ok(T.stats.arms === 8, `8 barrier arms (2 gates x (2 carriageway booms + 2 pavement booms)): ${T.stats.arms}`);
   ok(ctx._updates.length >= 2, `the module registered its frame update (knock + the module: ${ctx._updates.length})`);
   ok(ctx.dynamicRoot.children.some((c) => c.name === 'troitsky-leaf') && ctx.dynamicRoot.children.some((c) => c.name === 'troitsky-barriers'), 'the leaf and the barriers are in the dynamic root (moved by transform)');
@@ -379,6 +383,122 @@ const floorAt = (u, v, feet = 60) => { const w = W(u, v); return ph.surfaceAt(w.
     ok(climbed && onLeafFrames > 60, `the car drives onto the leaf while it is closing (reached u ${maxU.toFixed(1)}, ${onLeafFrames} frames on it)`);
     ok(worst < 0.1 && pitchErr < 0.08 && vmaxC <= 1.6, `on the closing leaf the car keeps contact (${worst.toFixed(3)} m), pitch (${(pitchErr / DEG).toFixed(2)} deg) and vertical speed (${vmaxC.toFixed(2)} m/s)`);
   }
+}
+
+// ------------------------------------------------------------------ 7. WATER IS REACHABLE: every fence of the bridge breaks (docs/AREAS.md 13.7, 13.8)
+section('7. the fences of the bridge are breakable: no static fence collider is left; a car breaks a railing of the closed deck and drives off the bridge into the water');
+const THREE = eng.THREE;
+const kUpd = (s) => { for (let t = 0; t < s; t += 1 / 60) ctx.knock.update(1 / 60); };
+const settleClosed = () => { T.setMode('closed'); for (let i = 0; i < 100000 && (T.state().stop || T.theta > 0); i++) { const r = T.advance(0.1, 0); if (r.th1 !== r.th0) leaf.set(r.th1); } leaf.set(0); };
+const nearLeaf = () => { const w = W(36, 0); ctx.player.position.set(w.x, 0, w.z); };
+{
+  settleClosed(); nearLeaf(); ph.refreshDynamic();
+  // (a) the audit: every box / cylinder the module made is a knock record, except the two obelisk blocks (granite monuments 2 x 2 m, 8 m tall: structure); the leaf's dynamic boxes are the knock records' own sources
+  const solids = ph.items.filter((it) => it.type === 'box' || it.type === 'cyl'), plain = solids.filter((it) => !(it.source && it.source.knock));
+  const obelisks = plain.filter((it) => it.type === 'box' && Math.abs(it.hw - 1) < 1e-6 && Math.abs(it.hd - 1) < 1e-6 && it.y1 === 8);
+  ok(plain.length === 2 && obelisks.length === 2, `${solids.length} boxes and posts, ${plain.length} are not knock records (the two obelisks: ${obelisks.length})`);
+  const kinds = {}; for (const it of solids) if (it.source && it.source.knock) { const k = it.source.knock; const key = k.kind + (it.type === 'cyl' ? ' post' : k.mass >= 2000 ? ' candelabrum' : k.mass >= 900 ? ' kerb/parapet' : ' bay'); kinds[key] = (kinds[key] || 0) + 1; }
+  say('  colliders by knock kind: ' + JSON.stringify(kinds));
+  ok(ph._dynItems.length === 56 && ph._dynItems.every((b) => b.source && b.source.knock && b.source.knock.state === 'stand'), `the leaf's ${ph._dynItems.length} dynamic boxes are the sources of their knock records`);
+  ok(leaf.bays.every((b) => b.rec && b.rec.items.length === 0), 'the bays of the leaf own no static collider (their box is the dynamic one)');
+  // the leaf bay is where the rail line is at every angle: the record origin, the part offsets and the instance matrix follow the leaf
+  const m4 = new THREE.Matrix4(), pos = new THREE.Vector3(), qq = new THREE.Quaternion(), sc = new THREE.Vector3();
+  for (const th of [0, 0.3, 0.9, F.THETA_MAX, 0.5, 0]) {
+    leaf.set(th); let worst = 0, worstBox = 0, n = 0;
+    for (const b of leaf.bays) {
+      if (b.rec.state !== 'stand') continue; n++;
+      const phi = F.phiOf(th), c = Math.cos(phi), s = Math.sin(phi), uu = F.U_HINGE + b.s0 * c - b.n * s, y = F.Y_HINGE + b.s0 * s + b.n * c, w = W(uu, b.v), p0 = b.rec.parts[0];
+      p0.mesh.getMatrixAt(p0.index, m4); m4.decompose(pos, qq, sc);
+      worst = Math.max(worst, Math.hypot(pos.x - w.x, pos.z - w.z, pos.y - y));
+      const t = S.leafBayAt(th, b.s0 + b.len / 2, b.len, b.v, b.k, {}); worstBox = Math.max(worstBox, Math.hypot(b.box.cx - t.cx, b.box.cz - t.cz), Math.abs(b.box.y1 - t.y1), Math.abs(b.box.y0 - t.y0));
+      // the rest offset of the knock part is the instance relative to the record origin
+      worst = Math.max(worst, Math.hypot(p0.off.x - (pos.x - b.rec.x), p0.off.y - (pos.y - b.rec.y), p0.off.z - (pos.z - b.rec.z)));
+    }
+    ok(n === 56 && worst < 1e-4 && worstBox < 1e-6, `theta ${(th / DEG).toFixed(0)}: the ${n} standing bays sit on the leaf (instance <= ${worst.toExponential(1)} m, box / record <= ${worstBox.toExponential(1)} m)`);
+  }
+  // (b) the car through the railing of the CLOSED deck, then off the bridge into the Neva: at u 100 (the 53 m steel span over the river), the railing panel in the car's way; the kerb bay before it breaks too
+  const cctx = { L: eng.L, physics: ph, services: { landmarksTroitsky: T } };
+  const wl = (x, z) => eng.L.waterLevelAt ? eng.L.waterLevelAt(x, z) : null;
+  const drive = (u, sg, kmh, label, thr = 1, v0 = 5.2) => {
+    settleClosed(); nearLeaf();
+    const dir = { x: -sg * F.FR.s, z: sg * F.FR.c }, yaw = Math.atan2(dir.x, dir.z), st = W(u, sg * v0), y0 = T.deckY(st.x, st.z);
+    const car = createHandling(cctx, null); car.reset(st.x, st.z, yaw); car.y = y0 + 0.03; car.vx = dir.x * kmh / 3.6; car.vz = dir.z * kmh / 3.6;
+    ctx.drive = { active: true, car, fx: { sparks() {} } };
+    const input = { thr, brk: 0, steer: 0, hand: false, nitro: false }, ev = []; let fell = false, minY = 9, depth = 0;
+    const was = new Set(ctx.knock.list.filter((r) => r.kind === 'fence' && r.state === 'stand'));
+    for (let t = 0; t < 7; t += 1 / 60) { ph.refreshDynamic(); car.step(1 / 60, input); ctx.knock.update(1 / 60); for (const e of car.events) ev.push({ type: e.type, v: e.v }); if (car.fall) fell = true; minY = Math.min(minY, car.y); depth = Math.max(depth, car.depth); }
+    const broke = ctx.knock.list.filter((r) => was.has(r) && r.state !== 'stand' && Math.hypot(r.x - st.x, r.z - st.z) < 14);
+    const w = wl(car.x, car.z), q = F.toUV(car.x, car.z, {});
+    say(`  ${label}: ${broke.length} bays broke (${broke.map((r) => r.state + ' ' + (r.mass >= 900 ? 'kerb' : 'rail')).join(', ')}), the car ended at u ${q.u.toFixed(1)} v ${q.v.toFixed(1)} y ${car.y.toFixed(2)} (water ${w}), fell ${fell}, events ${JSON.stringify(ev.filter((e) => e.type === 'hit' || e.type === 'land').map((e) => e.type[0] + e.v.toFixed(1)))}`);
+    ctx.drive = null;
+    return { car, fell, minY, depth, broke, w, q };
+  };
+  for (const [u, sg, label] of [[100, 1, 'closed deck u 100, east railing'], [100, -1, 'closed deck u 100, west railing'], [300, 1, 'closed deck u 300 (the crown), east railing']]) {
+    const r = drive(u, sg, 50, label);
+    ok(r.broke.some((b) => b.mass < 900), `${label}: a railing panel broke`);
+    ok(r.broke.some((b) => b.mass >= 900), `${label}: the barrier kerb bay in front of it broke`);
+    ok(r.fell && r.w !== null && r.car.y < r.w - 0.5 && Math.abs(r.q.v) > F.HW, `${label}: the car left the bridge and is in the Neva (v ${r.q.v.toFixed(1)}, y ${r.car.y.toFixed(2)}, water ${r.w})`);
+  }
+  // a car that does NOT have the speed is stopped by the railing (it holds a 12 km/h bump), the panel stays
+  { const r = drive(200, 1, 8, "closed deck u 200 at 8 km/h, coasting into the kerb", 0, 7.4); ok(r.broke.length === 0 && Math.abs(r.q.v) < 9.6 && !r.fell, `a car at 8 km/h is stopped by the kerb: it breaks nothing and stays on the roadway (v ${r.q.v.toFixed(1)}, broke ${r.broke.length})`); }
+}
+
+// ------------------------------------------------------------------ 8. the rule of the leaf's rails and kerbs (docs/AREAS.md 13.8)
+section('8. the leaf: its rail panels and kerb pieces are knock records that ride on it; the rule for what lies on a moving leaf');
+{
+  const rails = leaf.bays.filter((b) => b.rail), kerbs = leaf.bays.filter((b) => !b.rail), RESTING = (r) => r.state === 'rest' || r.state === 'lost';
+  const pick = (list, sg, s) => list.filter((b) => Math.sign(b.v) === sg).sort((a, b) => Math.abs(a.s0 - s) - Math.abs(b.s0 - s))[0];
+  settleClosed(); nearLeaf(); ph.refreshDynamic();
+  const nBoxes = () => { ph.refreshDynamic(); return ph._dynItems.length; };
+  ok(nBoxes() === 56, 'closed and untouched: 56 dynamic boxes');
+  // (1) closed: a hit breaks the panel from the closed pose. Toward the roadway it topples onto the pavement and lies there (a rest box <= 0.42 m); toward the water it sinks.
+  const A = pick(rails, 1, 10), B = pick(rails, -1, 30), K = pick(kerbs, 1, 8);
+  const hitDir = (side) => ({ x: -F.FR.s * side, z: F.FR.c * side });      // side +1 = toward +v (east), -1 = toward -v (west)
+  const kn = (b, side, kmh = 40) => { const d = hitDir(side); return ctx.knock.hit(b.rec.x, b.rec.z, kmh, d.x, d.z, 'fence'); };
+  ok(kn(A, -1) === A.rec && kn(B, -1) === B.rec, 'the two rail bays are the records that were hit');
+  ok(kn(K, -1, 45) === K.rec, 'a kerb piece too (45 km/h)');
+  kUpd(5);
+  ok(A.rec.state === 'rest' && A.rec.items.length === 1 && A.rec.items[0].y1 - A.rec.y <= 0.45, `east rail bay hit toward the roadway lies on the pavement: ${A.rec.state}, ${A.rec.items.length} rest box (top ${A.rec.items[0] ? (A.rec.items[0].y1 - A.rec.y).toFixed(2) : '-'} m above the foot)`);
+  ok(B.rec.state === 'lost', `west rail bay hit toward the water sinks: ${B.rec.state}`);
+  ok(RESTING(K.rec), `the kerb piece broke (${K.rec.state})`);
+  ok(nBoxes() === 53, `the three broken bays gave their dynamic boxes up (${nBoxes()} left of 56)`);
+  const restBox = A.rec.items[0];
+  // (2) the leaf starts to move: the debris is swept (box removed, instance hidden), the standing bays ride along
+  T.setMode('open'); for (let i = 0; i < 100000 && T.theta < 0.4; i++) { const r = T.advance(0.1, 0); if (r.th1 !== r.th0) leaf.set(r.th1); }
+  ok(A.rec.state === 'lost' && A.rec.items.length === 0 && !ph.items.includes(restBox), `moving leaf: the debris of the broken bay is swept (state ${A.rec.state}, its rest box is out of the physics)`);
+  { const p0 = A.rec.parts[0]; const m = new THREE.Matrix4(); p0.mesh.getMatrixAt(p0.index, m); ok(Math.abs(m.elements[0]) + Math.abs(m.elements[5]) + Math.abs(m.elements[10]) < 1e-9, 'its instance is hidden'); }
+  const standing = leaf.bays.filter((b) => b.rec.state === 'stand').length; ok(standing === 53, `53 bays still stand and ride on the leaf (${standing})`);
+  // (3) hit at theta = 23 degrees: the standing bay breaks from the pose it has NOW (its foot is high above the closed leaf), topples, and is no collider any more
+  const C = pick(rails, 1, 30); ok(C.rec.y > F.Y_HINGE + 5, `the east panel at s 30 m stands ${(C.rec.y - F.Y_HINGE).toFixed(1)} m above the hinge on the leaf at ${(T.theta / DEG).toFixed(0)} degrees`);
+  const y0 = C.rec.y; ok(kn(C, -1, 40) === C.rec, 'the raised panel is hit');
+  kUpd(0.5); ok(C.rec.state === 'fly' || RESTING(C.rec), `...and breaks from its current pose (${C.rec.state}, started at y ${y0.toFixed(1)})`);
+  ok(nBoxes() === 52, `its dynamic box is gone (${nBoxes()} left)`);
+  kUpd(8);
+  // (4) the leaf closes: nothing broken comes back, every standing bay is exactly where it started
+  settleClosed();
+  ok([A, B, C, K].every((b) => b.rec.state !== 'stand') && nBoxes() === 52, `closed again: the four broken bays stay broken (${[A, B, C, K].map((b) => b.rec.state)}), ${nBoxes()} boxes`);
+  { let worst = 0, n = 0; for (const b of leaf.bays) { if (b.rec.state !== 'stand') continue; n++; const al = F.ALPHA0, uu = F.U_HINGE + (b.s0 + b.len / 2) * Math.cos(al) - b.n * Math.sin(al), y = F.Y_HINGE + (b.s0 + b.len / 2) * Math.sin(al) + b.n * Math.cos(al), w = W(uu, b.v); worst = Math.max(worst, Math.hypot(b.rec.x - w.x, b.rec.z - w.z, b.rec.y - y)); } ok(n === 52 && worst < 1e-6, `the ${n} standing bays are back on the closed leaf (${worst.toExponential(1)} m)`); }
+  // (5) the broken bays are a way off the leaf: a walker on the pavement beside the gap of the east rail walks off the closed leaf into the Neva (the panel is gone; the post stays drawn)
+  { const gap = A, m = W(F.U_HINGE + gap.s0 + gap.len / 2, F.HW - 1.4); const pl = new eng.Player(camera, { addEventListener() {}, removeEventListener() {} }, ph, eng.L.WORLD.play); pl.enabled = true; pl.setPose(m.x, m.z, Math.atan2(F.FR.s, -F.FR.c) / DEG * -1, 0);
+    // a plain way out: the walker steps in +v for 3 s
+    const dirx = -F.FR.s, dirz = F.FR.c; pl.yaw = Math.atan2(-dirx, -dirz); pl.keys.add('KeyW'); ctx.player.position.copy(pl.pos);
+    for (let i = 0; i < 180; i++) { ph.refreshDynamic(); pl.time += 1 / 60; pl.update(1 / 60); ctx.player.position.copy(pl.pos); } pl.keys.clear();
+    const q = F.toUV(pl.pos.x, pl.pos.z, {}); ok(q.v > F.HW + 0.5, `a walker leaves the closed leaf through the gap of the broken panel (v ${q.v.toFixed(2)}, y ${pl.pos.y.toFixed(2)})`);
+    // the intact neighbour still holds him
+    const nb = rails.find((b) => b.rec.state === 'stand' && Math.sign(b.v) === 1 && b.s0 > 25); const m2 = W(F.U_HINGE + nb.s0 + nb.len / 2, F.HW - 1.4); const p2 = new eng.Player(camera, { addEventListener() {}, removeEventListener() {} }, ph, eng.L.WORLD.play); p2.enabled = true; p2.setPose(m2.x, m2.z, 0, 0);
+    p2.yaw = Math.atan2(-dirx, -dirz); p2.keys.add('KeyW'); ctx.player.position.copy(p2.pos); for (let i = 0; i < 180; i++) { ph.refreshDynamic(); p2.time += 1 / 60; p2.update(1 / 60); ctx.player.position.copy(p2.pos); } p2.keys.clear();
+    const q2 = F.toUV(p2.pos.x, p2.pos.z, {}); ok(q2.v < F.HW, `an intact panel still stops him (v ${q2.v.toFixed(2)})`);
+  }
+  // (6) the car on the closed leaf breaks an intact panel and drives into the river: the leaf is no exception
+  { settleClosed(); nearLeaf(); const nb = rails.find((b) => b.rec.state === 'stand' && Math.sign(b.v) === -1 && b.s0 > 16 && b.s0 < 36), mid = F.U_HINGE + nb.s0 + nb.len / 2, st = W(mid, -5.2), y0b = T.deckY(st.x, st.z);
+    const dir = { x: F.FR.s, z: -F.FR.c }, car = createHandling({ L: eng.L, physics: ph, services: { landmarksTroitsky: T } }, null); car.reset(st.x, st.z, Math.atan2(dir.x, dir.z)); car.y = y0b + 0.03; car.vx = dir.x * 50 / 3.6; car.vz = dir.z * 50 / 3.6;
+    ctx.drive = { active: true, car, fx: { sparks() {} } }; let fell = false;
+    for (let t = 0; t < 7; t += 1 / 60) { ph.refreshDynamic(); car.step(1 / 60, { thr: 1, brk: 0, steer: 0, hand: false, nitro: false }); ctx.knock.update(1 / 60); if (car.fall) fell = true; }
+    ctx.drive = null; const q = F.toUV(car.x, car.z, {}), w = eng.L.waterLevelAt ? eng.L.waterLevelAt(car.x, car.z) : null;
+    say(`  the car on the closed leaf: panel ${nb.rec.state}, ended at u ${q.u.toFixed(1)} v ${q.v.toFixed(1)} y ${car.y.toFixed(2)} (water ${w}), fell ${fell}`);
+    ok(nb.rec.state !== 'stand' && fell && w !== null && car.y < w - 0.5 && q.v < -F.HW, `the car drives through a panel of the closed leaf and into the Neva (${nb.rec.state}, v ${q.v.toFixed(1)}, y ${car.y.toFixed(2)}, water ${w})`);
+  }
+  settleClosed();
 }
 
 console.log(`\ntroitsky-test: ${checks} checks, ${fails.length} failed`);

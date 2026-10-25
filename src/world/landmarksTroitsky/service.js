@@ -33,23 +33,20 @@ export function placeRamps(items, theta) {
     it.cx = w.x; it.cz = w.z; it.hd = len / 2 + 0.02; it.yA = yA + st.lift; it.yB = yB + st.lift; it.y0 = Math.min(it.yA, it.yB) - THICK;
   }
 }
-/** the dynamic collider boxes of the leaf at theta (the two rails and the two barrier kerbs), cut so that the rise under one box stays within RISE_MAX; writes into `pool` (reused records) and returns it */
-export const RISE_MAX = 1.4;
-export function leafBoxes(theta, pool = []) {
-  const phi = phiOf(theta), cph = Math.cos(phi), sph = Math.sin(phi), n = clamp(Math.ceil(LEAF_S * Math.abs(sph) / RISE_MAX), 8, 36), ds = LEAF_S / n, hl = ds * cph;
-  let b = 0;
-  const put = (v, w, y0Off, y1Off) => {
-    for (let i = 0; i < n; i++) {
-      const s = ds * (i + 0.5), u = U_HINGE + s * cph, y = Y_HINGE + s * sph, rise = ds * Math.abs(sph) / 2, c = toWorld(u, v);
-      let o = pool[b]; if (!o) o = pool[b] = { cx: 0, cz: 0, w: 0, d: 0, rotY: -FR.T, y0: 0, y1: 0 };
-      o.cx = c.x; o.cz = c.z; o.w = hl + 0.06; o.d = w; o.rotY = -FR.T; o.y0 = y - rise + y0Off; o.y1 = y + rise + y1Off; b++;
-    }
-  };
-  for (const sg of [-1, 1]) put(sg * (HW - 0.14), 0.4, -1.2, PAVE + 1.25);       // the railing (blocks walkers and cars; open above 1.45 m)
-  for (const sg of [-1, 1]) put(sg * (ROAD + KERB / 2), KERB, -1.0, 0.8);         // the barrier kerb
-  pool.length = b;
-  return pool;
+// ------------------------------------------------------------------ the dynamic collider boxes of the leaf: one per BAY of the two rails and the two barrier kerbs (leaf.js owns the bays and their knock records)
+export const LEAF_BAY_RAIL = { d: 0.4, lo: -1.2, hi: PAVE + 1.25 };           // the railing box (blocks walkers and cars; open above 1.45 m): thickness, bottom / top over the surface (the top counts the 0.2 m pavement)
+export const LEAF_BAY_KERB = { d: KERB, lo: -1.0, hi: 0.8 };                  // the barrier kerb box
+/**
+ * The box of one BAY of the leaf (a rail panel or a kerb piece, docs/AREAS.md 13.8) at opening angle theta: the bay of surface length `len` whose middle stands `sMid` metres from the hinge along the leaf, at the
+ * lateral offset v. Writes { cx, cz (the middle on the surface, world), y (the surface level there), rise (half the height the surface gains along the bay), w (the horizontal length of the box), rotY, y0, y1 } into `out`
+ * (`k` = LEAF_BAY_RAIL | LEAF_BAY_KERB): a box that follows the slope: a bay is at most 2.6 m, the rise under one stays within 1.2 m up to 70 degrees.
+ */
+export function leafBayAt(theta, sMid, len, v, k, out = {}) {
+  const phi = phiOf(theta), cph = Math.cos(phi), sph = Math.sin(phi), c = toWorld(U_HINGE + sMid * cph, v, _w2), rise = len * Math.abs(sph) / 2, y = Y_HINGE + sMid * sph;
+  out.cx = c.x; out.cz = c.z; out.y = y; out.rise = rise; out.w = len * cph + 0.06; out.d = k.d; out.rotY = -FR.T; out.y0 = y - rise + k.lo; out.y1 = y + rise + k.hi;
+  return out;
 }
+const _w2 = { x: 0, z: 0 };
 
 // ------------------------------------------------------------------ the gates (barrier lines)
 export const GATE_ID = (g) => 'troitsky-' + g;
