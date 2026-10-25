@@ -8,6 +8,8 @@
 // Blue 97.3 m ...).  `zones` = [v from, v to, kind] bands of the deck surface (asphalt roadway, granite pavement, sett paving, plaza).  Sources: docs/research/west-canals-bridges.md
 // section 4 (cards), OSM bridge ways (tools: scratchpad br_frames.mjs) and relation r-boxes; heights: street level y = 0, water y per waterway (WATER_Y).
 import { SW_SITES } from './sites-sw.js';
+import { BRIDGE_GROUP_KEYS } from '../lib/area-tables.js';       // pure data too (the area module's tables)
+import { EXTENT_RECTS } from '../data/city.js';
 export const EXT = 0.8;                                   // the deck runs this far over the land beyond the bank line (no sliver of water at the corners; the street asphalt ends at the bank, a small overlap)
 /** water surface level per waterway key (dossier section 2.5; environment may publish its own: see bridges.js) */
 export const WATER_Y = { griboedov: -2.9, moika: -3.0, 'winter-canal': -3.1, neva: -3.4, fontanka: -3.2, 'swan-canal': -2.8, kryukov: -2.9, admiralty: -2.8 };
@@ -99,8 +101,13 @@ const BASE_SITES = [
     zones: [[-1.5, 1.5, 'asphalt']], hump: 0.15, at: [-1350, -540] },
 ];
 
-/** every bridge site of the Nevsky strip: the west + the Mars Field reach (this file) + the three south-west bridges of the strip (sites-sw.js: Kamenny, Pochtamtsky, Fonarny); every centre lies in the data extent (tools/bridges-sites-check.mjs) */
-export const SITES = [...BASE_SITES, ...SW_SITES];
+/** every bridge site there is: the west + the Mars Field reach (this file) + the three south-west bridges (sites-sw.js: Kamenny, Pochtamtsky, Fonarny); in the strip every centre lies in the data extent (tools/bridges-sites-check.mjs) */
+export const ALL_SITES = [...BASE_SITES, ...SW_SITES];
+/** THE predicate of the area: a site belongs to the area when its id is a sub-group of the area's GROUPS.bridges (the area claims its OSM ways) or its centre lies in the data extent of the area. The strip lists every site
+ *  in GROUPS.bridges, so all of them stay; a smaller area (Palace-Liteyny) keeps the ones in its data and does not build, open the quay for or walk over the rest. */
+export const siteInArea = (s) => BRIDGE_GROUP_KEYS.has(s.id) || EXTENT_RECTS.some((r) => s.cx >= r.x0 && s.cx <= r.x1 && s.cz >= r.z0 && s.cz <= r.z1);
+/** the bridge sites of THIS area: every consumer (bridges.js, streets/decks.js, environment/river.js, props/world.js, people/nav.js, people/west.js) reads this list, never ALL_SITES */
+export const SITES = ALL_SITES.filter(siteInArea);
 export const siteById = (id) => SITES.find((s) => s.id === id) || null;
 const rad = (d) => d * Math.PI / 180;
 /** the frame constants of a site: { cx, cz, T (rad), c, s } */

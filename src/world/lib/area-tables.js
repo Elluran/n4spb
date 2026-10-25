@@ -87,6 +87,9 @@ export const GARAGE = {
   spawn: G.spawn && Number.isFinite(G.spawn.x) && Number.isFinite(G.spawn.z) ? G.spawn : null,
 };
 
+/** the keys of the sub-groups of the area's GROUPS.bridges (= the ids of the bridge sites of bridges/sites.js that the area claims; the strip lists every site, a smaller area a subset, an area without a bridges module none) */
+export const BRIDGE_GROUP_KEYS = new Set(arr(obj(A.GROUPS).bridges).map((g) => g && g.key));
+
 export const PRUNE_SERVICES = arr(A.PRUNE_SERVICES);
 export const HOOKS = checkHooks(A.HOOKS);
 export const HEIGHT_PATCHES = checkPatches(A.HEIGHT_PATCHES);
