@@ -44,7 +44,7 @@ try {
     req.continue();
   });
   const errors = []; page.on('pageerror', (e) => errors.push(String(e.message).slice(0, 200)));
-  await page.evaluateOnNewDocument(() => { window.__rec = { introSeen: false }; const t = () => { const i = document.getElementById('intro'); if (/[?&]ho=/.test(location.search) && i && getComputedStyle(i).display !== 'none') window.__rec.introSeen = true; requestAnimationFrame(t); }; requestAnimationFrame(t); });
+  await page.evaluateOnNewDocument(() => { window.__rec = { introSeen: false, hand: /[?&]ho=/.test(location.search), log: [] }; const t0 = performance.now(); const t = () => { const i = document.getElementById('intro'), s = document.getElementById('seam'); if (window.__rec.hand && i) { const cs = getComputedStyle(i), vis = cs.display !== 'none' && cs.visibility !== 'hidden' && Number(cs.opacity) > 0.05; if (vis) { window.__rec.introSeen = true; if (window.__rec.log.length < 6) window.__rec.log.push({ t: Math.round(performance.now() - t0), playing: document.body && document.body.classList.contains('playing'), loaded: document.body && document.body.classList.contains('loaded'), seam: s ? getComputedStyle(s).display : 'none', cls: document.documentElement.className }); } } requestAnimationFrame(t); }; requestAnimationFrame(t); });
   await page.goto(`${ORIGIN}/index.html?q=performance`, { waitUntil: 'load', timeout: 180000 });
   await page.waitForFunction("document.body.classList.contains('loaded')", { timeout: 360000, polling: 500 });
   await page.click('#go'); await page.waitForFunction("document.body.classList.contains('playing')", { timeout: 20000 });
@@ -68,7 +68,7 @@ try {
   check('navigated to smolny.html', await page.evaluate(() => location.pathname.endsWith('smolny.html')) || true);
   for (let i = 0; i < 720; i++) { const pl = await page.evaluate(() => !!document.body && document.body.classList.contains('playing')).catch(() => false); if (pl) break; await sleep(500); }
   await sleep(2500);
-  const r = await page.evaluate(() => ({ path: location.pathname, playing: document.body.classList.contains('playing'), introSeen: window.__rec.introSeen, area: window.__ctx && window.__ctx.area && window.__ctx.area.ID, p: window.__ctx && window.__ctx.playerObj ? [Math.round(window.__ctx.playerObj.pos.x), Math.round(window.__ctx.playerObj.pos.z)] : null, seamLeft: !!(document.getElementById('seam') && getComputedStyle(document.getElementById('seam')).display !== 'none') }));
+  const r = await page.evaluate(() => ({ path: location.pathname, playing: document.body.classList.contains('playing'), introSeen: window.__rec.introSeen, recLog: window.__rec.log, area: window.__ctx && window.__ctx.area && window.__ctx.area.ID, p: window.__ctx && window.__ctx.playerObj ? [Math.round(window.__ctx.playerObj.pos.x), Math.round(window.__ctx.playerObj.pos.z)] : null, seamLeft: !!(document.getElementById('seam') && getComputedStyle(document.getElementById('seam')).display !== 'none') }));
   console.log('  destination', JSON.stringify(r));
   check('smolny started by itself, the splash was never shown, the veil is gone', r.path.endsWith('smolny.html') && r.playing && !r.introSeen && !r.seamLeft, JSON.stringify(r));
   check('same place: within 150 m of where he left', r.p && Math.hypot(r.p[0] - (start[0] + 80), r.p[1] - start[1]) < 150, JSON.stringify(r.p));
