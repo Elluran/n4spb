@@ -72,6 +72,13 @@ Golden 0.00052 (1 km 24 %): looking into the sun the avenue glows. The environme
 (was 0.88 / 0.91 / 1.12 at 0.6: the Yakutsk values made the Petersburg shade too navy); highlight warmth `(0.016, 0.009, -0.008)` (was 0.026 / 0.014 / -0.014: warm stucco must not turn orange). Outline colour, fade distance and
 strength unchanged. Per-time-of-day exposure / bloom / glow / leak / vignette / threshold / saturation live in the preset table.
 
+**Ambient occlusion** (2026-10-25): screen-space obscurance from the outline pass's normal / linear-depth target (no extra geometry pass), at half resolution with a 2-pass depth-aware
+blur and a depth-guided upsample in the composite, applied before the outlines. It darkens toward a cool shade (`uAOTint` `(0.30, 0.32, 0.46)`, strength `uAO` 0.9), so the contact
+shadows read like the blue-grey Petersburg shade, not black. World radius `uRadius` 1.5 m, `uBias` 0.2 (flat walls with shallow relief stay clean), `uIntensity` 10. It fades out between
+0.4 and 0.75 x `ndFar` (44-82 m on performance, 60-112 m on medium), before the outline pass ends. Samples per tier: `quality.ao` (performance 8, medium 12, touch 0 = off);
+`?ao=N` overrides (0 = off), `?aoview=1` shows the occlusion alone. Where it shows: wall / pavement junctions, under cars and kiosks, window reveals, shop signs, fence posts,
+tree canopies; strongest under the overcast preset. Glass that is transparent shows the AO of what is behind it (car cabins), a small, accepted darkening.
+
 ## 6. Palette (`core/materials.js` `PALETTE`, `ctx.palette`; ~430 keys)
 
 Every key of the Yakutsk palette is kept (copied code reads them) with Petersburg values; the legacy tree keys hold July greens (`birch #5f8a3a`, `lindenGold #6a9a3e` = lime, `mapleOrange #5e9a35` = Norway maple, `mapleRed #3f6b2a` = poplar).

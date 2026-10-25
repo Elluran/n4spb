@@ -76,18 +76,18 @@ const isTouch = document.documentElement.classList.contains('tc');      // the i
 // (tools/bake-scene.mjs) runs its base stage at medium (+ nav-medium) and a nav stage at performance (nav-low); ?q=high / ?q=low fall back to the default, performance.
 const QUALITY = {
   // high: { name: 'high', pixelRatio: Math.min(devicePixelRatio, 1.5), msaa: 4, shadowMap: 4096, shadowSize: 90, petals: 1.0, ndFar: 200, lod: 1, cull: 1 },
-  medium: { name: 'medium', pixelRatio: Math.min(devicePixelRatio, 1.0), msaa: 4, shadowMap: 2048, shadowSize: 70, petals: 0.6, ndFar: 150, lod: 0.8, cull: 0.75 },
+  medium: { name: 'medium', pixelRatio: Math.min(devicePixelRatio, 1.0), msaa: 4, shadowMap: 2048, shadowSize: 70, petals: 0.6, ndFar: 150, lod: 0.8, cull: 0.75, ao: 12 },
   // low: { name: 'low', pixelRatio: Math.min(devicePixelRatio, 0.75), msaa: 0, shadowMap: 2048, shadowSize: 50, petals: 0.35, ndFar: 110, lod: 0.6, cull: 0.55 },
   // performance: the frame-rate tier (docs/PERFORMANCE.md: the frame is CPU draw-submission bound, so fewer draws is what helps, not fewer pixels). level 'low' = the population / tree /
   // bird / lawn counts and the nav product of the low tier (ctx.quality.level); far = the camera far plane (1.8 km instead of 7 km: the colour calls beyond it were about half of the
   // render at street level); fogScale thickens the fog so that the cut is hidden (~97 % at the far plane, day: 500 m 24 %, 1 km 66 %). The GPU side stays at medium (pixel ratio 1, MSAA).
-  // ?far= and ?fogx= override the two for tuning (any tier).
-  performance: { name: 'performance', level: 'low', pixelRatio: Math.min(devicePixelRatio, 1.0), msaa: 4, shadowMap: 2048, shadowSize: 50, petals: 0.35, ndFar: 110, lod: 0.6, cull: 0.55, far: 1800, fogScale: 2.5 },
+  // ?far= and ?fogx= override the two for tuning (any tier). ao = ambient occlusion samples per pixel (core/renderer.js; GPU fill only, from the outline pass; ?ao= overrides, 0 = off).
+  performance: { name: 'performance', level: 'low', pixelRatio: Math.min(devicePixelRatio, 1.0), msaa: 4, shadowMap: 2048, shadowSize: 50, petals: 0.35, ndFar: 110, lod: 0.6, cull: 0.55, far: 1800, fogScale: 2.5, ao: 8 },
 };
 let qName = params.get('q') || (() => { try { return localStorage.getItem('piter.q'); } catch (e) { return null; } })() || 'performance';      // Performance is the default tier everywhere (a remembered choice or ?q=medium still wins)
 if (!QUALITY[qName]) qName = 'performance';                       // (a remembered 'high' / 'low' from before the two-tier policy lands here too)
 const quality = { ...QUALITY[qName] };
-if (isTouch) Object.assign(quality, { pixelRatio: Math.min(quality.pixelRatio, 1), shadowMap: Math.min(quality.shadowMap, 1024), msaa: Math.min(quality.msaa ?? 4, 2) });      // phones: the GPU side only (shadow map, MSAA, pixel ratio), so the bake and the `level` stay valid
+if (isTouch) Object.assign(quality, { pixelRatio: Math.min(quality.pixelRatio, 1), shadowMap: Math.min(quality.shadowMap, 1024), msaa: Math.min(quality.msaa ?? 4, 2), ao: 0 });      // phones (ambient occlusion off): the GPU side only (shadow map, MSAA, pixel ratio), so the bake and the `level` stay valid
 if (SHOT) { quality.pixelRatio = 1; }
 
 // ------------------------------------------------------------------ renderer & scene
@@ -109,6 +109,8 @@ const sky = createSky(scene, sunDir, quality);
 const pipeline = createRenderPipeline(renderer, quality);
 pipeline.ndFar = quality.ndFar;
 if (params.has('ndfar')) pipeline.ndFar = Number(params.get('ndfar')) || 1e9;      // debug / A-B: distance of the normal / depth pass (default 200 m)
+if (params.has('ao')) pipeline.setAO(params.get('ao'));      // A/B: ambient occlusion samples (0 = off)
+if (params.get('aoview') === '1') { pipeline.compMat.defines.AO_VIEW = 1; pipeline.compMat.needsUpdate = true; }      // debug: the ambient occlusion alone
 const audio = createAudio();
 const ctx = createContext({ scene, camera, renderer, audio, quality, sunDir });
 ctx.area = A;      // the area module of this page: ctx.area.ID, BAKE_DIR, MODULES ... (a test hook: __ctx.area.ID)

@@ -117,6 +117,9 @@ export function createRenderPipeline(renderer, quality) {
   const rtB2 = new THREE.WebGLRenderTarget(4, 4, { type: HF });
   const rtB3 = new THREE.WebGLRenderTarget(4, 4, { type: HF });
   const rtB4 = new THREE.WebGLRenderTarget(4, 4, { type: HF });
+  // ambient occlusion: half resolution, R = visibility (1 = open), G = linear depth (m) for the depth-aware blur / upsample
+  const aoOpts = { type: HF, format: THREE.RGFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false };
+  const rtAO = new THREE.WebGLRenderTarget(4, 4, aoOpts), rtAO2 = new THREE.WebGLRenderTarget(4, 4, aoOpts);
 
   // normal + linear depth override material (handles instancing & skinning through chunks)
   const ndMat = new THREE.ShaderMaterial({
@@ -193,6 +196,53 @@ export function createRenderPipeline(renderer, quality) {
     depthTest: false, depthWrite: false,
   });
 
+  // Ambient occlusion (scalable ambient obscurance, McGuire et al. 2012) from the normal / depth pre-pass: no extra geometry pass, so the cost is fill only (half resolution, quality.ao
+  // samples, 0 = off). The outline target holds view-space normals and linear depth up to ndFar: the AO fades out before that cut (uMaxD, compMat.uAOFade: 0.4 - 0.75 x ndFar), the sky / beyond reads as open.
+  const aoMat = new THREE.ShaderMaterial({
+    defines: { SAMPLES: 8 },
+    uniforms: { tND: { value: rtND.texture }, uRes: { value: new THREE.Vector2(1, 1) }, uFar: { value: 2000 }, uTan: { value: new THREE.Vector2(1, 1) }, uProj: { value: 500 },
+      uRadius: { value: 1.5 }, uBias: { value: 0.2 }, uIntensity: { value: 10 }, uMaxPx: { value: 90 }, uMaxD: { value: 100 } },
+    vertexShader: FS_VERT,
+    fragmentShader: /* glsl */`
+      uniform sampler2D tND; uniform vec2 uRes, uTan; uniform float uFar, uProj, uRadius, uBias, uIntensity, uMaxPx, uMaxD; varying vec2 vUv;
+      vec3 viewPos(vec2 uv, float d){ return vec3((uv*2.0-1.0)*uTan*d, -d); }
+      void main(){
+        vec4 c = texture2D(tND, vUv); float d = c.a * uFar;
+        float rPx = uProj * uRadius / max(d, 0.1);      // the world radius in full-resolution pixels
+        if (d > uMaxD || rPx < 1.5) { gl_FragColor = vec4(1.0, d, 0.0, 1.0); return; }
+        rPx = min(rPx, uMaxPx);
+        vec3 P = viewPos(vUv, d), N = normalize(c.rgb*2.0-1.0);
+        float spin = 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));      // interleaved gradient noise: a per-pixel rotation the blur removes
+        float r2 = uRadius*uRadius, occ = 0.0;
+        for (int i = 0; i < SAMPLES; i++) {
+          float a = (float(i) + 0.5) / float(SAMPLES), th = a * 43.9822972 + spin;      // 7 turns of a spiral
+          vec2 uv = vUv + vec2(cos(th), sin(th)) * (a * rPx) / uRes;
+          vec3 v = viewPos(uv, texture2D(tND, uv).a * uFar) - P;
+          float vv = dot(v, v);
+          occ += max(dot(v, N) * inversesqrt(vv + 1e-4) - uBias, 0.0) * max(1.0 - vv / r2, 0.0);
+        }
+        gl_FragColor = vec4(max(1.0 - occ * uIntensity / float(SAMPLES), 0.0), d, 0.0, 1.0);
+      }`,
+    depthTest: false, depthWrite: false,
+  });
+  const aoBlurMat = new THREE.ShaderMaterial({
+    uniforms: { tSrc: { value: null }, uDir: { value: new THREE.Vector2() } },
+    vertexShader: FS_VERT,
+    fragmentShader: /* glsl */`
+      uniform sampler2D tSrc; uniform vec2 uDir; varying vec2 vUv;
+      void main(){
+        vec2 c = texture2D(tSrc, vUv).rg; float k = 1.0 / (0.03 * c.g + 0.05), s = c.r, w = 1.0;
+        for (int i = -3; i <= 3; i++) {
+          if (i == 0) continue;
+          vec2 t = texture2D(tSrc, vUv + uDir * float(i)).rg;
+          float wi = exp(-0.12 * float(i*i)) * max(1.0 - abs(t.g - c.g) * k, 0.0);
+          s += t.r * wi; w += wi;
+        }
+        gl_FragColor = vec4(s / w, c.g, 0.0, 1.0);
+      }`,
+    depthTest: false, depthWrite: false,
+  });
+
   const compMat = new THREE.ShaderMaterial({
     uniforms: {
       tColor: { value: rtColor.texture }, tND: { value: rtND.texture }, tBloom: { value: rtB2.texture }, tBloom2: { value: rtB4.texture },
@@ -201,11 +251,12 @@ export function createRenderPipeline(renderer, quality) {
       uBloom: { value: 0.28 }, uGlow: { value: 0.12 }, uExposure: { value: 1.0 },
       uSunScreen: { value: new THREE.Vector3(0.2, 0.9, 0) }, uLeak: { value: 1.0 }, uTime: { value: 0 },
       uVignette: { value: 0.18 }, uSat: { value: 1.06 },      // vignette / saturation: written per time of day by core/timeofday.js (overcast = 0.84: muted, cool)
+      tAO: { value: rtAO.texture }, uAORes: { value: new THREE.Vector2(1, 1) }, uAO: { value: 0.9 }, uAOTint: { value: new THREE.Color(0.30, 0.32, 0.46) }, uAOFade: { value: new THREE.Vector2(60, 95) },
     },
     vertexShader: FS_VERT,
     fragmentShader: /* glsl */`
-      uniform sampler2D tColor, tND, tBloom, tBloom2; uniform vec2 uRes; uniform float uFar, uPx, uOutline, uBloom, uGlow, uExposure, uLeak, uTime, uVignette, uSat;
-      uniform vec3 uLine; uniform vec3 uSunScreen; varying vec2 vUv;
+      uniform sampler2D tColor, tND, tBloom, tBloom2, tAO; uniform vec2 uRes, uAORes, uAOFade; uniform float uFar, uPx, uOutline, uBloom, uGlow, uExposure, uLeak, uTime, uVignette, uSat, uAO;
+      uniform vec3 uLine, uAOTint; uniform vec3 uSunScreen; varying vec2 vUv;
       vec4 nd(vec2 uv){ return texture2D(tND, uv); }
       float lum(vec3 c){ return dot(c, vec3(0.2126,0.7152,0.0722)); }
       vec3 softClip(vec3 c){ vec3 k = vec3(0.78); vec3 over = max(c - k, 0.0); return min(c, k) + (1.0-k) * (1.0 - exp(-over/(1.0-k))); }
@@ -217,6 +268,21 @@ export function createRenderPipeline(renderer, quality) {
         // ---------- outlines (inverse-depth laplacian + normal discontinuity)
         vec4 c0 = nd(vUv);
         float d0 = c0.a * uFar;
+        #ifdef USE_AO
+        // ---------- ambient occlusion: the 4 nearest half-resolution texels, bilinear weights x depth similarity (no dark halo across a silhouette); darkens toward a cool shade
+        {
+          vec2 st = vUv * uAORes - 0.5, f = fract(st), b = (floor(st) + 0.5) / uAORes, o = 1.0 / uAORes;
+          vec2 a00 = texture2D(tAO, b).rg, a10 = texture2D(tAO, b + vec2(o.x, 0.0)).rg, a01 = texture2D(tAO, b + vec2(0.0, o.y)).rg, a11 = texture2D(tAO, b + o).rg;
+          float k = 1.0 / (0.02 * d0 + 0.03);
+          vec4 w = vec4((1.0-f.x)*(1.0-f.y), f.x*(1.0-f.y), (1.0-f.x)*f.y, f.x*f.y) * (vec4(1e-3) + max(vec4(1.0) - abs(vec4(a00.g, a10.g, a01.g, a11.g) - d0) * k, 0.0));
+          float vis = dot(w, vec4(a00.r, a10.r, a01.r, a11.r)) / max(w.x + w.y + w.z + w.w, 1e-4);
+          float occ = clamp(1.0 - vis, 0.0, 1.0) * uAO * (1.0 - smoothstep(uAOFade.x, uAOFade.y, d0));
+          col = mix(col, col * uAOTint, occ);
+          #ifdef AO_VIEW
+          gl_FragColor = vec4(vec3(1.0 - occ), 1.0); return;      // debug (?aoview=1): the occlusion alone, white = open
+          #endif
+        }
+        #endif
         vec4 cl = nd(vUv - vec2(px.x,0.0)), cr = nd(vUv + vec2(px.x,0.0)), cu = nd(vUv + vec2(0.0,px.y)), cd = nd(vUv - vec2(0.0,px.y));
         float i0 = 1.0/max(d0,0.05);
         float il = 1.0/max(cl.a*uFar,0.05), ir = 1.0/max(cr.a*uFar,0.05), iu = 1.0/max(cu.a*uFar,0.05), idn = 1.0/max(cd.a*uFar,0.05);
@@ -275,6 +341,18 @@ export function createRenderPipeline(renderer, quality) {
     rtB3.setSize(Math.max(4, W >> 4), Math.max(4, H >> 4)); rtB4.setSize(Math.max(4, W >> 4), Math.max(4, H >> 4));
     compMat.uniforms.uRes.value.set(W, H);
     compMat.uniforms.uPx.value = Math.max(1.0, H / 1100);
+    const aw = Math.max(4, W >> 1), ah = Math.max(4, H >> 1);
+    rtAO.setSize(aw, ah); rtAO2.setSize(aw, ah);
+    aoMat.uniforms.uRes.value.set(W, H); aoMat.uniforms.uMaxPx.value = 0.12 * H; compMat.uniforms.uAORes.value.set(aw, ah);
+  }
+
+  /** Ambient occlusion samples per pixel (0 = off: no AO passes, the composite drops its 4 fetches). */
+  function setAO(samples) {
+    samples = Math.max(0, Math.round(Number(samples) || 0));
+    if (samples === pipeline.aoSamples) return;
+    pipeline.aoSamples = samples;
+    if (samples) { aoMat.defines.SAMPLES = samples; aoMat.needsUpdate = true; compMat.defines.USE_AO = 1; } else delete compMat.defines.USE_AO;
+    compMat.needsUpdate = true;
   }
 
   function pass(mat, target) { quad.material = mat; renderer.setRenderTarget(target); renderer.render(qScene, qCam); }
@@ -342,7 +420,16 @@ export function createRenderPipeline(renderer, quality) {
     renderer.clear();
     renderWithoutSectors(scene, camera, false, true);
     renderer.autoClear = true;
-    // 3. bloom chain
+    // 3. ambient occlusion (half resolution) + a depth-aware blur, from the normal / depth target; fades out before the end of that pass (ndFar)
+    if (pipeline.aoSamples) {
+      const u = aoMat.uniforms, ty = Math.tan(THREE.MathUtils.DEG2RAD * 0.5 * camera.fov) / camera.zoom, fadeEnd = 0.75 * pipeline.ndFar;
+      u.uFar.value = farFull; u.uTan.value.set(ty * camera.aspect, ty); u.uProj.value = size.y / (2 * ty); u.uMaxD.value = fadeEnd;
+      compMat.uniforms.uAOFade.value.set(0.4 * pipeline.ndFar, fadeEnd);
+      pass(aoMat, rtAO);
+      aoBlurMat.uniforms.tSrc.value = rtAO.texture; aoBlurMat.uniforms.uDir.value.set(1 / rtAO.width, 0); pass(aoBlurMat, rtAO2);
+      aoBlurMat.uniforms.tSrc.value = rtAO2.texture; aoBlurMat.uniforms.uDir.value.set(0, 1 / rtAO.height); pass(aoBlurMat, rtAO);
+    }
+    // 4. bloom chain
     brightMat.uniforms.tSrc.value = rtColor.texture; pass(brightMat, rtB1);
     blurMat.uniforms.tSrc.value = rtB1.texture; blurMat.uniforms.uDir.value.set(1 / rtB1.width, 0); pass(blurMat, rtB2);
     blurMat.uniforms.tSrc.value = rtB2.texture; blurMat.uniforms.uDir.value.set(0, 1 / rtB1.height); pass(blurMat, rtB1);
@@ -352,7 +439,7 @@ export function createRenderPipeline(renderer, quality) {
     blurMat.uniforms.tSrc.value = rtB3.texture; blurMat.uniforms.uDir.value.set(0, 1 / rtB3.height); pass(blurMat, rtB4);
     blurMat.uniforms.tSrc.value = rtB4.texture; blurMat.uniforms.uDir.value.set(1.6 / rtB3.width, 0); pass(blurMat, rtB3);
     blurMat.uniforms.tSrc.value = rtB3.texture; blurMat.uniforms.uDir.value.set(0, 1.6 / rtB3.height); pass(blurMat, rtB4);
-    // 4. composite
+    // 5. composite
     _v.copy(sunDir).multiplyScalar(1000).add(camera.position).project(camera);
     const inFront = _v.z < 1 ? 1 : 0;
     const sx = _v.x * 0.5 + 0.5, sy = _v.y * 0.5 + 0.5;
@@ -366,10 +453,12 @@ export function createRenderPipeline(renderer, quality) {
   }
 
   // bg: clear colour of the colour pass (visible only where no sky dome is drawn: indoor zones); skipShadows: no shadow-map render (sun off underground)
-  const pipeline = { render, setSize, compMat, ndMat, targets: { rtColor, rtND }, size, leakScale: 1, brightMat, bg: new THREE.Color(0xdde9f3), skipShadows: false, ndFar: ND_FAR, frozenRoot: null, emptyCull: [],
+  // aoSamples / setAO(n): ambient occlusion samples (quality.ao; 0 = off); aoMat: its tuning uniforms (uRadius m, uBias), compMat.uAO / uAOTint: its strength and shade colour
+  const pipeline = { render, setSize, setAO, aoSamples: 0, aoMat, compMat, ndMat, targets: { rtColor, rtND, rtAO }, size, leakScale: 1, brightMat, bg: new THREE.Color(0xdde9f3), skipShadows: false, ndFar: ND_FAR, frozenRoot: null, emptyCull: [],
     // ndRoots: the dynamic roots whose layer-0 meshes are drawn into the normal / depth target (main.js); refreshND(staticRoot): re-collects the static ones (after the build / a region attach)
     combineND: true, cullShadowSectors: typeof location === 'undefined' || new URLSearchParams(location.search).get('shadowsectors') !== '0', sectorsRoot: null, ndSectorsRoot: null, ndRoots: null, addND(group) { const n = ndStatic.length; collectND(group, ndStatic); return ndStatic.length - n; },      // a subtree attached later (a streamed region)
     refreshND(staticRoot) { pipeline.refreshShadowSectors?.(); ndStatic.length = 0; collectND(staticRoot, ndStatic); for (const c of staticRoot.parent ? staticRoot.parent.children : []) if (c !== staticRoot && !(pipeline.ndRoots || []).includes(c) && c.isMesh && (c.layers.mask & 1)) ndStatic.push(c); return ndStatic.length; } };
   installShadowSectorCulling(renderer, pipeline);
+  setAO(quality.ao ?? 8);
   return pipeline;
 }

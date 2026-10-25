@@ -2,6 +2,27 @@
 
 > **Full-city numbers.** Every figure, timing, triangle count, region count and bake size in this file was measured on the whole 102_3d_piter city (up to 82 km2 of play area, 53-57 regions, a 450 MiB bake) before it was cut down to the Nevsky strip (4.9 km2, see [STRIP.md](STRIP.md)). Sections about islands, Krestovsky, Vasilievsky, Petrograd, the Moskovsky corridor and their tools (`islands-*`, `coverage-check`, `south-extension-check`, ...) describe code and docs that are no longer in this repository: the links to `ISLANDS-2026.md`, `SOUTH-EXTENSION.md`, `SEVKABEL-CULTURE.md` and `coverage.html` below are dead and kept only as history. The method (what costs what, how to measure) still applies; re-measure on the strip before quoting a number.
 
+## 2026-10-25: ambient occlusion (Palace-Liteyny page, index.html)
+
+Screen-space AO (`core/renderer.js`, [LOOK.md](LOOK.md) section 5) reads the existing normal / depth target, so it adds no geometry pass and no CPU work beyond three
+fullscreen draws (+3 draw calls). Cost is GPU fill only: one half-resolution pass of `quality.ao` samples, two 7-tap half-resolution blurs, 4 extra fetches in the composite.
+
+Machine: RTX 5060 Ti, Linux, Chrome for Testing 156 headless, ANGLE / Vulkan (not the Edge / D3D11 machine of the older sections; numbers are not comparable with them).
+Scene: `?baked=force` on the v1.5.0 bake (runtime-only change), performance tier unless noted.
+
+GPU time (`EXT_disjoint_timer_query_webgl2`, median of 4 interleaved rounds x 40 frames, poses: Vosstaniya hero, Nevsky sidewalk, Nevsky crossing):
+
+| resolution | AO passes alone, 8 / 12 samples | whole frame GPU, AO off -> 8 samples | frame JS (`__bench` jsMs) |
+|---|---|---|---|
+| 1280x720 | 0.04-0.05 / 0.05-0.07 ms | 1.09-1.25 -> 1.15-1.32 ms | 4.0-5.8 ms, unchanged |
+| 1920x1080 | 0.09-0.12 / 0.11-0.15 ms | 1.57-1.81 -> 1.67-1.95 ms | 4.1-5.3 ms, unchanged |
+| 2560x1440 | 0.17-0.21 / 0.21-0.28 ms | 2.28-2.66 -> 2.45-2.89 ms | 3.6-4.5 ms, unchanged |
+
+The frame stays CPU (draw submission) bound: GPU 1-3 ms against 4-5 ms of JS, so the AO does not move the frame time on this GPU. A GPU 10-20x slower (integrated
+graphics) would pay roughly 1-2 ms at 1080p; touch devices have it off. Driving (`drive-bench.mjs --seconds 20 --start "498.2286,135.1625,76.0322"`, headless frames are vsync-capped,
+two runs each, AO off vs on): performance mean 19.5 / 19.8 vs 19.0 / 19.3 ms, medium 23.4 / 23.6 vs 23.3 / 23.4 ms; p50 16.7, p95 33.4 ms in every run: no measurable difference.
+Not checked: the metro underground (same pass on the same target; only the background and the sun change there).
+
 ## 2026-10-15/16: walking and driving rounds 2 and 3 (far field, outline proxies, people scheduling, instanced ranges)
 
 Goal (user): comfortable walking and driving in the old centre, ≥ 30 FPS at medium quality on the
