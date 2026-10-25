@@ -2,6 +2,7 @@
 
 Newest first. One line per version; rules in CLAUDE.md (Versioning).
 
+- **1.5.0** (2026-10-25, minor): bridge stunts: breakable solid barrier arms, ballistic car physics over the opened bridges; no contact wires or masts over the open Palace Bridge span; the hand-off shows only the minimal veil (the loading watchdog can no longer bring the splash back); the Tauride nursery is summer green
 - **1.4.0** (2026-10-25, minor): the Palace Bridge opens: two bascule leaves rise about 70 degrees on a schedule offset from the Troitsky Bridge, walkable and driveable while they move
 - **1.3.0** (2026-10-25, minor): water is reachable on foot and by car (wading, falling, driving on the bed), quay and bridge fences and railings are breakable; the Troitsky Bridge opens on a schedule with a walkable, driveable moving leaf; car placement on raised decks fixed
 - **1.2.1** (2026-10-25, patch): review fixes: Palace-Liteyny trams run again, bridges outside the data are no longer built, HUD street names for both areas, TEST exports, the Nevsky Atrium leaves Smolninskoye; area tests know the edge gates
