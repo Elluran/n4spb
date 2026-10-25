@@ -463,7 +463,7 @@ export function createTouchControls({ ctx, player, canvas, params = new URLSearc
     if (!ctx.ui || !ctx.ui.panel) return;
     const act = (text, fn) => { const b = h('button', { type: 'button', text }); b.addEventListener('click', fn); return b; };
     const places = doc.getElementById('places'), list = h('div', { class: 'tc-places' });
-    if (places) for (const o of places.options) { if (!o.value) continue; const b = act(o.textContent, () => closePanelThen(() => { places.value = o.value; places.dispatchEvent(new win.Event('change')); })); list.append(b); }
+    if (places && doc.documentElement.classList.contains('teleports')) for (const o of places.options) { if (!o.value) continue; const b = act(o.textContent, () => closePanelThen(() => { places.value = o.value; places.dispatchEvent(new win.Event('change')); })); list.append(b); }
     const q = doc.getElementById('quality'), qsel = h('select', { 'aria-label': 'Качество · Quality' });
     if (q) { for (const o of q.options) qsel.append(h('option', { value: o.value, text: o.textContent })); qsel.value = q.value; qsel.addEventListener('change', () => { q.value = qsel.value; q.dispatchEvent(new win.Event('change')); }); }
     const fsOk = !!(doc.fullscreenEnabled || doc.webkitFullscreenEnabled) && !isIPhone;
@@ -474,7 +474,7 @@ export function createTouchControls({ ctx, player, canvas, params = new URLSearc
         act('Время суток · Time of day', () => closePanelThen(() => tap('KeyT'))),
         act(muted ? 'Звук: выкл · Sound: off' : 'Звук: вкл · Sound: on', () => closePanelThen(() => tap('KeyM'))),
         act('Скрыть интерфейс · Hide UI', () => closePanelThen(() => { body.classList.add('noui'); toast('Меню: кнопка справа вверху · Menu button stays top right'); })),
-        act('В начало · Respawn', () => closePanelThen(() => tap('KeyR'))),
+        doc.documentElement.classList.contains('teleports') ? act('В начало · Respawn', () => closePanelThen(() => tap('KeyR'))) : null,
         fsOk ? act(doc.fullscreenElement ? 'Выйти из полного экрана · Exit fullscreen' : 'Полный экран · Fullscreen', () => closePanelThen(() => toggleFullscreen())) : null,
         act('FPS', () => closePanelThen(() => { if (stats) stats.hidden = !stats.hidden; })),
         act('Управление · Controls settings', () => openSettings())),

@@ -1132,3 +1132,32 @@ The start screen of the app becomes a MAP of Saint Petersburg (`maps/intro-draft
 * Blocks outside the source's raw OSM box are built from the main streets only (no residential streets), so "one block" there is capped by the 320 m rule rather than by a real block.
 * Unnamed or missing border streets in the data: a few border segments have no street name in the border list.
 * The municipal borders are the official ones; some are odd and will be re-cut together with the split / merge of areas.
+
+## 13. The first two areas of the world map: Palace-Liteyny and Smolninskoye (v1.0.0, 2026-10-25)
+
+The strip and the North were re-cut to two areas of the map of section 12. Ids `palace` (Дворцовый–Литейный, map area 98, page `index.html`, the start page of the app) and `smolny` (Смольнинское, map area 96, page `smolny.html`).
+The old two scenes are PARKED (registry `parked: true`): `strip` (`strip.html`, now also the TEMPLATE of every generated page, `tools/gen-area-html.mjs`), `north` (`north.html`), `src/world/area.js`, `src/world/data`, `src/areas/north`, `assets/baked/`, `assets/baked/north/` stay as they were
+(nothing deleted) for the neighbour areas that are cut later. No gate leads to a parked area, `npm run bake` (`--area all`) skips them, and their bakes are stale against the new revision until they are baked by name (`--area strip` / `north`).
+
+### 13.1 Shape
+The play rectangles of an area are its WALKABLE TERRITORY on the map (core + overlaps, section 12.1): `node tools/area-shape.mjs --k 98 --js palace` rasterises the outline of the map (`maps/intro-draft.html`, embedded data) in 80 m cells (a cell is in when 4 of 9 sample points are inside:
+a slight outward bias, so a border street is never cut off) and merges the cells into rectangles (73 for Palace-Liteyny, 60 for Smolninskoye, 5.3 and 7.0 km2). Both rows also carry the rectangle `ST` (x 400..835, z 160..1060): the Moscow station complex belongs to both areas whole,
+because the rail module needs complete platforms (the station is a shared junction of both). The rows are pasted into `src/areas/registry.js` (`play`); the data of the area is cut from the source project in one go: `node tools/area-data-cut.mjs --area palace` (and `smolny`), then `tools/strip-data-known.mjs`
+for `known-data.js` (commands in section 6 of docs/AREAS-DATA.md). A part file per rectangle (`city-p01.js` ... `city-s61.js`).
+
+### 13.2 Modules
+`src/areas/palace/area.js` starts from the strip's area module: the landmark modules whose sights lie in the territory (A, B, C, E, F, G, I, K, Castle, Belinsky, bridges, the library of D, and from the North: NorthFull for Dom Muruzi, the Transfiguration Cathedral and Chernyshevskaya, BelinskyNorth) with their GROUPS;
+St Isaac's, the Admiralty, the Senate (H, J), the metro network and Oktyabrsky are left out. `src/areas/smolny/area.js` starts from the North's module (Smolny, Suvorov, Kirochnaya, Tauride with its hooks from `../north/hooks.js`, Oktyabrsky) and adds landmarksA, landmarksB (only the sub-groups whose buildings
+are in its data), `rail` and the station zones. A module that is group-aware (`L.groupMembers(key)`, `if (!recs.length) return`) builds only what the area claims. `node tools/area.mjs <id> tools/check.mjs --area-modules` builds all modules headlessly.
+
+### 13.3 Objects
+Buildings, benches, bins, kiosks, cars, people are movable and breakable exactly as before (the same modules and registrations); an object in an overlap exists in both areas, a hand-off does not carry the state of objects.
+
+### 13.4 Cars
+The four cars (coupe, pickup, Zhiguli, roadster) stand ONLY at the central station, the Moscow station (`GARAGE.poses`, the strip's poses). An area whose territory does not contain the station holds ONE car, the purple Zhiguli (`lada`: VAZ-2106 in eggplant), at its spawn. Both first areas contain the station, so both have the four.
+
+### 13.5 Teleports off
+The Places list, the view keys (1..0, Shift, Alt), R (back to the start) and the touch menu's Respawn are off (`?teleports=1` restores them for development and the tools): the player walks to the places himself. The page help lines carry movement keys only.
+
+### 13.6 Version
+`src/core/version.js` (1.0.0 and up, SemVer), shown top right on the preloader; `node tools/version.mjs patch|minor|major "note"` bumps it, `package.json` and `CHANGELOG.md`; the rules of the levels are in `CLAUDE.md`.

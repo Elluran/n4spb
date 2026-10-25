@@ -28,6 +28,7 @@ import { createTouchControls } from './core/touch.js';      // phones / tablets:
 import { installBootGuard } from './core/boot-guard.js';      // fatal card, lost-context handler, phone warning + crash-loop guard
 import { HOOKS } from './world/lib/area-tables.js';      // the validated hook table of the area module (docs/AREAS.md section 9): the engine reads it only through this file
 import { REGISTRY } from './areas/registry.js';      // runtime-only (tools/baked-revision.mjs): only this file may import it and core/gates.js / core/handoff.js
+import { VERSION } from './core/version.js';      // runtime-only (tools/baked-revision.mjs): the number on the preloader, CLAUDE.md "Versioning"
 import { createGates, planArrival, backLink } from './core/gates.js';      // the area gates: the question near a border, the navigation to the neighbour's page (docs/AREAS.md)
 
 export const MODULES = [
@@ -426,6 +427,11 @@ function frame(now) {
   stats.fps = fps; stats.calls = renderer.info.render.calls; stats.triangles = renderer.info.render.triangles;
 }
 
+/** The teleports (keys 1..0 / Shift / Alt = the VIEWS, R = back to the start, the Places list, the touch menu's Respawn) are OFF for now (owner, 2026-10-25: the player walks to the places himself); ?teleports=1 brings them back for development and the tools. */
+{ const v = document.getElementById('ver'); if (v) v.textContent = 'v' + VERSION; }
+const TELEPORTS = params.get('teleports') === '1';
+if (TELEPORTS) document.documentElement.classList.add('teleports'); else { const pl = document.getElementById('places'); if (pl) pl.remove(); }
+
 function start() {
   if (started) { player.requestLock(); return; }
   started = true;
@@ -539,13 +545,13 @@ async function main() {
     if (e.code === 'KeyT') showToast(tod.cycle());
     if (e.code === 'KeyM') { audio.muted = !audio.muted; const b = $('mute'); if (b) b.setAttribute('aria-pressed', String(audio.muted)); }
     const drv = ctx.drive && ctx.drive.active;      // while driving the places / R move the car instead of the walker
-    if (e.code === 'KeyR') { if (drv) ctx.drive.place(L.HERO.x, L.HERO.z, L.HERO.yaw); else player.setPose(L.HERO.x, L.HERO.z, L.HERO.yaw, L.HERO.pitch); if (ctx.gates) ctx.gates.teleported(); }
+    if (e.code === 'KeyR' && TELEPORTS) { if (drv) ctx.drive.place(L.HERO.x, L.HERO.z, L.HERO.yaw); else player.setPose(L.HERO.x, L.HERO.z, L.HERO.yaw, L.HERO.pitch); if (ctx.gates) ctx.gates.teleported(); }
     if (e.code === 'Backquote' && !e.altKey && !e.shiftKey) { const s = $('stats'); if (s) s.hidden = !s.hidden; }
-    const v = VIEWS[(e.altKey && e.shiftKey ? 'AltShift' : e.altKey ? 'Alt' : e.shiftKey ? 'Shift' : '') + e.code]; if (v && !e.repeat) goToView(v);     // standing on the ground there (setPose without y ends a flight); with the baked scene the regions around the destination stream in first (the Admiralty end is 2.6 km from the start pose)
+    const v = VIEWS[(e.altKey && e.shiftKey ? 'AltShift' : e.altKey ? 'Alt' : e.shiftKey ? 'Shift' : '') + e.code]; if (v && !e.repeat && TELEPORTS) goToView(v);     // standing on the ground there (setPose without y ends a flight); with the baked scene the regions around the destination stream in first (the Admiralty end is 2.6 km from the start pose)
   });
   if (flyBtn) flyBtn.addEventListener('click', () => { player.toggleFly(); flyBtn.blur(); });   // for touch screens / a free mouse (blur: Space must not click it again)
   const places = $('places');
-  if (places) {
+  if (places && TELEPORTS) {
     for (const v of L.VIEWS) { const o = document.createElement('option'); o.value=v.key; o.textContent=v.label; places.append(o); }
     // the places of the other areas (the area module's CROSS_PLACES, docs/AREAS.md M7): one optgroup per area under its registry title; a pick asks the gate question (core/gates.js offerPlace)
     if (ctx.gates && ctx.gates.places.length) for (const id of [...new Set(ctx.gates.places.map((p) => p.area))]) {

@@ -19,7 +19,7 @@ const revision = bakedRevision(root);
 // ---- which areas
 const argv = process.argv.slice(2);
 const areaArg = argv.includes('--area') ? argv[argv.indexOf('--area') + 1] : 'strip';
-const realRows = Object.values(REGISTRY).filter((a) => a.status !== 'planned');
+const realRows = Object.values(REGISTRY).filter((a) => a.status !== 'planned' && !a.parked);      // parked areas (docs/AREAS.md section 13) are not baked by 'all': name them to bake one
 let rows;
 if (areaArg === 'all') rows = realRows;
 else if (REGISTRY[areaArg]) {

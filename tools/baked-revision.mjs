@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
  * Runtime-only files: they never build or change anything that is baked (the gates, the hand-off codec, the area registry), so editing them must not make the bake stale. Tuning a gate
  * rectangle or a prompt text is then free. tools/runtime-only-lint.mjs enforces the contract: no other file under src/ imports them except src/main.js.
  */
-export const RUNTIME_ONLY = ['src/core/gates.js', 'src/core/handoff.js', 'src/areas/registry.js'];
+export const RUNTIME_ONLY = ['src/core/gates.js', 'src/core/handoff.js', 'src/core/version.js', 'src/areas/registry.js'];
 /** the files the bake revision covers, as { f: absolute path, rel: POSIX path relative to root }, in hash order */
 export function bakedRevisionFiles(root) {
   const files = [];

@@ -1,15 +1,16 @@
-// Generates the HTML page of an area (north.html ...) from index.html (the strip) and the area's text data src/areas/<id>/page.json (docs/AREAS.md section 2 and 5).
+// Generates the HTML page of an area (index.html, smolny.html, north.html ...) from strip.html (the TEMPLATE: the page of the parked strip, the source of every generated page) and the area's text data
+// src/areas/<id>/page.json (docs/AREAS.md section 2, 5 and 13). Since the world-map re-cut (docs/AREAS.md section 13) index.html is itself a generated page: the one of Palace-Liteyny, the start page of the app.
 //   node tools/gen-area-html.mjs [--area <id>] [--check] [--force-planned] [--root <dir>]
-//     no --area     every real area except the strip (rows of the registry that are not 'planned'); none exist yet = nothing to do
+//     no --area     every real area except the strip (rows of the registry that are not 'planned'; parked areas too: their pages stay current); none exist yet = nothing to do
 //     --check       write nothing; exit 1 when a page on disk differs from the generated one (CI: tools run in the 'verify' job) or does not exist
 //     --force-planned   also generate the page of a 'planned' registry row (the files of the area do not exist yet; the generated page then fails at its first import)
-//     --root <dir>  a site root other than this repository (tests: a throw-away copy of index.html + src/areas/<id>/page.json)
-// index.html is the SOURCE and is never edited by this tool: the page is index.html with targeted replacements of stable anchors (every anchor must match exactly once, otherwise the tool
-// stops: an index.html edit that moves an anchor must be followed here). The replacements:
+//     --root <dir>  a site root other than this repository (tests: a throw-away copy of strip.html + src/areas/<id>/page.json)
+// strip.html is the SOURCE and is never edited by this tool: the page is strip.html with targeted replacements of stable anchors (every anchor must match exactly once, otherwise the tool
+// stops: a strip.html edit that moves an anchor must be followed here). The replacements:
 //   <html data-area>, <title>, apple-mobile-web-app-title, the canvas aria-label, the intro kicker / title, the phone "heavy scene" note (the area's MB from the registry; it also gets data-card-title, the
 //   title of the phone's pre-start card: the intro kicker up to its first colon + " · Before you start"), the #places tooltip,
 //   the two keyboard-help lines (#help .walk / .air), the import map (the registry's remap entries first, the 'three' entries stay), and the facts script (SIGHTS + FACTS).
-// Everything else (every id, class, script, style) is index.html byte for byte, so the engine finds all it needs.
+// Everything else (every id, class, script, style) is strip.html byte for byte, so the engine finds all it needs.
 //
 // src/areas/<id>/page.json (SCHEMA 1; Cyrillic text only through an editor/Write tool, never through a shell):
 // {
@@ -30,6 +31,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const toolRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const PAGE_SCHEMA = 1;
+/** the template page (the strip's own page) and the registry id whose page it is: never generated */
+export const TEMPLATE_FILE = 'strip.html';
 const nl = (s) => s.replaceAll('\r\n', '\n');
 
 const escHtml = (s) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -72,11 +75,11 @@ export function validatePage(page, { id = '?', splashDir = null } = {}) {
   return p;
 }
 
-/** Replace the ONLY match of `re` (a missing or a second match is an error: the anchor moved in index.html). */
+/** Replace the ONLY match of `re` (a missing or a second match is an error: the anchor moved in strip.html). */
 function once(html, re, fn, label) {
   const g = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
   const ms = [...html.matchAll(g)];
-  if (ms.length !== 1) throw new Error(`gen-area-html: anchor "${label}" matches ${ms.length} times in index.html (expected exactly 1); update tools/gen-area-html.mjs`);
+  if (ms.length !== 1) throw new Error(`gen-area-html: anchor "${label}" matches ${ms.length} times in strip.html (expected exactly 1); update tools/gen-area-html.mjs`);
   const m = ms[0];
   return html.slice(0, m.index) + fn(...m) + html.slice(m.index + m[0].length);
 }
@@ -85,11 +88,11 @@ function once(html, re, fn, label) {
 const urlLike = (k) => (/^(\.{0,2}\/)/.test(k) ? k : './' + k);
 
 /**
- * indexHtml: the text of index.html; row: the registry row of the area; page: the parsed page.json.
+ * templateHtml: the text of strip.html; row: the registry row of the area; page: the parsed page.json.
  * Returns the text of the area page (LF line endings). Pure: no file access.
  */
-export function generatePage(indexHtml, row, page) {
-  let html = nl(indexHtml);
+export function generatePage(templateHtml, row, page) {
+  let html = nl(templateHtml);
   const id = row.id;
   html = once(html, /(<html\b[^>]*\sdata-area=")[^"]*(")/, (m, a, b) => a + id + b, '<html data-area>');
   html = once(html, /<title>[^<]*<\/title>/, () => `<title>${escHtml(page.title)}</title>`, '<title>');
@@ -98,18 +101,18 @@ export function generatePage(indexHtml, row, page) {
   html = once(html, /(<div class="kicker">)[^<]*(<\/div>)/, (m, a, b) => a + escHtml(page.intro.kicker) + b, 'intro kicker');
   html = once(html, /(<h1 class="title" id="stname">)[^<]*(<\/h1>)/, (m, a, b) => a + escHtml(page.intro.title) + b, 'intro title');
   const fill = (t) => t.replaceAll('{mb}', String(row.approxMB)).replaceAll('{ram}', String(page.heavy.ramGB));
-  // the heavy-scene note also carries the title of the phone's pre-start card (core/boot-guard.js pageSizes reads data-card-title; index.html has none and the strip keeps its own text): the intro
+  // the heavy-scene note also carries the title of the phone's pre-start card (core/boot-guard.js pageSizes reads data-card-title; strip.html has none and the strip keeps its own text): the intro
   // kicker up to its first colon («Прогулка по северу города: Таврический сад и Смольный» -> «Прогулка по северу города»), then the English half of the strip's card
   const cardTitle = `${page.intro.kicker.split(':')[0].trim()} · Before you start`;
   html = once(html, /<span class="tk">([^<]*Heavy scene:[^<]*)<\/span>/, () => `<span class="tk" data-card-title="${escAttr(cardTitle)}">` + escHtml(fill(page.heavy.ru)) + ' · ' + escHtml(fill(page.heavy.en)) + '</span>', 'heavy-scene note');
   html = once(html, /(<select id="places"[^>]*\stitle=")[^"]*(")/, (m, a, b) => a + escAttr(page.places.title) + b, '#places title');
   html = once(html, /(<span class="desk walk">)[\s\S]*?(<\/span>)/, (m, a, b) => a + page.help.walk + b, '#help walk line');
   html = once(html, /(<span class="desk air">)[\s\S]*?(<\/span>)/, (m, a, b) => a + page.help.air + b, '#help air line');
-  // the import map: the area's remap first, then whatever index.html maps (three, three/addons/)
+  // the import map: the area's remap first, then whatever strip.html maps (three, three/addons/)
   html = once(html, /<script type="importmap">\s*([\s\S]*?)\s*<\/script>/, (m, json) => {
     const base = JSON.parse(json).imports;
     const remap = Object.fromEntries(Object.entries(row.remap || {}).map(([k, v]) => [urlLike(k), urlLike(v)]));
-    for (const k of Object.keys(remap)) if (k in base) throw new Error(`gen-area-html: index.html's import map already maps ${k}`);
+    for (const k of Object.keys(remap)) if (k in base) throw new Error(`gen-area-html: strip.html's import map already maps ${k}`);
     const lines = Object.entries({ ...remap, ...base }).map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)}`);
     return `<script type="importmap">\n{ "imports": {\n${lines.join(',\n')}\n} }\n</script>`;
   }, 'import map');
@@ -121,7 +124,7 @@ export function generatePage(indexHtml, row, page) {
     html = once(html, /^( *)(document\.getElementById\('intro'\)\.style\.setProperty\('--art', `url\("\.\/assets\/splash\/\$\{sight \|\| pick\(SIGHTS\)\}\.jpg"\)`\);)$/m, (m, ind, stmt) => `${ind}if (sight || SIGHTS.length) ${stmt}`, 'splash picture line');
   }
   // a generated file says so, right after the doctype
-  html = once(html, /^<!doctype html>\n/i, (m) => `${m}<!-- GENERATED by tools/gen-area-html.mjs from index.html and src/areas/${id}/page.json: do not edit (node tools/gen-area-html.mjs regenerates it; --check runs in the CI). -->\n`, 'doctype');
+  html = once(html, /^<!doctype html>\n/i, (m) => `${m}<!-- GENERATED by tools/gen-area-html.mjs from strip.html and src/areas/${id}/page.json: do not edit (node tools/gen-area-html.mjs regenerates it; --check runs in the CI). -->\n`, 'doctype');
   return html;
 }
 
@@ -134,7 +137,7 @@ export function generateFor(siteRoot, row) {
   const page = JSON.parse(fs.readFileSync(pj, 'utf8'));
   const problems = validatePage(page, { id: row.id, splashDir: path.join(siteRoot, 'assets/splash') });
   if (problems.length) throw new Error(`gen-area-html: ${path.relative(siteRoot, pj)}:\n  - ${problems.join('\n  - ')}`);
-  return generatePage(fs.readFileSync(path.join(siteRoot, 'index.html'), 'utf8'), row, page);
+  return generatePage(fs.readFileSync(path.join(siteRoot, TEMPLATE_FILE), 'utf8'), row, page);
 }
 
 /** First differing line between two texts, for the --check message. */
@@ -153,10 +156,10 @@ if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   if (only) {
     const r = REGISTRY[only];
     if (!r) { console.error(`gen-area-html: unknown area "${only}" (known: ${Object.keys(REGISTRY).join(', ')})`); process.exit(2); }
-    if (r.id === 'strip') { console.error('gen-area-html: the strip page IS index.html (the source of every generated page)'); process.exit(2); }
+    if (r.page === TEMPLATE_FILE) { console.error(`gen-area-html: the page of ${r.id} IS ${TEMPLATE_FILE} (the source of every generated page)`); process.exit(2); }
     if (r.status === 'planned' && !force) { console.error(`gen-area-html: area "${only}" is planned (its files do not exist yet); pass --force-planned to generate its page anyway`); process.exit(2); }
     rows = [r];
-  } else rows = Object.values(REGISTRY).filter((r) => r.id !== 'strip' && r.status !== 'planned');
+  } else rows = Object.values(REGISTRY).filter((r) => r.page !== TEMPLATE_FILE && r.status !== 'planned');
   if (!rows.length) { console.log('gen-area-html: no generated area page to check (every area except the strip is planned)'); process.exit(0); }
   let bad = 0;
   for (const row of rows) {
