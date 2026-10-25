@@ -41,6 +41,8 @@ import { makeDeckUnderside } from './hooks/decks.js';
 
 /** The services whose own deckY(x, z) (a podium, stairs, garden bridges) is consulted before the bridge decks by the drive handling and the pedestrian navigation (H09). An absent service is skipped. */
 const DECK_SERVICES = Object.freeze(['landmarksTauride']);
+/** the same list on a page whose module list has northBridges (the Neva bridges, ported from the source): the raised deck of the bridge is asked after the garden / podium (the two never overlap) */
+const NB_DECK_SERVICES = Object.freeze([...DECK_SERVICES, 'northBridges']);
 
 /** T7 (M7b): the landmark services of PRUNE_SERVICES whose entrances carry a facing (the door points of lib/door-points.js: landmarksNorthFull 86, landmarksOktyabrsky 9); the others (Smolny, Suvorov, Kirochnaya) publish clearing discs only. */
 const DOOR_SERVICES = Object.freeze(['landmarksNorthFull', 'landmarksOktyabrsky']);
@@ -52,7 +54,7 @@ export function makeHooks(MODULES) {
     parkingReject: makeParkingReject(MODULES),      // no ctx in planParking: gated by the module list here
     carKeepOut: makeCarKeepOut(MODULES),            // T2: the garden is closed to cars (a plain function, gated by the module list like parkingReject)
     inGarden,
-    deckServices: DECK_SERVICES,
+    deckServices: (MODULES || []).includes('northBridges') ? NB_DECK_SERVICES : DECK_SERVICES,      // northBridges (the raised Bolsheokhtinsky / Liteyny decks) joins the list only on a page that builds it
     doorServices: DOOR_SERVICES,                    // T7: the door points of the landmark modules are doors for the pedestrians (people/nav.js)
     groundHoles: makeGroundHoles(MODULES),          // T3: the environment ground is cut out under the garden's own floor (a plain function, gated by the module list like parkingReject)
     groundWayReject: makeGroundWayReject(MODULES),  // T3: the garden's ways are not painted into the ground class mask (the garden draws them)

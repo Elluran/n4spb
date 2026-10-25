@@ -17,6 +17,7 @@ import { GROUPS_LIST as G_SUVOROV } from '../../world/landmarksSuvorov/groups.js
 import { GROUPS_LIST as G_KIROCHNAYA } from '../../world/landmarksKirochnaya/groups.js';
 import { GROUPS_LIST as G_TAURIDE } from '../../world/landmarksTauride/groups.js';
 import { GROUPS_LIST as G_OKTYABRSKY, KAPODISTRIAS_GROUP } from '../../world/landmarksOktyabrsky/groups.js';
+import { GROUPS_LIST as G_NORTHBRIDGES } from '../../world/northBridges/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'smolny';
@@ -34,6 +35,7 @@ export const MODULES = [
   'landmarksSuvorov', // the Suvorov Memorial Museum on Kirochnaya (7 OSM footprints, mosaics, tower)
   'landmarksKirochnaya', // the Elena Pavlovna Clinical Institute, Kirochnaya 41: 20 OSM footprints, garden campus (lawn, service lanes, trees, fence); before streets, it claims 14 service ways
   'landmarksTauride', // the Tauride Palace and the Paradny Quarter (T1 of docs/TAURIDE-REMAKE.md), the garden (T2-T6), the nursery lot (T8b); before streets / city, it claims its sub-groups and switches the Paradny hooks on
+  'northBridges', // the Bolsheokhtinsky Bridge over the Neva (raised steel-arch deck, 7 m, published as services.northBridges.deckY: cars, walkers and the wires read it); before streets / city, it claims its 8 mapped ways (the Liteyny deck lies in Palace-Liteyny: not claimed here)
   'streets',      // roads, markings, kerbs, granite pavements, crossings, road furniture, trolleybus overhead wires
   'city',         // every OSM building that no landmark module claims: Petersburg facade grammar, roofs, courtyards, entrances
   'rail',         // Moscow Railway Station tracks, platforms, canopies, catenary, signals, trains
@@ -55,6 +57,7 @@ export const LABELS = {
   landmarksKirochnaya: 'Клинический институт на Кирочной',
   landmarksTauride: 'Таврический дворец и Парадный квартал',
   landmarksOktyabrsky: 'БКЗ «Октябрьский» и памятник Каподистрии',
+  northBridges: 'Большеохтинский мост',
 };
 
 export const NAMES = {
@@ -117,6 +120,7 @@ GROUPS.landmarksSmolny = G_SMOLNY;
 GROUPS.landmarksSuvorov = G_SUVOROV;
 GROUPS.landmarksKirochnaya = G_KIROCHNAYA;
 GROUPS.landmarksTauride = G_TAURIDE;      // T1: the Tauride Palace r3801092 and the Paradny quarter; T2: the garden (osm ids: park, woods, ways, benches, bins); T8b: the nursery
+GROUPS.northBridges = G_NORTHBRIDGES.filter((g) => g.osm.length);      // only the sub-groups with mapped ways in THIS data: 'north-bolsheokhtinsky' (8 ways at (2622, -1150)); 'north-liteyny' has none here (it lies in Palace-Liteyny)
 GROUPS.landmarksOktyabrsky = [...G_OKTYABRSKY, KAPODISTRIAS_GROUP];      // the concert hall w30324279 (797, -347) and the Kapodistrias monument n1372027612 (797, -461)
 
 /**
@@ -215,8 +219,10 @@ export function makeViews({ yawToward }) {
 
 // ---------------------------------------------------------------- WATER (environment/waterways.js)
 /**
- * The North has no bridge crossings of its quay in the play area (the Belinsky Bridge deck ends 3 m west of the west edge, the Liteyny and Bolsheokhtinsky decks are cut off by the extent), so no plugs,
- * bridge zones, shades or clip lines. The Neva runs beyond the north edge ('neva-up' = the river upstream of the Palace Bridge, the scenery ring the data does not reach).
+ * Smolninskoye has no bridge crossings of its quay that need a gap: the Belinsky Bridge deck lies in Palace-Liteyny, and the Bolsheokhtinsky deck (module northBridges) crosses the Neva 7 m above the
+ * water: its underside (5.9 m) clears the granite wall and the parapet of the Neva quay (top 1.25 m) at both banks (x 2635 and 2957), so it needs no BRIDGE_ZONES row (a non-auto row would also lay an invisible
+ * fallback deck at y 0 over the river: quay.js). The source has no row for it either (its east / north bridges got automatic zones from river.js, which this engine does not have). So no plugs, bridge zones,
+ * shades or clip lines. The Neva runs beyond the north edge ('neva-up' = the river upstream of the Palace Bridge, the scenery ring the data does not reach).
  * The far window is centred on the middle of the North's extent.
  */
 export const WATER = {

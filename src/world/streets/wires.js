@@ -49,7 +49,8 @@ export function buildWires(ctx, net, lamps, opts = {}) {
   const service = { height: H0, pairs: [], spans: [], arcs: [], masts: [], anchors: [] };
   const add = (pts, width, color, kind, grp) => { ctx.wires.add(pts, { width, color, kind, grp }); };
   const refsOf = (w) => (w.rec && w.rec.trolley) || [];
-  const tw = net.ways.filter((w) => refsOf(w).length && w.rank >= 1 && w.L > 6);
+  // a bridge way that the module northBridges draws (its raised deck, published as services.northBridges.deckY) gets no trolley wires at street height: they would hang inside the deck (the source's rule)
+  const tw = net.ways.filter((w) => refsOf(w).length && w.rank >= 1 && w.L > 6 && !(w.skipDraw && ctx.services.northBridges?.deckY(w.x[0], w.z[0]) != null));
   if (!tw.length) return { stats, service };
   for (const w of tw) prepWay(w);
 
