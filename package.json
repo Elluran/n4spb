@@ -56,6 +56,7 @@
     "bakedcheck:north": "node tools/baked-check.mjs --area north",
     "partywalls": "node tools/party-wall-test.mjs",
     "belinsky": "node tools/belinsky-test.mjs",
+    "troitsky": "node tools/area.mjs palace tools/troitsky-test.mjs",
     "wires": "node tools/wires-test.mjs",
     "paving": "node tools/street-paving-test.mjs",
     "roads": "node tools/roads.mjs",
