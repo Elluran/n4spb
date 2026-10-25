@@ -259,7 +259,10 @@ function buildGroundMesh(ctx, root, field, mat, U) {
   // ---- the mesh: a tensor-product grid; cells that touch a cut are replaced by their convex pieces (fans)
   const xs = axisFor(f.box.x0, f.box.x1), zs = axisFor(f.box.z0, f.box.z1);
   const cuts = groundCuts(), P = [], UV = [], buckets = bucketCuts(cuts, xs, zs), nx = xs.length - 1;
-  let quads = 0, clipped = 0, tris = 0;
+  let quads = 0, clipped = 0, tris = 0, capped = 0;
+  // overlapping far-scenery cuts can shatter one big far cell into tens of thousands of slivers (an out-of-memory crash seen when the water zones moved the data edge of Palace-Liteyny): past MAX_CELL_PIECES the
+  // rest of the cuts of that cell are dropped, i.e. a little far ground stays over far water
+  const MAX_CELL_PIECES = 600;
   const vert = (x, z) => { P.push(x, 0, z); UV.push(x / (FAR * 2) + 0.5, 0.5 - z / (FAR * 2)); };
   // pieces are counter-clockwise in the (x, z) plane = clockwise seen from above (+Y looking down has +Z toward the viewer): emit them reversed so the normal is +Y
   const fan = (poly) => { for (let k = 1; k + 1 < poly.length; k++) { if (Math.abs((poly[k][0] - poly[0][0]) * (poly[k + 1][1] - poly[0][1]) - (poly[k + 1][0] - poly[0][0]) * (poly[k][1] - poly[0][1])) < 1e-3) continue; vert(poly[0][0], poly[0][1]); vert(poly[k + 1][0], poly[k + 1][1]); vert(poly[k][0], poly[k][1]); tris++; } };
@@ -292,7 +295,7 @@ function buildGroundMesh(ctx, root, field, mat, U) {
       const xa = xs[i], xb = xs[i + 1], za = zs[j], zb = zs[j + 1];
       let pieces = [[[xa, za], [xb, za], [xb, zb], [xa, zb]]];
       const here = buckets.get(j * nx + i);
-      if (here) { for (const c of here) { if (cellInside(c.poly, xa, xb, za, zb)) { pieces = []; break; } pieces = subtractConvex(pieces, c.poly); if (!pieces.length) break; } clipped++; } else quads++;
+      if (here) { for (const c of here) { if (cellInside(c.poly, xa, xb, za, zb)) { pieces = []; break; } pieces = subtractConvex(pieces, c.poly); if (pieces.length > MAX_CELL_PIECES) { capped++; break; } if (!pieces.length) break; } clipped++; } else quads++;
       for (const pc of pieces) fan(pc);
     }
   }
@@ -314,5 +317,5 @@ function buildGroundMesh(ctx, root, field, mat, U) {
   // Far super-cells (plan 2026-10-15 item 1b; core/spatial.js superCells): 3 x 3 pieces become one draw once the camera is 1.5 km (x the quality scale) outside them.
   // Same material, triangles, UVs and normals; near the player the 640 m pieces draw as before. ?supercells=0 = none.
   const superN = superCells(group.children.filter(m => m.isMesh), 1920, 1500, m => { m.receiveShadow = true; m.castShadow = false; ctx.noOutline(m); });
-  return { mesh: group, superCells: superN, uniforms: U, cells: quads + clipped, clipped, triangles: tris, blocks, chunks: chunks.length };
+  return { mesh: group, superCells: superN, uniforms: U, cells: quads + clipped, clipped, triangles: tris, blocks, chunks: chunks.length, capped };
 }

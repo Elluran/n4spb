@@ -66,7 +66,7 @@ export async function build(ctx) {
   const env = { groundAt: L.heightAt, trees: [], green: [], quay: { water: L.RIVER_Y.water, segments: [] }, free: () => true, kindAt: () => 'asphalt', shoreDist: L.shoreDist, waterAt: (x, z) => L.inRiver(x, z) };
   ctx.services.environment = env; _env = env; env.treesInRect = treesInRect;
   const DBG = typeof process !== 'undefined' && process.env && process.env.ENV_DEBUG, timing = {};
-  const step = async (name, fn) => { const t0 = Date.now(); try { return await fn(); } catch (e) { console.error('[environment] ' + name + ' failed:', e); if(ctx.recordBake)throw e;return null; } finally { timing[name] = Date.now() - t0; } };
+  const step = async (name, fn) => { const t0 = Date.now(); if (DBG) console.log('[environment] step', name); try { return await fn(); } catch (e) { console.error('[environment] ' + name + ' failed:', e); if(ctx.recordBake)throw e;return null; } finally { timing[name] = Date.now() - t0; } };
 
   await step('road-plan', () => roadPlan(ctx));
   const field = await step('field', async () => {

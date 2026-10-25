@@ -557,7 +557,7 @@ export const WATER = {
   plugs: PLUGS,
   bridgeZones: BRIDGE_ZONES,
   bridgeShades: BRIDGE_SHADES,
-  clipLines: [],
+  clipLines: [['x', -2670]],            // the seam of the removed S rectangles of the whole-city project: the clipped data holds the Griboedov Canal polygon pieces 5:1 / 5:2 that meet at it (a clip line of the full city, not a bank); inside this area since the water zones moved the west edge of the data to x -2840
   farSources: ['neva-up', 'neva-down', 'neva-malaya'],
   farCenter: [-900, -900],              // the middle of the area (the Neva scenery rings are real positions: the window only says how far the far ring reaches)
   farRadius: 6000,                      // the radius of the far scenery
