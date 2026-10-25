@@ -36,7 +36,7 @@ import { treeCleared, treeReject, tuftReject, propReject, pedestrianOnly, makePa
 import { makeHeightPatches as terrainPatches } from './hooks/height.js';
 import { inGarden } from './hooks/people.js';
 import { makeGroundHoles, makeGroundWayReject } from './hooks/ground.js';
-import { makeWaterBodies, makeNoLanding, makeDuckPonds } from './hooks/water.js';
+import { makeWaterBodies, makeDuckPonds } from './hooks/water.js';
 import { makeDeckUnderside } from './hooks/decks.js';
 
 /** The services whose own deckY(x, z) (a podium, stairs, garden bridges) is consulted before the bridge decks by the drive handling and the pedestrian navigation (H09). An absent service is skipped. */
@@ -62,7 +62,6 @@ export function makeHooks(MODULES) {
     groundHoles: makeGroundHoles(MODULES),          // T3: the environment ground is cut out under the garden's own floor (a plain function, gated by the module list like parkingReject)
     groundWayReject: makeGroundWayReject(MODULES),  // T3: the garden's ways are not painted into the ground class mask (the garden draws them)
     waterBodies: makeWaterBodies(MODULES),          // T4a: the garden's ponds enter the field's water mask (env.waterAt, shoreDist, the water shader's distance atlas)
-    noLanding: makeNoLanding(MODULES),              // T4a fix 1: a flight landing on the ponds is refused as 'water' (core/player.js landingBlocked; main.js hands it to the Player)
     duckPonds: makeDuckPonds(MODULES),              // T4b: duck lanes on the garden's ponds (wildlife/ducks.js)
     deckUnderside: makeDeckUnderside(MODULES),      // T8a: the flat decks of the garden's buildings also get an underside (city/roofs.js addDeck): no sky through a low roof seen from below
   };

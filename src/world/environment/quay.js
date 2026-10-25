@@ -40,6 +40,7 @@ import { pointInRing, distToRing, hash2 } from './util.js';
 import { pierRects } from './boats.js';
 import { BANK_INDEX } from './bank-index.js';
 import { lionGeometry } from './lions.js';
+import { knockBays, faceLeft, unitBox, unitProfile } from '../lib/fence-bays.js';
 const L2 = L;
 
 export const WATER_Y = L.RIVER_Y.water;
@@ -448,11 +449,14 @@ export function buildQuay(ctx, root) {
   const face = {}, faceDeck = {}, coping = {}, parapet = new MeshBuilder(), granite = new MeshBuilder(), graniteA = new MeshBuilder(), graniteB = new MeshBuilder(), graniteR = new MeshBuilder(), graniteP = new MeshBuilder(), descents = [], lionSpots = [];
   const keys = Object.keys(WATERWAYS);
   const grass = new MeshBuilder(), capB = new MeshBuilder(), slopeInfo = [];
-  const addBarrier = (cx, cz, len, tx, tz) => { ctx.physics.addBox(cx, cz, len, 0.5, Math.atan2(-tz, tx), -8, 1.25); return 1; };      // the slope-top barrier: one box along the piece
   for (const k of keys) { face[k] = new MeshBuilder(); faceDeck[k] = new MeshBuilder(); coping[k] = new MeshBuilder(); }
-  const posts = {}, panels = {}, rings = [], signs = [], culverts = [], tubes = [], btubes = [], corbels = [];
-  const postList = (style) => posts[style] || (posts[style] = []);
-  const panelList = (kind) => panels[kind] || (panels[kind] = []);
+  const rings = [], signs = [], culverts = [], corbels = [];
+  // THE BREAKABLE FENCE (docs/AREAS.md 13.7, the world rule "water is reachable"): every post, panel and tube of a railing, every section of the Neva parapet and every cheek wall of a descent is a BAY of lib/fence-bays.js: its own
+  // thin collider + its instances + one knock record (a car above the break speed breaks the bay off, the gap is passable). A railing bay is the span between two posts and the post at its end (a post that no span ends at stands alone
+  // as a one-post bay). Where no fence is drawn there is no collider: the quay edge is open (a walker steps off it, a car drives off it).
+  const bays = [], parapetBays = [], cheekBays = [], pierBays = [], postPts = [];
+  const addBay = (b) => { bays.push(b); postPts.push([b.x1, b.z1]); return b; };
+  const postTone = (kind, key, t, x, z) => new THREE.Color((POST_TONES[kind] || POST_TONES[key] || POST_TONES.griboedov)(t)).multiplyScalar(0.92 + 0.14 * hash2(Math.round(x * 3), Math.round(z * 3), 9));
   // the Palace Bridge deck rectangle (bridges/palace.js frame: cx -2339.5, cz -875, bearing 323.5, u 0..254.5, half width ~14.2): the OSM water-polygon seam runs along the abutment line (u ~ 1.5)
   // across the whole deck, so the zone gap (a rectangle centred beside the deck) misses it: whatever piece has its midpoint inside the deck is a gap too
   const PAL = { cx: -2339.5, cz: -875.0, T: (323.5 - 90) * Math.PI / 180, hw: 14.5, u0: -1, u1: 255.5 };
@@ -507,21 +511,29 @@ export function buildQuay(ctx, root) {
     const bx = (u0, u1, v0, v1, y0, y1, B) => { const uc = (u0 + u1) / 2, vc = (v0 + v1) / 2; box(B, p0.x + t[0] * uc - n[0] * vc, p0.z + t[1] * uc - n[1] * vc, t[0], t[1], n[0], n[1], (u1 - u0) / 2, (v1 - v0) / 2, y0, y1, 2); };
     const P = (u, v) => [p0.x + t[0] * u - n[0] * v, p0.z + t[1] * u - n[1] * v];
     const top = DS.topY, gA = DS.gateA, gB = DS.gateB, lowY = wl + 0.22, uL = gB + flight, uE = uL + DS.low;
+    /** a breakable cheek bay along the descent from u0 to u1 at v (out from the wall face), th thick, from y to y + h */
+    const cheek = (u0, u1, v, th, y, h) => { const a = P(u0, v), b = P(u1, v); cheekBays.push({ x0: a[0], z0: a[1], x1: b[0], z1: b[1], y, h, th, key }); };
     bx(-gA, gB, -0.05, Wd, YBk, top, graniteA);                              // the top landing, flush with the pavement
-    bx(-gA, gB, Wd - 0.3, Wd, top, 0.98, graniteR);                          // its outer parapet
-    bx(-gA, -gA + 0.4, -0.05, Wd, top, 1.04, graniteR);                      // the back cheek
+    if (play) cheek(-gA, gB, Wd - 0.15, 0.3, top, 0.98 - top);               // its outer parapet: a breakable bay (a descent outside the play area keeps the drawn block)
+    else bx(-gA, gB, Wd - 0.3, Wd, top, 0.98, graniteR);
+    if (play) { const a = P(-gA + 0.2, -0.05), b = P(-gA + 0.2, Wd); cheekBays.push({ x0: a[0], z0: a[1], x1: b[0], z1: b[1], y: top, h: 1.04 - top, th: 0.4, key }); }      // the back cheek (a breakable bay across the gate side)
+    else bx(-gA, -gA + 0.4, -0.05, Wd, top, 1.04, graniteR);
     if (key === 'neva') { for (const [a0, a1] of [[-gA, -gA + 0.55], [gB - 0.55, gB]]) { bx(a0, a1, -1.0, -0.02, 0, 1.12, graniteR); bx(a0 - (a0 < 0 ? 0.04 : -0.04) * 0, a1, -1.04, 0.02, 1.12, 1.22, graniteR); } }      // the cut ends of the parapet roll
     else {                                                                   // an end post of the railing on each side of the gate (unless the regular rhythm has one there already)
       for (const u of [-gA - 0.3, gB + 0.3]) {
         const [x, z] = P(u, -0.26);
-        let near = false; for (const list of Object.values(posts)) for (const q of list) if (Math.hypot(q.x - x, q.z - z) < 1.0) near = true;
-        if (!near && POST[key] && !onRoad(x, z)) postList(POST[key]).push({ x, z, yaw: Math.atan2(-t[1], t[0]), tone: hash2(Math.round(x), Math.round(z), 5), nx: n[0], nz: n[1], key });
+        let near = false; for (const q of postPts) if (Math.hypot(q[0] - x, q[1] - z) < 1.0) near = true;
+        if (!near && POST[key] && !onRoad(x, z)) addBay({ x0: x, z0: z, x1: x + t[0] * 0.001, z1: z + t[1] * 0.001, nx: n[0], nz: n[1], key, y: Y_TOP, post: { kind: POST[key], col: postTone(POST[key], key, hash2(Math.round(x), Math.round(z), 5), x, z), y: Y_TOP - 0.03 }, stub: true });      // (a one-post bay: the yaw of the post follows the wall)
       }
     }
     for (let k = 0; k < N; k++) {                                            // the flight: tread blocks (alternating tone) with the stepped cheek wall on the water side
       const u0 = gB + k * DS.run, ty = top - rise * (k + 1);
       bx(u0, u0 + DS.run, -0.05, Wd, YBk, ty, k % 2 ? graniteB : graniteA);
-      bx(u0, u0 + DS.run, Wd - 0.28, Wd, ty, ty + 0.9, graniteR);
+      if (!play) bx(u0, u0 + DS.run, Wd - 0.28, Wd, ty, ty + 0.9, graniteR);
+    }
+    if (play) for (let k = 0; k < N; k += 4) {                                // the cheek wall of the flight, one breakable bay per four steps (its top = 0.9 m over the highest tread of the group)
+      const k1 = Math.min(N - 1, k + 3), tyHi = top - rise * (k + 1), tyLo = top - rise * (k1 + 1);
+      cheek(gB + k * DS.run, gB + (k1 + 1) * DS.run, Wd - 0.14, 0.28, tyLo, tyHi + 0.9 - tyLo);
     }
     bx(uL, uE, -0.05, Wd, YBk, lowY, graniteA);                              // the lower landing
     bx(uE, uE + 0.4, -0.05, Wd, YBk, wl - 0.02, graniteB);                   // the apron step (just under the water line)
@@ -582,25 +594,23 @@ export function buildQuay(ctx, root) {
       return;
     }
   }
-  /** the solid barriers that make a descent safe (water side, back, end) and, with a pier, its deck + railings: nobody can step off into the trench */
+  /** the barriers of a descent and the deck of its pier. WATER IS REACHABLE (docs/AREAS.md 13.7): the invisible walls of before (the water side of the whole descent, the end of the lower landing, the far end and the wall side of a pier)
+   *  are gone: the lower landing and the pier end are OPEN to the water. What stands is drawn and breakable: the cheek bays of buildDescent (the outer parapet and the stepped wall of the flight), the back cheek (a wall,
+   *  not facing the water) is a breakable bay too, and a pier's white railing along the water side (pierBays: a rail of two tubes and posts per 2.4 m bay, built with the other bays below). */
   function finishDescent(d) {
     if (!d.play) return;
-    const { p0, t, n, Wd, wl, rot } = d, uE = d.end, gA = DS.gateA;
+    const { p0, t, n, Wd, wl, rot } = d, gA = DS.gateA;
     const P = (u, v) => [p0.x + t[0] * u - n[0] * v, p0.z + t[1] * u - n[1] * v];
     const box2 = (u0, u1, v0, v1, y1, y0 = -9) => { const c = P((u0 + u1) / 2, (v0 + v1) / 2); ctx.physics.addBox(c[0], c[1], u1 - u0, v1 - v0, rot, y0, y1); info.colliders++; };
     const pr = d.pier;
-    box2(-gA - 0.25, pr ? uE : uE + 0.3, Wd, Wd + 0.3, 1.5);                                  // outer edge
-    box2(-gA - 0.25, -gA + 0.05, 0, Wd + 0.3, 1.5);                                            // back
-    if (!pr) { box2(uE, uE + 0.3, -0.05, Wd + 0.3, 1.5); return; }                             // end of the lower landing
-    const top = pr.y, U0 = pr.u0, U1 = pr.u0 + pr.len, V0 = pr.v0, V1 = pr.v0 + pr.wid, hy = top + 1.3;
-    const c = P((U0 + U1) / 2, (V0 + V1) / 2); ctx.physics.addWalkBox(c[0], c[1], pr.len, pr.wid, rot, top, -8); info.colliders++;
-    box2(U0 - 0.2, U1 + 0.2, V1, V1 + 0.25, hy);                                               // railing on the water side
-    box2(U1, U1 + 0.25, V0 - 0.2, V1 + 0.25, hy);                                              // far end
-    box2(U0 - 0.2, U1 + 0.2, V0 - 0.25, V0, hy);                                               // wall side (the 0.4 m gap)
-    const gate0 = Math.max(V0, 0.35), gate1 = Math.min(Wd - 0.15, V1);                         // the opening toward the landing: v in [gate0, gate1]
-    if (V1 > gate1 + 0.05) box2(U0 - 0.25, U0, gate1, V1 + 0.25, hy);
-    if (gate0 > V0 + 0.05) box2(U0 - 0.25, U0, V0 - 0.25, gate0, hy);
-    d.pierGate = [gate0, gate1];
+    if (!pr) return;
+    const top = pr.y, U0 = pr.u0, U1 = pr.u0 + pr.len, V1 = pr.v0 + pr.wid;
+    const c = P((U0 + U1) / 2, (pr.v0 + V1) / 2); ctx.physics.addWalkBox(c[0], c[1], pr.len, pr.wid, rot, top, -8); info.colliders++;
+    const nb = Math.max(1, Math.round((pr.len - 0.2) / 2.4));                                  // the railing along the water side, from end to end of the deck
+    for (let i = 0; i < nb; i++) {
+      const a = P(U0 + 0.1 + (pr.len - 0.2) * i / nb, V1 - 0.08), b = P(U0 + 0.1 + (pr.len - 0.2) * (i + 1) / nb, V1 - 0.08);
+      pierBays.push({ x0: a[0], z0: a[1], x1: b[0], z1: b[1], y: top, key: d.key, last: i === nb - 1 });
+    }
   }
   const banks = [...waterBanks(), ...farBanks()];
   banks.forEach((bank, bi) => {
@@ -757,7 +767,12 @@ export function buildQuay(ctx, root) {
       sweep(coping[key], [[0, COP_BOT], [-COP_OUT, COP_BOT], [-COP_OUT, Y_TOP], [COP_IN, Y_TOP]], (i) => segGap[i] || segRoad[i], 0, flat);
     } else if (key === 'neva') {
       sweep(coping[key], [[0, COP_BOT], [-0.13, COP_BOT], [-0.16, -0.22], [-0.12, -0.08], [0, 0.0]], (i) => segGap[i] || segIn[i], 0, flat);                 // the rolled string course
-      sweep(parapet, PARAPET_ROLL, (i) => segGap[i] || segIn[i], 0, (y) => Math.max(0, y) / 1.04 * 0.99, 2.2);
+      sweep(parapet, PARAPET_ROLL, (i) => segGap[i] || segIn[i] || (!bank.far && segPlay[i]), 0, (y) => Math.max(0, y) / 1.04 * 0.99, 2.2);      // (the pieces within reach of the player are breakable sections of 2.2 m, parapetBays below)
+      for (let i = 0; i + 1 < fr.length; i++) {
+        if (segGap[i] || segIn[i] || bank.far || !segPlay[i]) continue;
+        const a = fr[i], sg = seg[i], nb = Math.max(1, Math.round(sg.len / 2.2));
+        for (let j = 0; j < nb; j++) parapetBays.push(faceLeft(a.x + sg.tx * sg.len * j / nb, a.z + sg.tz * sg.len * j / nb, a.x + sg.tx * sg.len * (j + 1) / nb, a.z + sg.tz * sg.len * (j + 1) / nb, sg.nx, sg.nz, { y: Y_TOP, nx: sg.nx, nz: sg.nz, key }));
+      }
       sweep(coping[key], [[0.88, Y_TOP], [1.4, Y_TOP]], (i) => segGap[i] || segIn[i] || segRoad[i], 0, flat);                // the granite kerb strip (not under a carriageway) behind the parapet
     } else {
       sweep(coping[key], [[0, COP_BOT], [-0.14, COP_BOT], [-0.17, -0.24], [-0.15, -0.08], [-0.07, 0.08], [0.05, 0.16], [0.2, Y_TOP], [COP_IN, Y_TOP]], (i) => segGap[i] || segRoad[i], 0, flat);
@@ -765,31 +780,15 @@ export function buildQuay(ctx, root) {
     sweep(coping[key], [[0, COP_BOT], [-COP_OUT, COP_BOT], [-COP_OUT, 0.0]], (i) => key === 'neva' || segGap[i] || !segRoad[i], 0, flat);                 // under a carriageway the wall top is flush: only its water-side lip
     info.deckPieces += segDeck.filter(Boolean).length;
 
-    // ---- colliders + published segments (everything except the bridge gaps); Neva scenery beyond the data has none
+    // ---- the published segments (everything except the bridge gaps). The old thin wall box along every piece (and the invisible barrier on every slope top) is GONE: water is reachable, only a drawn fence stands, and a drawn
+    // fence is a breakable bay with its own collider (the posts + panels below, the parapet sections of the Neva, the rails of the slope tops). A carriageway on the wall line, a gap, a gate, a stretch without a railing is OPEN.
     for (let i = 0; i + 1 < fr.length; i++) {
-      if (segSlope[i] && !segDeck[i] && !bank.far) {                                          // grass slope: the barrier stands on the slope top (the rail line), nobody can reach the slope or the water
-        const a = fr[i], b = fr[i + 1], sg = seg[i], rr = segSlope[i].run, cx = (a.x + b.x) / 2 + sg.nx * (rr + 0.2), cz = (a.z + b.z) / 2 + sg.nz * (rr + 0.2);
-        if (segPlay[i] && !onRoad(cx, cz, 0.3)) { info.colliders += addBarrier(cx, cz, sg.len + 0.5, sg.tx, sg.tz); }
-        if (segNear[i]) info.segments.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, nx: sg.nx, nz: sg.nz, bank: bank.name, key, slope: rr });
+      const a = fr[i], b = fr[i + 1], sg = seg[i];
+      if (segSlope[i] && !segDeck[i] && !bank.far) {
+        if (segNear[i]) info.segments.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, nx: sg.nx, nz: sg.nz, bank: bank.name, key, slope: segSlope[i].run });
         continue;
       }
-      if (segDeck[i] || !segPlay[i] || segKind[i] === 1 || bank.far) continue;                 // the scenery banks of the Neva are straight approximations: never a collider
-      const a = fr[i], b = fr[i + 1], sg = seg[i];
-      // a thin wall box (0.4 m landward of the wall line to 0.05 m beyond it): the descents, piers and landings in front of the wall stay free; y up to 1.25 keeps jumpers out
-      let cx = (a.x + b.x) / 2 + sg.nx * 0.175, cz = (a.z + b.z) / 2 + sg.nz * 0.175;
-      // a carriageway that runs over the wall line (the OSM centreline lies on the coping): the invisible wall would stand in the middle of a lane, so it moves out to the water-side edge of the asphalt
-      // (the wall is still there for anybody who leaves the road; nothing stands on it); where the road crosses the wall line instead (bridge approach), the piece is left out
-      const clash = (dd) => [0, 0.5, 1].some((f) => { const px = a.x + (b.x - a.x) * f + sg.nx * (0.4 - dd), pz = a.z + (b.z - a.z) * f + sg.nz * (0.4 - dd); return onRoad(px, pz, dd > 0 ? 0.4 : 0.05); });
-      let box = true;
-      if (clash(0)) {
-        let moved = false;
-        for (let dd = 0.3; dd <= 5; dd += 0.3) if (!clash(dd)) { cx -= sg.nx * dd; cz -= sg.nz * dd; moved = true; break; }
-        if (!moved) box = false;                      // the road crosses the wall line (a bridge approach without a deck zone): the wall must not close its mouth (sub-piece walls beside the asphalt blocked the pavements of the Panteleymonovsky Bridge: removed; the Troitsky zone is wide enough instead)
-      }
-      if (box) {                                                              // the +0.5 m overlap of neighbouring boxes stops at a bridge gap (a box end must not reach into a deck)
-        const e0 = i > 0 && segDeck[i - 1] ? 0 : 0.25, e1 = i + 1 < seg.length && segDeck[i + 1] ? 0 : 0.25, sh = (e1 - e0) / 2;
-        ctx.physics.addBox(cx + sg.tx * sh, cz + sg.tz * sh, sg.len + e0 + e1, 0.45, Math.atan2(-sg.tz, sg.tx), -8, 1.25); info.colliders++;
-      }
+      if (segDeck[i] || !segPlay[i] || segKind[i] === 1 || bank.far) continue;                 // the scenery banks of the Neva are straight approximations
       if (segNear[i]) info.segments.push({ ax: a.x, az: a.z, bx: b.x, bz: b.z, nx: sg.nx, nz: sg.nz, bank: bank.name, key });
     }
 
@@ -803,14 +802,14 @@ export function buildQuay(ctx, root) {
         const px = x + nx * 0.26, pz = z + nz * 0.26, minGap = style === 'tube' ? 1.2 : 1.6;
         if (prevPost && Math.hypot(prevPost.x - px, prevPost.z - pz) < minGap) return;
         const postKind = style === 'tube' ? 'tube' : style === 'arcade' ? 'bigpost' : style === 'moika' ? 'moika' : (POST[key] || 'bigpost');
-        const rec = { x: px, z: pz, yaw: Math.atan2(-tz, tx), tone: hash2(Math.round(x), Math.round(z), 5), nx, nz };
-        postList(postKind).push({ ...rec, key });
+        const post = { kind: postKind, col: postTone(postKind, key, hash2(Math.round(x), Math.round(z), 5), x, z), y: Y_TOP - 0.03 };
         if (key === 'winter-canal') corbels.push({ x: x - nx * 0.0 + nx * 0.0, z, nx, nz, yaw: Math.atan2(nx, nz), px: x + nx * 0.0, pz: z });
-        if (prevPost && Math.hypot(prevPost.x - px, prevPost.z - pz) < 4.8) {
-          const dx = px - prevPost.x, dz = pz - prevPost.z, l = Math.hypot(dx, dz);
-          if (onRoad((px + prevPost.x) / 2, (pz + prevPost.z) / 2)) { /* the span crosses a carriageway: no panel */ } else if (style === 'tube') tubes.push({ x: (px + prevPost.x) / 2, z: (pz + prevPost.z) / 2, len: l, yaw: Math.atan2(-dz, dx) });
-          else if (!onRoad((px + prevPost.x) / 2, (pz + prevPost.z) / 2)) panelList(style).push({ x: (px + prevPost.x) / 2, z: (pz + prevPost.z) / 2, len: Math.max(0.5, l - 0.3), yaw: Math.atan2(-dz, dx), h: RAIL_H[style] });
+        let spanned = false;
+        if (prevPost && Math.hypot(prevPost.x - px, prevPost.z - pz) < 4.8 && !onRoad((px + prevPost.x) / 2, (pz + prevPost.z) / 2)) {      // a span over a carriageway has no railing: the post stands alone
+          addBay({ x0: prevPost.x, z0: prevPost.z, x1: px, z1: pz, nx, nz, key, y: Y_TOP, post, panel: style === 'tube' ? null : style, h: RAIL_H[style], tube: style === 'tube' });
+          spanned = true;
         }
+        if (!spanned) addBay({ x0: px, z0: pz, x1: px + tx * 0.001, z1: pz + tz * 0.001, nx, nz, key, y: Y_TOP, post, stub: true });      // (a one-post bay: the post is turned with the wall)
         prevPost = { x: px, z: pz }; prevStyle = style;
       };
       const bay0 = W.bay;
@@ -830,12 +829,9 @@ export function buildQuay(ctx, root) {
       for (let j = 0; j <= n; j++) {
         const p = at(fr, seg, r.s0 + 0.5 + j * step), x = p.x + p.nx * off, z = p.z + p.nz * off;
         if (!isNear(x, z) || gapAt(key, x, z) || onRoad(x, z, 0.3)) { prev = null; continue; }
-        postList(kind).push({ x, z, yaw: Math.atan2(-p.tz, p.tx), tone: hash2(Math.round(x), Math.round(z), 5), nx: p.nx, nz: p.nz, key, y0: 0.0 });
-        if (prev) {
-          const dx = x - prev.x, dz = z - prev.z, l = Math.hypot(dx, dz), yaw = Math.atan2(-dz, dx), mx = (x + prev.x) / 2, mz = (z + prev.z) / 2;
-          if (kind === 'trellis') panelList('trellis').push({ x: mx, z: mz, len: l, yaw, h: RAIL_H.trellis, y0: 0.02 });
-          else for (const [yy, rr] of [[0.5, 0.024], [0.86, 0.026]]) btubes.push({ x: mx, z: mz, len: l, yaw, y: yy, r: rr });
-        }
+        const post = { kind, col: postTone(kind, key, hash2(Math.round(x), Math.round(z), 5), x, z), y: 0.0 };
+        if (prev) addBay({ x0: prev.x, z0: prev.z, x1: x, z1: z, nx: p.nx, nz: p.nz, key, y: 0, post, panel: kind === 'trellis' ? 'trellis' : null, h: RAIL_H.trellis, pany: 0.02, btubes: kind !== 'trellis', slope: true });
+        else addBay({ x0: x, z0: z, x1: x + p.tx * 0.001, z1: z + p.tz * 0.001, nx: p.nx, nz: p.nz, key, y: 0, post, stub: true, slope: true });
         prev = { x, z };
       }
     }
@@ -899,7 +895,7 @@ export function buildQuay(ctx, root) {
     const a = zn.axis * Math.PI / 180;
     const ux = Math.sin(a), uz = -Math.cos(a), ang = Math.atan2(-uz, ux), L0 = zn.len + 28;
     ctx.physics.addWalkBox(zn.c[0], zn.c[1], Math.min(L0, zn.site ? 62 : L0), zn.w, ang, 0.0, -1.2);
-    for (const sgn of [-1, 1]) ctx.physics.addBox(zn.c[0] + (-uz) * sgn * (zn.w / 2 + 0.25), zn.c[1] + ux * sgn * (zn.w / 2 + 0.25), zn.len + 6, 0.5, ang, -2, 1.3);
+    // (the two invisible parapet boxes of the fallback deck are gone: an invisible fence cannot be broken, and water is reachable. The deck is a floor, its edges are open.)
     info.fallbackDecks++;
   }
 
@@ -923,41 +919,52 @@ export function buildQuay(ctx, root) {
 
   const m4 = new T.Matrix4(), qt = new T.Quaternion(), pos = new T.Vector3(), sc = new T.Vector3(), up = new T.Vector3(0, 1, 0), col = new T.Color();
   const matBuf = (n) => new Float32Array(n * 16);
-  for (const kind of Object.keys(posts)) {
-    const list = posts[kind]; if (!list.length) continue;
-    const M = matBuf(list.length), CC = new Float32Array(list.length * 3);
-    list.forEach((p, i) => {
-      qt.setFromAxisAngle(up, p.yaw); m4.compose(pos.set(p.x, p.y0 ?? (Y_TOP - 0.03), p.z), qt, sc.set(1, 1, 1)); m4.toArray(M, i * 16);
-      const tone = POST_TONES[kind] || POST_TONES[p.key] || POST_TONES.griboedov;
-      col.set(tone(p.tone)).multiplyScalar(0.92 + 0.14 * hash2(i, 3, 9)); CC[i * 3] = col.r; CC[i * 3 + 1] = col.g; CC[i * 3 + 2] = col.b;
-    });
-    culledInstances(ctx, T, root, postGeometry(kind), ctx.mat.toon('#ffffff', { paint: 0.05, name: 'env-quay-posts-' + kind }), M, CC, 420, 'env-quay-posts-' + kind, { receiveShadow: true });
-    info.posts += list.length;
-  }
   if (corbels.length) {
     const M = matBuf(corbels.length);
     corbels.forEach((c, i) => { qt.setFromAxisAngle(up, Math.atan2(-c.nx, -c.nz)); m4.compose(pos.set(c.x - c.nx * 0.02, COP_BOT + 0.02, c.z - c.nz * 0.02), qt, sc.set(1, 1, 1)); m4.toArray(M, i * 16); });
     culledInstances(ctx, T, root, corbelGeometry(), ctx.mat.toon('#a89590', { paint: 0.05, name: 'env-quay-corbels', side: 'double' }), M, null, 300, 'env-quay-corbels');
   }
-  for (const kind of Object.keys(panels)) {
-    const list = panels[kind]; if (!list.length) continue;
-    const mat = ctx.mat.toon('#ffffff', { map: railTexture(ctx, kind), alphaTest: 0.5, side: 'double', paint: 0.02, name: 'env-quay-rail-' + kind });
-    const M = matBuf(list.length);
-    list.forEach((p, i) => { qt.setFromAxisAngle(up, p.yaw); m4.compose(pos.set(p.x, p.y0 ?? (Y_TOP + 0.12), p.z), qt, sc.set(p.len, p.h, 1)); m4.toArray(M, i * 16); });
-    culledInstances(ctx, T, root, new T.PlaneGeometry(1, 1).translate(0, 0.5, 0), mat, M, null, 520, 'env-quay-rails-' + kind, { noOutline: true });
-    info.panels += list.length;
+  // ---- THE BREAKABLE FENCES (lib/fence-bays.js, docs/AREAS.md 13.7): the railing bays (post + panel / tubes), the sections of the Neva parapet, the cheek walls of the descents, the pier railings. One knockInstances call per family:
+  // per 384 m cell and per part a dynamic InstancedMesh (LOD 380 .. 520 m), one knock record per bay (anchored: it holds a bump, a car above the break speed breaks it off at the foot), one thin collider per bay (flagged `fence`).
+  const heavyPost = new Set(['pyramid', 'twostep', 'tube', 'moika', 'pylon', 'bigpost']);
+  const dirOf = (b, fr) => b.nx * -fr.tz + b.nz * fr.tx;                                       // +1 when the landward normal is the local +z of the bay, else -1
+  const fenceStats = { bays: 0, parapet: 0, cheeks: 0, pier: 0 };
+  if (bays.length) {
+    const postKinds = [...new Set(bays.map((b) => b.post.kind))], panelKinds = [...new Set(bays.filter((b) => b.panel).map((b) => b.panel))];
+    const tubeGeo = new T.CylinderGeometry(0.04, 0.04, 1, 6, 1).rotateZ(Math.PI / 2).translate(0.5, 0, 0), panelGeo = new T.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
+    const parts = [];
+    for (const kind of postKinds) parts.push({ geo: postGeometry(kind), mat: ctx.mat.toon('#ffffff', { paint: 0.05, name: 'env-quay-posts-' + kind }), name: 'post-' + kind, receive: true, at: 'end', y: (b) => b.post.y - b.y, far: 420, when: (b) => b.post.kind === kind, color: (b) => b.post.col });
+    for (const kind of panelKinds) parts.push({ geo: panelGeo, mat: ctx.mat.toon('#ffffff', { map: railTexture(ctx, kind), alphaTest: 0.5, side: 'double', paint: 0.02, name: 'env-quay-rail-' + kind }), name: 'rail-' + kind, noOutline: true, far: 520, stretch: true, inset: 0.15, y: (b) => (b.pany ?? Y_TOP + 0.12) - b.y, sy: (b) => b.h, when: (b) => b.panel === kind });
+    parts.push({ geo: tubeGeo, mat: ctx.mat.toon('#7d848a', { paint: 0.02, name: 'env-quay-tubes' }), name: 'tube', far: 380, stretch: true, y: 0.93, when: (b) => b.tube });
+    for (const [yy, rr] of [[0.5, 0.024], [0.86, 0.026]]) parts.push({ geo: tubeGeo, mat: ctx.mat.toon('#24282c', { paint: 0.02, name: 'env-quay-btubes' }), name: 'btube-' + yy, far: 380, stretch: true, y: yy, sy: rr / 0.04, sz: rr / 0.04, when: (b) => b.btubes });
+    const r = knockBays(ctx, { name: 'env-quay-fence', bays, parts, far: 520,
+      collider: (b, fr) => (b.stub ? { y0: -8, y1: 1.25, thick: 0.5, e0: 0.25, e1: 0.25 } : { y0: -8, y1: 1.25, thick: b.slope ? 0.5 : 0.45, off: -(b.slope ? 0.1 : 0.085) * dirOf(b, fr), e0: 0.05, e1: 0.05 }),      // (the wall box of before: 0.4 m landward of the wall line .. 0.05 m beyond; y up to 1.25 keeps jumpers out)
+      rec: (b) => { const heavy = heavyPost.has(b.post.kind); return { kind: 'fence', mass: heavy ? 450 : 70, h: b.h ?? 1.0, r: 0.05, anchored: heavy ? 20 : 10, hitK: heavy ? 0.55 : 0.22, metal: !heavy, minDv: 0 }; } });
+    fenceStats.bays = bays.length; info.posts = bays.length; info.panels = bays.filter((b) => b.panel).length; info.tubes = bays.filter((b) => b.tube || b.btubes).length; info.colliders += r.items.filter(Boolean).length;
   }
-  if (tubes.length) {
-    const M = matBuf(tubes.length);
-    tubes.forEach((p, i) => { qt.setFromAxisAngle(up, p.yaw); m4.compose(pos.set(p.x, Y_TOP + 0.93, p.z), qt, sc.set(p.len, 1, 1)); m4.toArray(M, i * 16); });
-    culledInstances(ctx, T, root, new T.CylinderGeometry(0.04, 0.04, 1, 6, 1).rotateZ(Math.PI / 2), ctx.mat.toon('#7d848a', { paint: 0.02, name: 'env-quay-tubes' }), M, null, 380, 'env-quay-tubes');
-    info.tubes = tubes.length;
+  if (parapetBays.length) {
+    const roll = unitProfile(PARAPET_ROLL, { uLen: 2.2, uvs: 2.2, vFn: (y) => Math.max(0, y) / 1.04 * 0.99 });
+    const r = knockBays(ctx, { name: 'env-quay-parapet-bays', bays: parapetBays, far: 520,
+      parts: [{ geo: roll, mat: ctx.mat.toon('#ffffff', { map: parapetTexture(ctx), paint: 0.04, name: 'env-quay-parapet-bays' }), name: 'roll', receive: true, far: 520, stretch: true, y: -Y_TOP }],
+      collider: (b, fr) => ({ y0: -8, y1: 1.25, thick: 0.88, off: 0.44 * dirOf(b, fr), e0: 0.05, e1: 0.05 }),
+      rec: () => ({ kind: 'fence', mass: 900, h: 1.04, r: 0.3, anchored: 24, hitK: 0.7, metal: false, minDv: 0 }) });
+    fenceStats.parapet = parapetBays.length; info.colliders += r.items.filter(Boolean).length;
   }
-  if (btubes.length) {
-    const M = matBuf(btubes.length);
-    btubes.forEach((p, i) => { qt.setFromAxisAngle(up, p.yaw); m4.compose(pos.set(p.x, p.y, p.z), qt, sc.set(p.len, p.r / 0.04, p.r / 0.04)); m4.toArray(M, i * 16); });
-    culledInstances(ctx, T, root, new T.CylinderGeometry(0.04, 0.04, 1, 6, 1).rotateZ(Math.PI / 2), ctx.mat.toon('#24282c', { paint: 0.02, name: 'env-quay-btubes' }), M, null, 380, 'env-quay-btubes');
-    info.tubes += btubes.length;
+  if (cheekBays.length) {
+    const r = knockBays(ctx, { name: 'env-quay-cheek-bays', bays: cheekBays, far: 300,
+      parts: [{ geo: unitBox(0, 1, -0.5, 0.5), mat: ctx.mat.toon('#b89888', { paint: 0.05, name: 'env-quay-cheeks-bay' }), name: 'cheek', far: 300, stretch: true, sy: (b) => b.h, sz: (b) => b.th }],
+      collider: (b) => ({ y0: -9, y1: b.y + b.h + 0.35, thick: b.th, e0: 0.02, e1: 0.02 }),
+      rec: (b) => ({ kind: 'fence', mass: 500, h: b.h, r: 0.14, anchored: 18, hitK: 0.5, metal: false, minDv: 0 }) });
+    fenceStats.cheeks = cheekBays.length; info.colliders += r.items.filter(Boolean).length;
+  }
+  if (pierBays.length) {
+    const railMat = ctx.mat.toon('#e6e8e6', { paint: 0.03, name: 'env-pier-rail' });
+    const r = knockBays(ctx, { name: 'env-pier-rail', bays: pierBays, far: 260,
+      parts: [{ geo: unitBox(0.93, 0.98, -0.025, 0.025), mat: railMat, name: 'top', far: 260, stretch: true }, { geo: unitBox(0.48, 0.52, -0.02, 0.02), mat: railMat, name: 'mid', far: 260, stretch: true },
+        { geo: new T.BoxGeometry(0.06, 1.0, 0.06).translate(0, 0.5, 0), mat: railMat, name: 'post', far: 260, ats: (b) => (b.last ? ['start', 'end'] : ['start']) }],
+      collider: () => ({ y0: -0.6, y1: 1.3, thick: 0.2, e0: 0.05, e1: 0.05 }),
+      rec: () => ({ kind: 'fence', mass: 40, h: 1.0, r: 0.04, anchored: 8, hitK: 0.1, metal: true, minDv: 0 }) });
+    fenceStats.pier = pierBays.length; info.colliders += r.items.filter(Boolean).length;
   }
   const sprites = (list, tex, w, h, name, yOff = 0) => {
     if (!list.length) return 0;
@@ -974,7 +981,7 @@ export function buildQuay(ctx, root) {
   return {
     water: WATER_Y, top: Y_TOP, segments: info.segments, gaps: deck ? [Array.from(deck)] : [], bridges: zones.map((z) => ({ id: z.id, name: z.name, key: z.key, c: z.c, axis: z.axis, w: z.w, len: z.len, own: z.own })),
     stairs: info.stairs, allStairs: info.allStairs, rings: info.rings, signs: info.signs, posts: info.posts, panels: info.panels, colliders: info.colliders, culverts: info.culverts, tubes: info.tubes,
-    fallbackDecks: info.fallbackDecks, slopes: slopeInfo, pierOverride, banks: banks.map((b) => ({ name: b.name, key: b.key, len: Math.round(b.len) })),
+    fallbackDecks: info.fallbackDecks, fence: fenceStats, slopes: slopeInfo, pierOverride, banks: banks.map((b) => ({ name: b.name, key: b.key, len: Math.round(b.len) })),
   };
 }
 void waterGeo;

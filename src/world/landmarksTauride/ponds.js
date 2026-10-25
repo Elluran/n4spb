@@ -3,7 +3,7 @@
 // The bowls and the banks themselves are not built here: they are the ground (height.js is the profile, terrain-mesh.js samples it into the garden floor, ground-material.js paints the wet band and the bed).
 //   planPonds(o)    PURE: { water: { pos, idx, nrm, area, triangles, holes }, quay: { pos, nrm, idx, triangles, length, runs, negLength, posLength, maxStep }, colliders: [{ cx, cz, w, d, rot, y0, y1, len }], stats }
 //   buildPonds(ctx, parent, plan, opts)  the water mesh (waterMaterial of environment/water.js, LOOK key 'tauride-pond', one draw, never batched, out of the outline pass) + the kerb skirt (the quay: T4a fix rounds 1 and 2, one more draw, planned from the floor plan `o.floor`) + the shore colliders on ctx.physics
-// The colliders: physics.js blocks a walker whose feet + STEP_HEIGHT (0.45) is below the top of a box, at every feet height down to the box's bottom: the top (data COLLIDER.top) is far above the contour's feet + 0.45, so a
+// (REVERSED by the owner, docs/AREAS.md 13.7: the shore colliders are no longer built.) The colliders: physics.js blocks a walker whose feet + STEP_HEIGHT (0.45) is below the top of a box, at every feet height down to the box's bottom: the top (data COLLIDER.top) is far above the contour's feet + 0.45, so a
 // walker (or a jump from the crest: apex +0.73) cannot step or hop over it, and the bottom is below the bed so that nobody can slip under it either. The old module's trap (a 0.22 m box that ignored a walker at y = 0 and
 // blocked one at feet -1.4) is NOT reproduced: the box stands INLAND of the shore on the contour where the bank is at COLLIDER.contourY, so nobody ever stands in the water in the first place.
 // THE BRIDGES (T4b, bridges.js): `decks` (the axis segments of the extended decks with their half width + pad) CUT the shore chords where a deck crosses them (chordOutside), so the ring opens only onto a deck, between its rails;
@@ -13,7 +13,7 @@ import { waterMaterial } from '../environment/water.js';
 import { WATER_UNION } from './data/water.js';
 import * as PONDS from './data/ponds.js';
 import { GARDEN } from './data/footprints.js';
-import { pondProfile } from './height.js';
+import { pondProfile, GARDEN_SHORE } from './height.js';
 import { TERRAIN } from './terrain-mesh.js';
 
 /** the bank slope (1 : s) at a point, from the table */
@@ -270,6 +270,9 @@ export function buildPonds(ctx, parent, plan, opts = {}) {
     ctx.noBatch(quayMesh); parent.add(quayMesh);
   }
   const ph = opts.physics || ctx.physics; let n = 0;
-  if (ph) for (const c of plan.colliders) { ph.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1); n++; }
+  // WATER IS REACHABLE (docs/AREAS.md 13.7, the owner's rule of 2026-10-25 reverses the 'impassable shores' of T4a): the ring of shore colliders is NOT built (plan.colliders stays in the plan for the tests of the old rule;
+  // opts.colliders = true builds it for them). The pond is terrain (the bowl of height.js): a walker or a car goes in and wades on the bed; physics.waterLevel answers the depth (wading, the underwater tint, the car's drag).
+  if (ph && opts.colliders) for (const c of plan.colliders) { ph.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1); n++; }
+  if (ph && ph.addWater) ph.addWater({ fn: (x, z) => (GARDEN_SHORE.dist(x, z) < 0 ? P.WATER_Y : null) });
   return { mesh, quayMesh, triangles: W.triangles + (quayMesh ? Qd.triangles : 0), waterTriangles: W.triangles, quayTriangles: quayMesh ? Qd.triangles : 0, draws: 1 + (quayMesh ? 1 : 0), colliders: n, buildMs: performance.now() - t0 };
 }

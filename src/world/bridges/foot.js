@@ -63,7 +63,7 @@ export function makeFoot(env, site) {
       for (let i = 0; i < nb; i++) {
         const ua = uR0 + bw * i, w = B.world(ua + 0.04, v);
         rails.add({ kind: cfg.rail, hex: cfg.hex, x: w.x, y: yDeck(ua) + 0.06, z: w.z, rotY: -T, roll: Math.atan(slope(ua + bw / 2)), len: bw - 0.08 }); B.info.rails++;
-        if (cfg.gold) for (const dv of [0.012, -0.012]) { const wg = B.world(ua + 0.04, v + dv); rails.add({ kind: cfg.gold.kind, hex: cfg.gold.hex, x: wg.x, y: yDeck(ua) + 0.06, z: wg.z, rotY: -T, roll: Math.atan(slope(ua + bw / 2)), len: bw - 0.08 }); }
+        if (cfg.gold) for (const dv of [0.012, -0.012]) { const wg = B.world(ua + 0.04, v + dv); rails.add({ kind: cfg.gold.kind, hex: cfg.gold.hex, x: wg.x, y: yDeck(ua) + 0.06, z: wg.z, rotY: -T, roll: Math.atan(slope(ua + bw / 2)), len: bw - 0.08, over: true }); }
       }
       for (let i = 0; i <= nb; i++) { const u = uR0 + bw * i, y = yDeck(u); P.box(hexPost, u - 0.045, u + 0.045, y, y + spec.H + 0.12, v - 0.045, v + 0.045, 'b', 1); P.box(hexPost, u - 0.07, u + 0.07, y + spec.H + 0.1, y + spec.H + 0.15, v - 0.07, v + 0.07, 'b', 1); }
       for (let i = 0; i < nb; i++) { const ua = uR0 + bw * i, ub = ua + bw, ya = yDeck(ua) + 0.06 + spec.H, yb = yDeck(ub) + 0.06 + spec.H; P.quad(hexPost, [ua, ya + 0.05, v - 0.04], [ub, yb + 0.05, v - 0.04], [ub, yb + 0.05, v + 0.04], [ua, ya + 0.05, v + 0.04], [0, 1, 0]); }
@@ -116,11 +116,10 @@ export function makeFoot(env, site) {
     for (const [u, ts] of [[a - 0.35, -1], [b + 0.35, 1]]) for (const sg of [-1, 1]) {
       const v0 = sg * vEdge, v1 = sg * (hz + 0.3), vm = (v0 + v1) / 2, len = Math.abs(v1 - v0);
       if (len < 0.3) continue;
-      const w = B.world(u, vm);
-      ctx.physics.addBox(w.x, w.z, 0.5, len + 0.1, -T, -6, 1.45); B.info.colliders++;                       // box local z runs along v after the rotation by -T
       const pw = ctx.mat.toon('#b9a89e', { paint: 0.05, name: 'brg-quaycop' });
-      P.box(pw, u - 0.3, u + 0.3, 0.0, 0.2, Math.min(v0, v1), Math.max(v0, v1), 'b', 1);
-      P.box(M.parapetPink, u - 0.25, u + 0.25, 0.2, 1.0, Math.min(v0, v1), Math.max(v0, v1), 'b', 1.2);
+      P.box(pw, u - 0.3, u + 0.3, 0.0, 0.2, Math.min(v0, v1), Math.max(v0, v1), 'b', 1);                     // the granite foot of the wall (low: a step)
+      const p = B.world(u, v0), q = B.world(u, v1);                                                          // the wall itself: a breakable section (docs/AREAS.md 13.7), 0.5 m thick, 0.8 m over its foot
+      rails.parapet({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, y: 0.2, ye: 0.2, h: 0.8, th: 0.5, mat: M.parapetPink, box: true, center: true }); B.info.colliders++; void vm;
     }
   }
 
@@ -132,7 +131,7 @@ export function makeFoot(env, site) {
       const uE = sg < 0 ? uA : uB, w = B.world(uE + sg * cfg.steps * 0.16, 0);
       ph.addStairs(w.x, w.z, D + 0.1, cfg.steps * 0.32, sg < 0 ? rampRot : rampRot + Math.PI, 0, yDeck(uE), cfg.steps); B.info.colliders++;
     }
-    for (const sg of [-1, 1]) { const w = B.world(uc, sg * (hD + 0.02)); ph.addBox(w.x, w.z, uB - uA, 0.3, -T, -6, yDeck(uc) + 1.2); B.info.colliders++; }   // the railings: solid from the water to hand height
+    for (const sg of [-1, 1]) { const p = B.world(uA, sg * (hD + 0.02)), q = B.world(uB, sg * (hD + 0.02)); rails.wall({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, th: 0.3, y0: yDeck(uc) - 0.8, y1: yDeck(uc) + 1.2, y: yDeck(uc) - 0.4 }); B.info.colliders++; }   // the railings: a request (rails.wall): only where no panel bay covers it, then a ghost bay (docs/AREAS.md 13.7)
   };
   return B;
 }

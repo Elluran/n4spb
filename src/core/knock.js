@@ -18,6 +18,7 @@
 // PARTS  A record may carry any number of parts. A part is an instance { mesh, index, hide? } or an object { obj } (a single Object3D created with ctx.add, i.e. in the DYNAMIC root).
 //   Each part keeps its rest offset from the record origin (x, y + originY, z), so a traffic head or a lens instance sits where it stood and flies with the pole; a `hide` part
 //   (a glow, a light pool, a halo) is zero-scaled at the knock. Parts are normalised once at register(); a frame writes matrices only (no allocation).
+//      ghost: true = a record with no parts at all (a collider that stands where nothing is drawn: it breaks silently; docs/AREAS.md 13.7)
 // API  ctx.knock.register({ kind, x, z, y (the base), originY (the instance origin above the base: 0 for base-origin geometry, h/2 for a centred box), rotY, mass, h, r | w, d,
 //      anchored, hitK, metal, minDv, parts: [...], item | items: [...], onKnock }) -> record { kind, x, y, z, rotY, state: 'stand' | 'fly' | 'rest' | 'lost', wobble, parts, ... } | null (never throws);
 //      ctx.knock.listen(fn(record, body))  after every knock (seated people, perched crows); ctx.knock.update(dt) (self-registered); ctx.knock.list (records);
@@ -72,10 +73,10 @@ export function createKnock(ctx) {
   /** see the header; `item` / `items` are the physics colliders (ctx.physics.add*), `parts` the instanced parts (hide: true = this part vanishes at the knock: a lantern glow, a light pool) */
   function register(o) {
     try {
-      if (!o || !(o.parts && o.parts.length) || !Number.isFinite(o.x) || !Number.isFinite(o.z)) return null;
+      if (!o || !(o.ghost || (o.parts && o.parts.length)) || !Number.isFinite(o.x) || !Number.isFinite(o.z)) return null;
       const y = o.y ?? 0, originY = o.originY || 0, parts = [];
-      for (const p of o.parts) { const q = makePart(p, o.x, y + originY, o.z); if (q) parts.push(q); }
-      if (!parts.length) return null;
+      for (const p of o.parts || []) { const q = makePart(p, o.x, y + originY, o.z); if (q) parts.push(q); }
+      if (!parts.length && !o.ghost) return null;      // (ghost: a record without anything drawn: an invisible wall that must still break, lib/fence-bays.js)
       const items = o.items ? o.items.filter(Boolean) : (o.item ? [o.item] : []);
       const it = {
         kind: o.kind || 'thing', x: o.x, z: o.z, y, rotY: o.rotY || 0, mass: o.mass || 20, h: o.h || 1, r: o.r || (o.w && o.d ? hyp(o.w, o.d) / 2 : 0.3), w: o.w || (o.r ? o.r * 2 : 0.6), d: o.d || (o.r ? o.r * 2 : 0.6),

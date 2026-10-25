@@ -306,17 +306,12 @@ export function makeArch(env, site) {
   // ------------------------------------------------------------------ granite parapet (Kazansky, Winter Canal): solid, rough blocks, bullnose top, rolled coping
   /** parapet of height h along face sg from uA to uB (outer face flush with the spandrel at v) */
   B.parapet = (sg, uA, uB, h = 1.1, th = 0.52, mat = M.parapet) => {
+    // WATER IS REACHABLE (docs/AREAS.md 13.7): the parapet is a row of breakable SECTIONS (bridges/rails.js parapet(): a swept cross-section, instanced, one knock record and one collider per section), no longer merged quads
     const v = sg < 0 ? v0 : v1, vi = v - sg * th, n = Math.max(1, Math.ceil((uB - uA) / 2.8));
     for (let i = 0; i < n; i++) {
-      const ua = uA + (uB - uA) * i / n, ub = uA + (uB - uA) * (i + 1) / n, ya = yDeck(ua) + 0.12 * 0, yb = yDeck(ub), hh = h - 0.26;
-      const pu = [[ua / 2.8, 0], [ub / 2.8, 0], [ub / 2.8, hh / 1.2], [ua / 2.8, hh / 1.2]];
-      P.quad(mat, [ua, ya, v], [ub, yb, v], [ub, yb + hh, v], [ua, ya + hh, v], [0, 0, sg], pu);                    // outer face
-      P.quad(mat, [ub, yb, vi], [ua, ya, vi], [ua, ya + hh, vi], [ub, yb + hh, vi], [0, 0, -sg], pu);               // inner face
-      // bullnose cap: half-round cylinder along u
-      P.cyl(mat, [ua, ya + hh, v - sg * th / 2], [ub, yb + hh, v - sg * th / 2], th / 2, th / 2, 8, false);
+      const ua = uA + (uB - uA) * i / n, ub = uA + (uB - uA) * (i + 1) / n, p = B.world(ua, v), q = B.world(ub, v);
+      rails.parapet({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, y: yDeck(ua), ye: yDeck(ub), h, th, mat, mirror: sg > 0 });
     }
-    P.quad(mat, [uA, yDeck(uA), vi], [uA, yDeck(uA), v], [uA, yDeck(uA) + h - 0.26, v], [uA, yDeck(uA) + h - 0.26, vi], [-1, 0, 0]);
-    P.quad(mat, [uB, yDeck(uB), v], [uB, yDeck(uB), vi], [uB, yDeck(uB) + h - 0.26, vi], [uB, yDeck(uB) + h - 0.26, v], [1, 0, 0]);
     B.info.parapet = (B.info.parapet || 0) + 1;
     return { v, vi, uA, uB, h };
   };
@@ -332,7 +327,7 @@ export function makeArch(env, site) {
       const slope_ = slope(uCtr), w = B.world(ua + gap, v), yy = yDeck(ua + gap) + (o.lift ?? 0.04);
       rails.add({ kind, hex, x: w.x, y: yy, z: w.z, rotY: -T, roll: Math.atan(slope_), len: bw - 2 * gap, h: o.h });
       B.info.rails++;
-      if (o.gold) for (const dv of [0.012, -0.012]) { const wg = B.world(ua + gap, v + dv); rails.add({ kind: o.gold.kind, hex: o.gold.hex, x: wg.x, y: yy, z: wg.z, rotY: -T, roll: Math.atan(slope_), len: bw - 2 * gap, h: o.h }); }   // gilded details: same panel, 1.2 cm in front on both sides
+      if (o.gold) for (const dv of [0.012, -0.012]) { const wg = B.world(ua + gap, v + dv); rails.add({ kind: o.gold.kind, hex: o.gold.hex, x: wg.x, y: yy, z: wg.z, rotY: -T, roll: Math.atan(slope_), len: bw - 2 * gap, h: o.h, over: true }); }   // gilded details: same panel, 1.2 cm in front on both sides
     }
     for (let i = 0; i <= n; i++) {
       const u = uA + bw * i, y = yDeck(u);
@@ -374,8 +369,10 @@ export function makeArch(env, site) {
   };
   /** solid box along face sg (rail line / parapet): from uA to uB, 0.5 m thick, y -6 .. 1.4 */
   B.faceCollider = (sg, uA, uB, inset = 0.25, th = 0.5) => {
-    const v = (sg < 0 ? v0 : v1) - sg * inset, w = B.world((uA + uB) / 2, v);
-    ctx.physics.addBox(w.x, w.z, uB - uA, th, -T, -6, 1.45); B.info.colliders++;
+    // the solid box along a face (rail line / parapet): now a request to the fence batch (rails.wall): it becomes a collider only where no drawn panel / parapet section covers its line (those bays have their own),
+    // and then a ghost bay, breakable like the rest (docs/AREAS.md 13.7)
+    const v = (sg < 0 ? v0 : v1) - sg * inset, p = B.world(uA, v), q = B.world(uB, v), ya = yDeck(uA), yb = yDeck(uB);
+    rails.wall({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, th, y0: Math.min(ya, yb) - 0.8, y1: Math.max(1.45, Math.max(ya, yb) + 1.3), y: Math.min(ya, yb) }); B.info.colliders++;
   };
 
   /** the environment may leave the quay open over a longer stretch than the deck (BRIDGE_ZONES w): close the rest with a posts + loop railing on both bank lines and a solid collider */
@@ -397,9 +394,9 @@ export function makeArch(env, site) {
           const A = B.world(pts[i][0], pts[i][1]), Bw = B.world(pts[i + 1][0], pts[i + 1][1]);
           railWorld(rails, A.x, A.z, Bw.x, Bw.z, 0.2, 'loops', '#202428', { bay: 2.4 }); B.info.rails++; n++;
         }
-        for (let i = 0; i < nP; i += 4) {
-          const j = Math.min(nP, i + 4), A = B.world(pts[i][0], pts[i][1]), Bw = B.world(pts[j][0], pts[j][1]), len = Math.hypot(Bw.x - A.x, Bw.z - A.z);
-          ctx.physics.addBox((A.x + Bw.x) / 2, (A.z + Bw.z) / 2, 0.5, len + 0.3, Math.atan2(Bw.x - A.x, Bw.z - A.z) + Math.PI, -6, 1.25); B.info.colliders++;
+        for (let i = 0; i < nP; i += 4) {                                                // (the solid box of every four panels is gone: each railing panel is a breakable bay with its own collider, bridges/rails.js)
+          const j = Math.min(nP, i + 4), A = B.world(pts[i][0], pts[i][1]), Bw = B.world(pts[j][0], pts[j][1]);
+          rails.wall({ x0: A.x, z0: A.z, x1: Bw.x, z1: Bw.z, th: 0.5, y0: 0.0 - 0.8, y1: 1.25, y: 0 }); B.info.colliders++;
         }
       }
     }

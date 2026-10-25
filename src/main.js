@@ -24,9 +24,9 @@ import { createTimeOfDay } from './core/timeofday.js';
 import { createZones } from './core/zones.js';
 import { createUI, createInteract } from './core/ui.js';
 import { createMinimap } from './core/minimap.js';
+import { createWaterView } from './core/water-view.js';      // the underwater tint (docs/AREAS.md 13.7: water is reachable)
 import { createTouchControls } from './core/touch.js';      // phones / tablets: the touch UI (does nothing on desktop)
 import { installBootGuard } from './core/boot-guard.js';      // fatal card, lost-context handler, phone warning + crash-loop guard
-import { HOOKS } from './world/lib/area-tables.js';      // the validated hook table of the area module (docs/AREAS.md section 9): the engine reads it only through this file
 import { REGISTRY } from './areas/registry.js';      // runtime-only (tools/baked-revision.mjs): only this file may import it and core/gates.js / core/handoff.js
 import { VERSION } from './core/version.js';      // runtime-only (tools/baked-revision.mjs): the number on the preloader, CLAUDE.md "Versioning"
 import { createGates, planArrival, backLink, createSeam, grabFrame } from './core/gates.js';      // the area gates: the seamless hand-off to the neighbour's page, the freeze veil (docs/AREAS.md)
@@ -255,8 +255,8 @@ async function build() {
 const player = new Player(camera, canvas, ctx.physics, L.WORLD.play);
 ctx.playerObj = player;
 player.solidAt = L.insideBuilding;
-player.noLanding = HOOKS.noLanding || null;       // the ponds of the North refuse a flight landing (HOOKS.noLanding); the strip has no such hook
 player.clampXZ = L.clampToPlay;                       // the play area is a union of rectangles (layout.js): nobody walks into the empty notches
+createWaterView({ ctx, camera, physics: ctx.physics });      // the veil under the water surface (walking, driving, flying alike: it follows the camera)
 ctx.ui = createUI({ player, toast: showToast });
 ctx.interact = createInteract({ camera, player, ui: ctx.ui });
 createTouchControls({ ctx, player, canvas, params });      // null on desktop; on a phone it owns every touch element and feeds player / ctx.interact / ctx.drive (core/touch.js)
@@ -343,7 +343,6 @@ const FLY_TOAST = {
   on: isTouch ? 'Полёт · Flying' : 'Полёт · Flying — Space/E up · Q/C down · F lands',
   off: 'Посадка · Landing',
   roof: isTouch ? 'На крыше · Rooftop' : 'На крыше · On the roof — F to take off',
-  water: 'Над водой не приземлиться · No landing on water',
   blocked: 'Здесь не приземлиться · No room to land here',
   underground: 'Под землёй не полететь · No flight underground',
   ride: 'В вагоне не полететь · No flight on board',

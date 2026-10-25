@@ -3,7 +3,9 @@
 // six gears for the tacho / engine note, two gas HOPS (tuning.hop: the Roadster's down-jets throw the car up; absent = no vertical dynamics at all, car.y is the road; hop v3: two keys, both launch on the very frame of the key DOWN:
 // X = the simple hop, 1.86 m / 1.0 s; C = the barrel hop, 3.72 m / 1.4 s with a cosmetic 360 degree roll, see hopStep) and
 // an optional thrust surge (tuning.nitroRamp), and collisions against the same solids that stop the pedestrian (core/physics.js: walls, trees, lamp posts, parked cars, the moving
-// traffic) through an oriented rigid footprint with friction and angular impulses; the car also refuses the river, terrain holes (escalator shafts), building footprints and the edge of the map.
+// traffic) through an oriented rigid footprint with friction and angular impulses; the car also refuses terrain holes (escalator shafts), building footprints and the edge of the map.
+// WATER IS REACHABLE (docs/AREAS.md 13.7): a river, canal or pond is terrain, not a wall. A car that leaves the road where nothing stands (a quay edge without a fence, a broken railing) FALLS (gravity, the touchdown
+// costs damage by the fall speed through the usual 'hit' event), drives on the bed with a heavy water drag, and cannot climb out over a wall of more than RISE_MAX (a trench wall is a wall; the respawn key R is the way back).
 // Frame: yaw = rotY (0 faces +Z, positive turns toward +X); forward = (sin yaw, cos yaw), left = (cos yaw, -sin yaw). steer > 0 = left. Units: m, s.
 import { SPEC as COUPE_SPEC } from './model.js';
 import { createCarCollisions } from './collision.js';
@@ -18,6 +20,11 @@ export const COUPE_TUNING = { acc: ACC, brake: BRAKE, revAcc: REV_ACC, vmax: VMA
   impactDecay: 4.5, hf: 2.1, hr: 2.1, hw: 0.95, smokeZ: 1.2, smokeY: 0.82, spec: null };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const TAU = Math.PI * 2;
+const FALL_G = 12;          // m/s2 of a car that has left the ground (the same gravity as the walker and the knock bodies)
+const DROP_MAX = 0.45;      // m: a step down up to this (a kerb, a slab) is not a fall: the wheels follow the ground at once
+const RISE_MAX = 0.55;      // m: ground that is higher than the car by more than this is a wall for a car on the ground (the wall of a trench seen from its bed)
+const WATER_K = 2.1;        // 1/s: the velocity decay in deep water (full at WATER_DEEP m over the wheels); the 15.5 m/s2 engine then tops out around 28 km/h
+const WATER_DEEP = 1.5;     // m
 /**
  * The input of a car that is HELD while a panel or the area prompt is open (drive.js): nothing is steered, boosted or hopped, and the speed is taken away without ever reversing the car.
  * brk > 0 at a standstill (or below 0.8 m/s) accelerates BACKWARDS in step() and a throttle brakes a car that rolls backwards, so the hold follows the sign of the longitudinal speed vF:
@@ -46,20 +53,25 @@ export function createHandling(ctx, tuning = null) {
   } : oldDeckY);
   const deck = deckY();
 
-  /** road surface height at (x, z): the humped Anichkov deck, a low (<= 0.3 m) pavement / kerb slab, else the asphalt (0.03) */
+  /** road surface height at (x, z): the humped Anichkov deck (for a car that is on or above it: under a bridge the car is on the bed), a low (<= 0.3 m) pavement / kerb slab, the bed of a trench or a pond (the terrain below
+   *  -0.2 m: water is terrain), else the asphalt (0.03) */
   function groundAt(x, z) {
-    const d = deck ? deck(x, z) : null; if (d !== null) return d + 0.03;
+    const d = deck ? deck(x, z) : null; if (d !== null && car.y > d - 1.2) return d + 0.03;
     const S = ph.surfaceAt(x, z, 0.5, false, _s);
     if (S.kind === 'walk' && S.item && !S.item.sticky && S.y > 0.03 && S.y <= 0.3) return S.y;
-    return 0.03;
+    const th = L.heightAt(x, z);
+    return th < -0.2 ? th + 0.03 : 0.03;
   }
-  /** terrain the car may not enter: the river (the bridge deck is a floor), an escalator shaft, a building footprint */
+  /** the surface y of the water at (x, z) (a waterway, a pond, a basin) or null */
+  const waterY = (x, z) => { const w = ph.waterLevel ? ph.waterLevel(x, z) : null; return w !== null && w !== undefined ? w : (L.waterLevelAt ? L.waterLevelAt(x, z) : null); };
+  /** terrain the car may not enter: an escalator shaft, a building footprint, the area's closed ground. NOT water, never a river (the world rule) */
   function solidBlocked(x, z) {
     if (KEEP_OUT && KEEP_OUT(x, z)) return true;
-    if (!(deck && deck(x, z) !== null) && L.heightAt(x, z) < -1) return true;
     if (ph.inHole(x, z, 0.2)) return true;
     return L.insideBuilding(x, z);
   }
+  /** the terrain at (x, z) is a CLIFF for a car on the ground: more than RISE_MAX above its wheels (the wall of a trench seen from the bed); a deck is a floor, not a cliff */
+  const cliff = (x, z) => !car.air && L.heightAt(x, z) - car.y > RISE_MAX && !(deck && deck(x, z) !== null);
   /** the car may not be here: outside the map (the play area is a union of rectangles, layout.js inPlay: the empty notches are outside the map too) or on forbidden terrain */
   function blocked(x, z) { return !L.inPlay(x, z) || solidBlocked(x, z); }
   // The map edge is a SOFT wall for the car (edgePush): the car's origin stays at least EDGE_M inside the play area, EDGE_M being the radius of its footprint, so no corner can ever
@@ -70,14 +82,14 @@ export function createHandling(ctx, tuning = null) {
   const footBlocked = softEdge ? solidBlocked : blocked;
   const FOOT = [[T.hf, T.hw], [T.hf, -T.hw], [-T.hr, T.hw], [-T.hr, -T.hw], [0, T.hw], [0, -T.hw], [T.hf, 0], [-T.hr, 0]];
   const carBlocked = (x, z, sy, cy) => {
-    if (blocked(x, z)) return true;
-    for (const [a, b] of FOOT) if (footBlocked(x + sy * a + cy * b, z + cy * a - sy * b)) return true;
+    if (blocked(x, z) || cliff(x, z)) return true;
+    for (const [a, b] of FOOT) { const px = x + sy * a + cy * b, pz = z + cy * a - sy * b; if (footBlocked(px, pz) || cliff(px, pz)) return true; }
     return false;
   };
   /** how many of the nine footprint points (centre + eight) are blocked: a car that is embedded (steered into a wall, nudged into a footprint) may move as long as that number does not grow */
   const blockedPoints = (x, z, sy, cy) => {
-    let n = blocked(x, z) ? 1 : 0;
-    for (const [a, b] of FOOT) if (footBlocked(x + sy * a + cy * b, z + cy * a - sy * b)) n++;
+    let n = blocked(x, z) || cliff(x, z) ? 1 : 0;
+    for (const [a, b] of FOOT) { const px = x + sy * a + cy * b, pz = z + cy * a - sy * b; if (footBlocked(px, pz) || cliff(px, pz)) n++; }
     return n;
   };
   /** how many of the nine footprint points are inside the area's keep-out (always 0 for the strip: no hook). The keep-out is a CLOSED ground, so unlike the other obstacles it has no embedded-escape rule: the
@@ -113,6 +125,7 @@ export function createHandling(ctx, tuning = null) {
     x: 0, z: 0, y: 0.03, yaw: 0, vx: 0, vz: 0, steer: 0, pitch: 0, roll: 0, spin: 0, wheelSpin: 0,
     speed: 0, vF: 0, vL: 0, gear: 1, rpm: 0.15, boost: 1, boosting: false, drifting: false, braking: false, aLong: 0, aLat: 0, odo: 0, steerAngle: 0, throttle: 0,
     impactSpin: 0,
+    fall: false, vyF: 0, depth: 0,      // a fall off an edge (not the hop): falling, its speed, the metres of water over the wheels (0 on dry ground)
     h: 0, vy: 0, air: false, jet: 0, surge: 0,       // the gas hop (tuning.hop only): height above the road, climb speed, airborne, the down-jets 0..1; the thrust surge 0..1 (tuning.nitroRamp only)
     hopCd: 0, jetT: 0, jumpHeld: false, flipHeld: false, cushion: false, jetK: 1,   // hop v3: the cooldown, the down-jets' burn time, the X / C keys were down at the last step (an edge starts a hop), the landing cushion, the size of the down-jets (1 = simple, 1 + jetBig = barrel)
     flipOn: false, flip: 0, flipT: 0, flipDur: 1, flipDir: 1, flipDone: false, barrel: false, pulse0: 0, pulse1: 0,   // the barrel hop's roll (COSMETIC: the physics car stays upright): angle (rad, + = to the right), time, side-jet pulses 0..1 (left, right)
@@ -124,11 +137,29 @@ export function createHandling(ctx, tuning = null) {
   car.reset = (x, z, yaw) => {
     car.nitroLock = false; car.impactSpin = 0; car.events.length = 0;
     car.h = car.vy = car.jet = car.surge = car.hopCd = car.jetT = 0; car.air = car.jumpHeld = car.flipHeld = car.cushion = false;
+    car.fall = false; car.vyF = car.depth = 0; car.y = 0.03;      // (the ground below is asked from the neutral height: a car that stood on a bed must not read a bridge deck as a ceiling)
     car.flipOn = car.flipDone = car.barrel = false; car.flip = car.flipT = car.pulse0 = car.pulse1 = 0; car.jetK = 1;
     car.x = x; car.z = z; car.yaw = yaw; car.vx = car.vz = 0; car.steer = 0; car.pitch = car.roll = 0; car.y = groundAt(x, z);
     car.speed = car.vF = car.vL = car.aLong = car.aLat = 0; car.gear = 1; car.rpm = 0.15; car.boosting = car.drifting = car.braking = false;
   };
 
+  /** the car on the ground, or FALLING: the ground is lower than the wheels by more than a kerb (it drove off a quay edge, a ramp, through a broken railing). Gravity, then the touchdown: a 'land' event (the splash ring
+   *  and thud of the gas hop's landing) and, above 5 m/s, a 'hit' on the nose (the damage model counts it like a blow of 1.6 x the speed over 4.2 m/s). Returns car.y. */
+  function settle(h) {
+    const g = groundAt(car.x, car.z);
+    if (!car.fall) {
+      if (car.y - g <= DROP_MAX) return g;
+      car.fall = true; car.vyF = 0;
+    }
+    car.vyF -= FALL_G * h; car.y += car.vyF * h;
+    if (car.y > g) return car.y;
+    const v = -car.vyF, sy = Math.sin(car.yaw), cy = Math.cos(car.yaw);
+    car.fall = false; car.vyF = 0; car.y = g;
+    if (v > 2.5) car.events.push({ type: 'land', v, big: false });
+    if (v > 5) car.events.push({ type: 'hit', v: (v - 4.2) * 1.6, x: car.x, z: car.z, nx: -sy, nz: -cy, localX: 0, localZ: SPEC.front, localNX: 0, localNZ: -1 });
+    car.pitch -= Math.min(0.2, 0.02 * v);
+    return g;
+  }
   /** the airborne part of a substep: gravity, the landing cushion (the down-jets fire again just above the road), the touchdown; returns car.y (an absolute height: a kerb or a deck under the car can catch it) */
   function fly(h) {
     const H = T.hop, g = groundAt(car.x, car.z);
@@ -227,6 +258,9 @@ export function createHandling(ctx, tuning = null) {
     const dv = clamp(-vl * (1 - Math.exp(-gr * h)), -cap, cap);
     vl += dv;
     vf -= Math.sign(vf) * Math.abs(dv) * T.scrub;                                  // sliding scrubs speed
+    // water over the wheels (the car stands on the bed of a trench or a pond): a heavy drag, deeper = more
+    car.depth = 0;
+    if (!car.air && !car.fall) { const w = waterY(car.x, car.z); if (w !== null) { const dp = w - car.y; if (dp > 0.2) { car.depth = dp; const k = Math.exp(-WATER_K * Math.min(1, dp / WATER_DEEP) * h); vf *= k; vl *= k; } } }
     car.vx = sy * vf + cy * vl; car.vz = cy * vf - sy * vl;
     car.vF = vf; car.vL = vl; car.aLong = (nvF - vF0) / h * 0.5 + car.aLong * 0.5; car.aLat = om * vf;
     car.braking = !car.air && ((brk > 0.1 && vF0 > 0.8) || !!inp.hand && sp > 3);
@@ -248,7 +282,7 @@ export function createHandling(ctx, tuning = null) {
     }
     car.x = nx; car.z = nz;
     edgePush(h);
-    car.y = car.air ? fly(h) : groundAt(car.x, car.z);
+    car.y = car.air ? fly(h) : settle(h);
     const kx = car.x, kz = car.z;
     if (car.air && T.hop.clearMax !== undefined && car.h > T.hop.clearMax) { const yAir = car.y; car.y = yAir - car.h + T.hop.clearMax; collide(car); car.y = yAir; }     // the solids see the car no higher than clearMax over the road: a barrel hop clears the low furniture, never a bus shelter or a kiosk
     else collide(car);
@@ -272,10 +306,12 @@ export function createHandling(ctx, tuning = null) {
     for (let i = 0; i < n; i++) sub(h, inp);
     // ---- ride height + attitude: the axles follow the road (humped deck), body pitch / roll from the accelerations
     const sy = Math.sin(car.yaw), cy = Math.cos(car.yaw), w = SPEC.wb / 2;
-    const yF = groundAt(car.x + sy * w, car.z + cy * w), yR = groundAt(car.x - sy * w, car.z - cy * w);
+    const g0 = groundAt(car.x, car.z);
+    let yF = groundAt(car.x + sy * w, car.z + cy * w), yR = groundAt(car.x - sy * w, car.z - cy * w);
+    if (Math.abs(yF - g0) > DROP_MAX) yF = g0; if (Math.abs(yR - g0) > DROP_MAX) yR = g0;      // an axle over an edge (a quay, a trench wall) does not tilt the car: it holds on its middle until it falls
     const yT = (yF + yR) / 2, slope = Math.atan2(yF - yR, SPEC.wb);
     const k = Math.min(1, 16 * dt);
-    if (!car.air) {                                                               // (airborne, car.y is the flight itself: only the road part of the height is eased)
+    if (!car.air && !car.fall) {                                                               // (airborne, car.y is the flight itself: only the road part of the height is eased)
       car.y += (yT - car.y) * k;
       if (Math.abs(car.y - yT) > 0.6) car.y = yT;
     }
