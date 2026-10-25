@@ -86,6 +86,8 @@ export function mergeMeshes(meshes) {
 //  and sub-pixel wires fade by coverage instead of aliasing. One draw call for all wires.
 //  Usage (any module):  ctx.wires.add(points, { width: 0.02, color: '#34303a' })
 // ---------------------------------------------------------------------------------------------
+// the screen size of every wire mesh (the street wires and the dynamic wires of the bascule bridges, lib/bridge-wires.js): ONE uniform shared by all the wire systems
+const WIRE_RES = { value: new THREE.Vector2(1920, 1080) };
 export function createWireSystem() {
   const lists = []; // {pts, width, color}
   let mesh = null;
@@ -175,6 +177,7 @@ export function createWireSystem() {
         }`,
       transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide,
     });
+    mat.uniforms.uRes = WIRE_RES;
     mesh = new THREE.Mesh(g, mat);
     mesh.frustumCulled = false;
     mesh.layers.set(LAYER_NO_OUTLINE);
@@ -184,6 +187,6 @@ export function createWireSystem() {
     return mesh;
   }
 
-  function setResolution(w, h) { if (mesh) mesh.material.uniforms.uRes.value.set(w, h); }
+  function setResolution(w, h) { WIRE_RES.value.set(w, h); }
   return { add, build, setResolution, get count() { return lists.length; }, lists };
 }

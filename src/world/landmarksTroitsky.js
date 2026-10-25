@@ -13,6 +13,7 @@ export const OWNS_GROUPS = true;
 import * as THREE from 'three';
 import { Parts } from './bridges/kit.js';
 import { makeMats } from './bridges/mats.js';
+import { buildSpanWires } from './lib/bridge-wires.js';
 import { makeRailBatch } from './bridges/rails.js';
 import { WATER_Y } from './bridges/sites.js';
 import { buildTroitsky } from './landmarksTroitsky/bridge.js';
@@ -45,8 +46,10 @@ export async function build(ctx) {
   const mode = URLQ.get('troitsky'), svc = createService({ mode: mode === 'open' || mode === 'closed' ? mode : 'auto' });
   const leaf = buildLeaf({ ctx, M });
   leaf.colliders(); leaf.set(0);
+  const wires = buildSpanWires(ctx, 'troitsky');               // the contact wires of the leaf span: the streets module cut them out; drawn here only while the leaf is down (lib/bridge-wires.js)
   const gv = buildGates({ ctx, M, gates: svc.gates });
-  svc.leaf = leaf; svc.frame = { toWorld, toUV, FR, TROITSKY };
+  svc.wires = wires;
+  svc.leaf = leaf; svc.frame ={ toWorld, toUV, FR, TROITSKY };
   svc.stats = { tris: P.tris + leaf.tris, staticTris: P.tris, leafTris: leaf.tris, rails: B.info.rails + leaf.info.rails, colliders: B.info.colliders, lamps: lamps.records.filter(Boolean).length, arms: gv.arms,
     candelabra: B.candelabra.reduce((n, r) => n + r.records.filter(Boolean).length, 0), poles: B.poles ? B.poles.records.filter(Boolean).length : 0, kerbBays: B.kerbs ? B.kerbs.records.filter(Boolean).length : 0,
     leafBays: leaf.bays.filter((b) => b.rec).length };
@@ -99,7 +102,7 @@ export async function build(ctx) {
   ctx.onUpdate((dt, t) => {
     const night = ctx.shared && ctx.shared.uNight ? ctx.shared.uNight.value : 0;
     const r = svc.advance(dt > 0 ? Math.min(dt, 5) : 0, night);
-    if (first || r.th1 !== r.th0) leaf.set(r.th1);
+    if (first || r.th1 !== r.th0) { leaf.set(r.th1); if (wires) wires.set(r.th1); }
     gv.set(svc.clock.barrier, t);
     for (const ev of r.events) {
       if (ev === 'warn' && pp) { const w = toWorld(180, 0); if (Math.hypot(pp.x - w.x, pp.z - w.z) < TOAST_R && ctx.ui && ctx.ui.toast) ctx.ui.toast('Троицкий мост разводят · The Troitsky Bridge is opening'); }

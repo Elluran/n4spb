@@ -424,14 +424,14 @@ if (built.includes('landmarksPalaceBridge')) {
     const bays = P.leaf.bays; assert(bays.length === 88 && bays.every((b) => b.rec && b.rec.dynamic && b.rec.kind === 'fence' && b.rec.items.length === 0 && b.box === b.rec.src), `the leaves have ${bays.length} bays (56 rail panels, 32 kerb pieces), every one a knock record of kind fence with the record's own box, none a static collider`);
     assert(bays.filter((b) => b.rail).length === 56 && bays.filter((b) => !b.rail).length === 32, 'rails 56 + kerbs 32');
     const solids = ph.items.filter((it) => (it.type === 'box' || it.type === 'cyl') && P.inSpan(it.cx, it.cz, 0)), plain = solids.filter((it) => !(it.source && it.source.knock));
-    const masts = plain.filter((it) => it.type === 'cyl' && modOf(it) === 'streets' && it.r > 0.2 && it.r < 0.25 && it.y1 === 4), left = plain.filter((it) => !masts.includes(it));      // (the tram contact-wire masts of a bridge deck that the streets module keeps merged and plain: a known item of that module, not of the leaves; reported below)
+    const left = plain;      // (no exception any more: the two plain contact-wire masts the streets module used to stand at the midspan are gone, streets/wires.js bridgeZones: nothing carries wires over a moving span)
     assert.equal(left.length, 0, 'plain solids on the span between the hinges: ' + left.slice(0, 4).map((it) => `${modOf(it)} ${it.type} at ${it.cx.toFixed(0)}, ${it.cz.toFixed(0)} y ${it.y0.toFixed(1)}..${it.y1.toFixed(1)}`).join('; '));
     const pp = ctx.player && ctx.player.position, keep = pp ? pp.clone() : null, c = P.frame.toWorld(125, 0); if (pp) pp.set(c.x, 0, c.z);
     try {
       ph.refreshDynamic(); const on = ph._dynItems.filter((b) => P.inSpan(b.cx, b.cz, 3));
       assert(on.length >= 88 && on.every((b) => b.source && b.source.knock && b.source.knock.kind === 'fence'), `the dynamic boxes on the leaves are knock sources: ${on.length}, plain ${on.filter((b) => !(b.source && b.source.knock)).length}`);
     } finally { if (pp && keep) pp.copy(keep); ph.refreshDynamic(); }
-    console.log(`  palace leaves: ${bays.length} bays (knock fence records), plain solids on the span ${plain.length} (all of them ${masts.length} contact-wire masts of the streets module)`);
+    console.log(`  palace leaves: ${bays.length} bays (knock fence records), plain solids on the span ${plain.length}`);
   });
 }
 
