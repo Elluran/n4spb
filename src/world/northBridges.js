@@ -8,11 +8,12 @@ import * as THREE from 'three';
 import * as L from './layout.js';
 import { Parts } from './landmarksD/kit.js';
 import { GROUPS_LIST } from './northBridges/groups.js';
+import { knockBays } from './lib/fence-bays.js';
 export const OWNS_GROUPS = true;
 
 export function build(ctx) {
   const root = new THREE.Group(); root.name = 'north-bridges';
-  const P = new Parts(), surfaces = [];
+  const P = new Parts(), surfaces = [], rbays = [];      // rbays: the breakable railing bays (docs/AREAS.md 13.7)
   const stone = ctx.mat.toon('#999d97', { paint: 0.055 }), light = ctx.mat.toon('#bab6a9');
   const metal = ctx.mat.toon('#536863', { paint: 0.03 }), dark = ctx.mat.toon('#3f4a50');
   const asphalt = ctx.mat.toon('#535a62'), stripe = ctx.mat.toon('#dbd7bf');
@@ -41,28 +42,19 @@ export function build(ctx) {
         P.quad(light, [inner, ya + 0.12, a], [outer, ya + 0.12, a], [outer, yd + 0.12, d], [inner, yd + 0.12, d], [0, 1, 0]);
         P.quad(light, [inner, ya, a], [inner, ya + 0.12, a], [inner, yd + 0.12, d], [inner, yd, d], [-side, 0, 0]);
         P.quad(light, [outer, ya, a], [outer, ya + 0.12, a], [outer, yd + 0.12, d], [outer, yd, d], [side, 0, 0]);
-        for (const y of [0.35, 1.18]) P.cyl(metal, [outer, ya + y, a], [outer, yd + y, d], 0.05, 0.05, 4);
       }
       const markA = ya + (yd - ya) * 0.9 / (d - a) + 0.045, markD = yd - (yd - ya) * 0.9 / (d - a) + 0.045;
       for (const u of [-7, -3.5, 0, 3.5, 7]) P.quad(stripe, [u - 0.055, markA, a + 0.9], [u + 0.055, markA, a + 0.9], [u + 0.055, markD, d - 0.9], [u - 0.055, markD, d - 0.9], [0, 1, 0]);
       const [x, z] = pos(0, (a + d) / 2), seglen = d - a;
       ctx.physics.addWalkRamp(x, z, b.width, seglen + 0.035, rot, ya, yd, 1.1);
       surfaces.push({ x, z, c, s, len: seglen, width: b.width, ya, yb: yd });
-      for (const side of [-1, 1]) {
-        const [rx, rz] = pos(side * half, (a + d) / 2);
-        ctx.physics.addBox(rx, rz, 0.18, seglen, rot, Math.min(ya, yd), Math.max(ya, yd) + 1.2);
-      }
     }
     // End faces close the concrete deck, including undersides at each approach.
     for (const d of [start, finish]) P.box(stone, -half, half, yAt(d) - 1.1, yAt(d), d - 0.035, d + 0.035);
-    for (let d = start; d < finish; d += 2.5) for (const u of [-half, half]) {
-      const y = yAt(d); P.box(metal, u - 0.05, u + 0.05, y + 0.15, y + 1.25, d - 0.05, d + 0.05);
-      if (b.key === 'liteyny') {
-        // Cast-iron vocabulary: oval shield medallion and paired foliate scrolls.
-        for (const v of [-0.65, 0.65]) P.geo(metal, torus, u, y + 0.72, d + 1.2 + v, 0, Math.PI / 2, 0, 1, 0.85, 1);
-        P.geo(metal, torus, u, y + 0.73, d + 1.2, 0, Math.PI / 2, 0, 0.7, 1.05, 0.7);
-        P.box(metal, u - 0.045, u + 0.045, y + 0.53, y + 0.94, d + 1.07, d + 1.33);
-      } else for (const off of [0.6, 1.2, 1.8]) P.box(metal, u - 0.025, u + 0.025, y + 0.35, y + 1.18, d + off - 0.025, d + off + 0.025);
+    // the railing along both edges: a BAY per 2.5 m (a post with the cast-iron ornament, two tubes, a thin collider; lib/fence-bays.js), the ramps at both ends included
+    for (let d = start; d < finish; d += 2.5) for (const side of [-1, 1]) {
+      const d1 = Math.min(finish, d + 2.5), p = pos(side * half, d), q = pos(side * half, d1);
+      rbays.push({ x0: p[0], z0: p[1], x1: q[0], z1: q[1], y: yAt(d), ye: yAt(d1), key: b.key });
     }
     if (b.key === 'bolsheokhtinsky') {
       const offset = (len - 320) / 2;
@@ -123,6 +115,22 @@ export function build(ctx) {
       ctx.wires.add(points, { width: 0.012, color: '#465650' });
     }
     P.pop();
+  }
+  if (rbays.length) {
+    const T = ctx.THREE || THREE, tube = new T.CylinderGeometry(0.05, 0.05, 1, 4, 1).rotateZ(Math.PI / 2).translate(0.5, 0, 0), post = new T.BoxGeometry(0.1, 1.1, 0.1).translate(0, 0.55, 0);
+    const orn = new Parts(); { const Q = orn; Q.geo(metal, torus, 0, 0.72, 1.2 - 0.65, 0, 0, 0, 1, 0.85, 1); Q.geo(metal, torus, 0, 0.72, 1.2 + 0.65, 0, 0, 0, 1, 0.85, 1); Q.geo(metal, torus, 0, 0.73, 1.2, 0, 0, 0, 0.7, 1.05, 0.7); Q.box(metal, 1.07, 1.33, 0.53, 0.94, -0.045, 0.045); }
+    const bal = new Parts(); for (const off of [0.6, 1.2, 1.8]) bal.box(metal, off - 0.025, off + 0.025, 0.35, 1.18, -0.025, 0.025);
+    const meshesOf = (Q) => { const g = new THREE.Group(); Q.build(g, { name: 'north-bridges-orn' }); return g.children.map((m) => ({ geo: m.geometry, mat: m.material })); };
+    const parts = [
+      { geo: tube, mat: metal, name: 'tube-lo', far: 420, stretch: true, y: 0.35 }, { geo: tube, mat: metal, name: 'tube-hi', far: 420, stretch: true, y: 1.18 },
+      { geo: post, mat: metal, name: 'post', far: 420, y: 0.15 },
+      ...meshesOf(orn).map((t, i) => ({ geo: t.geo, mat: t.mat, name: 'orn' + i, far: 300, when: (q) => q.key === 'liteyny' })),
+      ...meshesOf(bal).map((t, i) => ({ geo: t.geo, mat: t.mat, name: 'bal' + i, far: 300, when: (q) => q.key !== 'liteyny' })),
+    ];
+    // (the ornament templates are drawn in the frame of a bay: x along the bridge, y up, z across)
+    knockBays(ctx, { name: 'north-bridges-rail', bays: rbays, parts, far: 420,
+      collider: (q) => ({ y0: Math.min(q.y, q.ye), y1: Math.max(q.y, q.ye) + 1.2, thick: 0.18, e0: 0.02, e1: 0.02 }),
+      rec: () => ({ kind: 'fence', mass: 110, h: 1.15, r: 0.06, anchored: 12, hitK: 0.25, metal: true, minDv: 0 }) });
   }
   P.build(root, { name: 'north-bridges' }); ctx.addStatic(root);
   const deckY = (x, z) => {

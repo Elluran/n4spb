@@ -9,6 +9,8 @@ import { buildHouse } from './house.js';
 import { ringFromFlat } from '../lib/massing.js';
 import { lathe } from './geo.js';
 import { human, horse, extend, cached, figureMats, V } from '../lib/figures.js';
+import { Parts } from './kit.js';
+import { knockBays } from '../lib/fence-bays.js';
 
 const G = 7.6, HC = 20.2;
 const URN = [[0, 0], [0.3, 0], [0.32, 0.06], [0.2, 0.16], [0.3, 0.42], [0.34, 0.62], [0.24, 0.84], [0.3, 0.92], [0.18, 1.0], [0.08, 1.1], [0, 1.16]];
@@ -76,32 +78,33 @@ export function forecourtFence(K) {
   const P = K.P, ph = K.ctx.physics, M = K.M;
   const iron = M.iron, gold = M.gold, pier = M.pierMat || K.mat('#8b7f78', { name: 'lmM-mp-pier', paint: 0.06 }), urnMat = K.mat('#6a6c68', { name: 'lmM-mp-urn', paint: 0.04 });
   const runs = [[[-1350.7, -1473.9], [-1330.7, -1482.8], [-1317, -1489.2]], [[-1322, -1401.9], [-1288.2, -1417.4]]];
+  // WATER IS REACHABLE (docs/AREAS.md 13.7): the forecourt fence breaks: one BAY per panel between two piers (a granite pier with its urn at the end of the bay, the iron rails, the spears, the gilded rosette, a box collider;
+  // lib/fence-bays.js: a car at 24 km/h breaks it off). The geometry is the same as before, drawn once as templates at the origin.
+  const bays = [];
   for (const pts of runs) {
     for (let i = 0; i + 1 < pts.length; i++) {
-      const a = pts[i], b = pts[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz);
-      P.push(a[0], 0, a[1], Math.atan2(-dz, dx));                                       // local +x along the run, z to the side
-      const n = Math.max(1, Math.round(len / 4.1)), step = len / n;
-      for (let k = 0; k <= n; k++) {
-        const x = k * step;
-        P.box(pier, x - 0.45, x + 0.45, 0, 2.2, -0.45, 0.45, 'b'); P.box(pier, x - 0.55, x + 0.55, 2.2, 2.45, -0.55, 0.55, 'b');
-        lathe(P, urnMat, 'lmM-urn', URN, x, 2.45, 0, 0.8, 0.8, 12, 10);
+      const a = pts[i], b = pts[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz), n = Math.max(1, Math.round(len / 4.1)), step = len / n;
+      for (let k = 0; k < n; k++) {
+        const m = Math.max(2, Math.round(step / 0.19)), pk = [];
+        for (let q = 1; q < m; q++) { const x = (q / m) * step; if (x < 0.5 || step - x < 0.5) continue; pk.push(x / step); }
+        bays.push({ x0: a[0] + dx * k / n, z0: a[1] + dz * k / n, x1: a[0] + dx * (k + 1) / n, z1: a[1] + dz * (k + 1) / n, y: 0, first: k === 0, pickets: pk });
       }
-      P.box(iron, 0, len, 0.5, 0.58, -0.03, 0.03, ''); P.box(iron, 0, len, 3.0, 3.08, -0.03, 0.03, ''); P.box(iron, 0, len, 1.7, 1.75, -0.03, 0.03, '');
-      const m = Math.max(2, Math.round(len / 0.19));
-      for (let k = 1; k < m; k++) {
-        const x = (k / m) * len; if (Math.abs(x / step - Math.round(x / step)) * step < 0.5) continue;
-        P.box(iron, x - 0.014, x + 0.014, 0.1, 3.3, -0.014, 0.014, 'bt');
-        P.cyl(gold, [x, 3.3, 0], [x, 3.55, 0], 0.035, 0.002, 4, false);
-        P.cyl(gold, [x, 3.0, 0], [x, 3.06, 0], 0.045, 0.045, 5, false);                  // the gold ferrule / tassel under the spear
-      }
-      // rosettes in rings between the pickets at the middle of every panel
-      for (let k = 0; k < n; k++) { const x = (k + 0.5) * step; P.cyl(gold, [x, 2.35, -0.04], [x, 2.35, 0.04], 0.32, 0.32, 10, false); }
-      P.pop();
-      // collider along the run: a thin box
-      const cx = (a[0] + b[0]) / 2, cz = (a[1] + b[1]) / 2;
-      ph.addBox(cx, cz, len, 0.4, Math.atan2(-dz, dx), 0, 3.6);
     }
   }
+  const templ = (fn) => { const Q = new Parts(), g = new THREE.Group(); fn(Q); Q.build(g, { name: 'lmM-fence' }); return g.children.map((m) => ({ geo: m.geometry, mat: m.material })); };
+  const parts = [];
+  templ((Q) => { Q.box(pier, -0.45, 0.45, 0, 2.2, -0.45, 0.45, 'b'); Q.box(pier, -0.55, 0.55, 2.2, 2.45, -0.55, 0.55, 'b'); lathe(Q, urnMat, 'lmM-urn', URN, 0, 2.45, 0, 0.8, 0.8, 12, 10); })
+    .forEach((t, i) => parts.push({ geo: t.geo, mat: t.mat, name: 'pier' + i, far: 400, ats: (q) => (q.first ? ['start', 'end'] : ['end']) }));
+  templ((Q) => { Q.box(iron, 0, 1, 0.5, 0.58, -0.03, 0.03, ''); Q.box(iron, 0, 1, 3.0, 3.08, -0.03, 0.03, ''); Q.box(iron, 0, 1, 1.7, 1.75, -0.03, 0.03, ''); })
+    .forEach((t, i) => parts.push({ geo: t.geo, mat: t.mat, name: 'rails' + i, far: 400, stretch: true }));
+  templ((Q) => { Q.box(iron, -0.014, 0.014, 0.1, 3.3, -0.014, 0.014, 'bt'); Q.cyl(gold, [0, 3.3, 0], [0, 3.55, 0], 0.035, 0.002, 4, false); Q.cyl(gold, [0, 3.0, 0], [0, 3.06, 0], 0.045, 0.045, 5, false); })
+    .forEach((t, i) => parts.push({ geo: t.geo, mat: t.mat, name: 'spear' + i, far: 300, ats: (q) => q.pickets }));
+  templ((Q) => { Q.cyl(gold, [0, 2.35, -0.04], [0, 2.35, 0.04], 0.32, 0.32, 10, false); })
+    .forEach((t, i) => parts.push({ geo: t.geo, mat: t.mat, name: 'rosette' + i, far: 300, ats: () => ['mid'] }));
+  knockBays(K.ctx, { name: 'lmM-forecourt-fence', bays, parts, far: 400,
+    collider: () => ({ y0: 0, y1: 3.6, thick: 0.4, e0: 0, e1: 0 }),
+    rec: () => ({ kind: 'fence', mass: 600, h: 3.2, r: 0.2, anchored: 24, hitK: 0.6, metal: true, minDv: 0 }) });
+  void P; void ph;
   // the paved forecourt (cour d'honneur): granite slabs between the palace, the two fences and the service wing (hides the generic ground, which shows tufts and mottling there)
   const court = [[-1322, -1401.9], [-1288.2, -1417.4], [-1317, -1489.2], [-1350.7, -1473.9], [-1343.9, -1456], [-1370.3, -1441.4], [-1362.9, -1428.4], [-1356.6, -1417.3], [-1353.7, -1418.9], [-1333.7, -1429.8]];
   P.cap(M.slabDark, court, 0.024, true, 1.6);

@@ -7,6 +7,10 @@
 import * as THREE from 'three';
 import * as G from './geo.js';
 import { partsGeos, addInstanced } from './inst.js';
+import { knockBays } from '../lib/fence-bays.js';
+import { knockInstances } from '../lib/knock-inst.js';
+
+const meshTris = (meshes) => meshes.reduce((t, m) => t + (m.geometry.index ? m.geometry.index.count / 3 : m.geometry.attributes.position.count / 3) * m.count, 0);
 import { NEVA_COLS, NEVA_GATES, NEVA_ROT, NEVA_DIR, MOIKA_PTS, MOIKA_GATES, PORPHYRY_VASE, rotOf } from './frame.js';
 
 const TAU = Math.PI * 2;
@@ -166,29 +170,37 @@ function gateGeo(K, g, c0, c1, opts = {}) {
 function nevaFence(K) {
   const { ctx, M, P, root } = K, ph = ctx.physics;
   const cols = NEVA_COLS, rot = NEVA_ROT, gateAt = new Map(NEVA_GATES.map((g) => [g.a, g]));
-  // instanced columns (variant A on even indexes, B on odd), panels
-  const mA = [], mB = [], mP = [];
-  const mm = (x, z, rotY, sx = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY), new THREE.Vector3(sx, 1, 1));
-  cols.forEach((c, i) => { (i % 2 ? mB : mA).push(mm(c[0], c[1], rot)); ph.addCylinder(c[0], c[1], 0.8, 0, 5.2); });
-  for (let i = 0; i + 1 < cols.length; i++) {
-    const c0 = cols[i], c1 = cols[i + 1], dx = c1[0] - c0[0], dz = c1[1] - c0[1], len = Math.hypot(dx, dz), mx = (c0[0] + c1[0]) / 2, mz = (c0[1] + c1[1]) / 2;
-    const gate = gateAt.get(i);
-    if (gate) { gateGeo(K, gate, c0, c1); continue; }
-    mP.push(mm(mx, mz, rot, (len - 0.9) / PANEL_W));
-    P.push(c0[0], 0, c0[1], rotOf(dx, dz));                                                          // the plinth wall between the column blocks
-    G.tbox(P, M.graniteRock, 0.7, len - 0.7, 0, 0.95, -0.3, 0.3, 2, 2, 'b');
-    G.tbox(P, M.granite, 0.7, len - 0.7, 0.95, 1.0, -0.34, 0.34, 1.5, 1.5, 'b');
-    P.pop();
-    ph.addBox(mx, mz, len - 1.2, 0.6, rotOf(dx, dz), 0, 4.0);
-  }
+  void P; void root;
+  // WATER IS REACHABLE (docs/AREAS.md 13.7): the fence breaks. Every column is a knock record (a granite column with its urn, 45 km/h), every span between two columns is a BREAKABLE BAY (the iron panel, the plinth wall and a box collider;
+  // lib/fence-bays.js: a car at 28 km/h breaks it off and the way to the Neva embankment is open). The gates keep their drawing and their open leaves.
   const pa = columnParts(M, 'A'), pb = columnParts(M, 'B'), pp = panelParts(M);
-  let tris = 0; const per = {};
-  for (const [name, parts, mats] of [['neva-colsA', pa, mA], ['neva-colsB', pb, mB], ['neva-panels', pp, mP]]) {
-    const r = addInstanced(ctx, root, name, parts, mats); tris += r.tris; per[name] = Math.round(r.tris / Math.max(1, mats.length));
-    for (const m of r.meshes) if (M.cutouts.has(m.material)) ctx.noOutline(m);
+  const colItems = cols.map((c) => ph.addCylinder(c[0], c[1], 0.8, 0, 5.2));
+  const colSpots = cols.map((c, i) => ({ x: c[0], y: 0, z: c[1], rotY: rot, v: i % 2 }));
+  const cutout = (m) => M.cutouts.has(m);
+  const colParts = [];
+  for (const [vv, list] of [[0, pa.list], [1, pb.list]]) list.forEach((q, k) => colParts.push({ geo: q.geo, mat: q.mat, name: 'col' + vv + '-' + k, noOutline: cutout(q.mat), far: 450, when: (sp) => sp.v === vv }));
+  const rc = knockInstances(ctx, { name: 'lmGd-neva-cols', parts: colParts, spots: colSpots, items: (i) => colItems[i], far: 450,
+    rec: { kind: 'column', mass: 1800, h: 5.0, r: 0.8, anchored: 45, hitK: 1.0, metal: false } });
+  const bays = [];
+  for (let i = 0; i + 1 < cols.length; i++) {
+    if (gateAt.get(i)) { gateGeo(K, gateAt.get(i), cols[i], cols[i + 1]); continue; }
+    const c0 = cols[i], c1 = cols[i + 1];
+    bays.push({ x0: c0[0], z0: c0[1], x1: c1[0], z1: c1[1], y: 0, len: Math.hypot(c1[0] - c0[0], c1[1] - c0[1]) });
   }
+  const L0 = bays.reduce((t, q) => t + q.len, 0) / Math.max(1, bays.length);            // the plinth template is drawn for the mean length and stretched to each bay
+  const plinth = partsGeos((Q) => {
+    G.tbox(Q, M.graniteRock, 0.7, L0 - 0.7, 0, 0.95, -0.3, 0.3, 2, 2, 'b');
+    G.tbox(Q, M.granite, 0.7, L0 - 0.7, 0.95, 1.0, -0.34, 0.34, 1.5, 1.5, 'b');
+  });
+  const parts = [];
+  pp.list.forEach((q, k) => parts.push({ geo: q.geo, mat: q.mat, name: 'panel-' + k, noOutline: cutout(q.mat), far: 450, at: 'mid', sx: (bb) => (bb.len - 0.9) / PANEL_W }));
+  plinth.list.forEach((q, k) => parts.push({ geo: q.geo, mat: q.mat, name: 'plinth-' + k, far: 450, stretch: true, sx: 1 / L0 }));
+  const rb = knockBays(ctx, { name: 'lmGd-neva-span', bays, parts, far: 450,
+    collider: () => ({ y0: 0, y1: 4.0, thick: 0.6, e0: -0.6, e1: -0.6 }),
+    rec: () => ({ kind: 'fence', mass: 1200, h: 3.6, r: 0.25, anchored: 28, hitK: 0.8, metal: true, minDv: 0 }) });
+  const tris = meshTris(rc.meshes) + meshTris(rb.meshes);
   K.extraTris += tris;
-  K.svc.neva = { columns: cols.length, panels: mP.length, gates: NEVA_GATES.length, tris, perInstance: per };
+  K.svc.neva = { columns: cols.length, panels: bays.length, gates: NEVA_GATES.length, tris, perInstance: { span: Math.round(tris / Math.max(1, bays.length)) } };
 }
 
 // ------------------------------------------------------------------------------------------------ the Moika fence
@@ -243,47 +255,64 @@ function moikaFence(K) {
     Q.box(M.ironGrey, -0.012, 0.012, 1.62, 1.84, -0.1, 0.1, '');                                       // the axe head
     Q.cyl(M.ironGrey, [0, 1.62, 0], [0, 1.9, 0], 0.016, 0.0, 4, false);
   });
-  const mb = [], mp = [], q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), sc = new THREE.Vector3(1, 1, 1);
-  const mx = (x, z, r) => new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), q.setFromAxisAngle(up, r), sc);
-  for (let s = 0.2; s < total; s += 0.35) { if (inGate(s)) continue; const p = at(s); mb.push(mx(p.x, p.z, 0)); }
-  let nextPost = 2.0;
-  for (let s = 0; s <= total + 0.01; s += 0.5) { if (s < nextPost - 0.01) continue; nextPost += 4.0; if (inGate(s)) continue; const p = at(s); mp.push(mx(p.x, p.z, rotOf(p.dx, p.dz))); }
-  // rails + the limestone plinth, run by run (between the gates)
+  // WATER IS REACHABLE (docs/AREAS.md 13.7): the fence breaks. A BAY is a run piece of about 3 m: the limestone plinth with its two rails, the bars (every 0.35 m) and the fasces posts (every 4 m) that stand on it, a box collider
+  // (lib/fence-bays.js, a car at 18 km/h breaks it off); the gates (eagle columns, leaves) keep their drawing.
   const runs = []; let a = 0;
   for (const g of gates.slice().sort((p1, p2) => p1.s - p2.s)) { if (g.s - g.half > a + 0.5) runs.push([a, g.s - g.half]); a = g.s + g.half; }
   if (total > a + 0.5) runs.push([a, total]);
+  const bays = [];
   for (const [s0, s1] of runs) {
     const n = Math.max(1, Math.ceil((s1 - s0) / 3));
     for (let k = 0; k < n; k++) {
-      const sa = s0 + (s1 - s0) * k / n, sb = s0 + (s1 - s0) * (k + 1) / n, A = at(sa), B = at(sb + 0.001), Am = at((sa + sb) / 2);
-      const x0 = A.x, z0 = A.z, x1 = at(sb).x, z1 = at(sb).z, len = Math.hypot(x1 - x0, z1 - z0), rotR = rotOf(Am.dx, Am.dz);
-      void B;
-      P.push(x0, 0, z0, rotOf(x1 - x0, z1 - z0));
-      G.tbox(P, M.graniteGrey, 0, len, 0, 0.45, -0.17, 0.17, 2, 2, 'b');
-      bar(P, M.ironGrey, [0, 1.46, 0], [len, 1.46, 0], 0.022, 4); bar(P, M.ironGrey, [0, 0.58, 0], [len, 0.58, 0], 0.02, 4);
-      P.pop();
-      ph.addBox((x0 + x1) / 2, (z0 + z1) / 2, len, 0.45, rotR, 0, 1.7);
+      const sa = s0 + (s1 - s0) * k / n, sb = s0 + (s1 - s0) * (k + 1) / n, A = at(sa), Bq = at(sb), len = Math.hypot(Bq.x - A.x, Bq.z - A.z);
+      const cnt = Math.max(1, Math.floor(len / 0.35));
+      bays.push({ x0: A.x, z0: A.z, x1: Bq.x, z1: Bq.z, y: 0, len, sa, sb, barAts: Array.from({ length: cnt }, (_, j) => (j + 0.5) / cnt), postAts: [] });
     }
   }
-  const rb = addInstanced(ctx, root, 'moika-bars', barsP, mb), rp = addInstanced(ctx, root, 'moika-posts', postP, mp);
-  K.extraTris += rb.tris + rp.tris;
+  let nextPost = 2.0, posts = 0;
+  for (let s = 0; s <= total + 0.01; s += 0.5) {
+    if (s < nextPost - 0.01) continue; nextPost += 4.0; if (inGate(s)) continue;
+    const bay = bays.find((q) => s >= q.sa - 1e-6 && s <= q.sb + 1e-6); if (bay) { bay.postAts.push(Math.max(0, Math.min(1, (s - bay.sa) / ((bay.sb - bay.sa) || 1)))); posts++; }
+  }
+  const railG = partsGeos((Q) => {
+    G.tbox(Q, M.graniteGrey, 0, 1, 0, 0.45, -0.17, 0.17, 2, 2, 'b');
+    bar(Q, M.ironGrey, [0, 1.46, 0], [1, 1.46, 0], 0.022, 4); bar(Q, M.ironGrey, [0, 0.58, 0], [1, 0.58, 0], 0.02, 4);
+  });
+  const parts = [];
+  railG.list.forEach((q, k) => parts.push({ geo: q.geo, mat: q.mat, name: 'rail-' + k, far: 420, stretch: true }));
+  barsP.list.forEach((q, k) => parts.push({ geo: q.geo, mat: q.mat, name: 'bar-' + k, far: 300, ats: (bb) => bb.barAts }));
+  postP.list.forEach((q, k) => parts.push({ geo: q.geo, mat: q.mat, name: 'post-' + k, far: 420, ats: (bb) => bb.postAts, when: (bb) => bb.postAts.length > 0 }));
+  const rb = knockBays(ctx, { name: 'lmGd-moika', bays, parts, far: 420,
+    collider: () => ({ y0: 0, y1: 1.7, thick: 0.45, e0: 0, e1: 0 }),
+    rec: () => ({ kind: 'fence', mass: 500, h: 1.6, r: 0.15, anchored: 18, hitK: 0.4, metal: true, minDv: 0 }) });
+  K.extraTris += meshTris(rb.meshes);
+  const mb = { length: bays.reduce((t, q) => t + q.barAts.length, 0) }, mp = { length: posts };
   // gates: eagle columns at both sides of each opening, leaves (shut for the end gates, open for the main entrance)
   for (const g of gates) {
     const A = at(g.s - g.half), B = at(g.s + g.half), C = at(g.s), r = rotOf(C.dx, C.dz);
     eagleColumn(P, M, A.x, A.z, r); eagleColumn(P, M, B.x, B.z, r);
     ph.addCylinder(A.x, A.z, 0.6, 0, 4.2); ph.addCylinder(B.x, B.z, 0.6, 0, 4.2);
     const w = g.half * 2 - 1.0;
+    const leaves = (Q) => {                                                                                            // the two leaves (open ones swing into the garden)
+      for (const sdir of [-1, 1]) {
+        Q.push(sdir * (w / 2), 0, 0, g.open ? (sdir < 0 ? -1.4 : 1.4) : 0);
+        const lw = w / 2, dir = sdir < 0 ? 1 : -1;
+        for (let k = 0; k <= Math.round(lw / 0.18); k++) { const x = dir * k * 0.18; bar(Q, M.ironGrey, [x, 0.1, 0], [x, 1.55, 0], 0.014, 4); }
+        box(Q, M.ironGrey, 0, dir * lw, 0.1, 0.18, -0.03, 0.03); box(Q, M.ironGrey, 0, dir * lw, 1.5, 1.58, -0.03, 0.03); box(Q, M.ironGrey, 0, dir * lw, 0.8, 0.85, -0.02, 0.02);
+        Q.pop();
+      }
+    };
     P.push(C.x, 0, C.z, r);
     G.tbox(P, M.graniteGrey, -g.half, g.half, 0, 0.04, -0.4, 0.4, 2, 2, 'b');
-    for (const sdir of [-1, 1]) {
-      P.push(sdir * (w / 2), 0, 0, g.open ? (sdir < 0 ? -1.4 : 1.4) : 0);
-      const lw = w / 2, dir = sdir < 0 ? 1 : -1;
-      for (let k = 0; k <= Math.round(lw / 0.18); k++) { const x = dir * k * 0.18; bar(P, M.ironGrey, [x, 0.1, 0], [x, 1.55, 0], 0.014, 4); }
-      box(P, M.ironGrey, 0, dir * lw, 0.1, 0.18, -0.03, 0.03); box(P, M.ironGrey, 0, dir * lw, 1.5, 1.58, -0.03, 0.03); box(P, M.ironGrey, 0, dir * lw, 0.8, 0.85, -0.02, 0.02);
-      P.pop();
-    }
+    if (g.open) leaves(P);
     P.pop();
-    if (!g.open) ph.addBox(C.x, C.z, g.half * 2 - 1, 0.3, r, 0, 1.7);
+    if (!g.open) {                                                                                                     // a SHUT gate is a breakable bay (docs/AREAS.md 13.7): both leaves as one instance, a thin collider (a car at 16 km/h breaks it)
+      const lg = partsGeos(leaves);
+      knockBays(ctx, { name: 'lmGd-moika-gate', bays: [{ x0: A.x, z0: A.z, x1: B.x, z1: B.z, y: 0 }], far: 420,
+        parts: lg.list.map((q, i) => ({ geo: q.geo, mat: q.mat, name: 'leaf' + i, far: 420, at: 'mid', noOutline: M.cutouts && M.cutouts.has(q.mat) })),
+        collider: () => ({ y0: 0, y1: 1.7, thick: 0.3, e0: -0.5, e1: -0.5 }),
+        rec: () => ({ kind: 'fence', mass: 160, h: 1.6, r: 0.08, anchored: 16, hitK: 0.3, metal: true, minDv: 0 }) });
+    }
     K.svc.entrances.push({ id: g.id, x: C.x, z: C.z, rotY: r + Math.PI / 2, kind: 'gate', label: g.open ? 'Вход в Летний сад со стороны Мойки' : 'Ворота Летнего сада (Мойка)', width: g.half * 2 - 1, open: !!g.open });
   }
   K.svc.moika = { bars: mb.length, posts: mp.length };

@@ -6,7 +6,9 @@
 //   * GRANITE CHAIN BOLLARDS (B2) along the Neva kerb of the Admiralty embankment next to the Senate pier: rough-polished grey stone cylinders 0.9 m x 0.38 m with a domed top every ~3.4 m,
 //     joined by a black chain (photos P40 P61 P104).
 // Instanced; colliders on the posts; none at crossings, bridge approaches, bus stops or gateways.
+import * as THREE from 'three';
 import { VB } from './vb.js';
+import { knockInstances } from '../lib/knock-inst.js';
 import { instances, alongKerbs, hash2, nodeNear, poleClear, clearNear } from './furn.js';
 import { nearCrossing } from './net.js';
 import { WALK_Y, KERB_W } from './surface.js';
@@ -15,6 +17,17 @@ import { MANMADE } from '../data/city.js';
 import * as L from '../layout.js';
 
 const NEVA_BOLLARDS = new Set(['Адмиралтейская набережная']);
+
+const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
+/** the stone / iron posts of the embankments as KNOCK records (docs/AREAS.md 13.7: a post that keeps people from the water breaks like a bollard): one instance per post (y scaled by sy), a cylinder collider each, and the optional
+ *  chain that ends at the post (c = { x, y, z, rotY, sz }: the instance origin is the span start, 1 m along +z scaled by sz) goes down with it */
+function knockPosts(ctx, name, geo, mat, list, { r, h, mass, anchored, hitK, chainGeo = null }) {
+  if (!list.length) return;
+  const items = list.map((q) => ctx.physics.addCylinder(q.x, q.z, r, 0, h));
+  const parts = [{ geo, mat, name: 'post', far: 260, place: (q) => new THREE.Matrix4().compose(_p.set(q.x, q.y || 0, q.z), _q.setFromEuler(_e.set(0, q.rotY || 0, 0)), _s.set(1, q.sy ?? 1, 1)) }];
+  if (chainGeo) parts.push({ geo: chainGeo, mat, name: 'chain', shadow: false, far: 200, when: (q) => !!q.c, place: (q) => new THREE.Matrix4().compose(_p.set(q.c.x, q.c.y, q.c.z), _q.setFromEuler(_e.set(0, q.c.rotY, 0)), _s.set(1, 1, q.c.sz)) });
+  knockInstances(ctx, { name, parts, spots: list, items: (i) => items[i], far: 260, rec: { kind: 'stone', mass, h, r, anchored, hitK, metal: false, minDv: 0 } });
+}
 
 export function buildQuay(ctx, net, root, avoid = []) {
   const out = { stones: 0, gateStones: 0, bollards: 0 };
@@ -36,8 +49,7 @@ export function buildQuay(ctx, net, root, avoid = []) {
     if (nodeNear(net, x, z, 12)) return;
     list.push({ x, y: WALK_Y, z, rotY: hash2(x, z) * 6.28, sy: 0.85 + hash2(z, x) * 0.3 });
   });
-  instances(ctx, geo, mVC, list, 'pt-guard-stones');
-  for (const s of list) ctx.physics.addCylinder(s.x, s.z, 0.26, 0, 0.6);
+  knockPosts(ctx, 'pt-guard-stones', geo, mVC, list, { r: 0.26, h: 0.6, mass: 260, anchored: 22, hitK: 0.35 });      // (granite guard stones 0.6 m: knock records, a car at 22 km/h breaks one off)
   out.stones = list.length;
 
   // ---- the mapped guard stones of the gateways (stone: domed granite 0.55 m; metal: a short black post)
@@ -51,9 +63,8 @@ export function buildQuay(ctx, net, root, avoid = []) {
       const at = poleClear(net, m.x, m.z) ? [m.x, m.z] : clearNear(net, m.x, m.z, 4);     // road clearance rule: a mapped stone that stands on the asphalt moves to the nearest clear spot beside the gate
       if (at) (m.material === 'metal' ? metal : stone).push({ x: at[0], y: 0.03, z: at[1], rotY: hash2(m.x, m.z) * 6.28, sy: 0.9 + hash2(m.z, m.x) * 0.2 });
     }
-    instances(ctx, S.build(), mVC, stone, 'pt-gate-stones'); instances(ctx, M.build(), mVC, metal, 'pt-gate-posts');
-    for (const s of stone) ctx.physics.addCylinder(s.x, s.z, 0.25, 0, 0.55);
-    for (const s of metal) ctx.physics.addCylinder(s.x, s.z, 0.1, 0, 0.62);
+    knockPosts(ctx, 'pt-gate-stones', S.build(), mVC, stone, { r: 0.25, h: 0.55, mass: 240, anchored: 22, hitK: 0.35 });
+    knockPosts(ctx, 'pt-gate-posts', M.build(), mVC, metal, { r: 0.1, h: 0.62, mass: 30, anchored: 10, hitK: 0.12 });
     out.gateStones = stone.length + metal.length;
   }
 
@@ -73,11 +84,12 @@ export function buildQuay(ctx, net, root, avoid = []) {
       if (!river || nearCrossing(net, x, z, 4) || net.cover(x, z, { skip: w }) > -0.5 || L.insideBuilding(x, z, 0.3) || deckAt(x, z, 1) || nodeNear(net, x, z, 9)) { prev = null; return; }
       for (const a of avoid) if (Math.hypot(a[0] - x, a[1] - z) < 4) { prev = null; return; }
       posts.push({ x, y: WALK_Y, z, rotY: hash2(x, z) * 6.28 });
-      if (prev && prevRun === k.run && Math.hypot(prev.x - x, prev.z - z) < 4.2) chains.push({ x: prev.x, y: WALK_Y, z: prev.z, rotY: Math.atan2(x - prev.x, z - prev.z), sz: Math.hypot(x - prev.x, z - prev.z) });
+      const post = posts[posts.length - 1];
+      if (prev && prevRun === k.run && Math.hypot(prev.x - x, prev.z - z) < 4.2) { const ch = { x: prev.x, y: WALK_Y, z: prev.z, rotY: Math.atan2(x - prev.x, z - prev.z), sz: Math.hypot(x - prev.x, z - prev.z) }; chains.push(ch); post.c = ch; }
       prev = { x, z }; prevRun = k.run;
     });
-    instances(ctx, B.build(), mVC, posts, 'pt-neva-bollards'); instances(ctx, C.build(), mVC, chains, 'pt-neva-chains', { shadow: false });
-    for (const p of posts) ctx.physics.addCylinder(p.x, p.z, 0.2, 0, 0.85);
+    knockPosts(ctx, 'pt-neva-bollards', B.build(), mVC, posts, { r: 0.2, h: 0.85, mass: 160, anchored: 26, hitK: 0.4, chainGeo: C.build() });      // (a chain goes down with the post it ends at)
+    void chains;
     out.bollards = posts.length;
   }
   return out;

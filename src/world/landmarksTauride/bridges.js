@@ -10,6 +10,7 @@
 // cut away inside the deck rectangle (+ WALK.pad), where the rails take over, so the head of a bridge is the one place where the shore ring opens and it opens onto the deck between two rails.
 // Budgets (data/bridge-design.js BUDGET): the six sites ~10 k triangles in 2 draws. Stone only where real (the abutments, the dam, the memorial descent of T2 / T3).
 import * as THREE from 'three';
+import { knockBays } from '../lib/fence-bays.js';
 import { registerLOD } from '../../core/spatial.js';
 import { BRIDGE_SITES, BRIDGE_DECK_WIDTH, DAM as DAM_DATA } from './data/bridges.js';
 import * as DESIGN from './data/bridge-design.js';
@@ -148,7 +149,7 @@ export function planBridges(o = {}) {
       for (let k = 1; k < inner.length; k++) { const u1 = inner[k]; if (u1 - u0 > W.rampLen + 1e-9 || hard.has(u1) || k === inner.length - 1) { if (u1 - u0 > 1e-6) { const um = (u0 + u1) / 2, q = at(um); colliders.push({ kind: 'ramp', site: site.site, cx: q.x, cz: q.z, w: deckW - 2 * W.widthInset, d: u1 - u0, rot, yA: h(u0), yB: h(u1), thick: W.rampThick, u0, u1 }); } u0 = u1; } }
       let lo = Infinity, hi = -Infinity; for (let u = cum[i]; u <= cum[i + 1] + 1e-9; u += 0.1) { const y = h(u); lo = Math.min(lo, y); hi = Math.max(hi, y); }
       const px = -dz, pz = dx, mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2, off = hw + R.colliderIn + R.colliderThick / 2;
-      for (const s of [-1, 1]) colliders.push({ kind: 'rail', site: site.site, side: s, cx: mx + px * s * off, cz: mz + pz * s * off, w: R.colliderThick, d: len + 0.6, rot, y0: lo - R.colliderBelow, y1: hi + R.colliderAbove, u0: cum[i], u1: cum[i + 1] });
+      // (the rail boxes of before are gone: WATER IS REACHABLE, docs/AREAS.md 13.7: every rail bay of buildSiteSolids is a breakable bay with its own collider, see buildBridges)
       decks.push({ ax: a[0], az: a[1], bx: b[0], bz: b[1], hw: hw + W.pad, site: site.site });
     }
     zones.push({ c: [site.centre[0], site.centre[1]], axis: site.bearingDeg, w: deckW, len: site.deckLenM, site: site.site });
@@ -181,10 +182,10 @@ export function planBridges(o = {}) {
     return null;
   }
   deckY.box = [bx0, bx1, bz0, bz1];
-  const stats = { sites: plans.length, triangles: K.triangles + KW.triangles, solidTriangles: K.triangles, waterTriangles: KW.triangles, colliders: colliders.length, ramps: colliders.filter((c) => c.kind === 'ramp').length, rails: colliders.filter((c) => c.kind === 'rail').length, worstRampSlope: worstRamp, draws: 1 + (KW.triangles ? 1 : 0),
+  const stats = { sites: plans.length, triangles: K.triangles + KW.triangles, solidTriangles: K.triangles, waterTriangles: KW.triangles, colliders: colliders.length, ramps: colliders.filter((c) => c.kind === 'ramp').length, rails: plans.reduce((n, p) => n + (p.railBays ? p.railBays.length : 0), 0), worstRampSlope: worstRamp, draws: 1 + (KW.triangles ? 1 : 0),
     perSite: Object.fromEntries(plans.map((p) => [p.site, { L: +p.L.toFixed(2), extA: +p.ends.a.ext.toFixed(2), extB: +p.ends.b.ext.toFixed(2), stairA: !!p.ends.a.stair, stairB: !!p.ends.b.stair, gA: +p.gA.toFixed(3), gB: +p.gB.toFixed(3), hA: +p.hA.toFixed(3), hB: +p.hB.toFixed(3), level: p.level === null ? null : +p.level.toFixed(3), crown: p.crown, uA: +p.uA.toFixed(2), uB: +p.uB.toFixed(2), wet: [+p.uWetA.toFixed(1), +p.uWetB.toFixed(1)], top: +Math.max(...p.table).toFixed(3), triangles: p.triangles }])) };
   const pack = (Kt) => ({ pos: Float32Array.from(Kt.pos), nrm: Float32Array.from(Kt.nrm), col: Float32Array.from(Kt.col), idx: Kt.pos.length / 3 > 65535 ? Uint32Array.from(Kt.idx) : Uint16Array.from(Kt.idx), triangles: Kt.triangles });
-  return { sites: plans, deckY, colliders, decks, zones, keepOut, geometry: pack(K), water: pack(KW), stats };
+  return { sites: plans, deckY, colliders, decks, zones, keepOut, geometry: pack(K), water: pack(KW), stats, railBays: plans.flatMap((p) => p.railBays || []) };
 }
 
 /** the solids of one site into the kit K (and the dam's water sheet into KW) */
@@ -206,22 +207,18 @@ function buildSiteSolids(K, KW, rec, D, P, G, shore) {
       if (i + 2 === us.length) K.quad(P3(b, -w, yb - t), P3(b, w, yb - t), P3(b, w, yb), P3(b, -w, yb), cc, q.dx, 0, q.dz);
     }
   };
-  /** the rails of both sides between u0 and u1: posts, a top rail, a mid rail; iron: an X in every bay */
+  /** the rails of both sides between u0 and u1: posts, a top rail, a mid rail; iron: an X in every bay. WATER IS REACHABLE (docs/AREAS.md 13.7): recorded as BAYS (rec.railBays, one per post-to-post span: x0, z0, x1, z1 on the rail line,
+   *  the deck height at both ends), drawn and given colliders by buildBridges (lib/fence-bays.js), no longer merged into the kit */
   const rails = (u0, u1, c, iron) => {
-    const v = hw - R.railW / 2 - 0.02, us = rows(u0, u1, 1.0);
+    const v = hw - R.railW / 2 - 0.02, list = rec.railBays || (rec.railBays = []);
     for (const s of [-1, 1]) {
-      const topPts = us.map((u) => P3(u, s * v, h(u) + DS.railH)), midPts = us.map((u) => P3(u, s * v, h(u) + R.midH)), pp = us.map((u) => perp(u));
-      K.tube(topPts, pp, R.railW / 2, R.railW / 2, c); K.tube(midPts, pp, R.railW * 0.4, R.railW * 0.4, c);
-      const nPost = Math.max(2, Math.round((u1 - u0) / R.postSpacing)), posts = [];
-      for (let k = 0; k <= nPost; k++) { const u = u0 + (u1 - u0) * k / nPost, q = at(u); posts.push(u); K.obb(q.x + perp(u)[0] * s * v, q.z + perp(u)[1] * s * v, q.dx, q.dz, R.postW / 2, R.postW / 2, h(u) - 0.05, h(u) + DS.railH, c); }
-      if (iron) for (let k = 0; k + 1 < posts.length; k++) {                         // the lattice: two diagonals per bay (thin flat bars, both faces)
-        const a = posts[k], b = posts[k + 1], y0a = h(a) + 0.12, y1a = h(a) + R.midH - 0.04, y0b = h(b) + 0.12, y1b = h(b) + R.midH - 0.04, pa = perp(a), pb = perp(b), o = 0.015;
-        for (const [ya, yb] of [[y0a, y1b], [y1a, y0b]]) for (const e of [-1, 1]) {
-          const A0 = P3(a, s * (v + e * o), ya), B0 = P3(b, s * (v + e * o), yb), A1 = P3(a, s * (v + e * o), ya + 0.05), B1 = P3(b, s * (v + e * o), yb + 0.05);
-          K.quad(A0, B0, B1, A1, c, e * s * pa[0], 0, e * s * pa[1]); void pb;
-        }
+      const nPost = Math.max(2, Math.round((u1 - u0) / R.postSpacing));
+      for (let k = 0; k < nPost; k++) {
+        const a = u0 + (u1 - u0) * k / nPost, b = u0 + (u1 - u0) * (k + 1) / nPost, pa = P3(a, s * v, 0), pb = P3(b, s * v, 0);
+        list.push({ x0: pa[0], z0: pa[2], x1: pb[0], z1: pb[2], y: h(a), ye: h(b), first: k === 0, iron, railH: DS.railH, color: C.rail, site: rec.site });
       }
     }
+    void c;
   };
   /** a granite block under the deck at an abutment face: from uIn (inland) to uOut (water side), full width + 0.3, from the ground - 0.4 (the bed at the face) to the deck underside */
   const abutment = (uIn, uOut, t, c) => { const u0 = Math.min(uIn, uOut), u1 = Math.max(uIn, uOut), um = (u0 + u1) / 2, q = at(um), base = G(q.x, q.z) - 0.4, top = Math.min(h(u0), h(u1)) - t + 0.01; if (top > base) K.obb(q.x, q.z, q.dx, q.dz, (u1 - u0) / 2, hw + 0.3, base, top, c); };
@@ -301,7 +298,29 @@ export function buildBridges(ctx, parent, plan, opts = {}) {
   for (const m of group.children) registerLOD(m, 1500);
   const ph = opts.physics || ctx.physics; let n = 0;
   if (ph) for (const c of plan.colliders) { if (c.kind === 'ramp') ph.addWalkRamp(c.cx, c.cz, c.w, c.d, c.rot, c.yA, c.yB, c.thick); else ph.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1); n++; }
-  return { group, mesh, waterMesh, triangles: plan.geometry.triangles + plan.water.triangles, draws: group.children.length, colliders: n };
+  // the rails: breakable bays (a top and a mid tube, a post per bay, the iron X of the arch / flat bridges), a collider each (0.5 m thick, from 1 m under the deck to 1.3 m over it: R.collider*), one knock record each
+  let railN = 0;
+  if (plan.railBays && plan.railBays.length && ph) {
+
+    const RR = (opts.design && opts.design.RAIL) || DESIGN.RAIL, T = ctx.mat.toon, colors = [...new Set(plan.railBays.map((q) => q.color))], parts = [];
+    const tube = (r) => new THREE.CylinderGeometry(r, r, 1, 4, 1).rotateZ(Math.PI / 2).translate(0.5, 0, 0);
+    const xg = new THREE.BufferGeometry(), px = [], ix = [];
+    for (const [ya, yb] of [[0.12, RR.midH - 0.04], [RR.midH - 0.04, 0.12]]) { const k = px.length / 3; px.push(0, ya, 0, 1, yb, 0, 1, yb + 0.05, 0, 0, ya + 0.05, 0); ix.push(k, k + 1, k + 2, k, k + 2, k + 3); }
+    xg.setAttribute('position', new THREE.Float32BufferAttribute(px, 3)); xg.setIndex(ix); xg.computeVertexNormals();
+    for (const col of colors) {
+      const m = T(col, { paint: 0.03, name: 'tauride-bridge-rail-' + col }), md = T(col, { paint: 0.03, side: 'double', name: 'tauride-bridge-rail-x-' + col });
+      parts.push({ geo: tube(RR.railW / 2), mat: m, name: 'top', far: 320, stretch: true, y: (q) => q.railH, when: (q) => q.color === col });
+      parts.push({ geo: tube(RR.railW * 0.4), mat: m, name: 'mid', far: 320, stretch: true, y: RR.midH, when: (q) => q.color === col });
+      parts.push({ geo: new THREE.BoxGeometry(RR.postW, 1, RR.postW).translate(0, 0.5, 0), mat: m, name: 'post', far: 320, at: 'end', y: -0.05, sy: (q) => q.railH + 0.05, when: (q) => q.color === col });
+      parts.push({ geo: new THREE.BoxGeometry(RR.postW, 1, RR.postW).translate(0, 0.5, 0), mat: m, name: 'post0', far: 320, at: 'start', y: -0.05, sy: (q) => q.railH + 0.05, when: (q) => q.color === col && q.first });
+      parts.push({ geo: xg, mat: md, name: 'lattice', far: 240, stretch: true, noOutline: true, when: (q) => q.color === col && q.iron });
+    }
+    const r = knockBays(ctx, { name: 'tauride-bridge-rail', bays: plan.railBays, parts, far: 320,
+      collider: (q) => ({ y0: Math.min(q.y, q.ye) - RR.colliderBelow, y1: Math.max(q.y, q.ye) + RR.colliderAbove, thick: RR.colliderThick, off: RR.colliderThick / 2 * 0, e0: 0.3, e1: 0.3 }),
+      rec: () => ({ kind: 'fence', mass: 120, h: 1.0, r: 0.06, anchored: 12, hitK: 0.25, metal: true, minDv: 0 }) });
+    railN = r.items.filter(Boolean).length; n += railN;
+  }
+  return { group, mesh, waterMesh, triangles: plan.geometry.triangles + plan.water.triangles, draws: group.children.length, colliders: n, railBays: railN };
 }
 
 export { DAM_DATA };

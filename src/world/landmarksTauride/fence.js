@@ -12,6 +12,7 @@
 // cannot see cut-outs; everything STONE or opaque (the plinths, the piers, the gate piers, the posts and rails of the pitch fence) is ONE static mesh with a plain vertex-colour toon material on the outline layer, so that it hides the
 // outlines of the trees and walkers behind it (QA round 1: they were drawn across the gate piers). Three draws in all.
 import * as THREE from 'three';
+import { knockBays } from '../lib/fence-bays.js';
 import { registerLOD } from '../../core/spatial.js';
 import { gardenHeight, GARDEN_SHORE } from './height.js';
 import { FENCES, FENCE_OPENINGS, GATES } from './data/furniture.js';
@@ -287,9 +288,10 @@ export function mergeGeos(list) {
  *   alpha: the open iron leaves of the gates and the diamond mesh of the pitch fence (atlas bands B and C, alpha-cut)
  * returns { stone, alpha, counts } (alpha is null without leaves and pitch panels; counts = triangles by part)
  */
-export function fenceGeometry(plan, D = FENCE, GD = GATE, PD = PITCH_FENCE) {
+export function fenceGeometry(plan, D = FENCE, GD = GATE, PD = PITCH_FENCE, opts = {}) {
   const s = new GB(), b = new GB(), baseOf = (x, z, g) => (g.gatePiers.length ? Math.max(0, (g.gatePiers[0].y + g.gatePiers[1].y) / 2) : 0), counts = {};
-  for (const p of plan.panels) { if (p.pitch || p.open || p.drop || p.low) continue; s.at(p.x, p.y, p.z, p.yaw); plinthInto(s, D, p.len); s.at(); }
+  // (the granite plinth of a tall panel is part of its BREAKABLE BAY now, buildFence: docs/AREAS.md 13.7; `opts.merged` keeps the old merged plinths for the pure tests)
+  if (opts.merged) for (const p of plan.panels) { if (p.pitch || p.open || p.drop || p.low) continue; s.at(p.x, p.y, p.z, p.yaw); plinthInto(s, D, p.len); s.at(); }
   counts.plinths = s.tris;
   for (const q of plan.piers) if (q.kind === 'pier') { s.at(q.x, q.y, q.z, q.yaw); pierInto(s, D); s.at(); }
   counts.piers = s.tris - counts.plinths;
@@ -352,22 +354,29 @@ export function buildFence(ctx, parent, plan, opts = {}) {
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), S = new THREE.Vector3();
   const far = D.far ?? 650;
   const closed = plan.panels.filter((p) => !p.open && !p.drop && !p.pitch), lowN = closed.filter((p) => p.low).length, tall = closed.filter((p) => !p.low);       // T7: `tall` = the 1.9 m panels (pickets + plinth); the low rail panels are in the stone mesh
-  // ---- 1. the pickets of the panels (instanced, alpha-cut: the no-outline layer, the outline pass cannot see cut-outs)
-  const pg = picketGeometry(D), panels = new THREE.InstancedMesh(pg, matA, Math.max(1, tall.length)); panels.name = 'tauride-fence-panels'; panels.castShadow = true; panels.receiveShadow = true;
-  tall.forEach((p, i) => { E.set(0, p.yaw, 0); Q.setFromEuler(E); M.compose(V.set(p.x, p.y, p.z), Q, S.set(1, 1, p.len / D.panelM)); panels.setMatrixAt(i, M); });
-  panels.count = tall.length; panels.instanceMatrix.needsUpdate = true; panels.frustumCulled = true;
-  ctx.noBatch(panels); ctx.noOutline(panels); parent.add(panels); registerLOD(panels, far);
+  // ---- 1. the TALL panels as BREAKABLE BAYS (lib/fence-bays.js, docs/AREAS.md 13.7: the garden's fence stands on the lake shore for 170 m, and a car that leaves the street there must be able to break through): per bay the pickets of the
+  //         panel (instanced, alpha-cut: the no-outline layer, the outline pass cannot see cut-outs), its granite plinth (opaque, vertex colours: layer 0 as the stone mesh below) and a thin collider flagged `fence`; one knock
+  //         record (a car at 24 km/h breaks the bay off at the foot). The piers, the gate piers and the low and pitch panels stay as they were.
+  const pg = picketGeometry(D), plg = (() => { const g = new GB(); plinthInto(g, D, D.panelM); return g.build(); })();
+  const bays = tall.map((p) => { const dx = Math.sin(p.yaw), dz = Math.cos(p.yaw), h = p.len / 2; return { x0: p.x - dx * h, z0: p.z - dz * h, x1: p.x + dx * h, z1: p.z + dz * h, y: p.y, len: p.len }; });
+  const cA = D.collider, bayRes = knockBays(ctx, { name: 'tauride-fence', bays, far,
+    parts: [{ geo: pg, mat: matA, name: 'pickets', noOutline: true, far, at: 'mid', rot: Math.PI / 2, sz: (q) => q.len / D.panelM }, { geo: plg, mat: matS, name: 'plinth', far, at: 'mid', rot: Math.PI / 2, sz: (q) => q.len / D.panelM }],
+    collider: (q) => ({ y0: Math.min(0, q.y) + cA.y0, y1: q.y + cA.y1, thick: cA.thick, e0: 0.01, e1: 0.01 }),
+    rec: () => ({ kind: 'fence', mass: 700, h: 1.9, r: 0.15, anchored: 24, hitK: 0.5, metal: true, minDv: 0 }) });
+  const panels = { count: tall.length, isBays: true, meshes: bayRes.meshes };      // (compat: the old single InstancedMesh)
   // ---- 2. the STONE (one opaque static mesh on layer 0, so that it is in the normal / depth pre-pass the outlines read and hides the lines of the trees and walkers behind a pier: QA round 1 found the outlines of
   //         the pedestrians and crowns drawn across the faces of the gate piers when they were part of the alpha-cut mesh): the plinths of the panels, the ordinary piers, the gate piers, the posts and rails of the pitch fence
   // ---- 3. the alpha-cut rest (the iron leaves of the gates, the diamond mesh of the pitch fence): the no-outline layer
-  const fg = fenceGeometry(plan, D, GATE, PITCH_FENCE), iron = plan.piers.filter((p) => p.kind === 'pier');
+  const fg = fenceGeometry(plan, D, GATE, PITCH_FENCE, opts), iron = plan.piers.filter((p) => p.kind === 'pier');
   const piers = fg.stone ? new THREE.Mesh(fg.stone, matS) : null;
   if (piers) { piers.name = 'tauride-fence-piers'; piers.castShadow = true; piers.receiveShadow = true; ctx.noBatch(piers); parent.add(piers); registerLOD(piers, far); }
   const gates = fg.alpha ? new THREE.Mesh(fg.alpha, matA) : null;
   if (gates) { gates.name = 'tauride-fence-gates'; gates.castShadow = true; gates.receiveShadow = true; ctx.noBatch(gates); ctx.noOutline(gates); parent.add(gates); registerLOD(gates, far); }
   // ---- colliders: a thin box per closed panel (a wall for the pedestrians), a box per pier, per gate pier and per pitch panel / post; the openings stay open
   const col = D.collider, items = { panels: [], piers: [], gates: [], pitch: [] };
-  for (const p of closed) { const c = p.low ? D.low.collider : col, y0 = Math.min(0, p.y) + c.y0, it = ph.addBox(p.x, p.z, c.thick, p.len + 0.02, p.yaw, y0, p.y + c.y1); it.fence = true; items.panels.push(it); }
+  for (const it of bayRes.items) if (it) items.panels.push(it);                                                  // (the tall panels: the colliders of their bays)
+  for (const p of closed) { if (!p.low) continue; const c = D.low.collider, y0 = Math.min(0, p.y) + c.y0, it = ph.addBox(p.x, p.z, c.thick, p.len + 0.02, p.yaw, y0, p.y + c.y1); it.fence = true; items.panels.push(it); }
+  void col;
   for (const p of iron) items.piers.push(ph.addBox(p.x, p.z, D.pier.collider, D.pier.collider, p.yaw, Math.min(0, p.y) - 0.5, p.y + D.pier.h));
   for (const g of plan.gates) for (const p of g.gatePiers) items.gates.push(ph.addBox(p.x, p.z, GATE.collider.w, GATE.collider.w, p.yaw, Math.min(0, p.y) - 0.5, p.y + GATE.h));
   for (const p of plan.panels) if (p.pitch && !p.open && !p.drop) { const it = ph.addBox(p.x, p.z, PITCH_FENCE.collider.thick, p.len + 0.02, p.yaw, Math.min(0, p.y) - 0.5, p.y + PITCH_FENCE.collider.y1); it.fence = true; items.pitch.push(it); }
