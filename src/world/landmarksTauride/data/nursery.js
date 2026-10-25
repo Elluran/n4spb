@@ -122,10 +122,11 @@ export const CRATES = [
   { id: 'crates-2', x: 1084.0, z: -1759.0, rot: -0.35, n: 5 },
 ];
 
-/** the look of the lot's floor: colours (sRGB hex; the shader converts) */
+/** the look of the lot's floor: colours (sRGB hex; the shader converts). SUMMER (the owner, 2026-10-25: the lot was authored from an autumn satellite screenshot and read as a brown field next to the green garden): the base is the garden's own
+ *  lawn (ground-material.js GROUND_COLORS uGA / uGB / uGC / uClover: the same hex), the beds under and between the glasshouses are low green crops and herbs, the tracks and the yard stay pale gravel / light earth */
 export const FLOOR_COLORS = Object.freeze({
-  uE1: '#6c5740', uE2: '#7e6849', uE3: '#574530', uSand: '#a8926f', uTrackA: '#b89f7c', uTrackB: '#a68d6c', uYardA: '#9b8f7b', uYardB: '#887d6b',
-  uDry: '#766b40', uDryB: '#887b52', uSoilA: '#43372b', uSoilB: '#544433', uWeed: '#4f5b2f', uMean: '#75624a',
+  uE1: '#5f8a34', uE2: '#78a043', uE3: '#4a7430', uSand: '#74a350', uPeb: '#c2b48e', uTrackA: '#c3b394', uTrackB: '#b2a283', uYardA: '#9b8f7b', uYardB: '#887d6b',
+  uDry: '#7fa040', uDryB: '#8ba84a', uSoilA: '#3f6a2a', uSoilB: '#4c7a30', uWeed: '#6a9a38', uMean: '#628c38',
 });
 
 /** the floor sits this much above y = 0 (the garden floor is lifted by the same 5 mm: TERRAIN.lift) */
