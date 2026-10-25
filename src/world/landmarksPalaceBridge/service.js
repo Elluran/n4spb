@@ -16,10 +16,16 @@ export const BRIDGE = {
   walkLift: () => 0,                                     // the player's floor is the walk ramp at the asphalt level, as on the fixed deck (bridges/palace.js colliders): no pavement lift for the engine
   liftOf: (v) => (Math.abs(v) >= VP0 ? PAVE : 0.03),     // what a pedestrian's feet stand above the asphalt (deckLift)
 };
-/** the lines of the dynamic colliders of ONE leaf: the two railings (block walkers and cars, open above 1.45 m) and the two barrier kerbs */
-export const RAIL_LINES = [-1, 1].map((sg) => ({ v: sg * (HW - 0.14), w: 0.4, y0Off: -1.2, y1Off: PAVE + 1.25 }));
-export const KERB_LINES = [-1, 1].map((sg) => ({ v: sg * (ROAD + KERB / 2), w: KERB, y0Off: -1.0, y1Off: KERB_H + 0.1 }));
-export const LINES = [...RAIL_LINES, ...KERB_LINES];
+/** the BAYS of a leaf (docs/AREAS.md 13.10): the rail panels (blocks walkers and cars, open above 1.45 m) and the barrier kerb pieces are breakable knock records with a dynamic box each (lib/bascule-bays.js); the box specs: thickness across, bottom / top over
+ *  the surface at the middle of the bay (the top of a rail counts the 0.12 m pavement) */
+export const BAY_RAIL = { d: 0.4, lo: -1.2, hi: PAVE + 1.25 };
+export const BAY_KERB = { d: KERB, lo: -1.0, hi: KERB_H + 0.1 };
+/** a kerb piece of about 3.6 m (wider than a car, like the 4 m pieces of the Troitsky leaf, so one hit meets one piece; the rise under a piece stays within 1.2 m up to the walker's footing limit of 35 degrees: the dynamic box follows the slope) */
+export const KERB_PIECE = 3.6;
+/** the bays of one leaf: both rails (the railing line at |v| = HW - 0.14, the panel foot 0.1 above the pavement) then both barrier kerbs; rs = railSpec('palace') = { W, H } (bridges/rails.js; passed in because this file is pure) */
+export const makeBays = (leaf, rs) => BA.leafBays(leaf, { rail: { W: rs.W, H: rs.H, v: HW - 0.14, n: PAVE + 0.1, k: BAY_RAIL }, kerb: { len: KERB_PIECE, v: ROAD + KERB / 2, k: BAY_KERB } });
+/** the world box of a bay of `leaf` at theta (lib/bascule.js leafBayAt) */
+export const leafBayAt = (leaf, th, sMid, len, v, k, out = {}) => BA.leafBayAt(BRIDGE, leaf, th, sMid, len, v, k, out);
 
 /** the GATES the NPC world stops at: id 's' (u = GATE_S, pointing +u) and 'n' (GATE_N, -u) */
 export const GATE_ID = (g) => 'palacebridge-' + g;
@@ -37,5 +43,3 @@ export const stepCar = (car, th0, th1, dt, st) => BA.stepCar(car, BRIDGE, th0, t
 export const bodyState = BA.bodyState;
 export const createRamps = (ph) => LEAVES.map((lf) => BA.createRamp(ph, BRIDGE, lf, 2 * HW + 0.2));
 export const placeRamps = (items, th) => { for (let i = 0; i < items.length; i++) BA.placeRamp(items[i], BRIDGE, LEAVES[i], th); };
-/** the dynamic boxes of both leaves at theta (writes into `pool`, returns it) */
-export function dynBoxes(theta, pool = []) { let n = 0; for (const lf of LEAVES) n = BA.leafBoxes(BRIDGE, lf, theta, LINES, pool, n); pool.length = n; return pool; }

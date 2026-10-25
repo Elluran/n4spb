@@ -1,9 +1,9 @@
 // lib/bascule.js - PURE (no three.js, no engine imports): the generic parts of a BASCULE BRIDGE that opens on a schedule of the game clock and that the player can use while it opens (docs/AREAS.md 13.8 and 13.10): the clock
 // (a small state machine: warning -> opening -> hold -> closing -> clear), the kinematics of a rigid leaf that rotates about a hinge line (any number of leaves, each pointing toward +u or -u of the bridge frame), the footing
-// (slip) rule, the published service (deckY, deckLift, stop flag, gates, pedestrian step test), the physics floor of a leaf (a walk ramp whose numbers are overwritten per frame) and its dynamic collider boxes, the carry / slip of a
+// (slip) rule, the published service (deckY, deckLift, stop flag, gates, pedestrian step test), the physics floor of a leaf (a walk ramp whose numbers are overwritten per frame), the BAYS of its rails and kerbs (layout + the box that follows the surface; lib/bascule-bays.js turns them into breakable knock records), the carry / slip of a
 // walker or a car that stands on a leaf, the NPC stop lines on the lanes of the bridge, the hooks into people / traffic. landmarksPalaceBridge uses it with TWO leaves (the Palace Bridge, opposite senses about two hinges);
 // landmarksTroitsky has the same logic for ONE leaf in its own files (landmarksTroitsky/{schedule,frame,service}.js) and could be rewritten over this file: the clock is the same code, `makeLeaf` with dir +1 is its frame.js leaf
-// maths, `createBasculeService` / `stepWalker` / `stepCar` / `addStopLines` / `leafBoxes` / `hookPeople` differ only by the bridge description passed in.
+// maths, `createBasculeService` / `stepWalker` / `stepCar` / `addStopLines` / `leafBayAt` / `hookPeople` differ only by the bridge description passed in.
 //
 // THE BRIDGE DESCRIPTION `B` that the generic functions read:
 //   { id, frame: { cx, cz, T, c, s, toWorld(u, v, out), toUV(x, z, out) }, leaves: [makeLeaf(...)...], gates: [{ id, u, dir, hw }], vMax (half width of the walkable deck), yStatic(u) (the height of the FIXED deck at u: where a slid body
@@ -11,6 +11,7 @@
 // Frame conventions: u along the bridge, v across, y up; a leaf with dir +1 stands at u >= uHinge, with dir -1 at u <= uHinge.
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const G = 9.81;
+const NO_EVENTS = Object.freeze([]);       // what takeEvents hands out in the (nearly every) frame without an event: one shared empty list, no allocation
 
 // ------------------------------------------------------------------ the clock
 /** the opening angle (rad) for progress p: smootherstep (zero speed and acceleration at both ends) */
@@ -71,8 +72,8 @@ export function createClock(opts = {}) {
     get stop() { return stage !== 'idle'; },
     /** barrier arm position 0 (up) .. 1 (down) */
     get barrier() { return barrier; },
-    /** events since the last call: 'warn' | 'opening' | 'open' | 'closing' | 'closed' | 'released' */
-    takeEvents() { const e = ev; ev = []; return e; },
+    /** events since the last call: 'warn' | 'opening' | 'open' | 'closing' | 'closed' | 'released' (a frozen shared empty list when there are none: do not keep it or push to it) */
+    takeEvents() { if (!ev.length) return NO_EVENTS; const e = ev; ev = []; return e; },
     setMode(m) { if (m === 'open' || m === 'closed' || m === 'auto') mode = m; return mode; },
     /** ready() -> true when nothing of the NPC world stands on the span (polled in WARN once WARN seconds have passed) */
     setReady(fn) { ready = typeof fn === 'function' ? fn : null; },
@@ -138,6 +139,7 @@ export function createBasculeService(B, o = {}) {
   const q = { u: 0, v: 0 }, u0 = Math.min(...leaves.map((l) => l.uHinge)), u1 = Math.max(...leaves.map((l) => l.uHinge));
   const gu0 = Math.min(...gates.map((g) => g.u)), gu1 = Math.max(...gates.map((g) => g.u)), gb = [1e9, 1e9, -1e9, -1e9];      // the gated rectangle (between the two gates) and its world AABB
   for (const [u, v] of [[gu0, -B.vMax - 1], [gu1, -B.vMax - 1], [gu1, B.vMax + 1], [gu0, B.vMax + 1]]) { const w = F.toWorld(u, v); gb[0] = Math.min(gb[0], w.x); gb[2] = Math.max(gb[2], w.x); gb[1] = Math.min(gb[1], w.z); gb[3] = Math.max(gb[3], w.z); }
+  const adv = { th0: 0, th1: 0, events: NO_EVENTS };
   const out = (x, z) => x < B.bounds[0] || x > B.bounds[2] || z < B.bounds[1] || z > B.bounds[3];
   const svc = {
     clock, gates, leaves, tris: 0, uRange: [u0, u1], gateRange: [gu0, gu1],
@@ -192,7 +194,8 @@ export function createBasculeService(B, o = {}) {
       for (let i = 0; i < gates.length; i++) { const g = gates[i]; if (Math.abs((x - g.x) * g.dx + (z - g.z) * g.dz) <= r && Math.hypot(x - g.x, z - g.z) < g.hw + r) return true; }
       return false;
     },
-    advance(dt, night = 0) { const th0 = clock.theta; clock.step(dt, night); return { th0, th1: clock.theta, events: clock.takeEvents() }; },
+    /** advance the clock by dt; returns ONE object that is reused by every call (valid until the next call: the frame loop reads it at once, nothing is allocated per frame) { th0, th1, events } */
+    advance(dt, night = 0) { adv.th0 = clock.theta; clock.step(dt, night); adv.th1 = clock.theta; adv.events = clock.takeEvents(); return adv; },
   };
   return svc;
 }
@@ -205,7 +208,7 @@ const ends = (leaf, th, out) => {                              // the footprint 
   const yAt = (u) => leaf.yHinge + leaf.dir * (u - leaf.uHinge) * tp;
   out.yLo = yAt(f.lo - E); out.yHi = yAt(f.hi + E); return out;
 };
-const _e = {};
+const _e = {}, _pw = { x: 0, z: 0 };
 /** add the floor ramp of the CLOSED leaf to a Physics (core/physics.js: addWalkRamp, local z = u: yA at the lower u); returns the item (flagged `leaf`). width = the full width of the deck rectangle */
 export function createRamp(ph, B, leaf, width) {
   const F = B.frame, rampRot = Math.atan2(F.c, F.s), e = ends(leaf, 0, _e), len = e.hi - e.lo + 2 * E, w = F.toWorld((e.lo + e.hi) / 2, 0);
@@ -213,27 +216,35 @@ export function createRamp(ph, B, leaf, width) {
 }
 /** overwrite the ramp for the opening angle theta: the footprint shrinks toward the hinge (it stays inside the cells the item was inserted in), the two heights follow the surface line */
 export function placeRamp(it, B, leaf, th) {
-  const e = ends(leaf, th, _e), w = B.frame.toWorld((e.lo + e.hi) / 2, 0);
+  const e = ends(leaf, th, _e), w = B.frame.toWorld((e.lo + e.hi) / 2, 0, _pw);
   it.cx = w.x; it.cz = w.z; it.hd = (e.hi - e.lo) / 2 + E; it.yA = _e.yLo; it.yB = _e.yHi; it.y0 = Math.min(it.yA, it.yB) - THICK;
 }
 
-// ------------------------------------------------------------------ the dynamic collider boxes of a leaf (rails, barrier kerbs)
-export const RISE_MAX = 1.4;
+// ------------------------------------------------------------------ the BAYS of a leaf: its two rails and two barrier kerbs (docs/AREAS.md 13.7, 13.8, 13.10)
+// Every rail panel and kerb piece of a MOVING leaf is a breakable BAY like the fixed fences of the world (the owner's rule: everything that blocks breaks). Pure part here: the layout of the bays on a leaf and the
+// world box of a bay that follows the leaf's surface; lib/bascule-bays.js (three.js) makes the knock records, the instances and the per-angle re-pose from it.
+const _bw = { x: 0, z: 0 };
 /**
- * boxes of the lines `lines` = [{ v, w (thickness across), y0Off, y1Off }] along `leaf` at theta, cut so that the rise under one box stays within RISE_MAX; appended to `pool` from index `at` (records reused);
- * returns the new count. Every box is aligned with the bridge axis (rotY = -T): a box of the leaf's slope is a staircase of short boxes.
+ * the world box of a bay at opening angle th: the bay lies on the leaf from sMid - len / 2 to sMid + len / 2 (distances along the surface from the hinge) at the bridge lateral offset v; k = { d (thickness across), lo / hi (bottom / top of the box relative to the surface at the middle of the bay; the box also covers the rise of the surface under it) }.
+ * Writes { cx, cz (the middle on the surface), y (the surface level there), rise (half the height the surface gains along the bay), w (the horizontal length of the box + 6 cm), d, rotY (-T: aligned with the bridge axis),
+ * y0, y1 } into `out`: a box that follows the slope; a bay of at most 2.5 m rises at most 1.2 m (half) under it up to 70 degrees. Allocation free.
  */
-export function leafBoxes(B, leaf, th, lines, pool, at = 0) {
-  const F = B.frame, phi = leaf.phi(th), cph = Math.cos(phi), sph = Math.sin(phi), S = leaf.S, n = clamp(Math.ceil(S * Math.abs(sph) / RISE_MAX), 8, 36), ds = S / n, hl = ds * cph;
-  let b = at;
-  for (const ln of lines) {
-    for (let i = 0; i < n; i++) {
-      const s = ds * (i + 0.5), u = leaf.uHinge + leaf.dir * s * cph, y = leaf.yHinge + s * sph, rise = ds * Math.abs(sph) / 2, c = F.toWorld(u, ln.v);
-      let o = pool[b]; if (!o) o = pool[b] = { cx: 0, cz: 0, w: 0, d: 0, rotY: -F.T, y0: 0, y1: 0 };
-      o.cx = c.x; o.cz = c.z; o.w = hl + 0.06; o.d = ln.w; o.rotY = -F.T; o.y0 = y - rise + ln.y0Off; o.y1 = y + rise + ln.y1Off; b++;
-    }
-  }
-  return b;
+export function leafBayAt(B, leaf, th, sMid, len, v, k, out) {
+  const F = B.frame, phi = leaf.phi(th), cph = Math.cos(phi), sph = Math.sin(phi), c = F.toWorld(leaf.uHinge + leaf.dir * sMid * cph, v, _bw), rise = len * Math.abs(sph) / 2, y = leaf.yHinge + sMid * sph;
+  out.cx = c.x; out.cz = c.z; out.y = y; out.rise = rise; out.w = len * cph + 0.06; out.d = k.d; out.rotY = -F.T; out.y0 = y - rise + k.lo; out.y1 = y + rise + k.hi;
+  return out;
+}
+/**
+ * the bays of one leaf: spec = { rail: { W (panel width wished), H (panel height), v (the lateral offset of the rail line, positive), n (height of the panel foot above the surface), k, gap }, kerb: { len (piece length wished), v, k } };
+ * returns [{ rail, s0, len, v (bridge lateral, signed), n, sy (the height scale of the instance), k, rec: null, box: {} }] : both rails (sides -1, +1), then both kerbs. s0 = the start along the surface from the hinge.
+ * A rail panel keeps `gap` m (0.04) at both ends for the post; the number of panels is round(S / W) (at least 2), of kerb pieces ceil(S / len).
+ */
+export function leafBays(leaf, spec) {
+  const out = [], S = leaf.S, R = spec.rail, K = spec.kerb, gap = R.gap ?? 0.04, nb = Math.max(2, Math.round(S / R.W)), bw = S / nb, nk = Math.max(1, Math.ceil(S / K.len)), kw = S / nk;
+  const box = () => ({ cx: 0, cz: 0, w: 1, d: 1, rotY: 0, y0: 0, y1: 0, y: 0, rise: 0 });
+  for (const sg of [-1, 1]) for (let i = 0; i < nb; i++) out.push({ rail: true, s0: bw * i + gap, len: bw - 2 * gap, v: sg * R.v, n: R.n, sy: R.H, k: R.k, rec: null, box: box() });
+  for (const sg of [-1, 1]) for (let i = 0; i < nk; i++) out.push({ rail: false, s0: kw * i, len: kw, v: sg * K.v, n: 0, sy: 1, k: K.k, rec: null, box: box() });
+  return out;
 }
 
 // ------------------------------------------------------------------ the NPC traffic: stop lines on the lanes of the bridge, answered red while the STOP flag is up

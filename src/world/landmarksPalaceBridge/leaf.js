@@ -1,17 +1,21 @@
 // landmarksPalaceBridge/leaf.js - the TWO BASCULE LEAVES of the Palace Bridge: the moving parts (each ~28.7 m of deck with its fish-belly steel girders, granite barrier kerbs, asphalt pavements, markings, the cast-iron railing, one
 // lamp standard per side, a counterweight on the pier side of the hinge), their physics and their dynamic colliders. Everything is a handful of meshes moved by TRANSFORM (no geometry rebuild); the physics floor is ONE walk
 // ramp per leaf whose numbers are overwritten per frame (lib/bascule.js placeRamp: an item mutated at run time, the way a conveyor's `dir` is, no re-insert of grid cells: the footprint of the raised leaf lies inside the footprint
-// of the closed one); the railings and the barrier kerbs are DYNAMIC colliders (ctx.physics.addDynamic -> refreshDynamic): boxes that follow the leaves' surfaces, cut into pieces that are short enough for the slope under them.
+// of the closed one); the railings and the barrier kerbs are BAYS (lib/bascule.js leafBays, lib/bascule-bays.js: a knock record with a dynamic box each, re-posed with the leaf; docs/AREAS.md 13.10): boxes that follow the leaves'
+// surfaces, one per bay of at most 2.5 m, short enough for the slope under them.
 // Frames: the OUTER group of a leaf stands at its hinge line (u = U0 / U1) turned about y so that its local x runs from the hinge TOWARD THE MIDDLE (A: along +u, B: along -u: local z = +v / -v, the deck is symmetric
 // across); PIVOT turns by theta about z (the opening: A and B rotate in OPPOSITE senses of the bridge frame); BODY turns by the rest tilt ALPHA0 so that its x axis runs along the deck surface: body coordinates
 // (s, n, v) = (distance from the hinge along the surface, height above the surface, across). The closed leaf is the chord of the deck profile, within a few centimetres of the fixed deck.
-// Rails: the fixed bridge's railing panels are breakable bays (bridges/rails.js, docs/AREAS.md 13.7); the railing of a MOVING leaf is one instanced mesh plus dynamic boxes (as the Troitsky leaf, 13.8): it blocks and does not
-// break while the leaf is part of the machine (documented in 13.10). The lamps of a leaf have no collider (nothing to hit or break).
+// Rails and kerbs: the fixed bridge's railing panels are breakable bays (bridges/rails.js, docs/AREAS.md 13.7); the rail panels and the barrier kerb pieces of a MOVING leaf are breakable too (the owner's rule: everything that
+// blocks breaks): knock records whose instances live in world-frame knock meshes that `set(theta)` re-poses, and whose collider is the record's own dynamic box (as the Troitsky leaf, 13.8; 13.10). The lamps of a leaf have
+// no collider (nothing to hit or break).
 import * as THREE from 'three';
-import { railMat, railSpec } from '../bridges/rails.js';
+import { railMat, railSpec, RAIL_FAR } from '../bridges/rails.js';
 import { Parts } from '../bridges/kit.js';
+import { unitBox } from '../lib/fence-bays.js';
+import { createLeafBays } from '../lib/bascule-bays.js';
 import { FR, HW, ROAD, KERB, PAVE, KERB_H, toWorld } from './frame.js';
-import { LEAVES, createRamps, placeRamps, dynBoxes } from './service.js';
+import { BRIDGE, LEAVES, createRamps, placeRamps, makeBays } from './service.js';
 
 const IRON_HEX = '#45664f', NEAR_R = 160;
 const VP0 = ROAD + KERB, VP1 = HW + 0.1;
@@ -22,8 +26,8 @@ const LAMP_U = { A: 111, B: 137.5 };                       // the lamp standards
 export function buildLeaves(env) {
   const { ctx, M } = env, T = FR.T, FI = M.fasPalace || M.fasIron;
   const ironMat = ctx.mat.toon(IRON_HEX, { paint: 0.03, name: 'brg-palace-rail' });
-  const outers = [], pivots = [], bodies = [], meshes = [];
-  let tris = 0, railCount = 0;
+  const outers = [], pivots = [], bodies = [], meshes = [], sets = [], knock = !!ctx.knock;
+  let tris = 0, railCount = 0, kerbCount = 0;
   const spec = railSpec('palace');
 
   for (const lf of LEAVES) {
@@ -46,9 +50,12 @@ export function buildLeaves(env) {
       for (const sg of [-1, 1]) {
         const va = sg * ROAD, vb = sg * VP1, vk = sg * VP0;
         P.quad(M.footAsphalt, [s0, PAVE, vk], [s1, PAVE, vk], [s1, PAVE, vb], [s0, PAVE, vb], [0, 1, 0], [[s0 / 2.4, vk / 2.4], [s1 / 2.4, vk / 2.4], [s1 / 2.4, vb / 2.4], [s0 / 2.4, vb / 2.4]]);
-        P.quad(M.kerb, [s0, 0, va], [s1, 0, va], [s1, KERB_H, va], [s0, KERB_H, va], [0, 0, -sg], [[s0, 0], [s1, 0], [s1, KERB_H], [s0, KERB_H]]);
-        P.quad(M.kerb, [s0, KERB_H, va], [s1, KERB_H, va], [s1, KERB_H, vk], [s0, KERB_H, vk], [0, 1, 0], [[s0, 0], [s1, 0], [s1, KERB], [s0, KERB]]);
-        P.quad(M.kerb, [s0, PAVE, vk], [s1, PAVE, vk], [s1, KERB_H, vk], [s0, KERB_H, vk], [0, 0, sg], [[s0, 0], [s1, 0], [s1, KERB_H], [s0, KERB_H]]);
+        if (knock) P.quad(M.kerb, [s0, 0, va], [s1, 0, va], [s1, 0, vk], [s0, 0, vk], [0, 1, 0], [[s0, 0], [s1, 0], [s1, KERB], [s0, KERB]]);      // the deck strip under the breakable kerb pieces (below): it stays when a piece is gone
+        else {                                                                                                                                   // (no ctx.knock: the kerb is part of the moving mesh and a plain box)
+          P.quad(M.kerb, [s0, 0, va], [s1, 0, va], [s1, KERB_H, va], [s0, KERB_H, va], [0, 0, -sg], [[s0, 0], [s1, 0], [s1, KERB_H], [s0, KERB_H]]);
+          P.quad(M.kerb, [s0, KERB_H, va], [s1, KERB_H, va], [s1, KERB_H, vk], [s0, KERB_H, vk], [0, 1, 0], [[s0, 0], [s1, 0], [s1, KERB], [s0, KERB]]);
+          P.quad(M.kerb, [s0, PAVE, vk], [s1, PAVE, vk], [s1, KERB_H, vk], [s0, KERB_H, vk], [0, 0, sg], [[s0, 0], [s1, 0], [s1, KERB_H], [s0, KERB_H]]);
+        }
       }
       const mk = (vc, w) => P.quad(M.mark, [s0, 0.03, vc - w], [s1, 0.03, vc - w], [s1, 0.03, vc + w], [s0, 0.03, vc + w], [0, 1, 0]);
       mk(-0.12, 0.06); mk(0.12, 0.06);
@@ -104,31 +111,40 @@ export function buildLeaves(env) {
     const ms = P.build(body, { name: 'palacebridge-leaf-' + lf.id });
     for (const m of ms) if (M.decalMats.has(m.material)) ctx.noOutline(m);
     meshes.push(...ms);
-    const geo = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), im = new THREE.InstancedMesh(geo, railMat(ctx, 'palace', IRON_HEX), 2 * nb), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3();
-    let k = 0; for (const sg of [-1, 1]) for (let i = 0; i < nb; i++) { m4.compose(ps.set(bw * i + 0.04, 0.1 + 0.12, sg * (HW - 0.14)), q, sc.set(bw - 0.08, spec.H, 1)); im.setMatrixAt(k++, m4); }
-    im.instanceMatrix.needsUpdate = true; im.castShadow = true; im.receiveShadow = false; im.name = 'palacebridge-leaf-rail-' + lf.id; im.frustumCulled = false; ctx.noOutline(im); body.add(im);
     ctx.add(outer);                                                                                         // the dynamic root: never merged, matrices live
-    tris += P.tris + nb * 4; railCount += 2 * nb;
+    // the BAYS of the two rails and the two barrier kerbs of this leaf (docs/AREAS.md 13.10): breakable knock records that ride on it (lib/bascule-bays.js)
+    const bays = makeBays(lf, spec), kl = bays.find((b) => !b.rail).len;
+    for (const b of bays) b.leaf = lf;
+    const lb = createLeafBays(ctx, {
+      B: BRIDGE, leaf: lf, outer, body, bays, name: 'palacebridge-leaf-' + lf.id,
+      rail: { geo: new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0), mat: railMat(ctx, 'palace', IRON_HEX), far: RAIL_FAR, rec: (b) => ({ kind: 'fence', mass: 60, h: spec.H, r: 0.04, w: b.len, d: 0.3, anchored: 12, hitK: 0.2, metal: true, minDv: 0 }) },
+      kerb: { geo: unitBox(0, KERB_H, -KERB / 2, KERB / 2, { uLen: kl }), mat: M.kerb, far: 450, rec: (b) => ({ kind: 'fence', mass: 900, h: KERB_H, r: 0.2, w: b.len, d: KERB, anchored: 30, hitK: 0.4, metal: false, minDv: 0 }) },
+    });
+    sets.push(lb);
+    tris += P.tris + lb.info.rails * 2 + (knock ? lb.info.kerbs * 10 : 0); railCount += lb.info.rails; kerbCount += lb.info.kerbs;
     outers.push(outer); pivots.push(pivot); bodies.push(body);
   }
 
-  // ---------------------------------------------------------------- physics: the floor (one ramp per leaf, overwritten per frame) and the dynamic colliders (the railings and the barrier kerbs of both leaves)
+  // ---------------------------------------------------------------- physics: the floor (one ramp per leaf, overwritten per frame) and the dynamic colliders (one box per STANDING bay of the railings and the barrier kerbs of both leaves)
   const ph = ctx.physics;
   let items = [], theta = 0;
   const colliders = () => { items = createRamps(ph); return items.length; };
-  const boxes = [], near = { x: 0, z: 0 }, NONE = [], r2 = NEAR_R * NEAR_R;
+  const boxes = [], near = { x: 0, z: 0 }, NONE = [], r2 = NEAR_R * NEAR_R;      // (the boxes of the STANDING bays: the knock records' own sources; broken bays drop out)
   { const c = toWorld((LEAVES[0].uHinge + LEAVES[1].uHinge) / 2, 0); near.x = c.x; near.z = c.z; }
-  ph.addDynamic(() => {
+  const provide = () => {
     const pp = ctx.player && ctx.player.position;
     if (pp) { const dx = pp.x - near.x, dz = pp.z - near.z; if (dx * dx + dz * dz > r2) return NONE; }      // nobody within 160 m: nothing to collide with
-    return dynBoxes(theta, boxes);
-  });
+    boxes.length = 0; for (let i = 0; i < sets.length; i++) sets[i].boxes(boxes);
+    return boxes;
+  };
+  provide.stableBoxes = true;                                                                              // the same box objects every call (the bays' own sources): physics.refreshDynamic keeps one OBB per box
+  ph.addDynamic(provide);
 
   return {
     outers, pivots, bodies, meshes, tris, colliders, items: () => items,
-    /** set the opening angle (rad): the transform of both pivots (A turns by +theta, B by +theta about its own local z: the opposite sense in the bridge frame) and the two floor ramps */
-    set(th) { theta = th; for (const p of pivots) p.rotation.z = th; placeRamps(items, th); },
+    /** set the opening angle (rad): the transform of both pivots (A turns by +theta, B by +theta about its own local z: the opposite sense in the bridge frame), the two floor ramps and the pose of the bays (the module calls it only when the angle changed) */
+    set(th) { theta = th; for (const p of pivots) p.rotation.z = th; placeRamps(items, th); for (let i = 0; i < sets.length; i++) sets[i].set(th); },
     get theta() { return theta; },
-    info: { rails: railCount },
+    bays: sets.flatMap((q) => q.bays), info: { rails: railCount, kerbs: kerbCount },
   };
 }

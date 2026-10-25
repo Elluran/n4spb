@@ -182,8 +182,24 @@ export class Physics {
     return out;
   }
   refreshDynamic() {
-    this._dynItems.length = 0;
-    for (const fn of this.dynamic) { const arr = fn() || []; for (const b of arr) this._dynItems.push(this._obb('box', b.cx, b.cz, b.w, b.d, b.rotY || 0, { y0: b.y0 ?? Y_MIN, y1: b.y1 ?? Y_MAX, source: b })); }
+    const items = this._dynItems; items.length = 0;
+    for (const fn of this.dynamic) {
+      const arr = fn(); if (!arr) continue;
+      if (!fn.stableBoxes) { for (const b of arr) items.push(this._obb('box', b.cx, b.cz, b.w, b.d, b.rotY || 0, { y0: b.y0 ?? Y_MIN, y1: b.y1 ?? Y_MAX, source: b })); continue; }
+      // a provider that marks itself `stableBoxes` returns the SAME box objects every call (a bascule leaf's bays): one OBB per source box is KEPT between calls and rewritten in place only when the box moved,
+      // so a leaf that lies allocates and computes nothing here
+      const cache = this._dynObb || (this._dynObb = new WeakMap());
+      for (let i = 0; i < arr.length; i++) {
+        const b = arr[i], rot = b.rotY || 0, y0 = b.y0 ?? Y_MIN, y1 = b.y1 ?? Y_MAX;
+        let it = cache.get(b);
+        if (!it) { it = this._obb('box', b.cx, b.cz, b.w, b.d, rot, { y0, y1, source: b }); cache.set(b, it); }
+        else if (it.cx !== b.cx || it.cz !== b.cz || it.hw !== b.w / 2 || it.hd !== b.d / 2 || it.rotY !== rot || it.y0 !== y0 || it.y1 !== y1) {
+          it.cx = b.cx; it.cz = b.cz; it.hw = b.w / 2; it.hd = b.d / 2; it.y0 = y0; it.y1 = y1;
+          if (it.rotY !== rot) { it.rotY = rot; it.c = Math.cos(rot); it.s = Math.sin(rot); }
+        }
+        items.push(it);
+      }
+    }
   }
 
   /** True when (x,z), grown by r, touches a terrain hole (addHole / addEscalator). */
