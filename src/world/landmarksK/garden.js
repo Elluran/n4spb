@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import * as G from './geo.js';
 import { plantTrees } from './trees.js';
 import { bust, cached, figureMats } from '../lib/figures.js';
+import { knockBays } from '../lib/fence-bays.js';
 
 const Q0 = { x: -971, z: -940 }, QR = -0.188;
 const cs = Math.cos(QR), sn = Math.sin(QR);
@@ -131,7 +132,14 @@ function rossiBridge(K) {
     ph.addWalkBox(cx, cz, seg + 0.05, w, rot, (y0 + y1) / 2 + 0.02, -1);
   }
   P.pop();
-  for (const s of [-1, 1]) ph.addBox(a[0] + dx / 2 + (-dz / L) * s * (w / 2), a[1] + dz / 2 + (dx / L) * s * (w / 2), L, 0.12, rot, 0, 1.1);
+  // the railing line: one GHOST bay per deck segment and side (a breakable collider under the drawn iron railing; water is reachable, docs/AREAS.md 13.7: the pond has water now, a 17 m wall in it was a fence line)
+  const rb = [];
+  for (const s of [-1, 1]) for (let i = 0; i < n; i++) {
+    const t0 = i / n, t1 = (i + 1) / n, ox = (-dz / L) * s * (w / 2), oz = (dx / L) * s * (w / 2);
+    rb.push({ x0: a[0] + dx * t0 + ox, z0: a[1] + dz * t0 + oz, x1: a[0] + dx * t1 + ox, z1: a[1] + dz * t1 + oz, y: 0, ghost: true });
+  }
+  knockBays(K.ctx, { name: 'lmK-rossi-rail', bays: rb, parts: [], far: 200, collider: { y0: 0, y1: 1.1, thick: 0.12, e0: 0.02, e1: 0.02 },
+    rec: { kind: 'fence', mass: 60, h: 1.0, r: 0.05, anchored: 14, hitK: 0.2, metal: true, minDv: 0 } });
 }
 
 export function garden(K) {
