@@ -95,6 +95,8 @@ const BUDGET = { environment: 500e3, streets: 500e3, city: 600e3, landmarksA: 40
   // Oktyabrsky: the STRIP's value (27,542 measured, + 10 %); the North builds 47,001 with the Kapodistrias monument, its apron and its trees and has its own entry in BUDGET_AREA above.
   // landmarksBelinskyNorth (M7 C-landmarks, measured 2026-10-23, + 20 %): the Church of Simeon and Anna 27,955
   landmarksOktyabrsky: 30.3e3, landmarksBelinskyNorth: 34e3,
+  // the Troitsky Bridge (docs/AREAS.md 13.8, measured 2026-10-25: 107,738 = the static bridge + the bascule leaf + the 22 knockable lamps + the barriers) + 11 %
+  landmarksTroitsky: 120e3,
   // the Tauride Palace + the Paradny quarter (T1 of docs/TAURIDE-REMAKE.md, measured: 621,713 incl. the courts 29 k and the palace 23 k; the garden is not in it, it comes with the later phases and gets its own allowance)
   landmarksTauride: 835e3 };      // T8b (the garden nursery, a user fix): measured 758,672 = 738,046 + the nursery's 20,626 (floor 20, frames 5,150, glass 3,714, trees 11,224, buildings and details 518); T6 (the Tauride remake): measured 741,242 after the fence, the furniture and the monuments (T5 695,581 + the fence 15.7 k + the furniture 19.1 k + the monuments 10.8 k), the tripwire = the measure + 10 % (T5: 765 k = 695,273 + 10 %); 815 k + the 20.6 k of the nursery = 835 k
 

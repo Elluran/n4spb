@@ -22,6 +22,7 @@ import { GROUPS_LIST as G_CASTLE } from '../../world/landmarksCastle/groups.js';
 import { LIBRARY_GROUP } from '../../world/landmarksD/groups.js';
 import { GROUPS_LIST as G_NORTHBRIDGES } from '../../world/northBridges/groups.js';
 import { GROUPS_LIST as G_GARDEN, GARDEN_RING } from '../../world/landmarksGarden/groups.js';
+import { GROUPS_LIST as G_TROITSKY } from '../../world/landmarksTroitsky/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'palace';
@@ -54,6 +55,7 @@ export const MODULES = [
   'landmarksMars', // Mars Field, Memorial to the Fighters of the Revolution (Eternal Flame), Suvorov monument, Marble Palace, Saltykov / Betsky houses, Pavlovsky Barracks
   'landmarksCastle', // Engineering (Mikhailovsky) Castle and the Peter I monument
   'bridges',      // the bridges of the area: Kazansky, Green, Palace, Hermitage, the Winter Canal and the Swan Canal bridges ...
+  'landmarksTroitsky', // the Troitsky Bridge over the Neva (554 m) with its opening bascule leaf; after streets (the NPC stop lines) and bridges (its deckY wraps theirs), before traffic / people (they read it)
   'props',        // benches, bins, kiosks, bus shelters, tourist stalls, billboards, flower baskets
   'traffic',      // moving cars, buses, trolleybuses + parked cars
   'people',       // pedestrians, tourists, groups with guides, station crowd, cyclists, scooters
@@ -65,6 +67,7 @@ export const LABELS = {
   landmarksNorthFull: 'Чернышевская, Спасо-Преображенский собор, дом Мурузи',
   landmarksBelinskyNorth: 'церковь Симеона и Анны',
   northBridges: 'Литейный мост',
+  landmarksTroitsky: 'Троицкий мост · разводной пролёт',
   landmarksD: 'Национальная библиотека',
   landmarksGarden: 'Летний сад · ограда',
   landmarksMars: 'Марсово поле, Мраморный дворец, памятник Суворову',
@@ -151,6 +154,8 @@ GROUPS.landmarksNorthFull = G_NORTHFULL; GROUPS.landmarksBelinskyNorth = G_BELIN
 GROUPS.landmarksGarden = G_GARDEN;
 // the Mars Field (the Field, the Eternal Flame memorial, Suvorov Square, the Marble Palace with the Saltykov / Betsky houses, the Adamini house, the Pavlovsky Barracks): all six sub-groups lie in this territory and in its data
 GROUPS.landmarksMars = G_MARS;
+// the Troitsky Bridge (landmarksTroitsky, OWNS_GROUPS = true): the 554 m bridge over the Neva with its opening leaf, all seven OSM ways of it lie in this territory and in this data (the whole deck is inside the play rectangles up to the north abutment)
+GROUPS.landmarksTroitsky = G_TROITSKY;
 
 /**
  * The HUD location table (first match wins), built with the layout helpers `h` ({ NAMES, SUBGROUPS, _sqPolys, _groupPolys, _named, _areaPolys, _shoreOf, _deck, inRiver, shoreDist }).
@@ -352,6 +357,7 @@ const BRIDGE_ZONES = [
   { id: 'garden1', name: '1-й Садовый мост', key: 'moika', c: [-886.4, -962.9], axis: 342, w: 21, len: 22.4, own: true },
   { id: 'garden2', name: '2-й Садовый мост', key: 'moika', c: [-1178.9, -1010.1], axis: 192, w: 20.6, len: 29.7, own: true },
   { id: 'malo-konyushenny', name: 'Мало-Конюшенный мост', key: 'moika', c: [-1249.8, -1036.4], axis: 11, w: 15.6, len: 24.6, own: true },
+  { id: 'troitsky', name: 'Троицкий мост', key: 'neva', c: [-1331.0, -1819.9], axis: 156.99, w: 27, len: 554, own: true },      // the 554 m bridge: the deck centre u = 277 of landmarksTroitsky/frame.js (bearing 336.99 = 156.99 + 180), the quay is open at both banks
 ];
 
 /** The decks of the big bridges as the water shader darkens the water under them (deck rectangle centre, axis, width between the railings, length bank to bank). Shade only: the quay openings come from the BRIDGE_ZONES rows above. */

@@ -98,7 +98,7 @@ export function buildNav(ctx, cfg = {}) {
   // the LONG Neva bridge of the strip: the Palace Bridge (bridges/palace.js, 255 m; the first ~175 m lie inside the play area) is no site of bridges/sites.js: its axis comes from services.bridges.spans
   // ({ id, a, b, hw }), the pavement band |v| (barrier kerb .. railing) from LBAND below (the band of the full-city people/petroarea.js; the other long bridges of that list lie outside the strip).
   // nav.longs = [{ id, ax, az, ux, uz, len, hw, v0, v1 }]
-  const LBAND = { palace: [11.3, 13.85] }, longs = [];
+  const LBAND = { palace: [11.3, 13.85], troitsky: [9.85, 11.8] }, longs = [];      // (troitsky: the barrier kerb .. the railing of the Troitsky Bridge, landmarksTroitsky publishes its span)
   for (const s of ((svc.bridges && svc.bridges.spans) || [])) {
     const b = LBAND[s.id]; if (!b || !s.a || !s.b) continue;
     const dx = s.b.x - s.a.x, dz = s.b.z - s.a.z, len = hyp(dx, dz); if (!(len > 5)) continue; const m = s.hw + 3;
