@@ -16,7 +16,7 @@ export const BOUNDS = _bb;
 
 // ------------------------------------------------------------------ the floor of the leaf: three walk ramps (roadway + kerb strip, two pavements) whose numbers are overwritten per frame
 export const STRIPS = [{ v: 0, w: 2 * VP0, lift: 0 }, { v: -(VP0 + VP1) / 2, w: VP1 - VP0, lift: PAVE }, { v: (VP0 + VP1) / 2, w: VP1 - VP0, lift: PAVE }];
-export const THICK = 1.0;
+export const THICK = 2.0;      // m: the solid depth of the floor ramps under the surface (a car that flies into the face of the raised leaf meets a girder, docs/AREAS.md 13.11)
 /** add the three floor ramps of the CLOSED leaf to a Physics (core/physics.js); returns the items (flagged `leaf`) */
 export function createRamps(ph) {
   const rampRot = Math.atan2(FR.c, FR.s), f = leafFoot(0), len0 = f.u1 - f.u0, um0 = (f.u0 + f.u1) / 2;
@@ -81,6 +81,12 @@ export function createService(o = {}) {
       if (u < U_MIN || u > U_MAX || q.v > V_MAX || q.v < -V_MAX) return null;
       if (u > U_HINGE && u < U_TIP) { const y = leafY(u, clock.theta); return y === y ? y : null; }       // (NaN = the gap beyond the raised leaf)
       return yDeck(clamp(u, 0, LEN));
+    },
+    /** the vertical speed (m/s) of the leaf's surface under (x, z) at the live angle speed (the material point (u - U_HINGE) dTheta/dt), 0 where the leaf does not lie: what a car that leaves the tip adds to its take-off */
+    deckVy(x, z) {
+      if (x < BOUNDS[0] || x > BOUNDS[2] || z < BOUNDS[1] || z > BOUNDS[3]) return 0;
+      toUV(x, z, q); if (Math.abs(q.v) > V_MAX || q.u <= U_HINGE || q.u >= leafFoot(clock.theta).u1 + 0.3) return 0;
+      return (q.u - U_HINGE) * clock.omega;
     },
     deckLift(x, z) {
       toUV(x, z, q);
@@ -181,16 +187,31 @@ export function stepWalker(p, th0, th1, dt, st) {
   return slope > lim ? 'slip' : 'carry';
 }
 
+/** the foot of the leaf, when it is steeper than the car's climb limit, is a WALL for a car that arrives (the same rule as lib/bascule.js footWall: put back WALL_GAP m before the hinge, its speed toward the leaf taken, a 'hit' in car.pending) */
+const WALL_GAP = 2.0;
+function footWall(car, u, v, dt) {
+  const sh = u - U_HINGE; if (sh > 0 || sh < -WALL_GAP - 3) return false;
+  const vu = car.vx * FR.c + car.vz * FR.s; if (vu <= 0.5 || sh + vu * dt <= -WALL_GAP) return false;
+  const w = toWorld(U_HINGE - WALL_GAP, v, _w); car.x = w.x; car.z = w.z;
+  const d = vu * 1.15; car.vx -= d * FR.c; car.vz -= d * FR.s;
+  if (vu > 3 && car.pending) {
+    const sp = car.spec || { front: 2.1 }, sy = Math.sin(car.yaw), cy = Math.cos(car.yaw), nx = -FR.c, nz = -FR.s;
+    car.pending.push({ type: 'hit', v: vu * 0.8, x: car.x + sy * sp.front, z: car.z + cy * sp.front, nx, nz, localX: 0, localZ: sp.front, localNX: nx * cy - nz * sy, localNZ: nx * sy + nz * cy });
+  }
+  return true;
+}
+
 /**
  * One frame of a CAR on the leaf. car = { x, z, y, vx, vz } (drive/handling.js), same th0 / th1 / dt / st. Carried like the walker (the car's centre keeps its place on the leaf), beyond CAR_SLIP_DEG
- * (25 degrees) the car slips toward the hinge: its velocity along u is held at or below -slide (a = g (sin phi - tan(25 deg) cos phi), capped at CAR_SLIDE_MAX), so the throttle cannot climb it. The height and
+ * (45 degrees) the car slips toward the hinge: its velocity along u is held at or below -slide (a = g (sin phi - tan(25 deg) cos phi), capped at CAR_SLIDE_MAX), so the throttle cannot climb it. The height and
  * the pitch come from the engine (handling.js groundAt reads deckY under both axles). Returns 'carry' | 'slip' | null.
  */
 export function stepCar(car, th0, th1, dt, st) {
+  if (car.fall || car.air) { st.slide *= Math.exp(-dt / 0.4); st.on = false; return null; }      // a car in the air is nobody's passenger: the ballistic phase of drive/handling.js owns it (the leaf may not carry or throw it)
   toUV(car.x, car.z, _q);
   let u = _q.u; const v = _q.v, foot = leafFoot(th0);
   const onLeaf = Math.abs(v) <= V_MAX && u > U_HINGE && u < foot.u1 + 0.3;
-  if (!onLeaf) { st.slide *= Math.exp(-dt / 0.4); st.on = false; st.lastU = u; return null; }
+  if (!onLeaf) { st.slide *= Math.exp(-dt / 0.4); st.on = false; st.lastU = u; if (Math.abs(v) <= V_MAX && Math.abs(phiOf(th1)) > CAR_SLIP_DEG * Math.PI / 180 + 1e-9) footWall(car, u, v, dt); return null; }
   const phi = phiOf(th1), slope = Math.abs(phi), lim = CAR_SLIP_DEG * Math.PI / 180;
   const cu = FR.c, su = FR.s;
   if (slope > lim) {

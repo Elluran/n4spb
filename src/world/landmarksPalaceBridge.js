@@ -30,6 +30,7 @@ export async function build(ctx) {
   leaf.colliders(); leaf.set(0);
   const wires = buildSpanWires(ctx, 'palace');                 // the contact wires of the span: the streets module cut them out; drawn here only while the leaves are down (lib/bridge-wires.js)
   const gv = buildGates({ ctx, M, gates: svc.gates });
+  svc.barriers = gv;
   svc.leaf = leaf;
   svc.wires = wires;
   svc.stats = { spanWires: wires ? wires.lines : 0, tris: leaf.tris, leafTris: leaf.tris, rails: leaf.info.rails, kerbs: leaf.info.kerbs, arms: gv.arms, ramps: leaf.items().length };
@@ -54,6 +55,7 @@ export async function build(ctx) {
     gv.set(svc.clock.barrier, t);
     for (let i = 0; i < r.events.length; i++) {
       const ev = r.events[i];
+      if (ev === 'warn') gv.restore();      // the booms that a car broke in the last cycle stand again (docs/AREAS.md 13.11)
       if (ev === 'warn' && pp) { const w = toWorld(UM, 0); if (Math.hypot(pp.x - w.x, pp.z - w.z) < TOAST_R && ctx.ui && ctx.ui.toast) ctx.ui.toast('Дворцовый мост разводят · The Palace Bridge is opening'); }
     }
     if (!peopleHooked) hook();
