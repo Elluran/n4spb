@@ -16,8 +16,8 @@
     "title": "Список мест отключён: до нужных мест можно дойти самому · The places list is off for now: walk to the places yourself"
   },
   "help": {
-    "walk": "<kbd>WASD</kbd> Walk · <kbd>Shift</kbd> Run · <kbd>Space</kbd> Jump · <kbd>F</kbd> Fly · <kbd>E</kbd> Use / car · <kbd>1</kbd> Площадь Восстания <kbd>2</kbd> Обелиск <kbd>3</kbd> Невский <kbd>4</kbd> Платформы <kbd>5</kbd> Аничков мост <kbd>6</kbd> Спас на Крови <kbd>7</kbd> Гостиный Двор <kbd>8</kbd> Зимний дворец <kbd>9</kbd> Казанский собор <kbd>0</kbd> Дворцовая площадь · <kbd>R</kbd> Respawn · <kbd>T</kbd> Time of day · <kbd>H</kbd> Hide UI · <kbd>M</kbd> Mute",
-    "air": "<kbd>W</kbd> Fly where you look · <kbd>A</kbd><kbd>D</kbd> Strafe · <kbd>Space</kbd>/<kbd>E</kbd> Up · <kbd>Q</kbd>/<kbd>C</kbd> Down · <kbd>Shift</kbd> Boost · <kbd>F</kbd> Land · <kbd>1</kbd>–<kbd>9</kbd> <kbd>0</kbd> Places · <kbd>R</kbd> Respawn · <kbd>T</kbd> Time of day · <kbd>H</kbd> Hide UI"
+    "walk": "<kbd>WASD</kbd> Walk · <kbd>Shift</kbd> Run · <kbd>Space</kbd> Jump · <kbd>F</kbd> Fly · <kbd>E</kbd> Use / car · <kbd>R</kbd> Respawn · <kbd>T</kbd> Time of day · <kbd>H</kbd> Hide UI · <kbd>M</kbd> Mute",
+    "air": "<kbd>W</kbd> Fly where you look · <kbd>A</kbd><kbd>D</kbd> Strafe · <kbd>Space</kbd>/<kbd>E</kbd> Up · <kbd>Q</kbd>/<kbd>C</kbd> Down · <kbd>Shift</kbd> Boost · <kbd>F</kbd> Land · <kbd>R</kbd> Respawn · <kbd>T</kbd> Time of day · <kbd>H</kbd> Hide UI"
   },
   "sights": [
     "moscow-station",
