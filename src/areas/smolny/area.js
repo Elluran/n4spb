@@ -225,6 +225,25 @@ export function makeViews({ yawToward }) {
   return { HERO, VIEWS };
 }
 
+/** The expectations of the CPU tests (tools/layout-test.mjs, tools/landmarks-groups-check.mjs, tools/areas-test.mjs; shape: tools/lib/area-test-data.mjs). */
+export const TEST = {
+  claimed: [
+    { id: 'r2404499', by: 'landmarksA', group: 'station' }, { id: 'w1214651508', by: 'landmarksA', group: 'square' }, { id: 'r1784115', by: 'landmarksB', group: 'nevsky-centre' }, { id: 'r15081493', by: 'landmarksB', group: 'atrium' },
+    { id: 'w22999175', by: 'landmarksNorthFull', group: 'north-chernyshevskaya' }, { id: 'r2864743', by: 'landmarksSmolny', group: 'north-smolny-cathedral' }, { id: 'r2133719', by: 'landmarksSmolny', group: 'north-smolny-ensemble' },
+    { id: 'w30198549', by: 'landmarksSuvorov', group: 'north-suvorov-museum' }, { id: 'w232918746', by: 'landmarksSuvorov', group: 'north-suvorov-museum' }, { id: 'w30324355', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
+    { id: 'r3801092', by: 'landmarksTauride', group: 'tauride-palace' }, { id: 'w102153008', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w23002927', by: 'landmarksTauride', group: 'tauride-garden' },
+    { id: 'r5677834', by: 'landmarksEast', group: 'east-lavra-gate' }, { id: 'r3132622', by: 'landmarksEast', group: 'east-hotel-moscow' }, { id: 'w30324279', by: 'landmarksOktyabrsky', group: 'oktyabrsky-hall' },
+    { id: 'n1372027612', by: 'landmarksOktyabrsky', group: 'kapodistrias' },
+  ],
+  viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Place.oktyabrsky'],
+  mustHaveAreas: [
+    { x: OBELISK.x, z: OBELISK.z, has: 'обелиск' }, { x: STATION.x, z: STATION.z, has: 'вокзал' }, { x: 467, z: -1351, has: 'чернышевская' }, { x: 2469, z: -1833, has: 'смольный собор' },
+    { x: 1379, z: -1734, has: 'таврический дворец' }, { x: 1000, z: -1000, has: 'парадный' },
+  ],
+  roadsNear: { at: [461, -1350], r: 75, min: 3 },
+};
+
+
 // ============================================================================================================================================
 //  ENGINE TABLES (docs/AREAS.md section 3.1): what the strip's engine modules used to hard-code. Same names as src/world/area.js; the modules read them through src/world/lib/area-tables.js.
 // ============================================================================================================================================

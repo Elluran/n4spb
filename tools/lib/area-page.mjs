@@ -1,7 +1,7 @@
 // Which page of which area a tool opens (docs/AREAS.md section 5). Shared by the browser tools (shot, smoke, drive-bench, drive-test, load-test, serve, baked-check) and the generator.
 //   --page <file>   an HTML page of the site root (north.html); the area is the registry row whose page it is (or the page's own <html data-area> when it is not registered: a fixture)
 //   --area <id>     a registry row; its page
-//   neither         the strip (index.html), exactly as before the areas existed
+//   neither         the strip (strip.html, the parked scene: the registry row's own page). index.html is the page of the live area 'palace' since the world-map re-cut: ask for it with --area palace / --page index.html
 // A tool that also reads the area's TABLES (layout.js HERO / VIEWS ...) calls activateArea() BEFORE it imports layout.js: it registers the same module-loader remap that tools/area.mjs
 // registers (and that the page's import map gives the browser), so `node tools/shot.mjs --area north` sees the north layout without being started through tools/area.mjs.
 import fs from 'node:fs';

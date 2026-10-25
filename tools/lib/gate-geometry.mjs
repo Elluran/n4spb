@@ -91,7 +91,7 @@ export function arrivalGrid(g, L, { step = 25 } = {}) {
       if (r.how === 'hero') why.push('fell back to the destination HERO');
       if (!L.inPlay(r.x, r.z, 25)) why.push('not 25 m inside the play area');
       if (L.insideBuilding(r.x, r.z, 1.5)) why.push('inside / next to a building');
-      if (L.inRiver(r.x, r.z)) why.push('in the river');
+      // (no river predicate: water is reachable, a pose in water is not a failure - CLAUDE.md world rules; a wall of water shows as 'not 25 m inside' or as the HERO fall-back)
       if (mode === 'car') {
         const lane = L.roadsNear(r.x, r.z, 0, { drivable: true }).find((q) => q.gap <= 0);
         if (!lane) why.push('not on a drivable lane'); else if (Math.abs(lane.tx * fx + lane.tz * fz) < Math.cos(30 * DEG)) why.push('lane is more than 30 degrees off the heading');

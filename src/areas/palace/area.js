@@ -319,6 +319,24 @@ export function makeViews({ yawToward }) {
 }
 
 
+/** The expectations of the CPU tests (tools/layout-test.mjs, tools/landmarks-groups-check.mjs, tools/areas-test.mjs; shape: tools/lib/area-test-data.mjs). */
+export const TEST = {
+  claimed: [
+    { id: 'r2404499', by: 'landmarksA', group: 'station' }, { id: 'w1214651508', by: 'landmarksA', group: 'square' }, { id: 'r8522850', by: 'landmarksA', group: 'galereya' },
+    { id: 'r1784115', by: 'landmarksB', group: 'nevsky-centre' }, { id: 'r15081493', by: 'landmarksB', group: 'atrium' }, { id: 'r3801087', by: 'landmarksD', group: 'library' },
+    { id: 'w28691685', by: 'landmarksBelinsky', group: 'ciniselli-circus' }, { id: 'r1147588', by: 'landmarksE', group: 'gostiny-dvor' }, { id: 'r11763697', by: 'landmarksF', group: 'kazan-cathedral' },
+    { id: 'r2000648', by: 'landmarksG', group: 'alexander-column' }, { id: 'r69424', by: 'landmarksI', group: 'winter-palace' }, { id: 'w28966446', by: 'landmarksK', group: 'saviour-church' },
+    { id: 'r238571', by: 'landmarksCastle', group: 'engineering-castle' }, { id: 'r946930', by: 'landmarksNorthFull', group: 'north-muruzi' }, { id: 'r5802451', by: 'landmarksNorthFull', group: 'north-preobrazhensky' },
+    { id: 'w22999175', by: 'landmarksNorthFull', group: 'north-chernyshevskaya' }, { id: 'w96148838', by: 'landmarksBelinskyNorth', group: 'simeon-anna' },
+    { id: 'w41230751', by: 'landmarksGarden', group: 'summer-palace' }, { id: 'r969622', by: 'landmarksMars', group: 'marble-palace' },
+  ],      // one row per landmark module (the Summer Garden and the Mars Field came with the checkpoint-3 port)
+  viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'ShiftDigit1', 'ShiftDigit2', 'ShiftDigit3', 'ShiftDigit4', 'ShiftDigit5', 'ShiftDigit6',
+    'AltDigit1', 'AltDigit2', 'AltDigit3', 'AltDigit4', 'AltDigit5', 'Place.preobrazhensky', 'Place.muruzi', 'Place.chernyshevskaya', 'Place.circus', 'Place.library', 'Place.alexandrinsky', 'Place.hermitage'],
+  mustHaveAreas: [{ x: OBELISK.x, z: OBELISK.z, has: 'обелиск' }, { x: -441, z: -93, has: 'Аничков' }, { x: STATION.x, z: STATION.z, has: 'вокзал' }],
+  roadsNear: { at: [SQUARE.x, SQUARE.z], r: 75, min: 3 },
+};
+
+
 // ============================================================================================================================================
 //  ENGINE TABLES (docs/AREAS.md section 3): the strip places that the engine modules used to hard-code. Every area module exports the same names; a module reads them through
 //  src/world/lib/area-tables.js, which fills what an area leaves out with an empty / inert value. The values below are the strip's, moved VERBATIM.
