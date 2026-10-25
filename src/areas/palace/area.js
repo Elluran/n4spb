@@ -10,6 +10,7 @@
 // ============================================================================
 import { GROUPS_LIST as G_NORTHFULL } from '../../world/landmarksNorthFull/groups.js';
 import { GROUPS_LIST as G_BELINSKY_NORTH } from '../../world/landmarksBelinskyNorth/groups.js';
+import { GROUPS_LIST as G_MARS } from '../../world/landmarksMars/groups.js';
 import { GROUPS_LIST as G_E } from '../../world/landmarksE/groups.js';
 import { GROUPS_LIST as G_F } from '../../world/landmarksF/groups.js';
 import { GROUPS_LIST as G_G } from '../../world/landmarksG/groups.js';
@@ -46,6 +47,7 @@ export const MODULES = [
   'landmarksI',   // Winter Palace + Hermitage
   'landmarksBelinsky', // Ciniselli Circus
   'landmarksK',   // Church of the Saviour on Blood, Mikhailovsky Garden, Russian Museum
+  'landmarksMars', // Mars Field, Memorial to the Fighters of the Revolution (Eternal Flame), Suvorov monument, Marble Palace, Saltykov / Betsky houses, Pavlovsky Barracks
   'landmarksCastle', // Engineering (Mikhailovsky) Castle and the Peter I monument
   'bridges',      // the bridges of the area: Kazansky, Green, Palace, Hermitage, the Winter Canal and the Swan Canal bridges ...
   'props',        // benches, bins, kiosks, bus shelters, tourist stalls, billboards, flower baskets
@@ -59,6 +61,7 @@ export const LABELS = {
   landmarksNorthFull: 'Чернышевская, Спасо-Преображенский собор, дом Мурузи',
   landmarksBelinskyNorth: 'церковь Симеона и Анны',
   landmarksD: 'Национальная библиотека',
+  landmarksMars: 'Марсово поле, Мраморный дворец, памятник Суворову',
   drive: 'машины у Московского вокзала',
 };
 
@@ -135,6 +138,8 @@ GROUPS.landmarksE = G_E; GROUPS.landmarksF = G_F; GROUPS.landmarksG = G_G; GROUP
 GROUPS.bridges = G_BR.filter((b) => !['blue', 'red', 'pochtamtsky', 'fonarny', 'kamenny', 'mucny'].includes(b.key));
 // Liteyny: the Chernyshevskaya vestibule, the Transfiguration Cathedral, Dom Muruzi, the Podpisnye Izdaniya bookstore and the corridor houses (they replace the strip's landmarksNorth, same ids), the church of Simeon and Anna
 GROUPS.landmarksNorthFull = G_NORTHFULL; GROUPS.landmarksBelinskyNorth = G_BELINSKY_NORTH;
+// the Mars Field (the Field, the Eternal Flame memorial, Suvorov Square, the Marble Palace with the Saltykov / Betsky houses, the Adamini house, the Pavlovsky Barracks): all six sub-groups lie in this territory and in its data
+GROUPS.landmarksMars = G_MARS;
 
 /**
  * The HUD location table (first match wins), built with the layout helpers `h` ({ NAMES, SUBGROUPS, _sqPolys, _groupPolys, _named, _areaPolys, _shoreOf, _deck, inRiver, shoreDist }).
@@ -413,6 +418,17 @@ const PEOPLE_HOT = [
   // ---- the PALACE BRIDGE (bridges/palace.js; the first ~170 m of the 255 m deck lie in the play area, the pavements carry the 'k' chains of people/nav.js nav.longs): the bank end (the lattice has to reach the
   //      pavements of the bridge head, or the chains hang in a stub of the pavement graph) and the stretches of the deck where people stop to look at the Neva. The deck weights are ~0.12-0.25 (the full-city table had 0.35-0.65 on a 255 m deck: the lanes of the pavements are 1.15 m wide between the barrier kerb and the lamp standards, and the strip has fewer pavements to share the crowd).
   [-2345, -883, 0.45, 26], [-2366, -922, 0.05, 26], [-2380, -950, 0.1, 30], [-2412, -992, 0.12, 28],
+  // ---- Mars Field (landmarksMars; the rows of the source's people/zones.js, docs/research/mars-field.md S12; the Summer Garden, Trinity / Swan bridge rows of the same block belong to the garden block)
+  [-1086, -1243, 2.4, 22],          // the Eternal Flame: the stream of tourists and photographers round the platform
+  [-1086, -1243, 0.8, 55],          // the memorial plaza (116 x 75 m gravel)
+  [-1186, -1329, 0.55, 30], [-1078, -1381, 0.5, 30], [-1106, -1115, 0.5, 30], [-995, -1161, 0.4, 30],      // the four rondels (strollers, prams, dog walkers)
+  [-1135, -1400, 0.5, 40], [-1250, -1310, 0.5, 40],        // the north axial alley, the barracks promenade (pensioners on the white benches)
+  [-1060, -1440, 0.45, 40], [-1100, -1050, 0.6, 45], [-1160, -1060, 0.4, 40],     // the Lebyazhya side, the Moika end (ice-cream carts)
+  [-1197, -1502, 1.3, 26],          // Suvorov Square: photographers of the monument on the island, from the pavements
+  [-1330, -1450, 0.8, 22], [-1290, -1460, 0.6, 30],        // the Marble Palace forecourt fence (the Alexander III monument behind it), the Millionnaya front
+  [-1370, -1500, 0.7, 40],          // the Palace Embankment in front of the Marble Palace
+  // the eight inscription slabs of the memorial (the source adds them from the landmarksMars crowd service, kind 'slab': FF.W of the slab centres, rounded)
+  [-1097, -1262, 0.5, 8], [-1108, -1238, 0.5, 8], [-1081, -1221, 0.5, 8], [-1106, -1232, 0.5, 8], [-1091, -1264, 0.5, 8], [-1067, -1253, 0.5, 8], [-1075, -1223, 0.5, 8], [-1064, -1247, 0.5, 8],
 ];
 
 // ---------------------------------------------------------------- WILDLIFE (wildlife/zones.js zoneTable, crowdTable, CROW_HAUNTS; wildlife.js)
@@ -493,7 +509,9 @@ export const ZONES = {
     west: { scale: 0.55, platforms: 0.75 },
     // the ENGINEERING CASTLE reach (people/mars.js, people/area.js): `scale` multiplies the counts of the scripted places; `zones` are head-count caps of the quiet zones (nav.marsZone: 0 the castle precinct): while a zone holds
     // `maxPeople` visible people (scripted ones included) nobody is re-placed / picks a target there. The summer afternoon is busy, but this is not Nevsky.
-    mars: { scale: 0.55, zones: [{ name: 'castle', maxPeople: 70 }] },
+    mars: { scale: 0.55, zones: [{ name: 'castle', maxPeople: 70 },
+      // Mars Field: the cap of the Field + Suvorov Square + Marble Palace zone (150 in the source, people.js DENSITY.mars.zones 'field'). INERT until people/area.js zone() returns this index (this tree's people/area.js knows only zone 0, the castle)
+      { name: 'field', maxPeople: 150 }] },
   },
   peopleCorridor: PEOPLE_CORRIDOR,
   peopleHot: PEOPLE_HOT,
