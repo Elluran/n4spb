@@ -262,7 +262,7 @@ for (const pl of placeNodes) {
   const k = lab[y * GW + x]; if (k >= 0) mos[k].contains.push(pl);
 }
 
-// ---------- existing areas (A strip, B north) in lon/lat from the registry
+// ---------- the live areas (P Palace-Liteyny, S Smolninskoye; docs/AREAS.md section 13) in lon/lat from the registry (the parked strip and North are no longer drawn; 'area B' elsewhere on the page stays the size REFERENCE, the old North, 3.95 km2)
 const REG = await import(new URL('../../src/areas/registry.js', import.meta.url).href);
 const OR = { lon: 30.351279, lat: 59.932421 };
 const KX0 = 111412.84 * Math.cos(OR.lat * Math.PI / 180) - 93.5 * Math.cos(3 * OR.lat * Math.PI / 180) + 0.118 * Math.cos(5 * OR.lat * Math.PI / 180);
@@ -270,7 +270,7 @@ const lat0 = OR.lat * Math.PI / 180;
 const KY0 = 111132.954 - 559.822 * Math.cos(2 * lat0) + 1.175 * Math.cos(4 * lat0);
 const unproj = (x, z) => [OR.lon + x / KX0, OR.lat - z / KY0];
 const existing = [];
-for (const [key, letter, st] of [['strip', 'A', 'Live'], ['north', 'B', 'In development']]) {
+for (const [key, letter, st] of [['palace', 'P', 'Live'], ['smolny', 'S', 'Live']]) {
   const row = REG.REGISTRY[key];
   const rects = row.play.map((r) => [unproj(r.x0, r.z0), unproj(r.x1, r.z0), unproj(r.x1, r.z1), unproj(r.x0, r.z1)].map(rpt));
   const mark = new Uint8Array(GW * GH);
@@ -278,7 +278,7 @@ for (const [key, letter, st] of [['strip', 'A', 'Live'], ['north', 'B', 'In deve
   const km2 = row.play.reduce((s, r) => s + (r.x1 - r.x0) * (r.z1 - r.z0), 0) / 1e6;
   const overlap = new Float64Array(mos.length);
   for (let i = 0; i < mark.length; i++) if (mark[i] && lab[i] >= 0 && !water[i]) overlap[lab[i]]++;
-  existing.push({ id: letter, key, title: row.title, titleEn: row.titleEn, status: st, km2: Math.round(km2 * 100) / 100, rects, overlap });
+  existing.push({ id: letter, key, page: row.page, title: row.title, titleEn: row.titleEn, status: st, km2: Math.round(km2 * 100) / 100, rects, overlap });
 }
 
 // ---------- the source project's coverage (the playable rectangles of D:/git2/agi-fun-tests/102_3d_piter, same frame) and its authored sights
@@ -377,7 +377,7 @@ for (const a of [...out.areas].sort((p, q) => q.nb.length - p.nb.length)) {
 }
 out.rayons = rayNames.map((r, i) => ({ id: i, ru: r.replace(' район', ''), ruFull: r, en: RAY_EN[r] || translit(r), hue: HUES[i % HUES.length], n: out.areas.filter((a) => a.rayon === r).length, km2: Math.round(out.areas.filter((a) => a.rayon === r).reduce((s, a) => s + a.km2, 0) * 10) / 10 }));
 out.source = { rects: srcRects, km2: srcKm2, regions: srcRects.length, sights: srcCov ? srcCov.sights.length : 0 };
-out.existing = existing.map((e) => ({ id: e.id, key: e.key, title: e.title, titleEn: e.titleEn, status: e.status, km2: e.km2, rects: e.rects }));
+out.existing = existing.map((e) => ({ id: e.id, key: e.key, page: e.page, title: e.title, titleEn: e.titleEn, status: e.status, km2: e.km2, rects: e.rects }));
 
 // ---------- base layers (simplified)
 const q = (pts) => pts.map(rpt);
