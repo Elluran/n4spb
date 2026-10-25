@@ -97,6 +97,10 @@ const KNOWN_UNCLAIMED = {
   north: {
     w102153010: { module: 'landmarksTauride', why: 'the raised court deck of the Paradny quarter (paradny-courts, y 3.3) covers Kirochnaya 35 (h 6.6, not one of the 11 claimed buildings of T1, drawn by city): the verbatim source behaviour, docs/AREAS.md 8.9' },
   },
+  palace: {
+    // the same Winkler fence piers as in the strip (the Mikhailovsky garden fence of landmarksK, Marso Polo on the Griboedov quay lies in this territory too)
+    w30353981: { module: 'landmarksK', why: 'the Winkler fence piers of the Mikhailovsky garden (landmarksK/fence.js winklerRun) run along and through the OSM outline of the Marso Polo restaurant (Griboedov quay 2v, h 3.3), which city draws: a fence, not a second building' },
+  },
   strip: {
     // findings of the first run (M7): pre-existing conditions of the strip, listed here so that the audit prints them as notes; a claim (or a removal) by the owner turns the note off
     w30353981: { module: 'landmarksK', why: 'the Winkler fence piers of the Mikhailovsky garden (landmarksK/fence.js winklerRun) run along and through the OSM outline of the Marso Polo restaurant (Griboedov quay 2v, h 3.3), which city draws: a fence, not a second building' },

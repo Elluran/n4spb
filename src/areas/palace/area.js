@@ -88,6 +88,13 @@ export const NAMES = {
     millionnaya: 'Миллионная улица', dvortsovyProezd: 'Дворцовый проезд', konnogvardeysky: 'Конногвардейский бульвар', pochtamtskaya: 'Почтамтская улица',
     kazanskaya: 'Казанская улица', inzhenernaya: 'Инженерная улица', italyanskaya: 'Итальянская улица', mikhailovskaya: 'Михайловская улица', bankovsky: 'Банковский переулок',
     tsaritsynsky: 'Царицынский проезд', yakubovicha: 'улица Якубовича', galernaya: 'Галерная улица',
+    // ---- the Liteyny half (names exactly as in OSM, ROADS[].name; the keys of src/areas/north/area.js NAMES.streets, plus the streets of the Neva bank and the Mars Field)
+    shpalernaya: 'Шпалерная улица', kirochnaya: 'Кирочная улица', voskresenskayaNab: 'Воскресенская набережная', furshtatskaya: 'Фурштатская улица', nekrasova: 'улица Некрасова',
+    zakharyevskaya: 'Захарьевская улица', chaikovskogo: 'улица Чайковского', chernyshevskogo: 'проспект Чернышевского', kutuzovaNab: 'набережная Кутузова', mokhovaya: 'Моховая улица',
+    pestelya: 'улица Пестеля', baskov: 'Басков переулок', radishcheva: 'улица Радищева', ryleeva: 'улица Рылеева', chekhova: 'улица Чехова', korolenko: 'улица Короленко',
+    petrovskayaNab: 'Петровская набережная', gagarinskaya: 'Гагаринская улица', klenovaya: 'Кленовая улица', salny: 'Соляной переулок',
+    karavannaya: 'Караванная улица', kovensky: 'Ковенский переулок', marsovoPole: 'Марсово поле', suvorovskayaSq: 'Суворовская площадь', preobrazhenskayaSq: 'Преображенская площадь',
+    liteyniBridge: 'Литейный мост', troitskyBridge: 'Троицкий мост',
     // squares
     dvortsovayaSq: 'Дворцовая площадь', isaakievskayaSq: 'Исаакиевская площадь', senatskayaSq: 'Сенатская площадь', ostrovskogoSq: 'площадь Островского', konyushennayaSq: 'Конюшенная площадь',
     iskusstvSq: 'площадь Искусств', birzhevayaSq: 'Биржевая площадь', kazanskayaSq: 'Казанская площадь',
@@ -175,7 +182,7 @@ export function makeAreas(h) {
   ..._groupPolys(SUBGROUPS.beloselsky, 8).map((r) => ({ name: 'Дворец Белосельских-Белозерских · Beloselsky-Belozersky Palace', ...r })),
   ..._groupPolys(SUBGROUPS.anichkov, 10).map((r) => ({ name: 'Аничков дворец · Anichkov Palace', ...r })),
   ..._groupPolys(SUBGROUPS.library, 6).map((r) => ({ name: 'Российская национальная библиотека · National Library', ...r })),
-  // ---- the west of the strip: sights (outline of the named OSM building + margin; the circle is the fallback when OSM has no such outline), squares, waterways, streets.
+  // ---- the west of the territory: sights (outline of the named OSM building + margin; the circle is the fallback when OSM has no such outline), squares, waterways, streets.
   // The areas find the buildings by their OSM names.
   ..._named(/Казанский собор/i, 14, { c: [-1568, -186], r: 90 }).map((r) => ({ name: 'Казанский собор · Kazan Cathedral', ...r })),
   ..._named(/Дом Зингера|Дом книги/i, 8, { c: [-1420, -383], r: 32 }).map((r) => ({ name: 'Дом Зингера · Singer House', ...r })),
@@ -196,25 +203,21 @@ export function makeAreas(h) {
   ..._named(/Главный штаб|Здание Главного штаба/i, 10, null).map((r) => ({ name: 'Здание Главного штаба · General Staff Building', ...r })),
   ..._named(/Штаб Гвардейского корпуса/i, 10, null).map((r) => ({ name: 'Штаб Гвардейского корпуса · Guards Corps Headquarters', ...r })),
   { name: 'Александровская колонна · Alexander Column', c: [-1983, -738], r: 30 },
-  ..._named(/Исаакиевский собор/i, 14, { c: [-2523, -185], r: 110 }).map((r) => ({ name: 'Исаакиевский собор · St Isaac\'s Cathedral', ...r })),
   ..._named(/Мариинский дворец/i, 10, null).map((r) => ({ name: 'Мариинский дворец · Mariinsky Palace', ...r })),
-  ..._named(/Сенат(?!ор)|Синод/i, 10, { c: [-2815, -350], r: 60 }).map((r) => ({ name: 'Сенат и Синод · Senate and Synod', ...r })),
-  { name: 'Медный всадник · Bronze Horseman', c: [-2744, -443], r: 40 },
   ..._areaPolys(/Дворцовая площадь/).map((o) => ({ name: 'Дворцовая площадь · Palace Square', poly: o, margin: 6 })),
-  ..._areaPolys(/Исаакиевская площадь/).map((o) => ({ name: 'Исаакиевская площадь · St Isaac\'s Square', poly: o, margin: 6 })),
-  ..._areaPolys(/Сенатская площадь|площадь Декабристов/).map((o) => ({ name: 'Сенатская площадь · Senate Square', poly: o, margin: 6 })),
   ..._areaPolys(/Казанская площадь/).map((o) => ({ name: 'Казанская площадь · Kazan Square', poly: o, margin: 6 })),
   ..._areaPolys(/площадь Островского/).map((o) => ({ name: 'Площадь Островского · Ostrovsky Square', poly: o, margin: 6 })),
   { name: 'Дворцовая площадь · Palace Square', c: [-2000, -740], r: 120 },
-  { name: 'Исаакиевская площадь · St Isaac\'s Square', c: [-2470, -90], r: 120 },
-  { name: 'Сенатская площадь · Senate Square', c: [-2730, -400], r: 90 },
   { name: 'Казанская площадь · Kazan Square', c: [-1568, -250], r: 90 },
-  { name: 'Нева · Neva River', x0: -3020, x1: -1630, z0: -1420, z1: -300, test: (x, z) => _shoreOf(['neva'], x, z) < 6 || inRiver(x, z) },
   { name: 'Зимняя канавка · Winter Canal', x0: -1950, x1: -1700, z0: -1180, z1: -880, test: (x, z) => _shoreOf(['winter-canal'], x, z) < 14 },
   { name: 'Мойка · Moika River', x0: -3020, x1: -720, z0: -1180, z1: 340, test: (x, z) => _shoreOf(['moika'], x, z) < 16 },
   { name: 'Канал Грибоедова · Griboedov Canal', x0: -1880, x1: -1180, z0: -1180, z1: 340, test: (x, z) => _shoreOf(['griboedov'], x, z) < 14 },
   { name: 'Лебяжья канавка · Swan Canal', x0: -1100, x1: -420, z0: -1300, z1: -900, test: (x, z) => _shoreOf(['swan-canal'], x, z) < 12 },
-  { name: 'Фонтанка · Fontanka River', x0: -720, x1: -330, z0: -1180, z1: 330, test: (x, z) => shoreDist(x, z) < 14 },
+  { name: 'Фонтанка · Fontanka River', x0: -830, x1: -330, z0: -1700, z1: 330, test: (x, z) => shoreDist(x, z) < 14 },       // down to the mouth at the Neva (the reach x -825 .. -725, z -1685 .. -1095 is Fontanka water)
+  // the Neva after the canals (they win where their water meets it) and after the sights; the box is the whole river of the territory, from the Palace Embankment to the Liteyny Bridge and beyond (the bridge decks first)
+  { name: 'Литейный мост · Liteyny Bridge', road: NAMES.streets.liteyniBridge },
+  { name: 'Троицкий мост · Troitsky Bridge', road: NAMES.streets.troitskyBridge },
+  { name: 'Нева · Neva River', x0: -3020, x1: 900, z0: -2400, z1: -300, test: (x, z) => _shoreOf(['neva'], x, z) < 6 || inRiver(x, z) },
   { name: 'Невский проспект · Nevsky Prospekt', road: NAMES.streets.nevsky },
   { name: 'Лиговский проспект · Ligovsky Prospekt', road: NAMES.streets.ligovsky },
   { name: 'Улица Маяковского · Ulitsa Mayakovskogo', road: NAMES.streets.mayakovskogo },
@@ -227,23 +230,16 @@ export function makeAreas(h) {
   { name: 'Улица Восстания · Ulitsa Vosstaniya', road: NAMES.streets.vosstaniya },
   { name: 'Гончарная улица · Goncharnaya ulitsa', road: NAMES.streets.goncharnaya },
   { name: 'Суворовский проспект · Suvorovsky Prospekt', road: NAMES.streets.suvorovsky },
-  { name: 'Кузнечный переулок · Kuznechny pereulok', road: NAMES.streets.kuznechny },
-  { name: 'Колокольная улица · Kolokolnaya ulitsa', road: NAMES.streets.kolokolnaya },
   { name: 'Улица Рубинштейна · Ulitsa Rubinshteyna', road: NAMES.streets.rubinsteina },
-  { name: 'Загородный проспект · Zagorodny Prospekt', road: NAMES.streets.zagorodny },
-  { name: 'Разъезжая улица · Razyezzhaya ulitsa', road: NAMES.streets.razyezzhaya },
   { name: 'Стремянная улица · Stremyannaya ulitsa', road: NAMES.streets.stremyannaya },
-  { name: 'Большая Московская улица · Bolshaya Moskovskaya', road: NAMES.streets.bolshayaMoskovskaya },
   { name: 'Дворцовая набережная · Palace Embankment', road: NAMES.streets.dvortsovayaNab },
   { name: 'Адмиралтейская набережная · Admiralty Embankment', road: NAMES.streets.admiralteyskayaNab },
-  { name: 'Английская набережная · English Embankment', road: NAMES.streets.angliyskayaNab },
   { name: 'Набережная Зимней канавки · Winter Canal embankment', road: NAMES.streets.winterCanalNab },
   { name: 'Набережная Лебяжьей канавки · Swan Canal embankment', road: NAMES.streets.swanCanalNab },
   { name: 'Набережная реки Мойки · Moika embankment', road: NAMES.streets.moika },
   { name: 'Набережная канала Грибоедова · Griboedov Canal embankment', road: NAMES.streets.griboedov },
   { name: 'Дворцовый проезд · Dvortsovy Proyezd', road: NAMES.streets.dvortsovyProezd },
   { name: 'Адмиралтейский проспект · Admiralteysky Prospekt', road: NAMES.streets.admiralteysky },
-  { name: 'Вознесенский проспект · Voznesensky Prospekt', road: NAMES.streets.voznesensky },
   { name: 'Садовая улица · Sadovaya ulitsa', road: NAMES.streets.sadovaya },
   { name: 'Малая Садовая улица · Malaya Sadovaya ulitsa', road: NAMES.streets.malayaSadovaya },
   { name: 'Гороховая улица · Gorokhovaya ulitsa', road: NAMES.streets.gorokhovaya },
@@ -252,25 +248,44 @@ export function makeAreas(h) {
   { name: 'Большая Конюшенная улица · Bolshaya Konyushennaya ulitsa', road: NAMES.streets.bolshayaKonyushennaya },
   { name: 'Малая Конюшенная улица · Malaya Konyushennaya ulitsa', road: NAMES.streets.malayaKonyushennaya },
   { name: 'Миллионная улица · Millionnaya ulitsa', road: NAMES.streets.millionnaya },
-  { name: 'Конногвардейский бульвар · Konnogvardeysky Boulevard', road: NAMES.streets.konnogvardeysky },
-  { name: 'Почтамтская улица · Pochtamtskaya ulitsa', road: NAMES.streets.pochtamtskaya },
   { name: 'Казанская улица · Kazanskaya ulitsa', road: NAMES.streets.kazanskaya },
   { name: 'Инженерная улица · Inzhenernaya ulitsa', road: NAMES.streets.inzhenernaya },
   { name: 'Итальянская улица · Italyanskaya ulitsa', road: NAMES.streets.italyanskaya },
   { name: 'Михайловская улица · Mikhailovskaya ulitsa', road: NAMES.streets.mikhailovskaya },
-  { name: 'Банковский переулок · Bankovsky pereulok', road: NAMES.streets.bankovsky },
   { name: 'Царицынский проезд · Tsaritsynsky Proyezd', road: NAMES.streets.tsaritsynsky },
-  { name: 'Улица Якубовича · Ulitsa Yakubovicha', road: NAMES.streets.yakubovicha },
-  { name: 'Галерная улица · Galernaya ulitsa', road: NAMES.streets.galernaya },
   { name: 'Дворцовая площадь · Palace Square', road: NAMES.streets.dvortsovayaSq },
-  { name: 'Исаакиевская площадь · St Isaac\'s Square', road: NAMES.streets.isaakievskayaSq },
-  { name: 'Сенатская площадь · Senate Square', road: NAMES.streets.senatskayaSq },
   { name: 'Площадь Островского · Ostrovsky Square', road: NAMES.streets.ostrovskogoSq },
   { name: 'Конюшенная площадь · Konyushennaya Square', road: NAMES.streets.konyushennayaSq },
   { name: 'Площадь Искусств · Arts Square', road: NAMES.streets.iskusstvSq },
   { name: 'Биржевая площадь · Birzhevaya Square', road: NAMES.streets.birzhevayaSq },
   { name: 'Казанская площадь · Kazan Square', road: NAMES.streets.kazanskayaSq },
   { name: 'Университетская набережная · Universitetskaya embankment', road: 'Университетская набережная' },
+  // ---- the Liteyny half (north of Nevsky, east of the Fontanka): the streets of the districts between the Mars Field and the Neva embankment, by length inside the play rectangles
+  { name: 'Шпалерная улица · Shpalernaya ulitsa', road: NAMES.streets.shpalernaya },
+  { name: 'Фурштатская улица · Furshtatskaya ulitsa', road: NAMES.streets.furshtatskaya },
+  { name: 'Кирочная улица · Kirochnaya ulitsa', road: NAMES.streets.kirochnaya },
+  { name: 'Проспект Чернышевского · Prospekt Chernyshevskogo', road: NAMES.streets.chernyshevskogo },
+  { name: 'Улица Чайковского · Ulitsa Chaikovskogo', road: NAMES.streets.chaikovskogo },
+  { name: 'Захарьевская улица · Zakharyevskaya ulitsa', road: NAMES.streets.zakharyevskaya },
+  { name: 'Набережная Кутузова · Kutuzov embankment', road: NAMES.streets.kutuzovaNab },
+  { name: 'Воскресенская набережная · Voskresenskaya embankment', road: NAMES.streets.voskresenskayaNab },
+  { name: 'Улица Некрасова · Ulitsa Nekrasova', road: NAMES.streets.nekrasova },
+  { name: 'Моховая улица · Mokhovaya ulitsa', road: NAMES.streets.mokhovaya },
+  { name: 'Гагаринская улица · Gagarinskaya ulitsa', road: NAMES.streets.gagarinskaya },
+  { name: 'Улица Пестеля · Ulitsa Pestelya', road: NAMES.streets.pestelya },
+  { name: 'Улица Короленко · Ulitsa Korolenko', road: NAMES.streets.korolenko },
+  { name: 'Басков переулок · Baskov pereulok', road: NAMES.streets.baskov },
+  { name: 'Кленовая улица · Klenovaya ulitsa', road: NAMES.streets.klenovaya },
+  { name: 'Соляной переулок · Solyanoy pereulok', road: NAMES.streets.salny },
+  { name: 'Улица Рылеева · Ulitsa Ryleeva', road: NAMES.streets.ryleeva },
+  { name: 'Улица Радищева · Ulitsa Radishcheva', road: NAMES.streets.radishcheva },
+  { name: 'Караванная улица · Karavannaya ulitsa', road: NAMES.streets.karavannaya },
+  { name: 'Улица Чехова · Ulitsa Chekhova', road: NAMES.streets.chekhova },
+  { name: 'Ковенский переулок · Kovensky pereulok', road: NAMES.streets.kovensky },
+  { name: 'Петровская набережная · Petrovskaya embankment', road: NAMES.streets.petrovskayaNab },
+  { name: 'Суворовская площадь · Suvorovskaya Square', road: NAMES.streets.suvorovskayaSq },
+  { name: 'Марсово поле · Mars Field', road: NAMES.streets.marsovoPole },
+  { name: 'Преображенская площадь · Preobrazhenskaya Square', road: NAMES.streets.preobrazhenskayaSq },
   { name: 'Санкт-Петербург · Saint Petersburg', x0: -9999, x1: 9999, z0: -9999, z1: 9999 },
   ];
 }
@@ -318,10 +333,50 @@ export function makeViews({ yawToward }) {
   return { HERO, VIEWS };
 }
 
+/** The expectations of the CPU tests (tools/layout-test.mjs, tools/landmarks-groups-check.mjs, tools/areas-test.mjs; shape: tools/lib/area-test-data.mjs). */
+export const TEST = {
+  claimed: [
+    { id: 'r2404499', by: 'landmarksA', group: 'station' }, { id: 'r16492039', group: 'station' },      // the Moscow station and its clock tower
+    { id: 'w1214651508', by: 'landmarksA', group: 'square' },                                              // the Vosstaniya obelisk
+    { id: 'r15081493', by: 'landmarksB', group: 'atrium' },
+    { id: 'w60196034', by: 'landmarksB', group: 'yusupova' },
+    { id: 'r1588865', by: 'landmarksC', group: 'beloselsky' },
+    { id: 'r3801087', by: 'landmarksD', group: 'library' },
+    { id: 'w28691685', by: 'landmarksBelinsky', group: 'ciniselli-circus' },
+    { id: 'r1147588', by: 'landmarksE', group: 'gostiny-dvor' },
+    { id: 'r11763697', by: 'landmarksF', group: 'kazan-cathedral' },
+    { id: 'w309796655', by: 'landmarksG', group: 'general-staff' },
+    { id: 'r2000648', by: 'landmarksG', group: 'alexander-column' },
+    { id: 'r69424', by: 'landmarksI', group: 'winter-palace' },
+    { id: 'r1067948', by: 'landmarksI', group: 'hermitage-museum' },
+    { id: 'w28966446', by: 'landmarksK', group: 'saviour-church' },
+    { id: 'r1502547', by: 'landmarksK', group: 'russian-museum' },
+    { id: 'r238571', by: 'landmarksCastle', group: 'engineering-castle' },
+    { id: 'r5589456', by: 'bridges', group: 'belinsky' }, { id: 'w362796524', by: 'bridges', group: 'palace' },
+    { id: 'w114933883', by: 'northBridges', group: 'north-liteyny' },            // the Liteyny Bridge deck
+    { id: 'r946930', by: 'landmarksNorthFull', group: 'north-muruzi' },          // Dom Muruzi
+    { id: 'r5802451', by: 'landmarksNorthFull', group: 'north-preobrazhensky' },
+    { id: 'w22999175', by: 'landmarksNorthFull', group: 'north-chernyshevskaya' },
+    { id: 'w96148838', by: 'landmarksBelinskyNorth', group: 'simeon-anna' },
+    { id: 'r2653740', by: 'landmarksGarden', group: 'summer-garden' }, { id: 'w41230751', by: 'landmarksGarden', group: 'summer-palace' },
+    { id: 'r15745625', by: 'landmarksMars', group: 'mars-field' }, { id: 'r969622', by: 'landmarksMars', group: 'marble-palace' },
+  ],      // one row per landmark module and its main sub-group
+  viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'ShiftDigit1', 'ShiftDigit2', 'ShiftDigit3', 'ShiftDigit4', 'ShiftDigit5', 'ShiftDigit6',
+    'AltDigit1', 'AltDigit2', 'AltDigit3', 'AltDigit4', 'AltDigit5',
+    'Place.preobrazhensky', 'Place.muruzi', 'Place.chernyshevskaya', 'Place.circus', 'Place.library', 'Place.alexandrinsky', 'Place.hermitage'],
+  mustHaveAreas: [
+    { x: OBELISK.x, z: OBELISK.z, has: 'обелиск' }, { x: -441, z: -93, has: 'аничков' }, { x: STATION.x, z: STATION.z, has: 'вокзал' },
+    { x: -1983, z: -738, has: 'колонна' }, { x: -900, z: -1450, has: 'летний сад' }, { x: 66, z: -1182, has: 'преображенский' }, { x: -95, z: -1125, has: 'мурузи' },
+  ],
+  // `kept` is left out on purpose: the default is every key of GROUPS, so tools/landmarks-groups-check.mjs verifies every landmark module of this page against its data
+  roadsNear: { at: [SQUARE.x, SQUARE.z], r: 75, min: 3 },
+};
+
 
 // ============================================================================================================================================
-//  ENGINE TABLES (docs/AREAS.md section 3): the strip places that the engine modules used to hard-code. Every area module exports the same names; a module reads them through
-//  src/world/lib/area-tables.js, which fills what an area leaves out with an empty / inert value. The values below are the strip's, moved VERBATIM.
+//  ENGINE TABLES (docs/AREAS.md section 3): the places that the engine modules used to hard-code. Every area module exports the same names; a module reads them through
+//  src/world/lib/area-tables.js, which fills what an area leaves out with an empty / inert value. The values below started as the strip's (moved verbatim) and have been cut to THIS territory: the rows whose place lies outside
+//  the play rectangles or has no module here are gone, the tram terminals are the track ends of this data.
 // ============================================================================================================================================
 
 // ---------------------------------------------------------------- WATER (environment/waterways.js)
@@ -386,7 +441,6 @@ const PEOPLE_HOT = [
   [-210, 20, 1.3, 50],            // Vladimirsky / Liteyny crossroads
   [-110, 20, 0.8, 45],
   [0, 0, 0.6, 50],                // Mayakovskogo
-  [-186, 520, 1.0, 40],           // Vladimirskaya (metro, cathedral)
   { u: -2, d: 40, a: 1.6, s: 24 },        // the station vestibule / hall (benches, kiosks, the Peter bust)
   { u: -2, d: 100, a: 1.3, s: 30 },      // the concourse under the departure boards
   { u: -12, d: 165, a: 0.9, s: 30 },    // the turnstiles and the apron
@@ -411,9 +465,6 @@ const PEOPLE_HOT = [
   [-2440, -766, 1.2, 62],         // the Admiralty garden
   [-2335, -494, 1.6, 52],         // S12 the Alexander Garden fountain
   [-2480, -500, 0.7, 95],         // the Alexander Garden (9 ha)
-  [-2449, -63, 2.0, 58],          // S13 St Isaac's garden and the monument rim
-  [-2396, 35, 1.2, 40],           // the Nicholas I monument
-  [-2745, -443, 1.4, 42],         // S14 Senate Square / the Bronze Horseman
   [-805, -86, 1.7, 52],           // S15 the Catherine garden: chess, artists at the monument
   [-1050, -215, 1.3, 30],         // S17 Gostiny Dvor metro stairs
   [-1000, -190, 1.9, 22], [-1058, -204, 2.0, 24], [-1115, -218, 1.9, 22],   // the open arcade of Gostiny Dvor (shoppers: the lattice runs through it)
@@ -488,8 +539,7 @@ const CROW_HAUNTS = [{ x: -1469, z: -290, r: 90 }, { x: -800, z: -105, r: 90 }, 
 const CROWDS = {
   column: [70, 70, 0.9], arch: [28, 40, 0.65], 'winter-palace': [45, 45, 0.65],
   kazan: [38, 55, 0.85], 'kazan-bench': [10, 25, 0.6], voronikhin: [18, 30, 0.5], 'kazan-nevsky': [22, 30, 0.6],
-  gostiny: [60, 50, 0.7], catherine: [28, 35, 0.55], bridge: [22, 30, 0.6],
-  alexander: [32, 45, 0.7], senate: [30, 40, 0.55], isaac: [38, 40, 0.6], 'isaac-monument': [24, 35, 0.5],
+  gostiny: [60, 50, 0.7], catherine: [28, 35, 0.55], bridge: [22, 30, 0.6],      // 'bridge': the Anichkov Bridge pigeons of wildlife/birds.js
   obelisk: [45, 50, 0.6], forecourt: [32, 45, 0.6], rotunda: [18, 30, 0.5],
 };
 
@@ -528,12 +578,11 @@ export const ZONES = {
   },
   peopleCorridor: PEOPLE_CORRIDOR,
   peopleHot: PEOPLE_HOT,
-  // the terminals in map metres: the track ends of the strip data, which are clipped at the data extent (tools/strip-data-clip.mjs). The strip holds two tram networks:
-  // route 3 (Sadovaya - Apraksin Dvor - Gostiny Dvor - Italyanskaya - Mikhailovsky Castle - Letny Sad, both directions, from the Letny Sad end at the north edge to the Sadovaya end at the west edge of W1) and
-  // the Marata / Ligovsky pair of routes 43 and 49, run from the north edge to the south edge (traffic/trams.js explains why the second one runs southbound only)
+  // the terminals in map metres: the track ends of THIS area's data (src/areas/palace/data, clipped at its extent; a terminal needs a degree-1 track end within 90 m, traffic/trams.js). One network runs through
+  // the data: route 3 (Gostiny Dvor - Italyanskaya - Mikhailovsky Castle - Letny Sad, both directions) from the track ends (-1526, -2280) at the north edge to (-1360, 200) at the south-west edge, both outside the play
+  // area (checked with buildTramNet: 2 routes, 2.95 km, nothing missing). The Marata / Ligovsky pair of routes 43 and 49 has no route here: its rails are cut at (-40, 417) and (-204, 360), the two halves do not meet.
   tramLines: [
-    { refs: ['3'], a: [-924, -1118], b: [-1456, 280], headway: 190 },
-    { refs: ['43', '49'], a: [-175, -523], b: [197, 1178], headway: 300 },
+    { refs: ['3'], a: [-1526, -2280], b: [-1360, 200], headway: 190 },
   ],
   clearDiscs: [{ x: STATION.tower.x, z: STATION.tower.z + 20, r: 28 }],      // the station forecourt (Vosstaniya Square paving is an AREA already): keep trunks off the facade apron
   farCentres: [{ x: -2430, z: -800, bias: 700 }],      // the historic centre reaches the Admiralty and over the Neva (Vasilievsky, Petrograd side): dense stone blocks there too
@@ -574,7 +623,7 @@ const DEG = Math.PI / 180;
  * station holds one car, the purple Zhiguli, at its spawn)
  *   poses  { coupe, truck, lada, roadster: { x, z, yaw (radians; 0 faces +Z, 99 deg = east) } }  a car without a pose is not built; an area with no pose at all has no drive module
  *   spawn  { x, z, yaw }  the default place of the first car (drive.js SPAWN)
- * The strip: the coupe stays at its old spot on the station's taxi-rank service aisle (OSM way w569726648, highway=service: lane rank 0, which traffic/sim.js never drives); the pickup and the Zhiguli
+ * Palace-Liteyny (the strip's poses): the coupe stays at its old spot on the station's taxi-rank service aisle (OSM way w569726648, highway=service: lane rank 0, which traffic/sim.js never drives); the pickup and the Zhiguli
  * stand on the free forecourt pavement south of it, staggered so that every car has a free way out to the east (toward Vosstaniya Square); the Roadster has the open forecourt east of x = 596 to itself;
  * docs/research/garage-2026.md (verified free of lanes / buildings by tools/drive-garage-test.mjs).
  */
@@ -590,11 +639,11 @@ export const GARAGE = {
 
 // ---------------------------------------------------------------- the rest
 /** environment.js: the services whose `entrances` ([{ x, z, clearance? }]) clear the trees from the doors of the buildings they list */
-export const PRUNE_SERVICES = ['city', 'landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksNorth'];
+export const PRUNE_SERVICES = ['city', 'landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksNorthFull', 'landmarksGarden', 'landmarksMars'];      // landmarksNorthFull (not the strip's landmarksNorth, which this page does not build) publishes the door points of its claimed buildings; landmarksGarden the gates of the Summer Garden, landmarksMars the doors of the barracks and the houses of the Mars Field
 /** the area-specific hooks of the engine modules (milestone M6, docs/AREAS.md section 9: keep-outs of trees / tufts / props / ways / parking, the crowd garden, the deck services; the call sites read
- *  them through lib/area-tables.js and are a no-op for a key that is absent): none in the strip */
+ *  them through lib/area-tables.js and are a no-op for a key that is absent) */
 export const HOOKS = makeHooks(MODULES);      // the hook set of src/areas/north/hooks.js gated by the module list: here only the deck service of northBridges is live (the Tauride / Smolny keep-outs wait for their modules)
-/** the height patches of layout.heightAt (milestone M6, docs/AREAS.md section 9: `[{ id, box: [x0, x1, z0, z1], at(x, z) -> number | null }]`, the first non-null answer wins): none in the strip */
+/** the height patches of layout.heightAt (milestone M6, docs/AREAS.md section 9: `[{ id, box: [x0, x1, z0, z1], at(x, z) -> number | null }]`, the first non-null answer wins): the hook set gated by MODULES, see src/areas/north/hooks.js */
 export const HEIGHT_PATCHES = makeHeightPatches(MODULES);
 
 import { makeHooks, makeHeightPatches } from '../north/hooks.js';      // shared with the parked North: the hook bodies are gated by the module list
