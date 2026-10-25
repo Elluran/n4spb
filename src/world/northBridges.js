@@ -118,7 +118,7 @@ export function build(ctx) {
   }
   if (rbays.length) {
     const T = ctx.THREE || THREE, tube = new T.CylinderGeometry(0.05, 0.05, 1, 4, 1).rotateZ(Math.PI / 2).translate(0.5, 0, 0), post = new T.BoxGeometry(0.1, 1.1, 0.1).translate(0, 0.55, 0);
-    const orn = new Parts(); { const Q = orn; Q.geo(metal, torus, 0, 0.72, 1.2 - 0.65, 0, 0, 0, 1, 0.85, 1); Q.geo(metal, torus, 0, 0.72, 1.2 + 0.65, 0, 0, 0, 1, 0.85, 1); Q.geo(metal, torus, 0, 0.73, 1.2, 0, 0, 0, 0.7, 1.05, 0.7); Q.box(metal, 1.07, 1.33, 0.53, 0.94, -0.045, 0.045); }
+    const orn = new Parts(); { const Q = orn; Q.geo(metal, torus, 1.2 - 0.65, 0.72, 0, 0, 0, 0, 1, 0.85, 1); Q.geo(metal, torus, 1.2 + 0.65, 0.72, 0, 0, 0, 0, 1, 0.85, 1); Q.geo(metal, torus, 1.2, 0.73, 0, 0, 0, 0, 0.7, 1.05, 0.7); Q.box(metal, 1.07, 1.33, 0.53, 0.94, -0.045, 0.045); }
     const bal = new Parts(); for (const off of [0.6, 1.2, 1.8]) bal.box(metal, off - 0.025, off + 0.025, 0.35, 1.18, -0.025, 0.025);
     const meshesOf = (Q) => { const g = new THREE.Group(); Q.build(g, { name: 'north-bridges-orn' }); return g.children.map((m) => ({ geo: m.geometry, mat: m.material })); };
     const parts = [
