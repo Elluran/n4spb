@@ -94,7 +94,9 @@ export async function build(ctx) {
     ball.center.set(x, 1.5, z); return !frus.intersectsSphere(ball);
   };
   // the Anichkov Bridge is a humped deck (+0.06 m at the abutments, +1.5 m at the crown): vehicles on it ride at the deck height and pitch with its slope (landmarksC.bridge.deckY)
-  const deckY = bridgeDeck(ctx);
+  const westDeckY = bridgeDeck(ctx), SV = ctx.services;
+  // the east bridges (Smolninskoye: the Alexander Nevsky Bridge) publish their own deck-height service, asked first (as in the source); without it the chain is exactly the west one
+  const deckY = SV.eastBridges ? (x, z) => SV.eastBridges.deckY(x, z) ?? (westDeckY ? westDeckY(x, z) : null) : westDeckY;
   const sim = DBG.includes('nomove') || DBG.includes('gallery') ? null : createSim(st, () => ctx.rng('traffic-sim'), {
     trams: !DBG.includes('notram'), tramStops: STATIONS.filter((q) => q.kind === 'tram'),
     // a road that the data extent cuts in the middle of a river crossing ends on the last dry metre (outside the play area only: inside it every crossing has its deck)
