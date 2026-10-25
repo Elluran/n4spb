@@ -7,3 +7,6 @@ Raise it on EVERY change that reaches the game or its build (code, data, bake, a
 - **minor**: something new the player can see or use: a landmark, a street, a car, a feature, a visible redesign of an area, a new UI element.
 - **patch**: no new capability: bug fixes, tuning, performance, collision / data corrections, texts, a re-bake of unchanged content.
 Docs-only, tests-only and tooling-only changes do not bump. When one round contains several changes, bump once at the highest level and list them in one line. `node tools/version.mjs` (no arguments) checks that `version.js` and `package.json` agree.
+
+## Commits (the owner's rule, 2026-10-25)
+Commit at every checkpoint (a working step: shapes, data, a module, the bake, a feature merged), locally on the working branch, never push. Stage files by name (never `git add -A`); end messages with the Co-Authored-By line. A commit that changes the game carries its version bump (see above).
