@@ -11,7 +11,7 @@ import { REGISTRY } from '../src/areas/registry.js';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const only = process.argv.includes('--area') ? process.argv[process.argv.indexOf('--area') + 1] : null;
 if (only && !REGISTRY[only]) { console.error(`bake-manifest-check: unknown area "${only}" (known: ${Object.keys(REGISTRY).join(', ')})`); process.exit(2); }
-const rows = Object.values(REGISTRY).filter((a) => a.status !== 'planned' && (!only || a.id === only));
+const rows = Object.values(REGISTRY).filter((a) => a.status !== 'planned' && (!only || a.id === only ? !a.parked || !!only : false));      // parked areas are not baked (docs/AREAS.md 13): checked only when named
 if (!rows.length) { console.error(`bake-manifest-check: area "${only}" is planned: it has no bake`); process.exit(2); }
 const revision = bakedRevision(root);
 let bytes = 0, products = 0;
