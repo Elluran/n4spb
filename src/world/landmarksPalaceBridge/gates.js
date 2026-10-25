@@ -4,9 +4,9 @@
 // feature is to be able to walk and drive onto a leaf while it opens). No flags, no sounds. Frames: each arm is a Group at its post, in the bridge frame (x = u, z = v), rotated about x.
 import * as THREE from 'three';
 import { Parts } from '../bridges/kit.js';
+import { createBarrierArms, ARM_Y, ARM_UP } from '../lib/bascule-gates.js';
 import { FR, ROAD, KERB, PAVE, HW, yDeck, toWorld } from './frame.js';
 
-const UP = 72 * Math.PI / 180, ARM_Y = 0.95;
 const VP0 = ROAD + KERB;
 
 export function buildGates(env) {
@@ -14,13 +14,7 @@ export function buildGates(env) {
   const red = ctx.mat.toon('#c9352c', { paint: 0.03, name: 'palacebridge-barrier-red' }), white = ctx.mat.toon('#eeebe4', { paint: 0.03, name: 'palacebridge-barrier-white' });
   const lampMat = ctx.mat.toon('#ff3a2a', { emissive: '#ff2a1a', emissiveIntensity: 0, paint: 0.02, name: 'palacebridge-barrier-lamp' });
   const post = M.iron, root = new THREE.Group(); root.name = 'palacebridge-barriers';
-  const arms = [];                                                    // { pivot, sg }
-  const armGeo = (len) => {                                           // a striped boom along local -z (from the post toward the carriageway), 0.1 x 0.1, stripes of 0.6 m; counterweight stub behind the post
-    const P = new Parts(), n = Math.max(2, Math.round(len / 0.6)), seg = len / n;
-    for (let i = 0; i < n; i++) P.box(i % 2 ? white : red, -0.05, 0.05, -0.05, 0.05, -(i + 1) * seg, -i * seg, '', 1);
-    P.box(post, -0.09, 0.09, -0.09, 0.09, 0.0, 0.45, '', 1);
-    const g = new THREE.Group(); P.build(g, { name: 'palacebridge-barrier-arm' }); return g;
-  };
+  const armSpecs = [];                                                // the booms: [{ u, v, to, y0, ped }] -> lib/bascule-gates.js (solid, breakable knock records)
   const P = new Parts();                                              // the static posts and lamp housings (in world coordinates through the frame)
   const lamps = [];
   for (const g of gates) {
@@ -32,10 +26,8 @@ export function buildGates(env) {
     for (const s of specs) {
       P.box(post, -0.16, 0.16, y0, y0 + ARM_Y + 0.35, s.v - 0.16, s.v + 0.16, '', 1);
       P.box(post, -0.2, 0.2, y0 + ARM_Y + 0.35, y0 + ARM_Y + 0.5, s.v - 0.2, s.v + 0.2, '', 1);
-      const len = Math.abs(s.v - s.to), pivot = new THREE.Group();
-      pivot.position.set(0, y0 + ARM_Y, s.v); pivot.add(armGeo(len)); if (s.sg < 0) pivot.children[0].rotation.y = Math.PI;     // (the boom of the west side runs toward +z)
-      const wp = new THREE.Group(); wp.position.set(toWorld(g.u, 0).x, 0, toWorld(g.u, 0).z); wp.rotation.y = -T; wp.add(pivot);
-      root.add(wp); arms.push({ pivot, sg: s.sg });
+      armSpecs.push({ u: g.u, v: s.v, to: s.to, y0, ped: !!s.ped });
+      const wp = new THREE.Group(); wp.position.set(toWorld(g.u, 0).x, 0, toWorld(g.u, 0).z); wp.rotation.y = -T; root.add(wp);
       const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), lampMat); lamp.position.set(0, y0 + ARM_Y + 0.62, s.v); lamp.castShadow = false; wp.add(lamp); lamps.push(lamp);
     }
     P.pop();
@@ -43,12 +35,14 @@ export function buildGates(env) {
   P.build(root, { name: 'palacebridge-barrier-posts' });
   for (const l of lamps) ctx.noOutline(l);
   ctx.add(root);
+  const arms = createBarrierArms(ctx, { name: 'palacebridge-barrier', toWorld, arms: armSpecs, mats: { red, white, post: M.iron } });
   return {
-    root, arms: arms.length,
+    root, arms: arms.count, barriers: arms,
+    /** the booms that a car broke come back (the module calls it when the next cycle starts) */
+    restore() { return arms.restore(); },
     /** barrier = 0 (up) .. 1 (down); t = game seconds (the lamps blink while the arms are not up) */
     set(barrier, t = 0) {
-      const psi = (1 - barrier) * UP;
-      for (const a of arms) a.pivot.rotation.x = a.sg * psi;
+      arms.set(barrier);
       const on = barrier > 0.02;
       lampMat.emissiveIntensity = on ? 0.9 + 0.7 * Math.sin(t * 5.5) : 0;
       return on ? 1 : 0;

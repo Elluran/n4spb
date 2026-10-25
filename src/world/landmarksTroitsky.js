@@ -46,6 +46,7 @@ export async function build(ctx) {
   const leaf = buildLeaf({ ctx, M });
   leaf.colliders(); leaf.set(0);
   const gv = buildGates({ ctx, M, gates: svc.gates });
+  svc.barriers = gv;
   svc.leaf = leaf; svc.frame = { toWorld, toUV, FR, TROITSKY };
   svc.stats = { tris: P.tris + leaf.tris, staticTris: P.tris, leafTris: leaf.tris, rails: B.info.rails + leaf.info.rails, colliders: B.info.colliders, lamps: lamps.records.filter(Boolean).length, arms: gv.arms,
     candelabra: B.candelabra.reduce((n, r) => n + r.records.filter(Boolean).length, 0), poles: B.poles ? B.poles.records.filter(Boolean).length : 0, kerbBays: B.kerbs ? B.kerbs.records.filter(Boolean).length : 0,
@@ -102,6 +103,7 @@ export async function build(ctx) {
     if (first || r.th1 !== r.th0) leaf.set(r.th1);
     gv.set(svc.clock.barrier, t);
     for (const ev of r.events) {
+      if (ev === 'warn') gv.restore();      // the booms that a car broke in the last cycle stand again (docs/AREAS.md 13.11)
       if (ev === 'warn' && pp) { const w = toWorld(180, 0); if (Math.hypot(pp.x - w.x, pp.z - w.z) < TOAST_R && ctx.ui && ctx.ui.toast) ctx.ui.toast('Троицкий мост разводят · The Troitsky Bridge is opening'); }
     }
     if (!peopleHooked) hookPeople();

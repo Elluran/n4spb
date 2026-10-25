@@ -11,7 +11,7 @@ export const LEAVES = LEAF_SPECS.map((s) => BA.makeLeaf(s));
 export const BRIDGE = {
   id: 'palacebridge', frame: { cx: FR.cx, cz: FR.cz, T: FR.T, c: FR.c, s: FR.s, toWorld, toUV },
   leaves: LEAVES, gates: [{ id: 's', u: GATE_S, dir: +1 }, { id: 'n', u: GATE_N, dir: -1 }],
-  vMax: HV, bounds: BOUNDS, thetaMax: THETA_MAX,
+  vMax: HV, bounds: BOUNDS, thetaMax: THETA_MAX, thick: 2.4,      // (thick: the solid depth of the floor ramp: the girder a flying car meets, lib/bascule.js THICK)
   yStatic: (u) => yDeck(Math.max(0, Math.min(LEN, u))),
   walkLift: () => 0,                                     // the player's floor is the walk ramp at the asphalt level, as on the fixed deck (bridges/palace.js colliders): no pavement lift for the engine
   liftOf: (v) => (Math.abs(v) >= VP0 ? PAVE : 0.03),     // what a pedestrian's feet stand above the asphalt (deckLift)

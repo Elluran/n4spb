@@ -71,7 +71,7 @@ export const leafVyFixed = (u, theta, w) => { const c = Math.cos(phiOf(theta)); 
 
 // ------------------------------------------------------------------ the footing rule (documented in docs/AREAS.md 13.8)
 /** a walker keeps its footing up to this slope of the leaf (degrees), a car up to the second one; beyond them they SLIP down the leaf toward the hinge (the lowest point of the leaf) */
-export const WALK_SLIP_DEG = 35, CAR_SLIP_DEG = 25;
+export const WALK_SLIP_DEG = 35, CAR_SLIP_DEG = 45;      // (45 degrees since the stunts: a car climbs the leaf as a ramp, docs/AREAS.md 13.11; it was 25)
 /** the speed cap of the slide (m/s along the slope): a walker, a car */
 export const WALK_SLIDE_MAX = 7, CAR_SLIDE_MAX = 16;
 /** the along-slope acceleration (m/s^2) of a body on a slope of phi radians whose footing limit is limDeg: g (sin phi - tan(lim) cos phi), 0 inside the limit (continuous at it) */

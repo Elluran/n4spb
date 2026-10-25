@@ -3,7 +3,7 @@
 // 1. the wiring: the module is in the palace MODULES (after streets and bridges, before traffic / people), its deck service is in HOOKS.deckServices, it claims nothing (the bridges module keeps the ways), the claims table
 //    lists it, the whole bridge lies in the territory, the bridges module draws all of the bridge but the bascule span when the module is in the build list (and the whole bridge when it is not);
 // 2. the kinematics (lib/bascule.js makeLeaf + landmarksPalaceBridge/frame.js): the two hinges are the pier faces, the closed leaves are the deck profile and meet at the midspan, the heights rise with the angle, the slope is the
-//    elevation, the carry, the vertical speed of a carried body <= 1.3 m/s over the cycle, the two leaves rotate in OPPOSITE senses, the footing rule (walker 35, car 25 degrees);
+//    elevation, the carry, the vertical speed of a carried body <= 1.3 m/s over the cycle, the two leaves rotate in OPPOSITE senses, the footing rule (walker 35, car 45 degrees (25 before the stunts));
 // 3. the schedule (schedule.js + lib/bascule.js createClock): the STOP flag is raised before the leaves move and released only after they lie and the arms are up, theta is continuous, the easing, the modes, the night rule,
 //    the offset from the Troitsky Bridge (they never warn at the same moment);
 // 4. the service: deckY on the closed bascule span equals the closed bridge's profile, on an open bridge it is the live surface of each leaf, null in the gap, the lift of the feet;
@@ -99,7 +99,7 @@ section('2. the kinematics of the two leaves (lib/bascule.js, frame.js)');
   const c = createPalaceClock({ mode: 'open' }); let thWalk = null, thCar = null;
   for (let i = 0; i < 5000; i++) { c.step(0.02, 0); if (thCar === null && LA.slips(BA.CAR_SLIP_DEG, c.theta)) thCar = c.theta; if (thWalk === null && LA.slips(BA.WALK_SLIP_DEG, c.theta)) thWalk = c.theta; }
   say(`  slip onset: car at theta ${(thCar / DEG).toFixed(1)} (slope ${(LA.slope(thCar) / DEG).toFixed(1)}), walker at theta ${(thWalk / DEG).toFixed(1)} (slope ${(LA.slope(thWalk) / DEG).toFixed(1)})`);
-  ok(thCar < thWalk && LA.slope(thCar) / DEG - 25 < 0.2 && LA.slope(thWalk) / DEG - 35 < 0.2, 'the car slips first, both at their limits (25 / 35 degrees)');
+  ok(thWalk < thCar && LA.slope(thWalk) / DEG - 35 < 0.2 && LA.slope(thCar) / DEG - 45 < 0.2, 'the walker slips first at 35, the car holds up to 45 degrees (the leaf is a RAMP for a car since the stunts, docs/AREAS.md 13.11; it was 25)');
   ok(BA.slideAccel(25, 25 * DEG) === 0 && BA.slideAccel(25, 40 * DEG) > 0 && BA.slideAccel(35, 34 * DEG) === 0 && BA.slideAccel(35, 70 * DEG) > BA.slideAccel(35, 40 * DEG), 'the slide acceleration is zero inside the limit, continuous at it, and grows with the slope');
 }
 
@@ -308,9 +308,9 @@ const ud = (th) => { leaf.set(th); leaf.outers.forEach((o) => o.updateMatrixWorl
   // the deck surface of each leaf in the world: a point of the deck (body 12, 0, 3) at theta 0 is at the asphalt height of the bridge
   const bodyA = leaf.bodies[0], p0 = bodyA.localToWorld(new THREE.Vector3(12, 0, 3)), q0 = F.toUV(p0.x, p0.z, {}); near(p0.y, F.yDeck(q0.u), 0.04, 'the drawn deck of leaf A at theta 0 is at the closed profile height (the rigid chord: up to 3.5 cm under the arch)');
   // the barrier arms: lifted (idle) they stand up, lowered (flag up) they lie across the lane
-  const bar = ctx.dynamicRoot.children.find((c) => c.name === 'palacebridge-barriers'), box = new THREE.Box3();
-  T.setMode('closed'); for (let i = 0; i < 100000 && T.state().stop; i++) T.advance(0.1, 0); update(0, 0); bar.updateMatrixWorld(true); const up = box.setFromObject(bar).max.y;
-  T.setMode('open'); T.advance(7, 0); update(0, 1); bar.updateMatrixWorld(true); const down = box.setFromObject(bar).max.y;
+  const bar = T.barriers.barriers, tipMax = () => { let m = -1e9; for (let i = 0; i < bar.count; i++) m = Math.max(m, bar.tip(i).y); return m; };      // (the booms are knock instances since 13.11: read the tips back from what is drawn)
+  T.setMode('closed'); for (let i = 0; i < 100000 && T.state().stop; i++) T.advance(0.1, 0); update(0, 0); const up = tipMax();
+  T.setMode('open'); T.advance(7, 0); update(0, 1); const down = tipMax();
   ok(T.state().stop && T.state().barrier === 1 && up - down > 5, `the arms: up they reach ${up.toFixed(1)} m, down ${down.toFixed(1)} m (the post), the flag is up`);
   T.setMode('closed'); for (let i = 0; i < 100000 && T.state().stop; i++) T.advance(0.1, 0); update(0, 2); ud(0);
 }
@@ -428,7 +428,7 @@ const floorAt = (u, v, feet = 60) => { const w = W(u, v); return ph.surfaceAt(w.
 // ---- the real car (drive/handling.js) on the leaves
 {
   const cctx = { L: eng.L, physics: ph, services: { landmarksPalaceBridge: T, bridges: BR } };
-  const NONE = { thr: 0, brk: 0, steer: 0, hand: false, nitro: false, jump: false, flip: false };
+  const NONE = { thr: 0, brk: 0, steer: 0, hand: false, nitro: false, jump: false, flip: false }, HELD = { ...NONE, hand: true };      // (HELD: the parked car of (a) has its handbrake on: gravity pulls a loose car down a leaf steeper than 25 degrees, docs/AREAS.md 13.11)
   const yawN = Math.atan2(F.FR.c, F.FR.s);                      // faces +u (toward Vasilyevsky Island)
   const fresh = () => { T.setMode('closed'); for (let i = 0; i < 50000 && T.state().stop; i++) T.advance(0.1, 0); ud(0); };
   // (a) a car parked on a leaf near the hinge, facing uphill (away from the hinge): carried by the opening, slips off beyond 25 degrees, never leaves the surface while carried
@@ -441,7 +441,7 @@ const floorAt = (u, v, feet = 60) => { const w = W(u, v); return ph.surfaceAt(w.
       t += dt; ph.refreshDynamic();
       const r = T.advance(dt, 0); if (r.th1 !== r.th0) leaf.set(r.th1);
       const how = S.stepCar(car, r.th0, r.th1, dt, st);
-      car.step(dt, NONE);
+      car.step(dt, HELD);
       const y = T.deckY(car.x, car.z); if (car.air) air++;
       if (how === 'carry' && y !== null) { worst = Math.max(worst, Math.abs(car.y - (y + 0.03))); vmaxC = Math.max(vmaxC, Math.abs(car.y - prevY) / dt); const pe = Math.abs(car.pitch - lf.phi(r.th1)); pitchErr = Math.max(pitchErr, pe); if (pe < 0.07) pitchOk = Math.max(pitchOk, lf.phi(r.th1)); nC++; }
       if (how === 'slip') slip++; prevY = car.y; uEnd = F.toUV(car.x, car.z, {}).u;
@@ -454,7 +454,7 @@ const floorAt = (u, v, feet = 60) => { const w = W(u, v); return ph.surfaceAt(w.
     ok(vmaxC <= 1.4, `leaf ${label}: the vertical speed handed to the car is <= 1.4 m/s (${vmaxC.toFixed(2)})`);
     ok(pitchErr < 0.07, `leaf ${label}: the body pitches with the slope (pitch error <= ${(pitchErr / DEG).toFixed(2)} deg)   [handling.js: fails with the DROP_MAX merge problem, not with this module]`);
     ok(pitchOk > 8 * DEG, `leaf ${label}: the pitch follows the slope at least up to 8 degrees (${(pitchOk / DEG).toFixed(1)}): the part of the contract that holds with and without the handling.js fix`);
-    ok(slip > 5, `leaf ${label}: beyond 25 degrees the car slips (${slip} frames)`);
+    ok(slip > 5, `leaf ${label}: beyond 45 degrees the car slips (the handbrake holds it until then) (${slip} frames)`);
     ok(lf.dir * (uEnd - lf.uHinge) < 1.5, `leaf ${label}: the slipping car ends at the hinge side (u ${uEnd.toFixed(1)})`);
     ok(air === 0, `leaf ${label}: the car is never airborne`);
   }
@@ -470,7 +470,7 @@ const floorAt = (u, v, feet = 60) => { const w = W(u, v); return ph.surfaceAt(w.
       const r = T.advance(dt, 0); if (r.th1 !== r.th0) leaf.set(r.th1);
       const how = S.stepCar(car, r.th0, r.th1, dt, st);
       const q = F.toUV(car.x, car.z, {}), y = T.deckY(car.x, car.z), sh = lf.dir * (q.u - lf.uHinge); maxS = Math.max(maxS, sh);
-      const go = lf.slope(r.th1) < (BA.CAR_SLIP_DEG - 3) * DEG && sh < 14;                              // the driver waits (handbrake) at the pier until the leaf is low enough, creeps at 9 km/h onto it and stops 14 m from the hinge
+      const go = lf.slope(r.th1) < 22 * DEG && sh < 14;                              // the driver waits (handbrake) at the pier until the leaf is low enough, creeps at 9 km/h onto it and stops 14 m from the hinge
       car.step(dt, go ? { ...NONE, thr: car.speed < 9 ? 0.5 : 0 } : { ...NONE, hand: true, brk: car.speed > 3 ? 1 : 0 });
       if (how === 'carry' && y !== null && sh > 3) { onLeafFrames++; worst = Math.max(worst, Math.abs(car.y - (y + 0.03))); pitchErr = Math.max(pitchErr, Math.abs(car.pitch - lf.phi(r.th1))); const er = car.y - (y + 0.03); vmaxC = Math.max(vmaxC, Math.abs(er - prevY) / dt); prevY = er; }      // (the rate of the contact error: the car's own climb up the slope is not the leaf's)
       if (sh > 6) climbed = true;

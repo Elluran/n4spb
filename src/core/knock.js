@@ -99,6 +99,17 @@ export function createKnock(ctx) {
     } catch (e) { if (!register.warned) { register.warned = true; console.error('knock register', e); } return null; }
   }
 
+  /** RE-ARM a record (the barrier arms of a bascule bridge come back when the next opening cycle starts; docs/AREAS.md 13.11): a body that is still flying is dropped, the rest box is removed, the record stands again
+   *  and every hidden part is shown. The caller re-poses the instances (they keep whatever matrix the fall left) and gives the dynamic box back to its physics provider (it.src is the same object). Returns true when it stood up. */
+  function restore(it) {
+    if (!it || it.state === 'stand') return false;
+    if (it.body) it.body.done = true;
+    for (const c of it.items) ctx.physics.remove(c);
+    it.items = []; it.item = null; it.body = null; it.wobble = null; it.armed = false; it.state = 'stand';
+    for (const p of it.parts) p.hidden = false;
+    return true;
+  }
+
   function listen(fn) { if (typeof fn === 'function') listeners.push(fn); }
 
   function knock(it, dvx, dvz, hx, hz) {
@@ -220,7 +231,7 @@ export function createKnock(ctx) {
     clock += dt;
     if (!live.length) return;
     const t0 = performance.now(), h = Math.min(dt, 0.05);
-    for (let i = 0; i < live.length; i++) { const b = live[i]; if (b.wobble) wobbleStep(b, dt); else step(b, h); }
+    for (let i = 0; i < live.length; i++) { const b = live[i]; if (b.done) continue; if (b.wobble) wobbleStep(b, dt); else step(b, h); }
     for (let i = live.length - 1; i >= 0; i--) if (live[i].done) live.splice(i, 1);
     for (let i = 0; i < dirty.length; i++) { const m = dirty[i]; m.instanceMatrix.needsUpdate = true; m.userData.knockDirty = false; }
     dirty.length = 0;
@@ -228,7 +239,7 @@ export function createKnock(ctx) {
   }
   ctx.onUpdate(update);
 
-  const api = { register, listen, update, list,
+  const api = { register, listen, update, restore, list,
     get stats() {
       stats.registered = list.length; stats.knocked = knocked; stats.live = live.length;
       let mx = 0; for (let i = 0; i < Math.min(busyN, busy.length); i++) if (busy[i] > mx) mx = busy[i];
