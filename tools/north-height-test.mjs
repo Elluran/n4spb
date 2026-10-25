@@ -313,7 +313,7 @@ const tauride = built.ctx.services.landmarksTauride;
 {
   ok(same(HOOKS.deckServices, ['landmarksTauride']) && same(makeHooks([]).deckServices, ['landmarksTauride']), `HOOKS.deckServices is ['landmarksTauride']: ${JSON.stringify(HOOKS.deckServices)}`);
   const pod = [900, -1000], flight = P.PARADNY_FLIGHTS.find((f) => f.id === STAIRS[3].id), mid = [(flight.pts[0] + flight.pts[2]) / 2, (flight.pts[1] + flight.pts[3]) / 2];
-  const g = (w, x, z) => createHandling(w).groundAt(x, z);
+  const g = (w, x, z) => createHandling(w).groundAt(x, z, 0, 1e9);      // (a PLACEMENT: the car asks from the sky, as car.reset does since v1.3.0: it lands on the deck above the point whatever its height)
   near(g(mkWorld({}), pod[0], pod[1]), 0.03, 0.0001, 'no service: the asphalt (the car ignores terrain above 0.45 m: groundAt takes only low walk boxes)');
   near(g(mkWorld({ landmarksTauride: tauride }), pod[0], pod[1]), 3.33, 1e-9, 'landmarksTauride built: the car stands on the podium deck + 0.03');
   near(g(mkWorld({ landmarksTauride: tauride }), mid[0], mid[1]), P.paradnyDeckY(mid[0], mid[1]) + 0.03, 1e-9, 'on a stair flight: the stair deck + 0.03');
@@ -331,10 +331,10 @@ const tauride = built.ctx.services.landmarksTauride;
     near(g(mkWorld({ landmarksTauride: { deckY: () => v }, bridges: chain.bridges }), 900, -1000), 7.03, 1e-9, `a service that answers ${what} does not shadow the bridge chain`);
   }
   const late = mkWorld({}), car = createHandling(late); late.services.landmarksTauride = tauride;
-  near(car.groundAt(pod[0], pod[1]), 3.33, 1e-9, 'a service built after the handling is found (looked up at call time)');
+  near(car.groundAt(pod[0], pod[1], 0, 1e9), 3.33, 1e-9, 'a service built after the handling is found (looked up at call time; a placement asks from the sky)');
   // river: a deck of the service makes the river bed no obstacle, as a bridge deck does
   const rv = (() => { for (const [x, z] of lattice(-400, 2400, -2100, -200, 20)) if (L.inRiver(x, z) && L.inPlay(x, z)) return [x, z]; return null; })();
-  ok(createHandling(mkWorld({})).blocked(rv[0], rv[1]) === true, `a car cannot enter the river at ${JSON.stringify(rv)}`);
+  ok(createHandling(mkWorld({})).blocked(rv[0], rv[1]) === false, `a car CAN enter the river at ${JSON.stringify(rv)} (the world rule: water is reachable, docs/AREAS.md 13.7)`);
   ok(createHandling(mkWorld({ landmarksTauride: { deckY: () => 1 } })).blocked(rv[0], rv[1]) === false, 'with a deck of the service over it the river is no obstacle');
   // the absent key / an empty list: exactly the old chain
   const keep = HOOKS.deckServices;

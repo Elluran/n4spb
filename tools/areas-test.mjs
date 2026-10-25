@@ -403,7 +403,7 @@ check('fixture: an arrival grid inside the reverse zone depth but outside its la
     assert.equal(good.total, GG.gridPoints(fa.arrive).length * 6); assert.equal(good.badCount, 0, good.bad.join('\n')); assert.equal(good.hero, 0); assert(good.ring > 0 && good.direct > 0, JSON.stringify(good));
   });
   const bad = GG.arrivalGrid(fa, fake(FB, { river: [R(0, 1000, -400, -90)] }));
-  check('fixture: an arrival rectangle drowned in the river is caught (every resolution falls back to the HERO)', () => { assert.equal(bad.badCount, bad.total); assert(bad.bad.length && /HERO|river/.test(bad.bad[0]), bad.bad[0]); });
+  check('fixture: an arrival rectangle in the river is VALID (the world rule: water is walkable, the probe does not block it; docs/AREAS.md 13.7)', () => { assert.equal(bad.badCount, 0, bad.bad[0]); assert.equal(bad.hero, 0); });
   const noRoad = GG.arrivalGrid(fa, { ...fake(FB), roadsNear: () => [] });
   check('fixture: a car arrival needs a drivable lane (an area without roads fails the car grid, not the walk grid)', () => { assert(noRoad.badCount > 0 && noRoad.badCount <= noRoad.total / 3 + 1, JSON.stringify([noRoad.badCount, noRoad.total])); assert(/car/.test(noRoad.bad[0])); });
 }
@@ -447,9 +447,9 @@ console.log('edge gate and territory fixtures (the checks must pass a good pair 
   {
     const stub = (o = {}) => ({ HERO: { x: 0, z: 0, yaw: 0, pitch: 0 }, inPlay: () => true, insideBuilding: () => false, inRiver: () => false, roadsNear: () => [{ gap: 0, tx: 1, tz: 0 }], ...o });
     const pts = [{ x: 100, z: 100, k: 2 }, { x: 200, z: 100, k: 3 }];
-    check('fixture: the edge arrival is direct on dry ground for walk / fly / car (a car along its lane, both senses), and a wall of water (the probe blocks water) counts as bad in the wet figures', () => {
+    check('fixture: the edge arrival is direct on dry ground for walk / fly / car (a car along its lane, both senses), and water is no wall (the probe does not block it: wet resolutions are all direct)', () => {
       const ok = EG.edgeArrival(pts, stub()); assert.equal(ok.total, 2 * 4); assert.equal(ok.direct, 8); assert.equal(ok.badCount, 0); assert.deepEqual(ok.wet, { total: 0, bad: 0 });
-      const wet = EG.edgeArrival(pts, stub({ inRiver: () => true })); assert.equal(wet.wet.total, 8); assert.equal(wet.wet.bad, wet.wet.total); assert.equal(wet.hero, 8);
+      const wet = EG.edgeArrival(pts, stub({ inRiver: () => true })); assert.equal(wet.wet.total, 8); assert.equal(wet.wet.bad, 0); assert.equal(wet.hero, 0);
       const noRoad = EG.edgeArrival(pts, stub({ roadsNear: () => [] })); assert.equal(noRoad.total, 4, 'a car is not tried where there is no lane'); assert.equal(noRoad.badCount, 0);
       const bld = EG.edgeArrival(pts, stub({ insideBuilding: () => true })); assert(bld.badCount === bld.total && /building|HERO/.test(bld.bad[0]), bld.bad[0]);
     });
