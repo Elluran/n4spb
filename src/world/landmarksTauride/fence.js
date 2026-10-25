@@ -363,7 +363,7 @@ export function buildFence(ctx, parent, plan, opts = {}) {
     parts: [{ geo: pg, mat: matA, name: 'pickets', noOutline: true, far, at: 'mid', rot: Math.PI / 2, sz: (q) => q.len / D.panelM }, { geo: plg, mat: matS, name: 'plinth', far, at: 'mid', rot: Math.PI / 2, sz: (q) => q.len / D.panelM }],
     collider: (q) => ({ y0: Math.min(0, q.y) + cA.y0, y1: q.y + cA.y1, thick: cA.thick, e0: 0.01, e1: 0.01 }),
     rec: () => ({ kind: 'fence', mass: 700, h: 1.9, r: 0.15, anchored: 24, hitK: 0.5, metal: true, minDv: 0 }) });
-  const panels = { count: tall.length, isBays: true, meshes: bayRes.meshes };      // (compat: the old single InstancedMesh)
+  const panels = { count: tall.length, isBays: true, meshes: bayRes.meshes, records: bayRes.records };      // (compat: the old single InstancedMesh)
   // ---- 2. the STONE (one opaque static mesh on layer 0, so that it is in the normal / depth pre-pass the outlines read and hides the lines of the trees and walkers behind a pier: QA round 1 found the outlines of
   //         the pedestrians and crowns drawn across the faces of the gate piers when they were part of the alpha-cut mesh): the plinths of the panels, the ordinary piers, the gate piers, the posts and rails of the pitch fence
   // ---- 3. the alpha-cut rest (the iron leaves of the gates, the diamond mesh of the pitch fence): the no-outline layer

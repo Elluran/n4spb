@@ -13,7 +13,7 @@
 //  The map is the strip Moscow station -> Nevsky -> Admiralty (8 play rectangles, data/city.js PLAY_RECTS) plus 120 m of scenery around it; the specialist modules of every other part of the city are not in this repo.
 //
 //  The city is FLAT (y = 0 = street level). The Fontanka lies in a granite trench: water surface y = RIVER_Y.water (-3.2), river bed RIVER_Y.bed; heightAt() returns the
-//  bed inside the river polygon (the quay walls enclose it, nobody can walk there). Sidewalks are +0.12 m visually only (SURFACE.sidewalk): the player's feet stay at y = 0.
+//  bed inside the river polygon (the quay walls enclose it; water is reachable: a walker steps off an open edge or through a broken fence, a car falls in and drives on the bed, docs/AREAS.md 13.7). Sidewalks are +0.12 m visually only (SURFACE.sidewalk): the player's feet stay at y = 0.
 //  UNDERGROUND: the metro lies 51-64 m below the street (docs/UNDERGROUND.md); the ground plane (y = 0) is a drawn mesh with holes over the shafts (GROUND_HOLES).
 //  The street grid is not axis aligned: Nevsky runs at bearing ~104 deg (WNW-ESE), Ligovsky / Marata ~17 deg, Liteyny / Vladimirsky ~1.5 deg.
 // ============================================================================

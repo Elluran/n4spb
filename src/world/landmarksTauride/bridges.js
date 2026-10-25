@@ -218,7 +218,7 @@ function buildSiteSolids(K, KW, rec, D, P, G, shore) {
       us.sort((p, q) => p - q);
       for (let k = 0; k + 1 < us.length; k++) {
         const a = us[k], b = us[k + 1]; if (b - a < 0.05) continue; const pa = P3(a, s * v, 0), pb = P3(b, s * v, 0);
-        list.push({ x0: pa[0], z0: pa[2], x1: pb[0], z1: pb[2], y: h(a), ye: h(b), first: k === 0, iron, railH: DS.railH, color: C.rail, site: rec.site });
+        list.push({ x0: pa[0], z0: pa[2], x1: pb[0], z1: pb[2], y: h(a), ye: h(b), first: k === 0, iron, railH: DS.railH, color: C.rail, site: rec.site, side: s });
       }
     }
     void c;
@@ -319,7 +319,7 @@ export function buildBridges(ctx, parent, plan, opts = {}) {
       parts.push({ geo: xg, mat: md, name: 'lattice', far: 240, stretch: true, noOutline: true, when: (q) => q.color === col && q.iron });
     }
     const r = knockBays(ctx, { name: 'tauride-bridge-rail', bays: plan.railBays, parts, far: 320,
-      collider: (q) => ({ y0: Math.min(q.y, q.ye) - RR.colliderBelow, y1: Math.max(q.y, q.ye) + RR.colliderAbove, thick: RR.colliderThick, off: RR.colliderThick / 2 * 0, e0: 0.3, e1: 0.3 }),
+      collider: (q) => ({ y0: Math.min(q.y, q.ye) - RR.colliderBelow, y1: Math.max(q.y, q.ye) + RR.colliderAbove, thick: RR.colliderThick, off: q.side * (RR.colliderIn + RR.colliderThick / 2 + RR.railW / 2 + 0.02), e0: 0.3, e1: 0.3 }),
       rec: () => ({ kind: 'fence', mass: 120, h: 1.0, r: 0.06, anchored: 12, hitK: 0.25, metal: true, minDv: 0 }) });
     railN = r.items.filter(Boolean).length; n += railN;
   }

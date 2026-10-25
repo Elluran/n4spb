@@ -170,20 +170,23 @@ check('2b landmarksTauride (T6): the furniture of the garden is knockable like t
   const c = census.landmarksTauride; assert(c, 'landmarksTauride was built');
   const S = ctx.services.landmarksTauride, plan = S.furniture.plan, lamps = plan.lanterns.length;
   assert.equal(c.byKind.bench, 132, `benches ${c.byKind.bench}`); assert.equal(c.byKind.bin, 167, `bins ${c.byKind.bin}`); assert.equal(c.byKind.lamp, lamps, `lanterns ${c.byKind.lamp} of ${lamps}`);
-  assert.equal(c.n, 132 + 167 + lamps, `the module registers nothing else (${JSON.stringify(c.byKind)})`);
+  const nFence = c.byKind.fence || 0;      // water is reachable (docs/AREAS.md 13.7): the tall fence panels are breakable BAYS (kind 'fence', lib/fence-bays.js)
+  assert(nFence > 800, `the tall panels are fence records (${nFence})`);
+  assert.equal(c.n, 132 + 167 + lamps + nFence, `the module registers nothing else (${JSON.stringify(c.byKind)})`);
   for (const r of c.records) {
+    if (r.kind === 'fence') { assert.equal(r.items.length, 1, 'a fence bay owns one collider'); continue; }
     assert.equal(r.items.length, 1, `a ${r.kind} owns one collider`); const it = r.items[0];
     if (r.kind === 'bench') { assert(it.type === 'box' && Math.abs(it.y1 - r.y - 0.9) < 1e-6, `bench collider ${it.type} y1 ${it.y1} (y ${r.y})`); assert.equal(r.parts.length, 1); }
     if (r.kind === 'bin') { assert(it.type === 'cyl' && Math.abs(it.y1 - r.y - 0.78) < 1e-6, `bin collider ${it.type}`); }
     if (r.kind === 'lamp') { assert(it.type === 'cyl' && Math.abs(it.y1 - r.y - 4.2) < 1e-6, `lantern collider ${it.type}`); assert.equal(r.parts.length, 3, 'body + glow + light pool'); assert.equal(r.anchored, 18); }
     assert(it.y0 <= Math.min(0, r.y) - 0.5 + 1e-6, 'the collider reaches below the ground (a piece on a hill still blocks and is an obstacle of the nav)');
   }
-  // the fence: no record (the iron fences of the strip are not knockable either); the panels and piers are plain colliders with fence = true on the panels
-  assert.equal(S.fence.items.panels.length > 800 && S.fence.items.panels.every((it) => it.fence === true && !(it.source && it.source.knock)), true, 'the fence panels are plain wall colliders');
+  // the fence: the tall panels are bay records (a car breaks them), the low panels, the piers and the pitch fence stay plain colliders with fence = true on the panels
+  assert.equal(S.fence.items.panels.length > 800 && S.fence.items.panels.every((it) => it.fence === true) && (() => { const own = S.fence.items.panels.filter((it) => it.source && it.source.knock).length; return own > 700 && own <= nFence; })(), true, 'the fence panels are wall colliders, the tall ones owned by a bay record (the rest of the fence records: the bridge rails, the monument rim)');
   // a bench hit at 40 km/h is knocked and takes its seats: the record leaves "stand" and its collider goes
   const b = c.records.find((r) => r.kind === 'bench'); ctx.knock.hit(b.x, b.z, 40, 1, 0, 'bench'); idle(1);
   assert.notEqual(b.state, 'stand', `the bench was knocked (${b.state})`);
-  console.log(`     ${c.n} records ${JSON.stringify(c.byKind)}; the fence (${S.fence.colliders} colliders, ${S.fence.instances.panels} panels, ${S.fence.instances.piers} piers) is not knockable`);
+  console.log(`     ${c.n} records ${JSON.stringify(c.byKind)}; the fence (${S.fence.colliders} colliders, ${S.fence.instances.panels} panels, ${S.fence.instances.piers} piers): ${nFence} tall panels are breakable bays, the piers are not`);
 });
 
 // ---------------------------------------------------------------- 3 the strip's furniture in the North
