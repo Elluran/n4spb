@@ -17,6 +17,8 @@ import { GROUPS_LIST as G_SUVOROV } from '../../world/landmarksSuvorov/groups.js
 import { GROUPS_LIST as G_KIROCHNAYA } from '../../world/landmarksKirochnaya/groups.js';
 import { GROUPS_LIST as G_TAURIDE } from '../../world/landmarksTauride/groups.js';
 import { GROUPS_LIST as G_OKTYABRSKY, KAPODISTRIAS_GROUP } from '../../world/landmarksOktyabrsky/groups.js';
+import { GROUPS_LIST as G_EAST } from '../../world/landmarksEast/groups.js';
+import { GROUPS_LIST as G_EASTBRIDGES } from '../../world/eastBridges/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'smolny';
@@ -29,6 +31,8 @@ export const REQUIRE_BAKE = true;
  *  neighbour area). tools/modules-list.mjs parses this list from the file: keep one quoted name per line. */
 export const MODULES = [
   'environment',  // ground, embankment granite, Fontanka / Neva water, trees, lawns, flowerbeds, far skyline
+  'landmarksEast', // the eastern edge: the Lavra gate church, the Alexander Nevsky monument and Hotel Moscow on Alexander Nevsky Square (the rest of the Lavra lies beyond the territory: only 'east-lavra-gate' and 'east-hotel-moscow' are claimed); before streets / city, it claims its buildings
+  'eastBridges',  // the Alexander Nevsky Bridge (clipped to the data of the area) and the Lavra / Obvodny canal crossings; before streets, it claims 21 bridge ways
   'landmarksNorthFull', // the Chernyshevskaya vestibule (the other sub-groups of the module lie in Palace-Liteyny: only 'north-chernyshevskaya' is claimed here)
   'landmarksSmolny', // Smolny Cathedral and the convent / Institute (docs/research/north-smolny.md)
   'landmarksSuvorov', // the Suvorov Memorial Museum on Kirochnaya (7 OSM footprints, mosaics, tower)
@@ -55,6 +59,7 @@ export const LABELS = {
   landmarksKirochnaya: 'Клинический институт на Кирочной',
   landmarksTauride: 'Таврический дворец и Парадный квартал',
   landmarksOktyabrsky: 'БКЗ «Октябрьский» и памятник Каподистрии',
+  landmarksEast: 'Надвратная церковь Лавры · гостиница «Москва»', eastBridges: 'мост Александра Невского · мосты Лавры',
 };
 
 export const NAMES = {
@@ -117,6 +122,8 @@ GROUPS.landmarksSmolny = G_SMOLNY;
 GROUPS.landmarksSuvorov = G_SUVOROV;
 GROUPS.landmarksKirochnaya = G_KIROCHNAYA;
 GROUPS.landmarksTauride = G_TAURIDE;      // T1: the Tauride Palace r3801092 and the Paradny quarter; T2: the garden (osm ids: park, woods, ways, benches, bins); T8b: the nursery
+GROUPS.landmarksEast = G_EAST.filter((g) => g.key === 'east-lavra-gate' || g.key === 'east-hotel-moscow');      // the Lavra gate church r5677834 (1968, 1029) and Hotel Moscow r3132622 (1983, 822); the Trinity Cathedral, the Lavra wings and the Feodorovsky Cathedral lie beyond the territory
+GROUPS.eastBridges = G_EASTBRIDGES;      // the 21 bridge ways of the east (the group's osm list is computed from this area's ROADS: the Alexander Nevsky Bridge, the Monastyrka / Obvodny canal / Lavra crossings)
 GROUPS.landmarksOktyabrsky = [...G_OKTYABRSKY, KAPODISTRIAS_GROUP];      // the concert hall w30324279 (797, -347) and the Kapodistrias monument n1372027612 (797, -461)
 
 /**
@@ -145,6 +152,11 @@ export function makeAreas(h) {
   ..._groupPolys(SUBGROUPS['nevsky-centre'], 6).map((r) => ({ name: 'Невский Центр · Nevsky Centre', ...r })),
   // ---- the strip's own sights in the 200 m band of the old North (z -405 .. -205) -----------------------------------------------------------------------------------------------------------------------------
   { name: 'БКЗ «Октябрьский» · Oktyabrsky Concert Hall', c: [797, -347], r: 55 },
+  // ---- the east: Alexander Nevsky Square with the Lavra gate church and the monument, Hotel Moscow, the bridge (rows of the source layout)
+  ..._groupPolys(SUBGROUPS['east-hotel-moscow'], 8).map((r) => ({ name: 'Гостиница «Москва» · Hotel Moscow', ...r })),
+  { name: 'Площадь Александра Невского · Alexander Nevsky Square', c: [1940, 978], r: 95 },
+  { name: 'Александро-Невская лавра · Alexander Nevsky Lavra', x0: 1870, x1: 2195, z0: 1100, z1: 1440 },
+  { name: 'Мост Александра Невского · Alexander Nevsky Bridge', road: 'мост Александра Невского' },
   // ---- the waterways: the Neva along the north edge (the play edge is partly in the water), the Fontanka along the west edge and through the band
   { name: 'Нева · Neva River', x0: -600, x1: 3100, z0: -2800, z1: -1750, test: (x, z) => _shoreOf(['neva'], x, z) < 8 || inRiver(x, z) },
   { name: 'Фонтанка · Fontanka River', x0: -900, x1: -330, z0: -2000, z1: -85, test: (x, z) => shoreDist(x, z) < 14 },
@@ -299,7 +311,7 @@ export const GARAGE = {
  *  array (landmarksSmolny, landmarksSuvorov, landmarksKirochnaya; landmarksD publishes an array that is empty in the North, as in the strip's list; since M7 (docs/AREAS.md section 10) landmarksNorthFull
  *  publishes the door points of its 17 claimed buildings (landmarksNorthFull/doors.js: the vestibule's door of the G3 gate among them, which must stay clear) and landmarksOktyabrsky the hall's 9
  *  (in the North only; in the strip its list is empty, so the strip's table need not list it). landmarksBelinskyNorth and landmarksTauride publish none. */
-export const PRUNE_SERVICES = ['city', 'landmarksNorthFull', 'landmarksSmolny', 'landmarksSuvorov', 'landmarksKirochnaya', 'landmarksOktyabrsky', 'landmarksA', 'landmarksB'];
+export const PRUNE_SERVICES = ['city', 'landmarksNorthFull', 'landmarksSmolny', 'landmarksSuvorov', 'landmarksKirochnaya', 'landmarksOktyabrsky', 'landmarksA', 'landmarksB', 'landmarksEast'];
 // The hook set (milestone M6, docs/AREAS.md section 9): hooks.js builds it from the module list above (a hook that serves a landmark module is dormant until the module is in MODULES).
 import { makeHooks, makeHeightPatches } from '../north/hooks.js';      // shared with the parked North: the hook bodies are gated by the module list
 /** the hooks of the engine modules (keep-outs of trees / tufts / props / ways / parking, the garden of the crowd cap, the deck services): src/areas/north/hooks.js documents the contract */
