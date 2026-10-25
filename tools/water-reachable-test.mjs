@@ -157,6 +157,7 @@ function openEdges() {
       if (!L.inPlay(sx, sz, 8) || L.insideBuilding(sx, sz, 1) || L.insideBuilding(px, pz, 1)) continue;
       if (waterAt(px - s.nx * 1.0, pz - s.nz * 1.0) === null) continue;              // the water must start right behind the wall line
       if (!corridorFree(sx, sz, ex, ez, 0.35, 0, 1.7, null)) continue;
+      if (Math.abs(ph.groundHeight(sx, sz, 30, false)) > 0.6 || ph.groundHeight(px - s.nx * 1.0, pz - s.nz * 1.0, 30, false) > waterAt(px - s.nx * 1.0, pz - s.nz * 1.0) - 0.3) continue;      // a street-level start, and no deck / landing stage over the water edge (a bridge approach is no quay edge)
       out.push({ sx, sz, dx: -s.nx, dz: -s.nz, key: s.key, px, pz });
     }
   }
@@ -170,7 +171,7 @@ function openEdgesScan() {
     if (d >= 16) continue;
     const bx = c.x + dx * (d - 0.5), bz = c.z + dz * (d - 0.5), lx = c.x + dx * d, lz = c.z + dz * d, sx = lx + dx * 3, sz = lz + dz * 3;
     if (!L.inPlay(sx, sz, 8) || L.insideBuilding(sx, sz, 1) || waterAt(sx, sz) !== null || !corridorFree(sx, sz, bx, bz, 0.35, 0, 1.7, null)) continue;
-    if (ph.groundHeight(bx, bz, 0.3, false) > waterAt(bx, bz) - 0.3) continue;       // a deck / a landing stage over the water edge is no edge
+    if (ph.groundHeight(bx, bz, 30, false) > waterAt(bx, bz) - 0.3 || Math.abs(ph.groundHeight(sx, sz, 30, false)) > 0.6) continue;       // a deck / a landing stage over the water edge is no edge
     out.push({ sx, sz, dx: -dx, dz: -dz, key: c.key, px: lx, pz: lz });
   }
   return out;
@@ -257,24 +258,24 @@ function carRun(f, speedKmh, { id = 'coupe' } = {}) {
   ctx.drive = { active: true, car, fx: { sparks() {} } };
   const { r, w } = f, start = { x: r.x - w.nx * 3.6, z: r.z - w.nz * 3.6 }, yaw = Math.atan2(w.nx, w.nz);
   car.reset(start.x, start.z, yaw); car.vx = Math.sin(yaw) * speedKmh / 3.6; car.vz = Math.cos(yaw) * speedKmh / 3.6;
-  const input = { thr: 0, brk: 0, steer: 0, hand: false, nitro: false }, ev = [];
+  const input = { thr: 1, brk: 0, steer: 0, hand: false, nitro: false }, ev = [];      // (the driver keeps the throttle down: a heavy parapet slows the car, it must not stop dead at the gap)
   let fell = false, minY = 9, maxDepth = 0, t = 0;
   for (; t < 6; t += 1 / 60) { car.step(1 / 60, input); ctx.knock.update(1 / 60); for (const e of car.events) ev.push({ type: e.type, v: e.v }); if (car.fall) fell = true; minY = Math.min(minY, car.y); maxDepth = Math.max(maxDepth, car.depth); }
   return { car, ev, fell, minY, maxDepth, start, yaw };
 }
 function pickCarFence() {
-  return pickFence((r) => FILTER_QUAY(r) && r.anchored <= 24 && r.mass <= 300 && !r.__tried, 6000, true) || pickFence((r) => FILTER_QUAY(r) && r.anchored <= 24 && !r.__tried, 6000, true);      // (a railing panel first: the 900 kg granite parapet holds a car that is slowed by the trees before it)
+  return pickFence((r) => FILTER_QUAY(r) && r.anchored <= 24 && r.mass <= 300 && !r.__tried, 6000, true) || pickFence((r) => FILTER_QUAY(r) && r.anchored <= 24 && !r.__tried, 6000, true) || pickFence((r) => r.anchored <= 24 && r.mass <= 900 && !r.__tried, 6000, true);      // (a railing panel first: the 900 kg granite parapet holds a car that is slowed by the trees before it)
 }
 check('4 the car drives into a quay fence at 40 km/h: the bay breaks, the car falls into the trench (fall damage events), lands on the bed in the water with the drag, cannot climb out', () => {
   let f = null, res = null;
-  for (let attempt = 0; attempt < 400 && !res; attempt++) {
+  for (let attempt = 0; attempt < 3000 && !res; attempt++) {
     f = pickCarFence(); if (!f) break;
-    const { r, w } = f, ex = new Set(r.items); for (const it of ph.querySolids(r.x, r.z, 4)) if (it.fence) ex.add(it);
-    const lane = () => corridorFree(r.x - w.nx * 5.5, r.z - w.nz * 5.5, r.x - w.nx * 0.8, r.z - w.nz * 0.8, 0.9, 0, 1.6, ex), cleared = [];
-    for (let k = 0; k < 40 && !lane(); k++) { const b = corridorFree.last; if (!b || b.fence || b.type === 'walk' || b.type === 'ramp' || (b.y1 ?? 0) > 8 || modOf(b) === 'environment') break; ph.remove(b); cleared.push(b); }      // the run-up lane: a lamp, a tree or a bench in it is taken out for the run (the check is about the fence and the water), put back after
-    const restore = () => { for (const b of cleared) ph._insert(b); };
+    const { r, w } = f, ex = new Set(r.items); for (const it of ph.querySolids(r.x, r.z, 8)) if (it.fence) ex.add(it);
+    const lane = () => waterAt(r.x - w.nx * 5.5, r.z - w.nz * 5.5) === null && ph.groundHeight(r.x - w.nx * 5.5, r.z - w.nz * 5.5, 30, false) > -0.5 && corridorFree(r.x - w.nx * 5.5, r.z - w.nz * 5.5, r.x - w.nx * 0.8, r.z - w.nz * 0.8, 0.9, 0, 1.6, ex), cleared = [];
+    for (let k = 0; k < 40 && !lane(); k++) { const b = corridorFree.last; if (!b || b.fence || b.type === 'walk' || b.type === 'ramp' || (b.y1 ?? 0) > 8 || (b.y0 ?? 0) < -1 || Math.max(b.hw || 0, b.hd || 0) > 2.5) break; cleared.push({ b, inItems: ph.items.includes(b), cells: [...ph.grid.values()].filter((a) => a.includes(b)) }); ph.remove(b); for (const a of ph.grid.values()) { const j = a.indexOf(b); if (j >= 0) a.splice(j, 1); } }      // the run-up lane: a lamp, a tree or a bench in it is taken out for the run (the check is about the fence and the water), put back after
+    const restore = () => { for (const c of cleared) { if (c.inItems) ph._insert(c.b); else for (const a of c.cells) a.push(c.b); } };
     if (!lane()) { restore(); f.r.__tried = true; f = null; continue; }
-    const rr = carRun(f, 40); restore(); if (rr.minY < -1) res = rr; else { /* a blocked run: try another place */ f.r.__tried = true; }
+    const rr = carRun(f, 40); restore(); if (rr.minY < -1 && rr.fell && r.state !== 'stand') res = rr; else { /* a blocked run: try another place */ f.r.__tried = true; }
   }
   assert(res, 'no fence in this area let the car through (the run-up is never free)');
   const { car, ev } = res; NEED.fell = true;

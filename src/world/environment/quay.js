@@ -771,7 +771,13 @@ export function buildQuay(ctx, root) {
       for (let i = 0; i + 1 < fr.length; i++) {
         if (segGap[i] || segIn[i] || bank.far || !segPlay[i]) continue;
         const a = fr[i], sg = seg[i], nb = Math.max(1, Math.round(sg.len / 2.2));
-        for (let j = 0; j < nb; j++) parapetBays.push(faceLeft(a.x + sg.tx * sg.len * j / nb, a.z + sg.tz * sg.len * j / nb, a.x + sg.tx * sg.len * (j + 1) / nb, a.z + sg.tz * sg.len * (j + 1) / nb, sg.nx, sg.nz, { y: Y_TOP, nx: sg.nx, nz: sg.nz, key }));
+        for (let j = 0; j < nb; j++) {
+          const x0 = a.x + sg.tx * sg.len * j / nb, z0 = a.z + sg.tz * sg.len * j / nb, x1 = a.x + sg.tx * sg.len * (j + 1) / nb, z1 = a.z + sg.tz * sg.len * (j + 1) / nb;
+          // the collider box of the old wall: 0.4 m landward of the wall line, 0.45 thick; where a road runs over it the box moves seaward (up to 5 m) or is left out (a carriageway must not be walled: the bridge approaches)
+          const clash = (dd) => [0, 0.5, 1].some((f) => onRoad(x0 + (x1 - x0) * f + sg.nx * (0.4 - dd), z0 + (z1 - z0) * f + sg.nz * (0.4 - dd), dd > 0 ? 0.4 : 0.05));
+          let cdd = 0; if (clash(0)) { cdd = -1; for (let dd = 0.3; dd <= 5; dd += 0.3) if (!clash(dd)) { cdd = dd; break; } }
+          parapetBays.push(faceLeft(x0, z0, x1, z1, sg.nx, sg.nz, { y: Y_TOP, nx: sg.nx, nz: sg.nz, key, cdd }));
+        }
       }
       sweep(coping[key], [[0.88, Y_TOP], [1.4, Y_TOP]], (i) => segGap[i] || segIn[i] || segRoad[i], 0, flat);                // the granite kerb strip (not under a carriageway) behind the parapet
     } else {
@@ -946,8 +952,8 @@ export function buildQuay(ctx, root) {
     const roll = unitProfile(PARAPET_ROLL, { uLen: 2.2, uvs: 2.2, vFn: (y) => Math.max(0, y) / 1.04 * 0.99 });
     const r = knockBays(ctx, { name: 'env-quay-parapet-bays', bays: parapetBays, far: 520,
       parts: [{ geo: roll, mat: ctx.mat.toon('#ffffff', { map: parapetTexture(ctx), paint: 0.04, name: 'env-quay-parapet-bays' }), name: 'roll', receive: true, far: 520, stretch: true, y: -Y_TOP }],
-      collider: (b, fr) => ({ y0: -8, y1: 1.25, thick: 0.88, off: 0.44 * dirOf(b, fr), e0: 0.05, e1: 0.05 }),
-      rec: () => ({ kind: 'fence', mass: 900, h: 1.04, r: 0.3, anchored: 24, hitK: 0.7, metal: false, minDv: 0 }) });
+      collider: (b, fr) => (b.cdd < 0 ? null : { y0: -8, y1: 1.25, thick: 0.45, off: (0.4 - b.cdd) * dirOf(b, fr), e0: 0.25, e1: 0.25 }),
+      rec: (b) => (b.cdd < 0 ? null : { kind: 'fence', mass: 900, h: 1.04, r: 0.3, anchored: 24, hitK: 0.7, metal: false, minDv: 0 }) });
     fenceStats.parapet = parapetBays.length; info.colliders += r.items.filter(Boolean).length;
   }
   if (cheekBays.length) {
