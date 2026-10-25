@@ -474,7 +474,7 @@ export function createTouchControls({ ctx, player, canvas, params = new URLSearc
         act('Время суток · Time of day', () => closePanelThen(() => tap('KeyT'))),
         act(muted ? 'Звук: выкл · Sound: off' : 'Звук: вкл · Sound: on', () => closePanelThen(() => tap('KeyM'))),
         act('Скрыть интерфейс · Hide UI', () => closePanelThen(() => { body.classList.add('noui'); toast('Меню: кнопка справа вверху · Menu button stays top right'); })),
-        doc.documentElement.classList.contains('teleports') ? act('В начало · Respawn', () => closePanelThen(() => tap('KeyR'))) : null,
+        act('В начало · Respawn', () => closePanelThen(() => tap('KeyR'))),
         fsOk ? act(doc.fullscreenElement ? 'Выйти из полного экрана · Exit fullscreen' : 'Полный экран · Fullscreen', () => closePanelThen(() => toggleFullscreen())) : null,
         act('FPS', () => closePanelThen(() => { if (stats) stats.hidden = !stats.hidden; })),
         act('Управление · Controls settings', () => openSettings())),

@@ -435,7 +435,7 @@ function frame(now) {
   stats.fps = fps; stats.calls = renderer.info.render.calls; stats.triangles = renderer.info.render.triangles;
 }
 
-/** The teleports (keys 1..0 / Shift / Alt = the VIEWS, R = back to the start, the Places list, the touch menu's Respawn) are OFF for now (owner, 2026-10-25: the player walks to the places himself); ?teleports=1 brings them back for development and the tools. */
+/** The place teleports (keys 1..0 / Shift / Alt = the VIEWS, the Places list) are OFF for now (owner, 2026-10-25: the player walks to the places himself); ?teleports=1 brings them back for development and the tools. R (respawn at the start) stays: the way back when the player has walked or driven somewhere he cannot return from (water is walkable, docs/AREAS.md 13.7). */
 { const v = document.getElementById('ver'); if (v) v.textContent = 'v' + VERSION; }
 const TELEPORTS = params.get('teleports') === '1';
 if (TELEPORTS) document.documentElement.classList.add('teleports'); else { const pl = document.getElementById('places'); if (pl) pl.remove(); }
@@ -557,7 +557,7 @@ async function main() {
     if (e.code === 'KeyT') showToast(tod.cycle());
     if (e.code === 'KeyM') { audio.muted = !audio.muted; const b = $('mute'); if (b) b.setAttribute('aria-pressed', String(audio.muted)); }
     const drv = ctx.drive && ctx.drive.active;      // while driving the places / R move the car instead of the walker
-    if (e.code === 'KeyR' && TELEPORTS) { if (drv) ctx.drive.place(L.HERO.x, L.HERO.z, L.HERO.yaw); else player.setPose(L.HERO.x, L.HERO.z, L.HERO.yaw, L.HERO.pitch); if (ctx.gates) ctx.gates.teleported(); }
+    if (e.code === 'KeyR') { if (drv) ctx.drive.place(L.HERO.x, L.HERO.z, L.HERO.yaw); else player.setPose(L.HERO.x, L.HERO.z, L.HERO.yaw, L.HERO.pitch); if (ctx.gates) ctx.gates.teleported(); }
     if (e.code === 'Backquote' && !e.altKey && !e.shiftKey) { const s = $('stats'); if (s) s.hidden = !s.hidden; }
     const v = VIEWS[(e.altKey && e.shiftKey ? 'AltShift' : e.altKey ? 'Alt' : e.shiftKey ? 'Shift' : '') + e.code]; if (v && !e.repeat && TELEPORTS) goToView(v);     // standing on the ground there (setPose without y ends a flight); with the baked scene the regions around the destination stream in first (the Admiralty end is 2.6 km from the start pose)
   });

@@ -20,6 +20,7 @@ import { GROUPS_LIST as G_BELINSKY } from '../../world/landmarksBelinsky/groups.
 import { GROUPS_LIST as G_BR } from '../../world/bridges/groups.js';
 import { GROUPS_LIST as G_CASTLE } from '../../world/landmarksCastle/groups.js';
 import { LIBRARY_GROUP } from '../../world/landmarksD/groups.js';
+import { GROUPS_LIST as G_NORTHBRIDGES } from '../../world/northBridges/groups.js';
 import { GROUPS_LIST as G_GARDEN, GARDEN_RING } from '../../world/landmarksGarden/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
@@ -35,6 +36,7 @@ export const MODULES = [
   'environment',  // ground, embankment granite, Fontanka / Moika / Neva water, trees, lawns, flowerbeds, far skyline
   'landmarksNorthFull', // Dom Muruzi, the Transfiguration Cathedral, the Chernyshevskaya vestibule, the Podpisnye Izdaniya bookstore and the corridor houses
   'landmarksBelinskyNorth', // the church of Simeon and Anna (Mokhovaya 48)
+  'northBridges', // the Liteyny Bridge over the Neva (the raised deck; the Bolsheokhtinsky Bridge of the module lies in Smolninskoye); before streets / city, it claims the bridge ways
   'streets',      // roads, markings, kerbs, granite pavements, crossings, road furniture, trolleybus overhead wires
   'city',         // every OSM building that no landmark module claims: Petersburg facade grammar, roofs, courtyards, entrances
   'rail',         // Moscow Railway Station tracks, platforms, canopies, catenary, signals, trains
@@ -62,6 +64,7 @@ export const MODULES = [
 export const LABELS = {
   landmarksNorthFull: 'Чернышевская, Спасо-Преображенский собор, дом Мурузи',
   landmarksBelinskyNorth: 'церковь Симеона и Анны',
+  northBridges: 'Литейный мост',
   landmarksD: 'Национальная библиотека',
   landmarksGarden: 'Летний сад · ограда',
   landmarksMars: 'Марсово поле, Мраморный дворец, памятник Суворову',
@@ -140,6 +143,7 @@ GROUPS.landmarksE = G_E; GROUPS.landmarksF = G_F; GROUPS.landmarksG = G_G; GROUP
 // the bridges: only the ones whose OSM ways are in the data of this area (the Blue, Red, Pochtamtsky, Fonarny, Kamenny and Mucny bridges lie south-west of it: they stay in the strip's table)
 GROUPS.bridges = G_BR.filter((b) => !['blue', 'red', 'pochtamtsky', 'fonarny', 'kamenny', 'mucny'].includes(b.key));
 // Liteyny: the Chernyshevskaya vestibule, the Transfiguration Cathedral, Dom Muruzi, the Podpisnye Izdaniya bookstore and the corridor houses (they replace the strip's landmarksNorth, same ids), the church of Simeon and Anna
+GROUPS.northBridges = G_NORTHBRIDGES.filter((g) => g.osm.length);      // only the sub-groups with mapped ways in THIS data: 'north-liteyny' (the Liteyny Bridge deck, x -123 .. -77, z -1972 .. -2356)
 GROUPS.landmarksNorthFull = G_NORTHFULL; GROUPS.landmarksBelinskyNorth = G_BELINSKY_NORTH;
 // the Summer Garden (landmarksGarden, OWNS_GROUPS = true: the module draws all five sub-groups from its own pure-data lists, it is not group-aware): the Neva fence, the Moika fence, the garden (359 OSM ids), the Summer
 // Palace of Peter I with the gate booths, the Coffee / Tea Houses and the pavilions. Every id is in this area's data and every vertex of the garden relation r2653740 lies inside the data extent (the garden ring x -1059 .. -751,
@@ -589,9 +593,11 @@ export const GARAGE = {
 export const PRUNE_SERVICES = ['city', 'landmarksA', 'landmarksB', 'landmarksC', 'landmarksD', 'landmarksNorth'];
 /** the area-specific hooks of the engine modules (milestone M6, docs/AREAS.md section 9: keep-outs of trees / tufts / props / ways / parking, the crowd garden, the deck services; the call sites read
  *  them through lib/area-tables.js and are a no-op for a key that is absent): none in the strip */
-export const HOOKS = {};
+export const HOOKS = makeHooks(MODULES);      // the hook set of src/areas/north/hooks.js gated by the module list: here only the deck service of northBridges is live (the Tauride / Smolny keep-outs wait for their modules)
 /** the height patches of layout.heightAt (milestone M6, docs/AREAS.md section 9: `[{ id, box: [x0, x1, z0, z1], at(x, z) -> number | null }]`, the first non-null answer wins): none in the strip */
-export const HEIGHT_PATCHES = [];
+export const HEIGHT_PATCHES = makeHeightPatches(MODULES);
+
+import { makeHooks, makeHeightPatches } from '../north/hooks.js';      // shared with the parked North: the hook bodies are gated by the module list
 
 // ---------------------------------------------------------------- the places of the OTHER areas (milestone M7, docs/AREAS.md: core/gates.js, the HUD list "Места · Places")
 /**

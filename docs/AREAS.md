@@ -1156,8 +1156,8 @@ Buildings, benches, bins, kiosks, cars, people are movable and breakable exactly
 ### 13.4 Cars
 The four cars (coupe, pickup, Zhiguli, roadster) stand ONLY at the central station, the Moscow station (`GARAGE.poses`, the strip's poses). An area whose territory does not contain the station holds ONE car, the purple Zhiguli (`lada`: VAZ-2106 in eggplant), at its spawn. Both first areas contain the station, so both have the four.
 
-### 13.5 Teleports off
-The Places list, the view keys (1..0, Shift, Alt), R (back to the start) and the touch menu's Respawn are off (`?teleports=1` restores them for development and the tools): the player walks to the places himself. The page help lines carry movement keys only.
+### 13.5 Place teleports off, respawn stays
+The Places list and the view keys (1..0, Shift, Alt) are off (`?teleports=1` restores them for development and the tools): the player walks to the places himself. **R (respawn at the start) and the touch menu's Respawn stay**: the way back from anywhere. The page help lines carry movement keys and R only.
 
 ### 13.6 Version
 `src/core/version.js` (1.0.0 and up, SemVer), shown top right on the preloader; `node tools/version.mjs patch|minor|major "note"` bumps it, `package.json` and `CHANGELOG.md`; the rules of the levels are in `CLAUDE.md`.
