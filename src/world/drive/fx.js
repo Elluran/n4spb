@@ -1,5 +1,5 @@
 // drive/fx.js - soft billboard particles for the player's car: white tyre smoke while drifting / braking hard, warm sparks when it scrapes or hits something, and a
-// fading exhaust glow trail while the nitro burns. Two InstancedMeshes (smoke = normal blending, sparks = additive), one draw call each, no outline pass.
+// fading exhaust glow trail while the nitro burns. Two InstancedMeshes (smoke = normal blending, sparks = additive), one draw call each, no outline pass; they veil the outlines behind them (ctx.overOutline).
 // COLD GAS (the Roadster, def.jetFx in drive/cars/index.js): its THRUST is not a fire but a white condensate cloud, so the exhaust glow is replaced by soft white puffs from every nozzle
 // (a third, normal-blended InstancedMesh with its own cap, so the tyre smoke is never starved), plus the hop's down-jet columns and the ring cloud that rolls out from the car at take-off and touchdown.
 // HOP v3: bigger columns / rings for the barrel hop (C; car.jetK), whose SIDE STREAMS are: thin white cold-gas jets from the front lateral nozzles and a
@@ -23,7 +23,7 @@ function system(ctx, cap, additive, name = additive ? 'drive-sparks' : 'drive-sm
       void main(){ float d = length(vUv - 0.5) * 2.0; float a = smoothstep(1.0, 0.15, d) * vCol.a; if (a < 0.01) discard; gl_FragColor = vec4(vCol.rgb, a); }`,
   });
   const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; mesh.renderOrder = 5; mesh.name = name;
-  ctx.noOutline(mesh); ctx.add(mesh);
+  ctx.overOutline(mesh); ctx.add(mesh);      // over the outlines: the car's lines no longer cut through its smoke
   const P = []; for (let i = 0; i < cap; i++) P.push({ live: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, age: 0, life: 1, s0: 1, s1: 1, r: 1, g: 1, b: 1, a: 1, grav: 0, drag: 0 });
   let next = 0;
   return {

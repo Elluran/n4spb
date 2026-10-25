@@ -61,6 +61,19 @@ export function createContext({ scene, camera, renderer = null, audio, quality, 
     onUpdate(fn) { updates.push(fn); },
     /** Exclude from the outline pass (alpha cut-outs, particles, shader-animated meshes). */
     noOutline(obj) { obj.traverse((o) => o.layers.set(LAYER_NO_OUTLINE)); return obj; },
+    /** A soft transparent veil (smoke, sparks) drawn OVER the outlines: noOutline, and its blending also lowers the colour target's alpha by its coverage, which the composite reads
+     *  to fade the outlines of whatever lies behind it (core/renderer.js). Without it the lines, found by the normal / depth pass that never sees the veil, are painted over it. */
+    overOutline(obj) {
+      obj.traverse((o) => {
+        o.layers.set(LAYER_NO_OUTLINE);
+        for (const m of o.material ? [].concat(o.material) : []) {
+          const additive = m.blending === THREE.AdditiveBlending;
+          Object.assign(m, { blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: additive ? THREE.OneFactor : THREE.OneMinusSrcAlphaFactor,
+            blendEquationAlpha: THREE.AddEquation, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor });
+        }
+      });
+      return obj;
+    },
     /** Underground-only: drawn only while the camera is below y = -2 m (or inside a zone with showUnder). Also keeps the object in underground batches. */
     underground(obj) { obj.userData.undergroundOnly = true; return obj; },
     /** Surface-only: not drawn while the camera is deeper than -20 m (the whole street is hidden from the metro). */

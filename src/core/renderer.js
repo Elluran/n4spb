@@ -235,6 +235,8 @@ export function createRenderPipeline(renderer, quality) {
         float dNear = min(d0, dmin);
         float fade = 1.0 - smoothstep(35.0, 190.0, dNear);
         float edge = max(dEdge, nEdge * 0.85) * fade * uOutline;
+        // the colour target's alpha is 1 except under a veil (smoke, sparks: ctx.overOutline), which lowers it by its coverage: the lines fade behind it instead of crossing it
+        edge *= clamp(texture2D(tColor, vUv).a, 0.0, 1.0);
         // colour-aware line: darken & cool the underlying colour rather than paint black
         vec3 lineCol = mix(col * vec3(0.42, 0.38, 0.5), uLine, 0.35);
         col = mix(col, lineCol, edge * 0.82);
