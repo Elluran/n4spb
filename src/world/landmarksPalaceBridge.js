@@ -13,6 +13,7 @@
 export const OWNS_GROUPS = [];
 
 import { makeMats } from './bridges/mats.js';
+import { buildSpanWires } from './lib/bridge-wires.js';
 import { buildLeaves } from './landmarksPalaceBridge/leaf.js';
 import { buildGates } from './landmarksPalaceBridge/gates.js';
 import { createService, addStopLines, stepWalker, stepCar, bodyState } from './landmarksPalaceBridge/service.js';
@@ -27,9 +28,11 @@ export async function build(ctx) {
   const mode = URLQ.get('palacebridge'), svc = createService({ mode: mode === 'open' || mode === 'closed' ? mode : 'auto' });
   const leaf = buildLeaves({ ctx, M });
   leaf.colliders(); leaf.set(0);
+  const wires = buildSpanWires(ctx, 'palace');                 // the contact wires of the span: the streets module cut them out; drawn here only while the leaves are down (lib/bridge-wires.js)
   const gv = buildGates({ ctx, M, gates: svc.gates });
   svc.leaf = leaf;
-  svc.stats = { tris: leaf.tris, leafTris: leaf.tris, rails: leaf.info.rails, kerbs: leaf.info.kerbs, arms: gv.arms, ramps: leaf.items().length };
+  svc.wires = wires;
+  svc.stats = { spanWires: wires ? wires.lines : 0, tris: leaf.tris, leafTris: leaf.tris, rails: leaf.info.rails, kerbs: leaf.info.kerbs, arms: gv.arms, ramps: leaf.items().length };
   svc.deckAt = svc.deckY;
   Object.defineProperty(svc.stats, 'swept', { get: () => swept, enumerable: true });      // NPC people set down off a steep leaf (see the frame loop)
   ctx.services.landmarksPalaceBridge = svc;
@@ -47,7 +50,7 @@ export async function build(ctx) {
   ctx.onUpdate((dt, t) => {
     const night = ctx.shared && ctx.shared.uNight ? ctx.shared.uNight.value : 0;
     const r = svc.advance(dt > 0 ? Math.min(dt, 5) : 0, night);
-    if (first || r.th1 !== r.th0) leaf.set(r.th1);
+    if (first || r.th1 !== r.th0) { leaf.set(r.th1); if (wires) wires.set(r.th1); }
     gv.set(svc.clock.barrier, t);
     for (let i = 0; i < r.events.length; i++) {
       const ev = r.events[i];

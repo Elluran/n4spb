@@ -30,6 +30,8 @@ import { VB } from './vb.js';
 import { knockInstances } from '../lib/knock-inst.js';
 import { PointGrid, pairs } from './util.js';
 import * as L from '../layout.js';
+import * as PALACE_FR from '../landmarksPalaceBridge/frame.js';          // (pure frames of the two bascule bridges: toUV and the pier faces, for the span cut below)
+import * as TROITSKY_FR from '../landmarksTroitsky/frame.js';
 
 const H0 = 5.8;                                  // contact wire height above the road
 const WIRE = '#1d1f22', SPANC = '#2a2d31';
@@ -42,12 +44,56 @@ const CHAIN = Number(ENV.WIRES_CHAIN) || 70;     // longest run over a joint: la
 const MAST_H = 9.0, MAST_FAR = 320;             // the instanced mast model stands 9 m (a tie mast of 8 m is the same model scaled), seen up to this far
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
+/** the spans of the bascule bridges whose module is in the page's build list: { id, toUV, u0, u1 (the pier faces), hv (the half width of the zone) } */
+function bridgeZones(ctx) {
+  const list = Array.isArray(ctx.buildList) ? ctx.buildList : null, out = [];
+  if (!list) return out;
+  // (the Palace Bridge: from the last cross span of the fixed approach (u 62: two masts at the deck edges, hangers) to the first of the other one (u 186): everything between them hangs over the two bascule pier heads (u 85.3 .. 96.5, 153.9 .. 165.1) and the
+  // leaves, which stand up on the inner pier faces, so the wires of the fixed spans end at that last cross span, in front of the barrier, and not loose against a raised leaf; the gap fill of the streets module put its midspan masts at u 124)
+  if (list.includes('landmarksPalaceBridge')) out.push({ id: 'palace', toUV: PALACE_FR.toUV, u0: 62.5, u1: 185.5, hv: 30 });
+  if (list.includes('landmarksTroitsky')) out.push({ id: 'troitsky', toUV: TROITSKY_FR.toUV, u0: TROITSKY_FR.U_HINGE, u1: TROITSKY_FR.U_TIP, hv: 30 });
+  return out;
+}
+/** a polyline [[x, y, z], ...] against the span of zone q (clipped in u at the pier faces): null when no segment touches the span, else { keep: [polylines outside], cut: [polylines over the span] } */
+function clipLine(pts, q) {
+  const us = pts.map((p) => q.toUV(p[0], p[2])), pieces = []; let hit = false;
+  const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], A = us[i - 1], B = us[i], ts = [0];
+    for (const k of [q.u0, q.u1]) if ((A.u - k) * (B.u - k) < 0) ts.push((k - A.u) / (B.u - A.u));
+    ts.push(1); ts.sort((x, y) => x - y);
+    for (let j = 1; j < ts.length; j++) {
+      const tm = (ts[j - 1] + ts[j]) / 2, u = A.u + (B.u - A.u) * tm, v = A.v + (B.v - A.v) * tm, inn = u > q.u0 && u < q.u1 && Math.abs(v) < q.hv;
+      if (inn) hit = true;
+      pieces.push({ a: lerp(a, b, ts[j - 1]), b: lerp(a, b, ts[j]), inn });
+    }
+  }
+  if (!hit) return null;
+  const keep = [], cutL = []; let cur = null, curIn = null;
+  for (const pc of pieces) { if (!cur || pc.inn !== curIn) { cur = [pc.a]; curIn = pc.inn; (pc.inn ? cutL : keep).push(cur); } cur.push(pc.b); }
+  return { keep, cut: cutL };
+}
+
 export function buildWires(ctx, net, lamps, opts = {}) {
   const T0 = now();
   const { avoid = [], inPlaza = () => false, poles = null, panels = null, signTex = null } = opts;
   const stats = { pairs: 0, spans: 0, rosettes: 0, masts: 0, hangers: 0, arcs: 0, frogs: 0, signs: 0, wireKm: 0, ties: 0, snapped: 0, terminals: 0, gapSpans: 0, dropped: 0, ms: 0 };
   const service = { height: H0, pairs: [], spans: [], arcs: [], masts: [], anchors: [] };
-  const add = (pts, width, color, kind, grp) => { ctx.wires.add(pts, { width, color, kind, grp }); };
+  // THE MOVING SPANS (docs/AREAS.md 13.8, 13.10): where the page builds the module of a bascule bridge (it draws and moves the leaves), nothing may hang over or stand on the span between the pier faces: the contact wires are
+  // CLIPPED at the pier faces (the part over the span goes to service.cut[id], the module draws it as a dynamic object that is visible only while the leaves are down), the cross spans / hangers / masts of the span are not drawn
+  // (the masts: no collider either). A page without the module (the strip, the parked area) has no zone: nothing changes.
+  const zones = bridgeZones(ctx);
+  const spanCut = service.cut = {}; for (const z of zones) spanCut[z.id] = [];
+  const zoneAt = (x, z) => { for (const q of zones) { const p = q.toUV(x, z); if (p.u > q.u0 + 0.01 && p.u < q.u1 - 0.01 && Math.abs(p.v) < q.hv) return q; } return null; };
+  const add = (pts, width, color, kind, grp) => {
+    if (zones.length) for (const q of zones) {
+      const r = clipLine(pts, q); if (!r) continue;
+      for (const l of r.keep) ctx.wires.add(l, { width, color, kind, grp });
+      if (kind === 'contact') for (const l of r.cut) spanCut[q.id].push({ pts: l, width, color });
+      return;
+    }
+    ctx.wires.add(pts, { width, color, kind, grp });
+  };
   const refsOf = (w) => (w.rec && w.rec.trolley) || [];
   // a bridge way that the east bridges or the north bridges own (skipDraw) and that starts on their raised deck carries the module's own contact wires (eastBridges.js) or none at street height (northBridges: they would hang inside the deck), as in the source
   const onOwnDeck = (w) => w.skipDraw && (ctx.services.eastBridges?.deckY(w.x[0], w.z[0]) != null || ctx.services.northBridges?.deckY(w.x[0], w.z[0]) != null);
@@ -420,6 +466,7 @@ export function buildWires(ctx, net, lamps, opts = {}) {
   const placeSupport = (P, nx, nz, pole, deck = false) => {
     const key = Math.round(P[0] * 4) + ',' + Math.round(P[1] * 4) + ',' + Math.round(P[2] * 2);
     if (placed.has(key)) return; placed.set(key, 1);
+    if (zones.length && zoneAt(P[0], P[1])) return;                          // nothing stands on a moving bascule span (no mast, no collider)
     if (pole) {
       // plain black mast with a short bracket
       const item = ctx.physics.addCylinder(P[0], P[1], 0.22, 0, 4);
@@ -465,7 +512,7 @@ export function buildWires(ctx, net, lamps, opts = {}) {
     }
     // hangers: from the contact wire up to the span (the span polyline has a vertex right there)
     for (const q of wr.sups) {
-      for (const h of q.hang) { const sp = q.sp; hangerPts.push([[h.p[0], wr.hAt(q.s), h.p[1]], [sp.A[0] + (sp.B[0] - sp.A[0]) * h.u, spanY(sp, h.u), sp.A[1] + (sp.B[1] - sp.A[1]) * h.u]]); }
+      for (const h of q.hang) { const sp = q.sp; if (zones.length && (zoneAt(sp.A[0], sp.A[1]) || zoneAt(sp.B[0], sp.B[1]))) continue; hangerPts.push([[h.p[0], wr.hAt(q.s), h.p[1]], [sp.A[0] + (sp.B[0] - sp.A[0]) * h.u, spanY(sp, h.u), sp.A[1] + (sp.B[1] - sp.A[1]) * h.u]]); }
     }
   }
   // ties of the free ends nothing else fits (a short wire from the wire end to a rosette / mast)
@@ -496,6 +543,7 @@ export function buildWires(ctx, net, lamps, opts = {}) {
     for (const k of sp.knots) us.add(k);
     const U = [...us].sort((a, b) => a - b), pts = [];
     for (const u of U) pts.push([sp.A[0] + (sp.B[0] - sp.A[0]) * u, spanY(sp, u), sp.A[1] + (sp.B[1] - sp.A[1]) * u]);
+    if (zones.length && (zoneAt(sp.A[0], sp.A[1]) || zoneAt(sp.B[0], sp.B[1]))) { stats.spansCut = (stats.spansCut || 0) + 1; continue; }      // (a cross span of the moving bascule: not drawn, its masts neither)
     add(pts, 0.034, SPANC, 'span', 'S' + sp.id); stats.spans++;
     service.spans.push({ id: sp.id, a: [sp.A[0], sp.A[2], sp.A[1]], b: [sp.B[0], sp.B[2], sp.B[1]], mid: [sp.mid[0], parab(sp, 0.5), sp.mid[1]], len: sp.len, poles: [sp.poleA, sp.poleB] });
     placeSupport(sp.A, sp.nxA, sp.nzA, sp.poleA, sp.deckA); placeSupport(sp.B, sp.nxB, sp.nzB, sp.poleB, sp.deckB);
