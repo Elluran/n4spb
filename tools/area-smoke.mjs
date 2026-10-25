@@ -21,7 +21,7 @@ const ORIGIN = `http://127.0.0.1:${server.address().port}`;
 const EDGE = ['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Microsoft/Edge/Application/msedge.exe'].find((p) => fs.existsSync(p));
 const threeRoot = path.join(here, 'node_modules', 'three');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-// [area page, shot name, [x, z, yaw, pitch], query extras, time of day (tod.set k) or null]
+// [area page, shot name, [x, z, yaw, pitch, y?] (y = the eye height of a fly pose; omitted = standing on the ground), query extras, time of day (tod.set k) or null]
 const SHOTS = [
   ['palace', 'palace-station', [560, 192, -138.5, 8], '', 2.0],
   ['palace', 'palace-square', [-1985, -715, 31.5, 6], '', 2.0],
@@ -36,6 +36,10 @@ const SHOTS = [
   ['smolny', 'smolny-cathedral', [2335, -1833, -90, 21], '', 2.0],
   ['smolny', 'smolny-lavra', [1900, 960, 180, 8], '', 2.0],
   ['smolny', 'smolny-bolsheokhtinsky', [2480, -1130, -90, 8], '', 2.0],
+  // the garden nursery lot (T8b): the owner's pose from above (summer green, not the autumn photo), a lane between two glasshouses, the south edge
+  ['smolny', 'smolny-nursery', [1121.5, -1600.2, 44.2, -21.9, 34.1], '', 0],
+  ['smolny', 'smolny-nursery-lane', [1072, -1631.5, 90, 2], '', 0],
+  ['smolny', 'smolny-nursery-south', [1045, -1596, 0, 4], '', 0],
 ];
 const only = args.only ? String(args.only).split(',') : null, areaArg = args.area || 'all';
 const jobs = SHOTS.filter(([a, n]) => (areaArg === 'all' || a === areaArg) && (!only || only.includes(n)));
@@ -69,7 +73,7 @@ try {
       await page.click('#go'); await page.waitForFunction("document.body.classList.contains('playing')", { timeout: 20000 });
     }
     try {
-      if (cam) await page.evaluate((c, t, open) => { window.__setCam(c[0], null, c[1], c[2], c[3]); if (t !== null) window.__tod.set(t, true); if (open) { const B = window.__ctx.services.landmarksPalaceBridge; if (B && B.setMode) B.setMode('open'); } }, cam, tod, /-open$/.test(name));
+      if (cam) await page.evaluate((c, t, open) => { window.__setCam(c[0], c[4] === undefined ? null : c[4], c[1], c[2], c[3]); if (t !== null) window.__tod.set(t, true); if (open) { const B = window.__ctx.services.landmarksPalaceBridge; if (B && B.setMode) B.setMode('open'); } }, cam, tod, /-open$/.test(name));
       else if (name === 'palace-troitsky-open') await page.evaluate((t) => { const T = window.__ctx.services.landmarksTroitsky; const p = T && T.frame ? T.frame.toWorld(8, 8) : null; if (p) window.__setCam(p.x, null, p.z, 0, 4); window.__tod.set(t, true); if (T && T.setMode) T.setMode('open'); }, tod);
       await sleep(cam && !/-open$/.test(name) ? 6000 : 95000);      // the regions around the pose stream in; the Troitsky leaf needs about 90 s to rise
       const info = await page.evaluate(() => { const p = window.__ctx.playerObj; return { x: +p.pos.x.toFixed(1), z: +p.pos.z.toFixed(1), y: +p.pos.y.toFixed(2) }; });

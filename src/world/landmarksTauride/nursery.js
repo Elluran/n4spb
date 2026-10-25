@@ -12,6 +12,7 @@ import { registerLOD } from '../../core/spatial.js';
 import { FAR_FOG } from '../environment/farconf.js';
 import { GB } from './fence.js';
 import * as ND from './data/nursery.js';
+import { LEAF } from './data/vegetation.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 /** a deterministic hash of three integers -> [0, 1) */
@@ -176,7 +177,7 @@ export function planNurseryMask(plan, T = NURSERY) {
 // ---------------------------------------------------------------------------------------------------------------- the floor material (the garden's toon pattern: one category per pixel from noise fields)
 const PRE = /* glsl */`
 uniform sampler2D uMask; uniform sampler2D uNoise; uniform vec4 uMB; uniform vec2 uFogK;
-uniform vec3 uE1; uniform vec3 uE2; uniform vec3 uE3; uniform vec3 uSand; uniform vec3 uTrackA; uniform vec3 uTrackB; uniform vec3 uYardA; uniform vec3 uYardB;
+uniform vec3 uE1; uniform vec3 uE2; uniform vec3 uE3; uniform vec3 uSand; uniform vec3 uPeb; uniform vec3 uTrackA; uniform vec3 uTrackB; uniform vec3 uYardA; uniform vec3 uYardB;
 uniform vec3 uDry; uniform vec3 uDryB; uniform vec3 uSoilA; uniform vec3 uSoilB; uniform vec3 uWeed; uniform vec3 uMean;
 vec4 gz(vec2 p, float s) { return texture2D(uNoise, p * s); }
 `;
@@ -193,14 +194,14 @@ const BODY = /* glsl */`
   vec4 n5 = gz(P + (n4.rg - 0.5) * 0.8, 1.9);
   vec4 n6 = gz(vec2(P.x * 0.8746 + P.y * 0.4848, P.y * 0.8746 - P.x * 0.4848) + vec2(37.0, 11.0), 1.43);
   float nf = 0.5 * (n5.r + n6.r);
-  // ---- bare brown earth, darker and lighter blotches, sandy patches, pebbles
+  // ---- summer lawn (the garden's greens): darker and lighter blotches, clover patches, light flecks
   vec3 col = mix(uE1, uE2, smoothstep(0.42, 0.66, n2.g));
   col = mix(col, uE3, smoothstep(0.64, 0.80, n3.r) * 0.55);
   col = mix(col, uSand, smoothstep(0.62, 0.76, n2.r) * 0.55 * (0.6 + 0.4 * n3.g));
   float peb = smoothstep(0.58, 0.72, n5.g) * smoothstep(0.46, 0.64, n6.b) * patF;
-  col = mix(col, uSand * 1.05, peb * 0.35);
+  col = mix(col, uSand * 1.1, peb * 0.35);
   col *= 0.93 + 0.14 * nf;
-  // ---- dry grass lanes
+  // ---- the lush herb lanes
   float dk = M.a + (n2.g - 0.5) * 0.55 + (n3.b - 0.5) * 0.3;
   col = mix(col, mix(uDry, uDryB, smoothstep(0.35, 0.65, n3.g)) * (0.95 + 0.10 * nf), smoothstep(0.46, 0.62, dk) * 0.72);
   // ---- the yard: pale gravel
@@ -209,9 +210,9 @@ const BODY = /* glsl */`
   // ---- the gravel tracks
   float tk = smoothstep(0.42, 0.58, M.r + (n3.r - 0.5) * 0.35 + (n4.g - 0.5) * 0.14);
   vec3 tc = mix(uTrackA, uTrackB, smoothstep(0.38, 0.62, n3.g)) * (0.95 + 0.10 * nf);
-  tc = mix(tc, uSand * 1.1, peb * 0.4);
+  tc = mix(tc, uPeb * 1.05, peb * 0.4);
   col = mix(col, tc, tk * 0.96);
-  // ---- the dark soil under the glass, with weeds
+  // ---- the green crop beds under the glass, with taller herbs
   float sk = smoothstep(0.42, 0.58, M.g + (n4.g - 0.5) * 0.2 + (n5.r - 0.5) * 0.1);
   vec3 sc = mix(uSoilA, uSoilB, smoothstep(0.35, 0.65, n3.g)) * (0.88 + 0.24 * nf);
   float weed = smoothstep(0.62, 0.80, n5.g) * smoothstep(0.50, 0.70, n6.b) * patF;
@@ -250,7 +251,7 @@ export function nurseryFloorMaterial(ctx, mask, noise) {
     Object.assign(shader.uniforms, U);
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\n' + PRE).replace('#include <map_fragment>', '#include <map_fragment>\n' + BODY).replace('#include <fog_fragment>', FOG);
   };
-  mat.customProgramCacheKey = () => 'paint|tauride-nursery-floor-t8b';
+  mat.customProgramCacheKey = () => 'paint|tauride-nursery-floor-t8c-summer';
   mat.userData.tauride = 'nursery-floor';
   return { mat, uniforms: U, maskTexture };
 }
@@ -355,6 +356,9 @@ export function detailGeometry(g, plan) {
   }
 }
 
+/** the crown palette of the nursery trees: the garden's lime / maple / ash / birch leaf hexes (data/vegetation.js LEAF; SUMMER fix, the first crowns were autumn grey-brown) */
+const CROWN = [...LEAF.lime, ...LEAF.maple, ...LEAF.ash, ...LEAF.birch];
+const shadeHex = (hex, k) => '#' + new THREE.Color(hex).multiplyScalar(k).getHexString();
 /** the tree template (FIX ROUND 2): a big old leafless tree whose crown starts LOW (the trunk is ~2.2 m of 8) and is full: a tapering trunk, six forked boughs and fourteen small irregular grey-brown twig masses (an octahedron with every
  *  vertex pushed by the hash and turned at random: no two share a plane) spread over an egg-shaped crown ~4.4 m across (wide low, narrower at the top, lighter towards the sky); ONE mass carries a muted spring tint. 8 m tall at scale 1 */
 export function treeGeometry() {
@@ -383,11 +387,11 @@ export function treeGeometry() {
   const NM = 14, y0 = 2.5, y1 = 7.2;
   for (let i = 0; i < NM; i++) {
     const f = (i + 0.5) / NM, fy = 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, f * 1.15)), ang = i * 2.399963 + 0.7, R = (0.35 + 0.9 * Math.sin(Math.PI * (0.12 + 0.82 * fy))) * (1.15 + 0.9 * (1 - fy)) * (0.75 + 0.5 * h3(i, 1, 79));   // egg: wide low, narrow at the top
-    const y = y0 + (y1 - y0) * fy + 0.35 * (h3(i, 2, 79) - 0.5), r = (1.25 - 0.3 * fy) * (0.82 + 0.34 * h3(i, 3, 79));
-    const col = i === 6 ? '#7c7b60' : lerpC(['#6a6050', '#6d6252', '#655b4d', '#716656'][i % 4], ['#8a7e6c', '#857a68', '#8d8170'][i % 3], fy);
+    const y = y0 + (y1 - y0) * fy + 0.35 * (h3(i, 2, 79) - 0.5), r = 1.18 * (1.25 - 0.3 * fy) * (0.82 + 0.34 * h3(i, 3, 79));
+    const col = i === 6 ? LEAF.larch[1] : lerpC(shadeHex(CROWN[(i * 3 + 1) % CROWN.length], 0.8), CROWN[(i * 5 + 2) % CROWN.length], fy);       // summer greens of the garden's own trees: darker below, the lit green above
     mass(Math.cos(ang) * R, y, Math.sin(ang) * R, r, col, i + 1);
   }
-  mass(0.05, 7.35, 0.0, 1.05, '#847868', 30);                                                                                    // the top
+  mass(0.05, 7.35, 0.0, 1.15, LEAF.birch[0], 30);                                                                                    // the top
   return g.build();
 }
 
