@@ -88,9 +88,9 @@ for (const a of real) {
       assert(Math.abs(p.yaw) <= 180 && p.pitch >= -30 && p.pitch <= 60, `${p.key}: yaw / pitch range`);
     }
   });
-  check(`area ${a.id}: every row's gate leaves ${a.id} and leads to the row's area (crossPlaces of core/gates.js keeps every row), 4-6 rows toward each real neighbour`, () => {
+  check(`area ${a.id}: every row's gate leaves ${a.id} and leads to the row's area (crossPlaces of core/gates.js keeps every row), 4-7 rows toward each real neighbour`, () => {
     const kept = crossPlaces(table, a.id, GATES); assert.equal(kept.length, table.length, 'a row names a gate that does not lead from this area to its area');
-    for (const b of real) if (b.id !== a.id && GATES.some((g) => !g.dev && g.from === a.id && g.to === b.id)) { const n = table.filter((p) => p.area === b.id).length; assert(n >= 4 && n <= 6, `${n} rows toward ${b.id} (4-6 wanted)`); }
+    for (const b of real) if (b.id !== a.id && GATES.some((g) => !g.dev && g.from === a.id && g.to === b.id)) { const n = table.filter((p) => p.area === b.id).length; assert(n >= 4 && n <= 7, `${n} rows toward ${b.id} (4-6 wanted)`); }
   });
   check(`area ${a.id}: every row copies the VIEWS row it names in its area (x, z, pitch exact, yaw within 0.01 degrees)`, () => {
     for (const p of table) {
@@ -220,8 +220,9 @@ async function doorPlacePin(gatesMod) {
   const mk = (over = {}) => {
     const dom = { getElementById: () => null, documentElement: { classList: { contains: () => false } }, body: { classList: { contains: () => false } }, createElement: () => ({ className: '', textContent: '', append() {} }) };
     const w = { location: { href: 'http://h/north.html', search: '' }, addEventListener() {} };
+      // (?gateprompt=1: this pin is about the CONTENT of the place question and the hand-off it books; the default asks nothing, see tools/gates-test.mjs)
     const api = gatesMod.createGates({ ctx: { onUpdate() {}, drive: null, ...(over.ctx || {}) }, player: { inputLock: 0, riding: false, fly: false, pos: { x: 458, z: -1350 }, yaw: 0.5, pitch: 0.1, isUnderground: () => false }, camera: { position: {} },
-      ui: over.ui || fakeUi(), tod: { k: 0, variant: null }, audio: { muted: false }, guard: null, params: new URLSearchParams('devgates=1&baked=0'), A, isStarted: () => true, toast() {}, win: w, doc: dom });
+      ui: over.ui || fakeUi(), tod: { k: 0, variant: null }, audio: { muted: false }, guard: null, params: new URLSearchParams('devgates=1&baked=0&gateprompt=1'), A, isStarted: () => true, toast() {}, win: w, doc: dom });
     return api;
   };
   const ui = fakeUi(), api = mk({ ui });
@@ -233,7 +234,7 @@ async function doorPlacePin(gatesMod) {
   let url = null; api.navigate = (u) => { url = u; };
   assert.equal(await api.go(doorG, 'place', doorRow), true); assert(url, 'no navigation');
   const [page, qs] = url.split('?'), q = new URLSearchParams(qs);
-  assert.equal(page, 'index.html'); assert.equal(q.get('cam'), camParam({ x: doorRow.x, z: doorRow.z, yaw: doorRow.yaw, pitch: doorRow.pitch }, false), `the hand-off lands at ${q.get('cam')}, not at the place ${doorRow.x},${doorRow.z} (the door pose is ${doorG.pose.x},${doorG.pose.z})`);
+  assert.equal(page, 'strip.html'); assert.equal(q.get('cam'), camParam({ x: doorRow.x, z: doorRow.z, yaw: doorRow.yaw, pitch: doorRow.pitch }, false), `the hand-off lands at ${q.get('cam')}, not at the place ${doorRow.x},${doorRow.z} (the door pose is ${doorG.pose.x},${doorG.pose.z})`);
   const ho = (await import(pathToFileURL(path.join(root, 'src/core/handoff.js')).href)).decodeHo(q.get('ho'), { to: 'strip' }); assert(ho.ok, ho.why);
   assert.equal(ho.ho.via, 'place'); assert.equal(ho.ho.gate, doorG.id); assert.equal(ho.ho.car, null); assert.deepEqual([ho.ho.ret.x, ho.ho.ret.z], [458, -1350], 'the return pose is where the player stood');
   // a driver who picks the row walks (the door has no car) and still lands at the place; a flyer too

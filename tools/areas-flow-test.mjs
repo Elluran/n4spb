@@ -29,7 +29,7 @@ const server = http.createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const ORIGIN = `http://127.0.0.1:${server.address().port}`;
-const FAST = 'baked=0&only=drive&noroof=1&gate=0&guard=0&devgates=1&q=performance';
+const FAST = 'baked=0&only=drive&noroof=1&gate=0&guard=0&devgates=1&q=performance&gateprompt=1&seam=0';      // gateprompt=1: the old question; seam=0: the old arrival card (the seamless flow is tools/seam-smoke.mjs)
 const EDGE = ['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe'].find((p) => fs.existsSync(p));
 let browser = null;      // launched on the first page (a run that only skips, the g3 section without a bake, starts none)
 const GL_ARGS = args.software ? ['--disable-gpu', '--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-webgl', '--disable-gpu-sandbox'];      // --software: SwiftShader on the CPU (slow, but no GPU is touched)
@@ -87,7 +87,7 @@ async function g3flow(title, flags, { full }) {
   const s = await S(north);
   check('E opens the door question with the metro title; nothing navigated yet', s.open && /Чернышевская/.test(s.title) && /Восстания/.test(s.title) && (await north.evaluate(() => window.__navUrls.length)) === 0, s);
   await sleep(900); await north.keyboard.press('Enter'); await sleep(full ? 1500 : 800);
-  const r = await north.evaluate(() => ({ urls: window.__navUrls, traveling: window.__gates.traveling, veil: !document.getElementById('travel').hidden }));
+  const r = await north.evaluate(() => ({ urls: window.__navUrls, traveling: window.__gates.traveling, veil: document.getElementById('seam').classList.contains('on') }));
   check('accepted: ONE navigation' + (full ? ' (the real preflight passed)' : '') + ', the travel veil is up', r.urls.length === 1 && r.traveling && r.veil, r);
   const u = new URL(r.urls[0], ORIGIN), q = u.searchParams;
   check('the URL is index.html at the AltDigit1 pose on foot (cam = the registry pose, no fly), the page flags kept', u.pathname.endsWith('/index.html') && q.get('cam') === `${G3.pose.x},${G3.pose.z},${G3.pose.yaw},${G3.pose.pitch}` && !q.has('fly') && q.get('q') === 'performance', r.urls[0]);
@@ -184,9 +184,9 @@ try {
     await page.evaluate(() => { window.__gates.machine.grace(0); window.__tod.set(1.5, true); }); await hookNav(page);
     await placeWalker(page, 545, 167.7); await sleep(400); await walkUntilOpen(page); await sleep(900);
     await page.keyboard.press('Enter'); await sleep(600);
-    const r = await page.evaluate(() => ({ urls: window.__navUrls, traveling: window.__gates.traveling, veil: !document.getElementById('travel').hidden, title: document.querySelector('#travel .t-title').textContent, pending: window.__ctx.travelPending }));
+    const r = await page.evaluate(() => ({ urls: window.__navUrls, traveling: window.__gates.traveling, veil: document.getElementById('seam').classList.contains('on'), pending: window.__ctx.travelPending }));
     check('Enter after arming navigates exactly once', r.urls.length === 1, r);
-    check('the travel veil shows the area, the sim is frozen', r.veil && r.traveling && r.pending && /Невск/.test(r.title), r);
+    check('the freeze veil is up (#seam), the sim is frozen', r.veil && r.traveling && r.pending, r);
     const u = new URL(r.urls[0], ORIGIN), q = u.searchParams;
     check('the URL is the page with cam, tod and the ho object, and keeps the page flags', u.pathname.endsWith('/index.html') && q.has('cam') && q.get('tod') === '1.5' && q.has('ho') && q.get('q') === 'performance' && q.get('baked') === '0', r.urls[0]);
     const cam = q.get('cam').split(',').map(Number);
@@ -284,7 +284,7 @@ try {
     const page = await open(`index.html?${FAST}`);
     await page.evaluate(() => { window.__gates.machine.grace(0); window.__gates.preflight = async () => ({ ok: false, why: 'offline' }); }); await hookNav(page);
     await placeWalker(page, 545, 167.7); await sleep(400); await walkUntilOpen(page); await sleep(900); await page.keyboard.press('Enter'); await sleep(700);
-    const r = await page.evaluate(() => ({ urls: window.__navUrls.length, traveling: window.__gates.traveling, pending: window.__ctx.travelPending, veil: !document.getElementById('travel').hidden, toast: document.querySelector('#toast .t-name').textContent, lock: window.__ctx.playerObj.inputLock }));
+    const r = await page.evaluate(() => ({ urls: window.__navUrls.length, traveling: window.__gates.traveling, pending: window.__ctx.travelPending, veil: document.getElementById('seam').classList.contains('on'), toast: document.querySelector('#toast .t-name').textContent, lock: window.__ctx.playerObj.inputLock }));
     check('an unreachable destination: no navigation, no veil, the game is playable again, a toast says why', r.urls === 0 && !r.traveling && !r.pending && !r.veil && /Нет связи|Cannot reach/.test(r.toast) && r.lock === 0, r);
     await page.evaluate(() => { window.__gates.preflight = async () => ({ ok: false, why: 'stale' }); window.__gates.machine.cooldown(window.__gates.gates.find((g) => g.id === 'g0'), 0.5); });      // (the first failure set the 30 s cooldown: shorten it)
     await sleep(1500); await placeWalker(page, 575, 174.5); await sleep(600); await placeWalker(page, 545, 167.7); await sleep(600); await walkUntilOpen(page); await sleep(900); await page.keyboard.press('Enter'); await sleep(700);

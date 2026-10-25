@@ -67,6 +67,18 @@ check('a car needs a lane within 30 degrees of its heading (either direction)', 
   assert.notEqual(H.resolveArrival(fake({ lane: () => null }), { x: 0, z: 0, yaw: 90 }, 'car', null).how, 'direct');
 });
 
+console.log('an EDGE-gate arrival (the seamless hand-off: no arrival rectangle, the same x,z,yaw):');
+check('a walker lands exactly where he stood (direct, moved 0, the yaw kept); something in the way: the nearest free spot of the ring search, no clamp', () => {
+  const r = H.resolveArrival(fake(), { x: 123.4, z: -56.7, yaw: 211 }, 'walk', undefined); assert.equal(r.how, 'direct'); assert.equal(r.x, 123.4); assert.equal(r.z, -56.7); assert.equal(r.yaw, 211); assert.equal(r.moved, 0);
+  const b = H.resolveArrival(fake({ deadRect: [100, 140, -80, -40] }), { x: 123.4, z: -56.7, yaw: 211 }, 'walk', undefined); assert.equal(b.how, 'ring'); assert(b.moved > 0 && b.moved <= 60, String(b.moved));
+});
+check('a car needs a lane: the same spot is kept when a lane runs along its heading, moved along the ring to one otherwise; a car with no lane within 60 m falls back to the HERO', () => {
+  const lane = (x, z) => (Math.abs(z) < 3 ? { tx: 1, tz: 0 } : null);      // an east-west road along z = 0
+  assert.equal(H.resolveArrival(fake({ lane }), { x: 50, z: 1, yaw: 90 }, 'car', undefined).how, 'direct');
+  const off = H.resolveArrival(fake({ lane }), { x: 50, z: 20, yaw: 90 }, 'car', undefined); assert.equal(off.how, 'ring'); assert(Math.abs(off.z) < 3 && off.moved <= 60);
+  assert.equal(H.resolveArrival(fake({ lane }), { x: 50, z: 200, yaw: 90 }, 'car', undefined).how, 'hero');
+});
+
 console.log('resolveArrival (the real strip layout):');
 {
   const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);

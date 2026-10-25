@@ -4,13 +4,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { DEFAULTS, depthFor, chipFor, gateCoords, createGateMachine, createGates, planArrival, promptTexts, crossPlaces, isDoor, backLink } from '../src/core/gates.js';
+import { DEFAULTS, depthFor, chipFor, gateCoords, createGateMachine, createGates, planArrival, promptTexts, crossPlaces, isDoor, backLink, inUnion, seamEntryOk, seamWrite, seamRead, seamClear, createSeam, grabFrame } from '../src/core/gates.js';
 import { REGISTRY, GATES } from '../src/areas/registry.js';
 import { decodeHo, makeHo, encodeHo, camParam, parseCamParam } from '../src/core/handoff.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 let fails = 0, passes = 0;
+const acheck = async (name, fn) => { try { await fn(); passes++; console.log('  ok   ' + name); } catch (e) { fails++; console.log('  FAIL ' + name + '\n       ' + String(e.message).split('\n').slice(0, 5).join('\n       ')); } };
 const check = (name, fn) => { try { fn(); passes++; console.log('  ok   ' + name); } catch (e) { fails++; console.log('  FAIL ' + name + '\n       ' + String(e.message).split('\n').slice(0, 5).join('\n       ')); } };
 const G = { id: 'g', from: 'a', to: 'b', seg: [[0, 0], [200, 0]], inward: [0, 1], zone: 30 };
 const H = { id: 'h', from: 'a', to: 'c', seg: [[300, 0], [500, 0]], inward: [0, 1], zone: 30 };
@@ -106,7 +107,9 @@ console.log('preflight (the real logic, fakes for the network):');
 /** a createGates with fakes for the DOM: over.ctx / player / ui / A ... replace the defaults; the fake ui records every confirm() in ui.asked */
 const fakeDoc = () => ({ getElementById: () => null, documentElement: { classList: { contains: () => false } }, body: { classList: { contains: () => false } }, createElement: () => ({ className: '', textContent: '', append() {} }) });
 const fakeUi = () => ({ open: false, asked: [], confirm(o) { this.asked.push(o); } });
-const mkGates = (over = {}, params = new URLSearchParams('devgates=1')) => {
+// (the default is the DEVELOPMENT mode ?gateprompt=1 that restores the old chip + question: most of the checks below are about that question; 'noprompt' in the params = the real default, no question)
+const mkGates = (over = {}, params0 = new URLSearchParams('devgates=1')) => {
+  const params = new URLSearchParams(params0); if (params.has('noprompt')) params.delete('noprompt'); else params.set('gateprompt', '1');
   const doc = fakeDoc(), win = { location: { href: 'http://h/index.html', search: '' }, addEventListener() {} };
   const ctx = { onUpdate() {}, drive: null };
   return createGates({ ctx, player: { inputLock: 0, riding: false, fly: false, pos: { x: 0, z: 0 }, yaw: 0, pitch: 0, isUnderground: () => false }, camera: { position: {} }, ui: fakeUi(), tod: { k: 0, variant: null }, audio: { muted: false }, guard: null, params, A: { ID: 'strip' }, isStarted: () => true, toast() {}, win, doc, ...over });
@@ -215,7 +218,7 @@ check('a PLACE asked through the door keeps the area title / scene (no metro rid
   let url = null; api2.navigate = (u) => { url = u; };
   const went = await api2.go(G3, 'door');
   check('accepting hands off to index.html at the AltDigit1 pose ON FOOT: cam = 534,125,28.61,10, no fly, ho { via door, gate g3, car null, ret = the vestibule pose }', () => {
-    assert.equal(went, true); assert(url, 'no navigation'); const [page, qs] = url.split('?'); assert.equal(page, 'index.html');
+    assert.equal(went, true); assert(url, 'no navigation'); const [page, qs] = url.split('?'); assert.equal(page, 'strip.html');
     const q = new URLSearchParams(qs); assert.equal(q.get('cam'), '534,125,28.61,10'); assert(!q.has('fly'));
     const ho = decodeHo(q.get('ho'), { to: 'strip' }); assert(ho.ok, ho.why); assert.equal(ho.ho.via, 'door'); assert.equal(ho.ho.gate, 'g3'); assert.equal(ho.ho.car, null); assert.equal(ho.ho.from, 'north');
     assert.deepEqual(ho.ho.ret, { x: 458, z: -1350, yaw: -90, pitch: 0 });
@@ -344,6 +347,194 @@ check('the strip\'s table lists 4-6 places of the North through g1, every row wi
     assert.ok(i > 0 && j > i); assert.ok(!/\{\s*\.\.\./.test(body) && !/Math\.hypot/.test(body) && !/gateCoords\(/.test(body), 'a spread, Math.hypot or gateCoords is back in the per-frame loop');
   });
 }
+
+
+// ---------------------------------------------------------------------------------------------- the seamless hand-off: territory (edge) gates, no question, the freeze veil
+console.log('inUnion (the territory test, the semantics of layout.js _inUnion):');
+check('one rectangle: inside, outside, and the margin counts from the boundary (a margin of 60 at 59 m inside is false, at 61 m true; a negative margin also takes the outside band)', () => {
+  const R = [{ x0: 0, x1: 100, z0: 0, z1: 200 }];
+  assert(inUnion(R, 50, 50) && !inUnion(R, 150, 50) && inUnion(R, 0, 0));
+  assert.equal(inUnion(R, 50, 100, 40), true); assert.equal(inUnion(R, 50, 100, 51), false); assert.equal(inUnion(R, 59, 100, 60), false); assert.equal(inUnion(R, 40, 100, 40), true);
+  assert.equal(inUnion(R, 110, 100, -15), true); assert.equal(inUnion(R, 130, 100, -15), false); assert.equal(inUnion([], 1, 1), false); assert.equal(inUnion(undefined, 1, 1, 5), false);
+});
+check('an L-shaped union: a shared edge of two rectangles is interior (no margin from it), the outer boundary counts', () => {
+  const U = [{ x0: 0, x1: 100, z0: 0, z1: 100 }, { x0: 100, x1: 300, z0: 0, z1: 50 }];
+  assert.equal(inUnion(U, 100, 25, 20), true, 'on the seam, 25 m from the nearest outer edge'); assert.equal(inUnion(U, 100, 25, 26), false); assert.equal(inUnion(U, 120, 75, 1), false, 'the notch');
+  assert.equal(inUnion(U, 90, 75, 10), true); assert.equal(inUnion(U, 95, 95, 10), false);
+});
+{
+  const L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);
+  check('inUnion(REGISTRY.strip.play) == layout.inPlay over 3,000 random points and the margins 0 / 25 / 60 / -30', () => {
+    let seed = 7; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296); let inside = 0;
+    for (let i = 0; i < 3000; i++) { const x = -3000 + rnd() * 4000, z = -1500 + rnd() * 3000, m = [0, 25, 60, -30][i % 4], a = inUnion(REGISTRY.strip.play, x, z, m), b = L.inPlay(x, z, m); assert.equal(a, b, `${x},${z},${m}`); if (a) inside++; }
+    assert(inside > 300 && inside < 2700, 'the sample must hit both sides: ' + inside);
+  });
+}
+
+console.log('edge gates (kind "edge": territories that overlap, a probe point ahead of the player):');
+// A = a square 0..1000, B = 800..2000 east of it (a 200 m overlap), C = 0..1000 x 800..2000 south of A; the player is in A
+const TERR = { A: [{ x0: 0, x1: 1000, z0: 0, z1: 1000 }], B: [{ x0: 800, x1: 2000, z0: 0, z1: 1000 }], C: [{ x0: 0, x1: 1000, z0: 800, z1: 2000 }] };
+const EAB = { id: 'e1', kind: 'edge', from: 'A', to: 'B', reverse: 'e2' }, EAC = { id: 'e2', kind: 'edge', from: 'A', to: 'C', zone: 40, reverse: null };
+const rectsOf = (id) => TERR[id];
+const edgeM = (gates = [EAB], cfg = {}) => createGateMachine({ gates, config: { graceS: 0, ...cfg }, rectsOf });
+/** walk (x0, z0) -> (x1, z1) at `speed` in `mode`, after standing still for `settle` s; returns the first step that offers: { x, z, offer, dir } or null */
+function walkTo(m, x0, z0, x1, z1, { speed = 1.5, mode = 'walk', settle = 2, blocked = false } = {}) {
+  for (let i = 0; i < settle / DT; i++) m.update({ dt: DT, x: x0, z: z0, mode, blocked });
+  const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / speed / DT));
+  for (let i = 0; i <= n; i++) { const x = x0 + (x1 - x0) * i / n, z = z0 + (z1 - z0) * i / n, r = m.update({ dt: DT, x, z, mode, blocked }); if (r.offer) return { x, z, offer: r.offer, dir: r.dir }; }
+  return null;
+}
+check('a walker heading for the edge triggers when the probe 40 m ahead leaves FROM (x 960) and lands in TO; the probe direction is east (EDGE_DIRS 2)', () => {
+  const o = walkTo(edgeM(), 900, 500, 1000, 500); assert(o, 'no trigger'); assert.equal(o.offer.id, 'e1'); assert.equal(o.dir, 2); assert(o.x >= 959 && o.x <= 962, 'at x ' + o.x);
+});
+check('the probe point must be INSIDE TO by 60 m: near the corner of TO (z 30: the probe is 30 m from TO\'s north edge) nothing happens, 70 m from it the gate triggers; the destination\'s own rim is never the arrival', () => {
+  assert.equal(walkTo(edgeM(), 900, 30, 1000, 30), null); assert(walkTo(edgeM(), 900, 70, 1000, 70));
+  const rim = walkTo(edgeM(), 900, 950, 1000, 950); assert(!rim || rim.x >= 990, 'z 950 (50 m from TO\'s south rim): the east probe never qualifies, only the near-edge diagonal does, at the very edge: x ' + (rim && rim.x));
+  const ok = walkTo(edgeM(), 900, 930, 1000, 930); assert(ok && ok.x < 962, 'z 930: 70 m from the rim, the east probe qualifies at x 960');
+});
+check('a probe point outside TO as well (a territory edge with nothing beyond it: the north side of A) triggers nothing', () => assert.equal(walkTo(edgeM(), 500, 100, 500, -50), null));
+check('standing still 30 m from the edge asks nothing; standing within 8 m of it triggers (nearD)', () => {
+  assert.equal(walkTo(edgeM(), 970, 500, 970.01, 500, { speed: 0.01, settle: 5 }), null); assert(walkTo(edgeM(), 995, 500, 995.01, 500, { speed: 0.01, settle: 1 }));
+});
+check('walking AWAY from the edge inside the zone, or ALONG it (x 975, 25 m from the edge, heading north), triggers nothing; heading diagonally toward it does', () => {
+  assert.equal(walkTo(edgeM(), 980, 500, 900, 500), null); assert.equal(walkTo(edgeM(), 975, 600, 975, 300), null, 'along the edge');
+  const d = walkTo(edgeM(), 940, 500, 1000, 440); assert(d && d.dir === 1, 'NE: ' + JSON.stringify(d));
+});
+check('a player outside FROM\'s territory (he is in TO already) is never offered the gate, and the cooldown / decline state clears there', () => {
+  const m = edgeM(); assert.equal(walkTo(m, 1100, 500, 1200, 500), null); m.cooldown(EAB); assert.equal(m.state(EAB).needExit, false);
+});
+check('blocked (panel open, travelling, not started, indoors) never triggers; no trigger in the first graceS seconds', () => {
+  assert.equal(walkTo(edgeM(), 900, 500, 1000, 500, { blocked: true }), null);
+  const m = createGateMachine({ gates: [EAB], config: { graceS: 6 }, rectsOf }); let asked = false; for (let i = 0; i < 5 / DT; i++) if (m.update({ dt: DT, x: 995, z: 500, mode: 'walk', blocked: false }).offer) asked = true; assert(!asked);
+  const m2 = edgeM(); let a2 = false; for (let i = 0; i < 3 / DT; i++) if (m2.update({ dt: DT, x: 995, z: 500, mode: 'walk', blocked: false, indoors: true }).offer) a2 = true; assert(!a2, 'indoors');
+});
+check('cooldown(g) (a failed preflight): no trigger for 30 s, then it triggers again without having to leave; markOpen(g) holds it while the travel runs', () => {
+  const m = edgeM(); const o = walkTo(m, 900, 500, 1000, 500); m.markOpen(o.offer); m.cooldown(o.offer);
+  let asked = false; for (let i = 0; i < 25 / DT; i++) if (m.update({ dt: DT, x: 995, z: 500, mode: 'walk', blocked: false }).offer) asked = true; assert(!asked, 'inside the cooldown');
+  for (let i = 0; i < 10 / DT; i++) if (m.update({ dt: DT, x: 995, z: 500, mode: 'walk', blocked: false }).offer) asked = true; assert(asked, 'after it');
+  const m2 = edgeM(); const o2 = walkTo(m2, 900, 500, 1000, 500); m2.markOpen(o2.offer); let again = false; for (let i = 0; i < 20 / DT; i++) if (m2.update({ dt: DT, x: 995, z: 500, mode: 'walk', blocked: false }).offer) again = true; assert(!again, 'open: no second trigger');
+});
+check('decline (the gateprompt question): not again for 45 s AND until the player has left the zone by 20 m (x < 940 for the walker), then it re-arms', () => {
+  const m = edgeM(); const o = walkTo(m, 900, 500, 1000, 500); m.markOpen(o.offer); m.decline(o.offer);
+  let asked = false; for (let i = 0; i < 60 / DT; i++) if (m.update({ dt: DT, x: 990, z: 500, mode: 'walk', blocked: false }).offer) asked = true; assert(!asked, 'still in the zone');
+  for (let i = 0; i < 3 / DT; i++) m.update({ dt: DT, x: 850, z: 500, mode: 'walk', blocked: false });      // 150 m from the edge
+  const back = walkTo(m, 850, 500, 1000, 500, { settle: 0 }); assert(back && back.offer.id === 'e1', 'not re-armed');
+});
+check('a car\'s zone is deeper: at 30 m/s the probe is depthFor(car, v) = 60 m ahead, so it triggers earlier than the walker (x ~940; at 8 m/s the 40 m minimum applies: x ~960); a flyer uses the vehicle depth too', () => {
+  const car = walkTo(edgeM(), 600, 500, 1000, 500, { speed: 30, mode: 'car' }); assert(car, 'no car trigger'); assert(car.x >= 935 && car.x <= 945, 'car x ' + car.x);
+  const slow = walkTo(edgeM(), 800, 500, 1000, 500, { speed: 8, mode: 'car' }); assert(slow && slow.x >= 958 && slow.x <= 962, 'slow car x ' + (slow && slow.x));
+  const fly = walkTo(edgeM(), 600, 500, 1000, 500, { speed: 60, mode: 'fly' }); assert(fly && fly.x < car.x, 'a flyer at 60 m/s probes 100 m: x ' + (fly && fly.x));
+});
+check('several edge gates leave one area (one per neighbour): the east edge offers B, the south edge offers C, the first match wins at the corner; the machine keeps a state per gate', () => {
+  const m = edgeM([EAB, EAC]); const e = walkTo(m, 900, 500, 1000, 500); assert.equal(e.offer.id, 'e1');
+  const m2 = edgeM([EAB, EAC]); const s = walkTo(m2, 500, 900, 500, 1000); assert.equal(s.offer.id, 'e2'); assert.equal(s.dir, 4);
+  const BIG = { A: TERR.A, B: [{ x0: 800, x1: 2000, z0: 0, z1: 2000 }], C: [{ x0: 0, x1: 2000, z0: 800, z1: 2000 }] };      // the corner (996, 996) leads into both
+  const at = (gates) => { const mm = createGateMachine({ gates, config: { graceS: 0 }, rectsOf: (id) => BIG[id] }); for (let i = 0; i < 40; i++) { const r = mm.update({ dt: DT, x: 996, z: 996, mode: 'walk', blocked: false }); if (r.offer) return r.offer.id; } return null; };
+  assert.equal(at([EAB, EAC]), 'e1'); assert.equal(at([EAC, EAB]), 'e2');
+  m.markOpen(EAB); assert.equal(m.state(EAC).open, false);
+});
+check('inFrom is injectable (the page\'s own inPlay): a player outside the injected territory is never offered, one inside is', () => {
+  const m = createGateMachine({ gates: [EAB], config: { graceS: 0 }, rectsOf, inFrom: (g, x, z) => x <= 900 });      // FROM ends at x 900
+  const o = walkTo(m, 850, 500, 900, 500); assert(o && o.offer.id === 'e1' && o.x >= 859 && o.x <= 862, JSON.stringify(o));
+});
+check('a gate row whose territories are unknown (no REGISTRY play) is inert, a border gate in the same machine still works', () => {
+  const m = createGateMachine({ gates: [{ id: 'x', kind: 'edge', from: 'nowhere', to: 'B' }, G], config: { graceS: 0 }, rectsOf }); const log = run(m, { z0: 100, z1: 0, speed: 1.5 }); assert.equal(firstOffer(log).offer.id, 'g');
+});
+check('the real registry territories: a strip -> north edge row triggers on the strip side of the shared band (x 100, heading north at z -380) and not 100 m south of it', () => {
+  const E = { id: 'edev-t', kind: 'edge', from: 'strip', to: 'north' }, m = createGateMachine({ gates: [E], config: { graceS: 0 } });
+  const o = walkTo(m, 100, -330, 100, -380); assert(o && o.dir === 0, JSON.stringify(o)); assert.equal(walkTo(createGateMachine({ gates: [E], config: { graceS: 0 } }), 100, 0, 100, -100), null);
+});
+check('the update() of an edge gate allocates nothing per call (no spread, no array literal, no Math.hypot in the per-frame loop)', () => {
+  const src = fs.readFileSync(path.join(root, 'src/core/gates.js'), 'utf8'), i = src.indexOf('function edgeDir('), j = src.indexOf('const machine = {', i), body = src.slice(i, j);
+  assert(i > 0 && j > i); assert(!/\{\s*\.\.\./.test(body) && !/Math\.hypot/.test(body) && !/=>\s*\[/.test(body) && !/\[\s*[a-z]/.test(body.replace(/EDGE_DIRS\[k\]\[[01]\]/g, '').replace(/EDGE_DIRS\[k\]/g, '')), 'allocation in edgeDir');
+});
+
+console.log('no question, the freeze veil (the DOM layer with fakes):');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const fakeStorage = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); }, m }; };
+const fakeSeam = () => ({ shown: [], hidden: 0, show(s) { this.shown.push(s); return true; }, hide() { this.hidden++; }, progress() {}, finish() {}, remove() {} });
+const SNAP = { img: 'data:image/jpeg;base64,/9j/AAAA', w: 640, h: 360 };
+/** a createGates in the REAL default mode (no ?gateprompt): the fake ui records any question, win.sessionStorage is a Map, the veil and the frame grab are fakes */
+const mkReal = (over = {}, qs = 'devgates=1&baked=0') => {
+  const storage = over.storage || fakeStorage(), seam = fakeSeam(), ui = fakeUi(), toasts = [], navs = [];
+  const player = over.player || { inputLock: 0, riding: false, fly: false, pos: { x: 100, z: -380 }, yaw: 0, pitch: 0, isUnderground: () => false };
+  const ctx = over.ctx || { onUpdate() {}, drive: null };
+  const win = { location: { href: 'http://h/index.html', search: '' }, addEventListener() {}, sessionStorage: storage, stop() { this.stopped = true; } };
+  const api = mkGates({ ui, seam, toast: (t) => toasts.push(t), win, player, ctx, captureFrame: over.captureFrame === undefined ? async () => SNAP : over.captureFrame, ...(over.deps || {}) }, new URLSearchParams(qs + '&noprompt=1'));
+  if (api) api.navigate = (u) => navs.push(u);
+  return { api, storage, seam, ui, toasts, navs, player, ctx, win };
+};
+await acheck('a border gate triggers go() directly: no ui.confirm, the frame is captured, the veil is shown with it, the entry is stored for the next page, then ONE navigation (the player stands 25 m inside g1, in the strip)', async () => {
+  const r = mkReal({ player: { inputLock: 0, riding: false, fly: false, pos: { x: 100, z: -376 }, yaw: 0, pitch: 0, isUnderground: () => false } }, 'baked=0');
+  // (the strip's g1 is the border z = -405, inward +z: the player walks toward it from 29 m, at 1.5 m/s)
+  r.api.preflight = async () => ({ ok: true }); r.api.machine.grace(0);
+  for (let i = 0; i < 40; i++) { r.player.pos.z -= 1.5 * DT; r.api.tick(DT); await sleep(1); }
+  await sleep(20);
+  assert.equal(r.ui.asked.length, 0, 'a question was asked'); assert.equal(r.navs.length, 1, 'navigations: ' + r.navs.length); assert.equal(r.seam.shown.length, 1); assert.equal(r.seam.shown[0], SNAP);
+  const e = JSON.parse(r.storage.getItem('n4spb.seam')); assert.equal(e.img, SNAP.img); assert.equal(e.from, 'strip'); assert.equal(e.to, 'north'); assert(Math.abs(Date.now() - e.t) < 5000);
+  assert(seamEntryOk(e, { to: 'north' }) && !seamEntryOk(e, { to: 'strip' }) && !seamEntryOk(e, { now: e.t + 61000 }), 'freshness / destination'); assert.equal(r.api.traveling, true); assert.equal(r.player.inputLock, 1); assert.equal(r.ctx.travelPending, true);
+});
+await acheck('?gateprompt=1 restores the old question: the zone asks (ui.confirm, no navigation, no veil), "Load" travels', async () => {
+  const ui = fakeUi(), navs = []; const player = { inputLock: 0, riding: false, fly: false, pos: { x: 100, z: -376 }, yaw: 0, pitch: 0, isUnderground: () => false }; const seam = fakeSeam();
+  const api = mkGates({ ui, seam, player, captureFrame: async () => SNAP }, new URLSearchParams('baked=0&gateprompt=1')); api.navigate = (u) => navs.push(u); api.machine.grace(0);
+  for (let i = 0; i < 40; i++) { player.pos.z -= 1.5 * DT; api.tick(DT); }
+  assert.equal(ui.asked.length, 1); assert.equal(navs.length, 0); assert.equal(seam.shown.length, 0); assert.equal(api.promptMode, true); ui.asked[0].onYes(); await sleep(20); assert.equal(navs.length, 1); assert.equal(seam.shown.length, 1);
+});
+await acheck('E at a door and a HUD place pick go straight to go() (no ui.confirm)', async () => {
+  const items = []; const r = mkReal({ ctx: { onUpdate() {}, drive: null, interact: { add(d) { items.push(d); } } }, player: { inputLock: 0, riding: false, fly: false, pos: { x: 458, z: -1350 }, yaw: 0, pitch: 0, isUnderground: () => false }, deps: { A: { ID: 'north' } } }, 'baked=0');
+  r.api.preflight = async () => ({ ok: true }); items[0].onUse(); await sleep(20); assert.equal(r.ui.asked.length, 0); assert.equal(r.navs.length, 1); assert(/^strip\.html\?/.test(r.navs[0]));
+  const r2 = mkReal({ deps: { A: stripA } }, 'baked=0'); r2.api.preflight = async () => ({ ok: true }); assert.equal(r2.api.offerPlace('smolny-cathedral'), true); await sleep(20);
+  assert.equal(r2.ui.asked.length, 0); assert.equal(r2.navs.length, 1); assert(/^north\.html\?/.test(r2.navs[0]) && new URLSearchParams(r2.navs[0].split('?')[1]).get('cam') === '2335,-1833,-90,21', r2.navs[0]);
+});
+await acheck('a failed preflight: a short toast, no veil, the cooldown starts, the freeze is released (inputLock 0, travelPending false), no navigation', async () => {
+  const r = mkReal({ player: { inputLock: 0, riding: false, fly: false, pos: { x: 100, z: -376 }, yaw: 0, pitch: 0, isUnderground: () => false } }, 'baked=0'); r.api.preflight = async () => ({ ok: false, why: 'offline' }); r.api.machine.grace(0);
+  for (let i = 0; i < 40; i++) { r.player.pos.z -= 1.5 * DT; r.api.tick(DT); await sleep(1); } await sleep(20);
+  assert.equal(r.navs.length, 0); assert.equal(r.seam.shown.length, 0); assert.equal(r.toasts.length, 1); assert(/Нет связи/.test(r.toasts[0]), r.toasts[0]);
+  assert.equal(r.api.traveling, false); assert.equal(r.player.inputLock, 0); assert.equal(r.ctx.travelPending, false); assert(r.api.machine.state(r.api.gates[0]).until > r.api.machine.clock + 20, 'cooldown');
+});
+await acheck('no frame (captureFrame null / throws / absent) or a blocked sessionStorage: the travel still happens, the veil is the plain dark one (show(null)), nothing is stored', async () => {
+  for (const [name, over] of [['null', { captureFrame: async () => null }], ['throws', { captureFrame: async () => { throw new Error('x'); } }], ['absent', { captureFrame: null }],
+    ['quota', { storage: { getItem() { return null; }, setItem() { throw new Error('QuotaExceededError'); }, removeItem() {} } }], ['blocked', { storage: { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('SecurityError'); }, removeItem() { throw new Error('SecurityError'); } } }]]) {
+    const r = mkReal(over, 'baked=0'); r.api.preflight = async () => ({ ok: true }); await r.api.go(r.api.gates[0], 'gate'); assert.equal(r.navs.length, 1, name); assert.equal(r.seam.shown.length, 1, name);
+    if (name === 'null' || name === 'throws' || name === 'absent') { assert.equal(r.seam.shown[0], null, name); assert.equal(r.storage.getItem('n4spb.seam'), null, name); }
+  }
+});
+await acheck('the edge gate in the DOM layer: a strip -> north edge row (injected) triggers go() from the page\'s own inPlay; the hand-off is the same pose (cam = x,z,yaw,pitch) and ho { via gate, gate edev-t }', async () => {
+  const E = { id: 'edev-t', kind: 'edge', from: 'strip', to: 'north' }, L = await import(pathToFileURL(path.join(root, 'src/world/layout.js')).href);
+  const player = { inputLock: 0, riding: false, fly: false, pos: { x: 100, z: -366 }, yaw: 0.25, pitch: 0.05, isUnderground: () => false };
+  const r = mkReal({ player, deps: { gates: [E], inPlay: (x, z) => L.inPlay(x, z) } }, 'baked=0'); assert.deepEqual(r.api.edges.map((g) => g.id), ['edev-t']); assert.deepEqual(r.api.gates.map((g) => g.id), ['edev-t']);
+  r.api.preflight = async () => ({ ok: true }); r.api.machine.grace(0);
+  for (let i = 0; i < 60; i++) { player.pos.z -= 1.5 * DT; r.api.tick(DT); await sleep(1); } await sleep(20);
+  assert.equal(r.ui.asked.length, 0); assert.equal(r.navs.length, 1, 'navigations ' + r.navs.length);
+  const q = new URLSearchParams(r.navs[0].split('?')[1]), cam = q.get('cam').split(',').map(Number), ho = decodeHo(q.get('ho'), { to: 'north' });
+  assert(ho.ok, ho.why); assert.equal(ho.ho.gate, 'edev-t'); assert.equal(ho.ho.via, 'gate'); assert.equal(cam.length, 4); assert.equal(cam[0], 100); assert(cam[1] < -365 && cam[1] >= player.pos.z, 'z at the trigger ' + cam[1]); assert(Math.abs(cam[2] - 0.25 * 180 / Math.PI) < 0.01);
+  // the destination: planArrival with that row has NO arrival rectangle, the pose is walkable in the strip's sibling (here the real strip layout stands in for the destination), and the arrival is the same x,z
+  const h = planArrival({ L, A: { ID: 'north' }, params: q, gates: [{ ...E, from: 'strip', to: 'north' }] });
+  assert(h && !h.invalid && h.gate.id === 'edev-t'); assert(h.how === 'direct' || h.how === 'ring');
+});
+check('the dev switch: ?gateprompt=0 is the default again (no question)', () => { const r = mkReal({}, 'baked=0&gateprompt=0'); assert.equal(r.api.promptMode, false); });
+check('seam helpers: seamWrite / seamRead / seamClear never throw; seamEntryOk refuses a non-image, a stale or a future entry', () => {
+  const st = fakeStorage(), w = { sessionStorage: st }; assert.equal(seamWrite(w, { img: SNAP.img, t: 1 }), true); assert.equal(seamRead(w).img, SNAP.img); seamClear(w); assert.equal(seamRead(w), null);
+  assert.equal(seamRead({ sessionStorage: { getItem() { throw new Error('x'); } } }), null); assert.equal(seamWrite({}, {}), false); seamClear({});
+  const now = 1e12, ok = { img: SNAP.img, t: now - 1000, to: 'north' };
+  assert(seamEntryOk(ok, { now })); assert(!seamEntryOk({ ...ok, img: 'javascript:alert(1)' }, { now })); assert(!seamEntryOk({ ...ok, t: now - 61000 }, { now })); assert(!seamEntryOk({ ...ok, t: now + 60000 }, { now })); assert(!seamEntryOk(null, { now })); assert(!seamEntryOk({ ...ok, t: 'x' }, { now }));
+});
+check('createSeam on a tiny fake DOM: show() sets the picture and the classes on / anim / blur (a plain veil without a picture), progress() drives the fill and the percentage, finish() fades out and drops the key, hide() resets', () => {
+  const cls = new Set(), st = {}, mk = () => ({ style: {}, setAttribute() {}, textContent: '' });
+  const snap = mk(), fill = mk(), pct = mk(), track = mk(), el = { classList: { add: (...a) => a.forEach((c) => cls.add(c)), remove: (...a) => a.forEach((c) => cls.delete(c)), contains: (c) => cls.has(c) }, offsetWidth: 0, remove() { el.gone = true; }, querySelector: (s) => ({ '.seam-snap': snap, '.seam-fill': fill, '.seam-pct': pct, '.seam-track': track })[s] };
+  const storage = fakeStorage(); storage.setItem('n4spb.seam', '{}'); const doc = { getElementById: (id) => (id === 'seam' ? el : null), documentElement: { classList: { remove() {} } } };
+  const s = createSeam({ doc, win: { sessionStorage: storage } }); assert.equal(s.active, false);
+  assert.equal(s.show(SNAP), true); assert(cls.has('on') && cls.has('blur') && cls.has('anim') && !cls.has('plain')); assert(/^url\("data:image\/jpeg/.test(snap.style.backgroundImage)); assert.equal(s.active, true);
+  s.progress(0.426); assert.equal(fill.style.transform, 'scaleX(0.426)'); assert.equal(pct.textContent, '43%'); s.progress(7); assert.equal(pct.textContent, '100%'); s.progress(NaN); assert.equal(pct.textContent, '0%');
+  s.hide(); assert(!cls.has('on') && !cls.has('blur')); s.show(null); assert(cls.has('plain'));
+  s.finish(); assert(cls.has('out')); assert.equal(storage.getItem('n4spb.seam'), null); assert.equal(pct.textContent, '100%'); s.remove(); assert.equal(el.gone, true);
+  assert.equal(createSeam({ doc: { getElementById: () => null }, win: {} }).show(SNAP), false);
+});
+check('grabFrame: a black or a zero-sized canvas gives null, a drawn one a JPEG data URL scaled to at most maxW (fake 2D canvases)', () => {
+  const mkDoc = (sum) => ({ createElement: () => { const c = { width: 0, height: 0, getContext: () => ({ drawImage() {}, getImageData: () => ({ data: new Uint8ClampedArray(8 * 8 * 4).fill(sum) }) }), toDataURL: (t, q) => `data:${t};q=${q};${c.width}x${c.height}` }; return c; } });
+  assert.equal(grabFrame({ width: 0, height: 0 }, { doc: mkDoc(9) }), null); assert.equal(grabFrame({ width: 800, height: 600 }, { doc: mkDoc(0) }), null);
+  const g = grabFrame({ width: 2560, height: 1440 }, { doc: mkDoc(9) }); assert.equal(g.w, 1280); assert.equal(g.h, 720); assert(g.img.startsWith('data:image/jpeg;q=0.72;1280x720'), g.img); assert.equal(grabFrame({ width: 640, height: 360 }, { doc: mkDoc(9) }).w, 640); assert.equal(grabFrame(null), null);
+});
 
 console.log(`gates-test: ${passes} passed, ${fails} failed`);
 console.log(fails ? 'RESULT: FAIL' : 'RESULT: OK');

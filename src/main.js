@@ -29,7 +29,7 @@ import { installBootGuard } from './core/boot-guard.js';      // fatal card, los
 import { HOOKS } from './world/lib/area-tables.js';      // the validated hook table of the area module (docs/AREAS.md section 9): the engine reads it only through this file
 import { REGISTRY } from './areas/registry.js';      // runtime-only (tools/baked-revision.mjs): only this file may import it and core/gates.js / core/handoff.js
 import { VERSION } from './core/version.js';      // runtime-only (tools/baked-revision.mjs): the number on the preloader, CLAUDE.md "Versioning"
-import { createGates, planArrival, backLink } from './core/gates.js';      // the area gates: the question near a border, the navigation to the neighbour's page (docs/AREAS.md)
+import { createGates, planArrival, backLink, createSeam, grabFrame } from './core/gates.js';      // the area gates: the seamless hand-off to the neighbour's page, the freeze veil (docs/AREAS.md)
 
 export const MODULES = [
   // order matters: later modules read services of earlier ones (see docs/DESIGN.md)
@@ -145,7 +145,9 @@ async function loadFonts() {
 // ------------------------------------------------------------------ build
 const errors = []; window.__errors = errors;
 const stats = { modules: {} }; window.__stats = stats;
+const seam = createSeam();      // the veil of a seamless hand-off (index.html #seam): on a page reached by one it is already up (the inline script), setProgress drives its bar, the end of main() fades it out
 function setProgress(frac, label) {
+  seam.progress(frac);
   const bar = $('bar'); if (bar) bar.style.transform = `scaleX(${frac})`;
   const pct = $('loadpct'); if (pct) pct.textContent = `${Math.round(frac * 100)}%`;
   const lab = $('loadlabel'); if (lab && label !== undefined) lab.textContent = label;   // '' clears the text (the 'Ready' line is CSS)
@@ -395,6 +397,11 @@ function hudTick(t) {
 
 // ------------------------------------------------------------------ main loop
 let started = false, last = performance.now(), fpsAcc = 0, fpsN = 0, fps = 0;
+let snapWait = null;      // a pending request for the frozen frame (ctx.captureFrame, core/gates.js go()): answered by the next frame() right after pipeline.render
+ctx.captureFrame = () => new Promise((resolve) => {
+  const t = setTimeout(() => { if (snapWait === fn) snapWait = null; resolve(null); }, 800), fn = () => { clearTimeout(t); resolve(grabFrame(canvas)); };      // (a hidden tab draws no frames: the plain dark veil after 0.8 s)
+  snapWait = fn;
+});
 const lodOpts = { shadowR: (quality.shadowSize || 75) * 1.6, ndFar: pipeline.ndFar };      // sectors within the sun shadow box stay drawn behind the camera (casters); proxies only within the outline range
 const lodBase = params.has('lodscale') ? Number(params.get('lodscale')) || 1 : (quality.lod || 1), DRIVE_LOD = params.has('drivelod') ? Number(params.get('drivelod')) : 0.7; let driveLod = 1;      // ?drivelod=1 turns the drive mode off
 function frame(now) {
@@ -421,6 +428,7 @@ function frame(now) {
   sky.update(simT, camera);
   renderer.info.reset();
   pipeline.render(scene, camera, sunDir, simT);
+  if (snapWait) { const f = snapWait; snapWait = null; f(); }      // the frozen frame of a hand-off is read HERE, in the task of the render that drew it (the drawing buffer is not preserved)
   if (!SHOT) hudTick(simT);
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; const s = $('stats'); if (s && !s.hidden) s.textContent = `${fps.toFixed(0)} fps · ${renderer.info.render.calls} calls · ${(renderer.info.render.triangles / 1e6).toFixed(2)}M tris`; }
@@ -432,16 +440,17 @@ function frame(now) {
 const TELEPORTS = params.get('teleports') === '1';
 if (TELEPORTS) document.documentElement.classList.add('teleports'); else { const pl = document.getElementById('places'); if (pl) pl.remove(); }
 
-function start() {
-  if (started) { player.requestLock(); return; }
+/** auto: the page started by itself after a seamless hand-off (no user gesture: no pointer lock, which the first click takes; no area toast; the audio waits for the first key / pointer, see main()) */
+function start(auto) {
+  if (started) { if (!auto) player.requestLock(); return; }
   started = true;
   player.enabled = true;
   document.body.classList.add('playing');
-  player.requestLock();
+  if (!auto) player.requestLock();
   try { audio.start(); } catch (e) { console.warn(e); }
   applyHandoffAtStart();
-  if (ctx.gates) ctx.gates.machine.grace(6);      // no question in the first seconds
-  showToast(areaAt(player.pos.x, player.pos.z) || L.NAMES.place);
+  if (ctx.gates) ctx.gates.machine.grace(6);      // no trigger in the first seconds
+  if (!auto) showToast(areaAt(player.pos.x, player.pos.z) || L.NAMES.place);
 }
 /** What the standard parameters cannot say, applied when the player presses Start on a page reached by a hand-off: mute, the HUD toggle, the car (docs/AREAS.md), then the URL is cleaned. */
 function applyHandoffAtStart() {
@@ -533,8 +542,11 @@ async function main() {
   stats.timing.readyMs = Math.round(performance.now());      // since navigation start: the intro is ready
   document.body.classList.add('loaded');
   if (ctx.regions) { stats.regions = ctx.regions.stats; ctx.regions.start(); }
-  ctx.gates = createGates({ ctx, player, camera, ui: ctx.ui, tod, audio, guard, params, A, isStarted: () => started, toast: showToast }); window.__gates = ctx.gates;      // null when this area has no gate (or ?gates=0)
-  const go = $('go'); if (go) { go.disabled = false; if (ctx.handoff) { go.textContent = 'Продолжить · Continue'; guard.arrivalLink(); } go.focus(); go.addEventListener('click', start); }
+  ctx.gates = createGates({ ctx, player, camera, ui: ctx.ui, tod, audio, guard, params, A, seam, inPlay: L.inPlay, captureFrame: ctx.captureFrame, isStarted: () => started, toast: showToast }); window.__gates = ctx.gates;      // null when this area has no gate (or ?gates=0)
+  // a seamless hand-off (index.html: the inline script put the veil up and hid the splash, html.seam-in): the page starts BY ITSELF, no 'Continue'. A bad ho (no ctx.handoff) is no hand-off: the splash comes back.
+  const seamless = document.documentElement.classList.contains('seam-in') && !!ctx.handoff;
+  if (!seamless && document.documentElement.classList.contains('seam-in')) seam.remove();
+  const go = $('go'); if (go) { go.disabled = false; if (ctx.handoff && !seamless) { go.textContent = 'Продолжить · Continue'; guard.arrivalLink(); } if (!seamless) go.focus(); go.addEventListener('click', () => start()); }
   canvas.addEventListener('click', () => { if (started) player.requestLock(); });
   document.addEventListener('pointerlockchange', () => { document.body.classList.toggle('locked', document.pointerLockElement === canvas); });
   addEventListener('keydown', (e) => {
@@ -570,5 +582,14 @@ async function main() {
   const mute = $('mute'); if (mute) mute.addEventListener('click', () => { audio.muted = !audio.muted; mute.setAttribute('aria-pressed', String(audio.muted)); });
   if (params.has('stats')) $('stats').hidden = false;
   if (errors.length) console.warn('module errors', errors);
+  if (seamless) {
+    start(true);
+    // a fresh page has no user gesture: the AudioContext may start suspended and the pointer lock was skipped. The first key / pointer resumes the audio (audio.start() on a started engine only resumes it);
+    // the first click on the canvas takes the pointer lock (the handler above); walking with the keys works at once.
+    const kick = () => { try { audio.start(); } catch (e) { /* silent */ } if (audio.context && audio.context.state === 'running') for (const t of ['pointerdown', 'keydown']) removeEventListener(t, kick, true); };
+    for (const t of ['pointerdown', 'keydown']) addEventListener(t, kick, true);
+    // two frames under the veil (the live scene is drawn once at the start pose), then the blur relaxes and the frozen frame cross-fades into it
+    requestAnimationFrame(() => requestAnimationFrame(() => seam.finish()));
+  }
 }
 guard.gate().then(() => main()).catch(guard.fatal);      // (the gate is empty except on a phone's first visit / after a crash loop)

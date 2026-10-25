@@ -229,6 +229,9 @@ REGISTRY.smolny = {
  * A DOOR gate (kind: 'door', milestone M7) is not a stretch of the border but a ctx.interact item (E / USE) for a walker: { id, kind: 'door', from, to, at: { x, z } (the door point in the FROM area),
  * r (m: the use radius), pose: { x, z, yaw, pitch } (the arrival pose in the TO area, on foot; `view` names the VIEWS row of the TO area it copies, tools/areas-test.mjs pins it), prompt (its texts:
  * label / labelEn of the chip, title / sights / scene / fine of the question), reverse: null }. The gate machine ignores doors (no chip, no zone, no arrival rectangle); core/gates.js registers them.
+ * An EDGE gate (kind: 'edge', docs/AREAS.md "Seamless hand-off") is a border between two TERRITORIES (REGISTRY[id].play, a union of rectangles) that overlap by about one block: { id, kind: 'edge', from, to, zone (m, optional:
+ * how far ahead of a walker the probe point lies, default 40; a vehicle or flyer uses the speed-dependent depth), reverse (id of the gate back) }. It triggers when the player is inside FROM's territory and the point
+ * p + depth * dir (8 directions, every 45 degrees) is outside FROM's but inside TO's by at least 60 m, and he moves toward it (or stands within 8 m of the edge). No segment, no arrival rectangle: he lands at the same x, z, yaw.
  */
 export const GATES = [
   // g1 / g2 - the strip and the North share one border, the line z = -405 .. -205 across Liteyny (x -420 .. 835). The strip ends at z = -405 (its OLD rectangle); the North holds the strip's 200 m band
@@ -240,6 +243,10 @@ export const GATES = [
   // strip at a spot outside the rectangle lands at the nearest point of it (the departure x is clamped, so a crossing on the Fontanka quay at x -370 lands 145 m east of it).
   { id: 'g1', from: 'strip', to: 'north', seg: [[-420, -405], [835, -405]], inward: [0, 1], zone: 30, arrive: { x0: -225, x1: 755, z0: -460, z1: -310 }, reverse: 'g2' },
   { id: 'g2', from: 'north', to: 'strip', seg: [[-420, -205], [835, -205]], inward: [0, -1], zone: 30, arrive: { x0: -225, x1: 805, z0: -300, z1: -230 }, reverse: 'g1' },
+  // e1 / e2 - the edge gates between the two live areas (docs/AREAS.md sections 13 and 14): the territories overlap by about one block (Ligovsky, Nevsky / Vosstaniya, Liteyny / Chernyshevskaya), and the player
+  // who walks out of one territory into the core of the other is carried over without a question (freeze, blur, progress bar). No segment and no arrival rectangle: he lands at the same x, z, yaw.
+  { id: 'e1', kind: 'edge', from: 'palace', to: 'smolny', zone: 40, reverse: 'e2' },
+  { id: 'e2', kind: 'edge', from: 'smolny', to: 'palace', zone: 40, reverse: 'e1' },
   // g0 - the dev loop (?devgates=1): a gate across the Nevsky approach to Vosstaniya Square (a vertical segment at x = 470, the strip east of it is the "own area") that leads back to the SAME page at
   // the same pose. It exercises the whole hand-off (prompt, preflight, veil, navigation, arrival, memory) before a second area exists, and stays as a test fixture afterwards.
   { id: 'g0', dev: true, from: 'strip', to: 'strip', seg: [[470, 100], [470, 240]], inward: [1, 0], zone: 30, arrive: { x0: 440, x1: 700, z0: 80, z1: 260 }, reverse: 'g0' },

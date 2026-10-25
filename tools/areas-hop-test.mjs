@@ -88,7 +88,7 @@ try {
 
   // ================================================================= 1. strip -> north, walking
   console.log('1. strip -> north (walking):');
-  await boot(page, `index.html?q=${Q}`);
+  await boot(page, `index.html?q=${Q}&gateprompt=1&seam=0`);
   let s = await state(page); check('the strip boots from its real bake (no fatal card, no module errors)', s.area === 'strip' && !s.fatal && s.moduleErrors.length === 0, s);
   await arrival('strip (first load)', null);
   await startPlaying(page);

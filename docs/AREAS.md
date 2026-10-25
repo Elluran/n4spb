@@ -1161,3 +1161,35 @@ The Places list, the view keys (1..0, Shift, Alt), R (back to the start) and the
 
 ### 13.6 Version
 `src/core/version.js` (1.0.0 and up, SemVer), shown top right on the preloader; `node tools/version.mjs patch|minor|major "note"` bumps it, `package.json` and `CHANGELOG.md`; the rules of the levels are in `CLAUDE.md`.
+
+## 14. Seamless hand-off (edge gates, freeze veil)
+
+Entering a neighbour area must feel like one scene: no question, no card. When the player reaches the edge of the area the frame **freezes, blurs a little and a single progress bar** fills in the middle of the screen while the next page loads; when the new area is ready the veil fades into the live scene and he walks on from the same pose (heading, time of day, car, mute). Code: `src/core/gates.js` (runtime-only, so none of it enters the bake revision; `index.html` and `src/main.js` do, the next rebake covers them). Tests: `tools/gates-test.mjs`, `tools/handoff-test.mjs` (CPU).
+
+### 14.1 The edge gate row
+
+```js
+{ id: 'e1', kind: 'edge', from: 'strip', to: 'north', zone: 40 /* optional, m, walking */, reverse: 'e2' }
+```
+
+No `seg`, no `inward`, no `arrive`: the territories come from `REGISTRY[id].play` (a union of rectangles, street frame, x east, z south) and overlap their neighbour's by about one block (section 12). The page's own `inPlay` (layout.js) stands in for FROM's territory (`createGates` dep `inPlay`; `createGateMachine` options `rectsOf` / `inFrom` for tests). Several edge gates may leave one area (one per neighbour; the first match wins). Border (`seg` / `inward`) and `door` gates keep working; only their UI changed (they no longer ask). `inUnion(rects, x, z, margin)` has the semantics of layout.js `_inUnion` (inside, at least `margin` m from the union's boundary; a negative margin also takes the outside band).
+
+### 14.2 The trigger rule (per frame, no allocation)
+
+With p the player's position (car: the car's), in FROM's territory, and depth = `zone` (40 m) for a walker, `depthFor(mode, v)` (the vehicle formula: 40..160 m) for a car or flyer: the gate triggers when for one of the 8 directions (every 45 degrees, N = -z, clockwise) the probe q = p + depth * dir is **outside FROM's territory and inside TO's by at least 60 m** (`edgeIn`; so the arrival is never at the destination's rim), and the player is moving toward q: his velocity component along dir is >= `approachV` (0.5 m/s) **and** >= 0.92 of his speed (`edgeAlign`: only the octant he heads in counts, so walking ALONG an edge triggers nothing), or he stands within `nearD` (8 m) of the edge in that direction. The rest is the machine of the border gates: no trigger in the first `graceS` (6 s) after an arrival, `cooldown(g)` 30 s after a failed preflight, `markOpen(g)` while a travel runs, `decline(g)` (only with `?gateprompt=1`) 45 s and until the player has left the zone by 20 m, blocked while a panel is open, indoors, underground, riding, travelling.
+
+The arrival has no rectangle: the player lands at the **same x, z, yaw, pitch**; `resolveArrival` only moves him (the ring search, 3..60 m, no clamp) when something blocks it, a car needs a lane within 30 degrees of its heading. The URL protocol (`?cam&fly&tod&look&ho`) is unchanged.
+
+### 14.3 The veil flow
+
+1. **Trigger** (an edge or border gate, E at a door gate, a pick from the HUD list of CROSS_PLACES): `go()` runs at once. The sim and the input are frozen (`ctx.travelPending`, `player.inputLock`). The preflight (HEAD of the page + manifest revision) is silent; a failure shows a short toast, starts the cooldown and unfreezes.
+2. **Freeze.** `ctx.captureFrame()` (main.js) is answered by the next `frame()` right after `pipeline.render`, in the same task (the WebGL drawing buffer is not preserved): `grabFrame` draws the canvas into a 2D canvas of at most 1280 px width and takes a JPEG (quality 0.72); an all-black frame is refused. Without a frame (a hidden tab: 0.8 s time-out, a failure) the veil is plain dark.
+3. **Veil on the origin page.** `#seam` (index.html: `.seam-snap`, `.seam-shade`, a thin rounded glowing track with a gradient fill in the gold accent #f2c14e, a shimmer, a tabular percentage; no other text) fades in: blur 0 -> 10 px and a vignette over 350 ms (`prefers-reduced-motion`: no shimmer or glow animation, the global rule drops the transitions). The snapshot and facts go to `sessionStorage` (below), then `api.navigate` (`location.replace`). Nothing of the destination is prefetched. If the new page has not committed in 25 s the travel is cancelled (`stop()`, toast, cooldown), the game goes on.
+4. **Veil on the destination page.** A tiny inline script right after the canvas (before the module scripts) sees `ho=` in the URL, reads the stored entry (fresh: less than 60 s old, an image, written for THIS area) and paints the same veil at once (blurred picture, bar at 0), hides the splash (`html.seam-in`); without an entry (private mode, a bookmarked URL with `ho`) the veil is plain dark. `setProgress` drives the bar with the loader's 0..1.
+5. **Start by itself.** When the scene is built a page with a valid hand-off calls `start(true)` (no "Continue", no pointer lock request, no area toast; `applyHandoffAtStart` as before: mute, HUD, the car), two frames later `seam.finish()`: the blur relaxes while the picture cross-fades into the live frame (700 ms), the element is removed and the stored entry dropped. The first key / pointer resumes a suspended AudioContext (`audio.start()` resumes); the first click on the canvas takes the pointer lock; walking with the keys works at once. A `ho` that does not validate is no hand-off: the veil goes and the splash returns. A fatal error (`piter-fatal`) and the 45 s loading watchdog remove the veil. A normal visit (no `ho`) is untouched: the splash with "В Питер".
+
+### 14.4 Storage and switches
+
+* `sessionStorage['n4spb.seam']` = `{ img: <data: URL of the JPEG>, w, h, t: Date.now(), from, to }`, written by the origin page, read by the destination's inline script and cleared at `finish()`. Every access is wrapped: a blocked or full storage only costs the picture (plain veil).
+* `?gateprompt=1` (development) restores the old passive chip (#gatechip, key N) and the `ui.confirm` question; `Загрузить` runs the same `go()`. Default: no question, no chip.
+* `?devgates=1` keeps g0 (the strip loops back to the same page), the quickest way to see the whole flow; `?gates=0` / `?gates=1` as before.

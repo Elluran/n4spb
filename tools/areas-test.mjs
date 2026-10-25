@@ -132,7 +132,7 @@ for (const g of GATES.filter(isDoor)) {
 
 // ---------------------------------------------------------------------------------------------- the generated area pages (tools/gen-area-html.mjs)
 console.log('area pages (generator fixtures, page.json data, pages on disk):');
-const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replaceAll('\r\n', '\n');
+const indexHtml = fs.readFileSync(path.join(root, 'strip.html'), 'utf8').replaceAll('\r\n', '\n');
 const FIX_ROW = { id: 'fix', page: 'fix.html', approxMB: 20, remap: { 'src/world/data/city.js': 'src/areas/fix/data/city.js', 'src/world/area.js': 'src/areas/fix/area.js' } };
 const FIX_PAGE = {
   schema: 1, title: 'Fixture area · Saint Petersburg', appTitle: 'Fix', canvasLabel: 'A fixture area: 3D scene', intro: { kicker: 'Fixture walk', title: 'Fixture title' },
@@ -191,7 +191,7 @@ check('generator CLI on a throw-away root: writes the page, --check passes, a ch
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gen-area-'));
   try {
     fs.mkdirSync(path.join(tmp, 'src/areas/north'), { recursive: true });
-    fs.copyFileSync(path.join(root, 'index.html'), path.join(tmp, 'index.html'));
+    fs.copyFileSync(path.join(root, 'strip.html'), path.join(tmp, 'strip.html'));
     fs.copyFileSync(pageJsonFile(root, 'north'), pageJsonFile(tmp, 'north'));
     const real = path.join(root, 'tools/gen-area-html.mjs');
     const run = (tool, ...a) => spawnSync(process.execPath, [tool, '--root', tmp, ...a], { encoding: 'utf8' });
@@ -217,7 +217,7 @@ check('generator CLI on a throw-away root: writes the page, --check passes, a ch
     assert.equal(stale.status, 1); assert(/STALE/.test(stale.stdout), stale.stdout);
     fs.writeFileSync(path.join(tmp, 'north.html'), fs.readFileSync(path.join(tmp, 'north.html'), 'utf8').replace(/<!-- hand edit -->\n/, '').replaceAll('\n', '\r\n'));
     assert.equal(run(real, '--area', 'north', '--check').status, 0, 'CRLF checkouts (Windows autocrlf) compare equal');
-    assert.equal(fs.readFileSync(path.join(root, 'index.html'), 'utf8').replaceAll('\r\n', '\n'), indexHtml, 'index.html is never touched');
+    assert.equal(fs.readFileSync(path.join(root, 'strip.html'), 'utf8').replaceAll('\r\n', '\n'), indexHtml, 'index.html is never touched');
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 for (const row of Object.values(REGISTRY)) {

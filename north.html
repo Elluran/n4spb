@@ -129,18 +129,30 @@
   .confirm-yes:focus-visible { outline: 3px solid var(--line-deep); outline-offset: 2px; }
   html.tc .confirm-yes { min-height: 48px; }
   @media (max-width: 520px) { .confirm-row { flex-direction: column-reverse; } .confirm-yes { width: 100%; } }
-  #travel { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; padding: 16px; background: rgba(11,18,48,.88); backdrop-filter: blur(4px); color: var(--paper); text-align: center; }
-  #travel[hidden] { display: none; }
-  #travel .t-card { max-width: 520px; }
-  #travel .t-kicker { font: 600 13px/1.2 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: #f2c14e; }
-  #travel .t-title { font: 900 28px/1.2 var(--round); margin: 8px 0; }
-  #travel .t-sights { font: 500 15px/1.5 var(--sans); opacity: .9; }
-  #travel .t-spin { width: 34px; height: 34px; margin: 22px auto 0; border-radius: 50%; border: 4px solid rgba(247,240,225,.25); border-top-color: #f2c14e; animation: t-spin 1s linear infinite; }
-  @keyframes t-spin { to { transform: rotate(360deg); } }
-  #travel .t-stall { margin-top: 18px; display: none; }
-  #travel.stalled .t-stall { display: block; }
-  #travel .t-stall button { margin: 0 6px; min-height: 44px; padding: 0 18px; border: 0; border-radius: 4px; background: #f2c14e; color: #0f1a44; font: 600 15px/1 "Golos Text", "Segoe UI", sans-serif; cursor: pointer; }
-  @media (prefers-reduced-motion: reduce) { #travel .t-spin { animation-duration: 3s; } }
+  /* the seamless hand-off (core/gates.js createSeam, docs/AREAS.md "Seamless hand-off"): the frozen frame of the area we leave, blurred, with ONE progress bar in the middle and nothing else; the destination page paints the
+     same veil from its inline script (index.html, before the module scripts) and fades it into the live scene. States on #seam: .on shown, .anim transitions run, .blur the blurred / darkened end state, .plain no picture, .out fading away. */
+  #seam { position: fixed; inset: 0; z-index: 15; display: none; overflow: hidden; background: transparent; user-select: none; -webkit-user-select: none; cursor: progress; }
+  #seam.on, html.seam-in #seam { display: block; }
+  #seam .seam-snap { position: absolute; inset: 0; background: #0b1230 center / cover no-repeat; }
+  #seam.plain .seam-snap { background: radial-gradient(120% 90% at 50% 40%, #1a2a66 0%, #0b1230 70%); }
+  #seam.anim .seam-snap { transition: filter .35s ease, transform .35s ease, opacity .7s ease; }
+  #seam.blur .seam-snap { filter: blur(10px) brightness(.74) saturate(1.06); transform: scale(1.06); }
+  #seam .seam-shade { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at 50% 50%, rgba(8,12,34,.10) 0%, rgba(8,12,34,.62) 100%); }
+  #seam.anim .seam-shade { transition: opacity .35s ease; }
+  #seam.blur .seam-shade { opacity: 1; }
+  #seam .seam-ui { position: absolute; left: 50%; top: 50%; width: min(420px, 62vw); transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  #seam.anim .seam-ui { transition: opacity .35s ease; }
+  #seam .seam-track { position: relative; width: 100%; height: 6px; border-radius: 999px; overflow: hidden; background: rgba(255,244,214,.14); box-shadow: inset 0 0 0 1px rgba(255,244,214,.10), 0 0 26px rgba(242,193,78,.20); animation: seam-glow 2.4s ease-in-out infinite; }
+  #seam .seam-fill { position: absolute; inset: 0; border-radius: inherit; transform-origin: left; transform: scaleX(0); transition: transform .45s cubic-bezier(.22,.7,.2,1); background: linear-gradient(90deg, #b8841f 0%, #f2c14e 55%, #ffe6a3 100%); box-shadow: 0 0 14px rgba(242,193,78,.75); }
+  #seam .seam-track::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,.55) 50%, transparent 100%); transform: translateX(-100%); animation: seam-shimmer 1.7s ease-in-out infinite; }
+  #seam .seam-pct { font: 600 13px/1 "Golos Text", "Segoe UI", sans-serif; letter-spacing: .18em; color: rgba(255,243,214,.88); font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px rgba(8,12,34,.8); }
+  #seam.out { pointer-events: none; cursor: default; }
+  #seam.out .seam-snap { filter: blur(0) brightness(1); transform: none; opacity: 0; }
+  #seam.out .seam-shade, #seam.out .seam-ui { opacity: 0; }
+  html.seam-in #intro { display: none; }      /* a page reached by a hand-off never shows the splash card: the veil above is its loading screen (the inline script of the page sets the class) */
+  @keyframes seam-shimmer { to { transform: translateX(100%); } }
+  @keyframes seam-glow { 50% { box-shadow: inset 0 0 0 1px rgba(255,244,214,.14), 0 0 36px rgba(242,193,78,.34); } }
+  @media (prefers-reduced-motion: reduce) { #seam .seam-track, #seam .seam-track::after { animation: none; } #seam .seam-track::after { display: none; } }
   #coords { right: 6px; bottom: 3px; font: 500 10px/1 var(--sans); color: rgba(255,255,255,.92); text-shadow: 0 0 2px rgba(0,0,0,.85), 0 0 4px rgba(0,0,0,.55); font-variant-numeric: tabular-nums; letter-spacing: .02em; }   /* debug readout: same numbers as ?cam= */
   #stats { position: fixed; bottom: 22px; right: 12px; z-index: 4; font: 500 11px/1 var(--sans); background: rgba(28,42,90,.72); color: #fff; padding: 6px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; }
   @media (pointer: coarse) { #help .desk, body.flying #help .air { display: none; } }
@@ -176,6 +188,21 @@
 </head>
 <body>
 <canvas id="scene" tabindex="0" aria-label="Northern Saint Petersburg, the Tauride Garden and Smolny: 3D scene"></canvas>
+<div id="seam" aria-hidden="true"><div class="seam-snap"></div><div class="seam-shade"></div><div class="seam-ui"><div class="seam-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="seam-fill"></div></div><div class="seam-pct">0%</div></div></div>
+<script>
+  // A page reached by a seamless hand-off (?ho= in the URL, core/gates.js): paint the veil of the page we came from AT ONCE - its frozen frame (sessionStorage n4spb.seam, written less than a minute ago for THIS area),
+  // blurred, with the progress bar - and keep the splash card away (html.seam-in); without a picture the veil is a plain dark one. src/main.js drives the bar (setProgress), starts the game when the scene is ready and fades
+  // the veil out; a bad ho is not a hand-off and gets its splash back; a fatal error or a stalled load removes the veil. A normal visit (no ho) is untouched.
+  (function () { try {
+    if (!/[?&]ho=/.test(location.search) || /[?&]seam=0/.test(location.search)) return;      // (?seam=0, development: the old arrival with the splash and its Continue button)
+    var root = document.documentElement, el = document.getElementById('seam'), e = null;
+    try { e = JSON.parse(sessionStorage.getItem('n4spb.seam') || 'null'); } catch (x) {}
+    var ok = e && typeof e.img === 'string' && e.img.indexOf('data:image/') === 0 && e.img.length < 6e6 && typeof e.t === 'number' && Date.now() - e.t < 60000 && Date.now() - e.t > -5000 && e.to === (root.dataset.area || 'strip');
+    if (ok) el.firstChild.style.backgroundImage = 'url("' + e.img + '")'; else el.classList.add('plain');
+    el.classList.add('on', 'blur'); root.classList.add('seam-in');      // (no .anim: the end state at once, the same as the origin page's last frame)
+    window.addEventListener('piter-fatal', function () { el.remove(); root.classList.remove('seam-in'); });
+  } catch (x) {} })();
+</script>
 
 <div id="intro">
   <div id="ver" aria-hidden="true"></div>
@@ -239,6 +266,7 @@
     function text(id) { var n = document.getElementById(id); return n ? n.textContent : ''; }
     function show() {
       var started = !!window.__mainStarted;
+      var sm = document.getElementById('seam'); if (sm) sm.remove(); document.documentElement.classList.remove('seam-in');      // a stalled load behind the veil: the splash card (with this message) takes over
       el.replaceChildren();
       var p = document.createElement('div');
       p.textContent = started
@@ -274,7 +302,6 @@
 <div class="hud" id="cross"></div>
 <div class="hud" id="interact" role="button" aria-live="polite"></div>
 <div class="hud" id="gatechip" role="button" aria-live="polite"></div>
-<div id="travel" hidden role="status" aria-live="polite"><div class="t-card"><div class="t-kicker"></div><div class="t-title"></div><div class="t-sights"></div><div class="t-spin" aria-hidden="true"></div><div class="t-stall"><button type="button" class="t-retry">Ещё раз · Retry</button><button type="button" class="t-stay">Остаться · Stay</button></div></div></div>
 <div id="panel" hidden role="dialog" aria-modal="true"><div class="panel-card"><div class="panel-head"><span class="panel-title"></span><button class="panel-x" type="button">Закрыть · Close</button></div><div class="panel-body"></div></div></div>
 <div class="hud" id="coords">x 0 · z 0</div>
 <div id="stats" hidden></div>
