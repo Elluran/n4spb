@@ -233,6 +233,8 @@ export function promptBody(doc, T) {
 /** sessionStorage key of the hand-over between the two pages: { img (a data: URL of the frozen frame, JPEG), w, h, t (Date.now()), from, to } */
 export const SEAM_KEY = 'n4spb.seam';
 export const SEAM_FRESH_MS = 60000;
+/** where the origin page leaves the bar (0..1) when it hands over; the destination continues from the entry's p */
+export const SEAM_LEAD = 0.12;
 /** may the destination page paint this stored entry? (a data: image, written less than a minute ago, for THIS area when `to` is given) */
 export function seamEntryOk(e, { now = Date.now(), to = null } = {}) {
   return !!e && typeof e === 'object' && typeof e.img === 'string' && e.img.startsWith('data:image/') && e.img.length < 6e6 && Number.isFinite(e.t) && now - e.t < SEAM_FRESH_MS && now - e.t > -5000 && (!to || e.to === to);
@@ -264,34 +266,55 @@ export function grabFrame(canvas, { maxW = 1280, quality = 0.72, doc = globalThi
 export function createSeam({ doc = globalThis.document, win = globalThis.window } = {}) {
   const el = () => doc.getElementById('seam');
   const q = (s) => { const e = el(); return e && e.querySelector ? e.querySelector(s) : null; };
-  let timer = null;
+  let timer = null, raf = 0, shown = null, target = 0;
+  const hasRaf = () => !!win && typeof win.requestAnimationFrame === 'function';
+  /** the bar's base: the value the origin page left it at (the destination's inline script writes it to #seam data-base); real progress 0..1 maps onto base..1, so the bar continues instead of restarting */
+  const base = () => { const e = el(), b = e && e.dataset ? Number(e.dataset.base) : 0; return Number.isFinite(b) ? Math.min(0.9, Math.max(0, b)) : 0; };
+  /** ONE drawn value feeds the fill and the label (no CSS transition on the fill: the label can never run ahead of the bar) */
+  function paint(v) {
+    const fill = q('.seam-fill'), pct = q('.seam-pct'), tr = q('.seam-track'), e = el(); shown = v;
+    if (fill) fill.style.transform = `scaleX(${Math.round(v * 1000) / 1000})`;
+    if (pct) pct.textContent = `${Math.round(v * 100)}%`;
+    if (tr) tr.setAttribute('aria-valuenow', String(Math.round(v * 100)));
+    if (e && e.dataset) e.dataset.p = String(Math.round(v * 1000) / 1000);
+  }
+  function step() {
+    raf = 0; const d = target - shown;
+    if (Math.abs(d) < 0.004) { paint(target); return; }
+    paint(shown + d * 0.2); raf = win.requestAnimationFrame(step);
+  }
+  /** move the drawn value toward t (0..1, absolute): at once without animation frames (tests, a hidden tab), eased by a frame loop otherwise */
+  function aim(t, now = false) {
+    target = Math.min(1, Math.max(0, Number(t) || 0));
+    if (shown === null) { const f = q('.seam-fill'), m = f && f.style && /scaleX\(([\d.]+)\)/.exec(f.style.transform || ''); shown = m ? Number(m[1]) : 0; }
+    if (now || !hasRaf()) { if (raf && win.cancelAnimationFrame) win.cancelAnimationFrame(raf); raf = 0; paint(target); return; }
+    if (!raf) raf = win.requestAnimationFrame(step);
+  }
   const api = {
     get active() { const e = el(); return !!e && !!e.classList && e.classList.contains('on'); },
     /** the origin page: show the veil over the frozen frame `snap` ({ img } or null: a plain dark veil) and let it blur in */
     show(snap) {
       const e = el(); if (!e) return false; clearTimeout(timer);
       const s = q('.seam-snap'); if (snap && snap.img && s) s.style.backgroundImage = `url("${snap.img}")`; else e.classList.add('plain');
-      e.classList.remove('out', 'blur'); e.classList.add('on', 'anim'); api.progress(0);
+      if (e.dataset) e.dataset.base = '0';
+      e.classList.remove('out', 'blur'); e.classList.add('on', 'anim'); aim(0, true);
       void e.offsetWidth;      // a style flush between `on` and `blur`: the blur and the darkening animate from 0
       e.classList.add('blur'); return true;
     },
-    /** the real progress 0..1 (src/main.js setProgress); the bar's transition smooths the steps */
-    progress(f) {
-      const frac = Math.min(1, Math.max(0, Number(f) || 0)), fill = q('.seam-fill'), pct = q('.seam-pct'), tr = q('.seam-track');
-      if (fill) fill.style.transform = `scaleX(${frac})`;
-      if (pct) pct.textContent = `${Math.round(frac * 100)}%`;
-      if (tr) tr.setAttribute('aria-valuenow', String(Math.round(frac * 100)));
-    },
+    /** the origin page: the bar rises to SEAM_LEAD while the new page is on its way; the same value goes into the sessionStorage entry (p) and the destination continues from it */
+    lead(v = SEAM_LEAD) { aim(Math.max(shown || 0, v)); },
+    /** the real progress 0..1 (src/main.js setProgress), mapped onto base..1 and eased; fill and label are drawn from one value */
+    progress(f) { const frac = Math.min(1, Math.max(0, Number(f) || 0)), b = base(); aim(b + (1 - b) * frac); },
     /** the destination page is ready and running: the blur relaxes while the frozen frame cross-fades into the live one, then the element goes and the stored picture is dropped */
     finish() {
       seamClear(win); const e = el(); if (!e) return;
-      api.progress(1); e.classList.add('anim', 'out');
+      aim(1); e.classList.add('anim', 'out');
       clearTimeout(timer); timer = setTimeout(() => { const x = el(); if (x && x.remove) x.remove(); }, 900);      // (html.seam-in stays: the splash must not come back behind a running game)
     },
-    /** gone at once (a failed travel, a fatal error, a stalled load) */
+    /** gone at once (a failed travel, a fatal error, a bad hand-off): the splash card may come back */
     remove() { clearTimeout(timer); const e = el(); if (e && e.remove) e.remove(); try { doc.documentElement.classList.remove('seam-in'); } catch (err) { /* a fake document */ } },
     /** back to the hidden state without removing the element (a failed preflight after the veil was up: the origin page plays on) */
-    hide() { const e = el(); if (!e) return; clearTimeout(timer); e.classList.remove('on', 'blur', 'out', 'plain', 'anim'); const s = q('.seam-snap'); if (s) s.style.backgroundImage = ''; api.progress(0); },
+    hide() { const e = el(); if (!e) return; clearTimeout(timer); e.classList.remove('on', 'blur', 'out', 'plain', 'anim'); const s = q('.seam-snap'); if (s) s.style.backgroundImage = ''; if (e.dataset) e.dataset.base = '0'; aim(0, true); },
   };
   return api;
 }
@@ -410,8 +433,8 @@ export function createGates(deps) {
       car: m === 'car' ? { id: d.vehicle.id, view: d.view.mode, d: [d.damage.state.front, d.damage.state.rear, d.damage.state.left, d.damage.state.right] } : null });
     const url = arrivalUrl({ page: REGISTRY[g.to].page, pose, fly: m === 'fly', tod: tod.k, look: tod.variant, ho, search: win.location.search });
     let snap = null; try { snap = deps.captureFrame ? await deps.captureFrame() : null; } catch (e) { snap = null; }      // the frozen frame (null: the plain dark veil)
-    seam.show(snap);
-    if (snap && snap.img) seamWrite(win, { img: snap.img, w: snap.w, h: snap.h, t: Date.now(), from: A.ID, to: g.to }); else seamClear(win);      // (a full / blocked storage: the destination shows the plain veil)
+    seam.show(snap); if (snap && snap.img && seam.lead) seam.lead(SEAM_LEAD);      // the bar rises to SEAM_LEAD: the destination continues from there (entry.p)
+    if (snap && snap.img) seamWrite(win, { img: snap.img, w: snap.w, h: snap.h, t: Date.now(), from: A.ID, to: g.to, p: SEAM_LEAD }); else seamClear(win);      // (a full / blocked storage: the destination shows the plain veil)
     clearTimeout(watchdog);
     watchdog = setTimeout(() => {      // the new page has not committed in 25 s: the player stays, the game goes on
       if (!traveling) return;

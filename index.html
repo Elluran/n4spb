@@ -22,6 +22,30 @@
     if (on) document.documentElement.classList.add('tc');
   } catch (e) {} })();
 </script>
+<script>
+  // THE PRELOADER RULE (docs/AREAS.md 14): a page reached by a seamless hand-off (?ho= in the URL) shows ONE thing while it loads: the veil (the blurred frame of the area we left + one progress bar), never the splash card.
+  // This head script runs before the first paint and sets html.seam-in: the CSS below hides #intro and darkens the page at once, whatever else happens (a slow stylesheet, a late script, blocked storage).
+  (function () { try {
+    if (!/[?&]ho=/.test(location.search) || /[?&]seam=0/.test(location.search)) return;
+    var root = document.documentElement, e = null, p = 0, img = null;
+    root.classList.add('seam-in');
+    try { e = JSON.parse(sessionStorage.getItem('n4spb.seam') || 'null'); } catch (x) {}
+    if (e && typeof e.img === 'string' && e.img.indexOf('data:image/') === 0 && e.img.length < 6e6 && typeof e.t === 'number' && Date.now() - e.t < 60000 && Date.now() - e.t > -5000 && e.to === (root.dataset.area || 'strip')) {
+      img = e.img; if (typeof e.p === 'number' && e.p >= 0 && e.p <= 0.9) p = e.p;
+      root.style.setProperty('--seam-img', 'url("' + img + '")'); root.style.setProperty('--seam-p', String(p));
+    }
+    window.__seam0 = { img: img, p: p };      // (read by the veil script at the top of the body)
+  } catch (e) {} })();
+</script>
+<style>
+  html.seam-in, html.seam-in body { background: #0b1230; }
+  html.seam-in #intro { display: none !important; }
+  html.seam-in #seam .seam-snap { background-image: var(--seam-img, radial-gradient(120% 90% at 50% 40%, #1a2a66 0%, #0b1230 70%)); }
+  html.seam-in #seam:not(.out) .seam-snap { filter: blur(10px) brightness(.74) saturate(1.06); transform: scale(1.06); }
+  html.seam-in #seam:not(.out) .seam-shade { opacity: 1; }
+  html.seam-in #seam .seam-fill { transform: scaleX(var(--seam-p, 0)); }      /* (an inline transform, set by the scripts later, wins) */
+  html.seam-in:not(.seam-live) #seam .seam-pct { visibility: hidden; }      /* the label appears with the veil script: a label of "0%" must never flash before the real start value */
+</style>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231c2a5a'/%3E%3Cpath d='M16 4v6M16 10l-5 4h10zM9 14h14v3H9zM10 17h12v2H10zM8 22h16v2H8z' fill='%23e6c36a'/%3E%3Cpath d='M16 4l1 6h-2z' fill='%23fff3dc'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -143,9 +167,13 @@
   #seam .seam-ui { position: absolute; left: 50%; top: 50%; width: min(420px, 62vw); transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 14px; }
   #seam.anim .seam-ui { transition: opacity .35s ease; }
   #seam .seam-track { position: relative; width: 100%; height: 6px; border-radius: 999px; overflow: hidden; background: rgba(255,244,214,.14); box-shadow: inset 0 0 0 1px rgba(255,244,214,.10), 0 0 26px rgba(242,193,78,.20); animation: seam-glow 2.4s ease-in-out infinite; }
-  #seam .seam-fill { position: absolute; inset: 0; border-radius: inherit; transform-origin: left; transform: scaleX(0); transition: transform .45s cubic-bezier(.22,.7,.2,1); background: linear-gradient(90deg, #b8841f 0%, #f2c14e 55%, #ffe6a3 100%); box-shadow: 0 0 14px rgba(242,193,78,.75); }
+  #seam .seam-fill { position: absolute; inset: 0; border-radius: inherit; transform-origin: left; transform: scaleX(0); background: linear-gradient(90deg, #b8841f 0%, #f2c14e 55%, #ffe6a3 100%); box-shadow: 0 0 14px rgba(242,193,78,.75); }
   #seam .seam-track::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,.55) 50%, transparent 100%); transform: translateX(-100%); animation: seam-shimmer 1.7s ease-in-out infinite; }
   #seam .seam-pct { font: 600 13px/1 "Golos Text", "Segoe UI", sans-serif; letter-spacing: .18em; color: rgba(255,243,214,.88); font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px rgba(8,12,34,.8); }
+  #seam .seam-note { margin-top: 6px; max-width: 86vw; text-align: center; font: 500 13px/1.45 "Golos Text", "Segoe UI", sans-serif; color: rgba(255,243,214,.86); text-shadow: 0 1px 8px rgba(8,12,34,.8); }
+  #seam .seam-note[hidden] { display: none; }
+  #seam .seam-note button { margin: 8px 6px 0; min-height: 44px; padding: 0 16px; border: 0; border-radius: 4px; background: #f2c14e; color: #0f1a44; font: 600 14px/1 "Golos Text", "Segoe UI", sans-serif; cursor: pointer; touch-action: manipulation; }
+  #seam .seam-note button.alt { background: rgba(255,255,255,.16); color: #fff; }
   #seam.out { pointer-events: none; cursor: default; }
   #seam.out .seam-snap { filter: blur(0) brightness(1); transform: none; opacity: 0; }
   #seam.out .seam-shade, #seam.out .seam-ui { opacity: 0; }
@@ -187,22 +215,24 @@
 </script>
 </head>
 <body>
-<canvas id="scene" tabindex="0" aria-label="Palace-Liteyny, Saint Petersburg: the Hermitage, Palace Square, Nevsky and Liteyny Prospekts, the Moscow station: 3D scene"></canvas>
-<div id="seam" aria-hidden="true"><div class="seam-snap"></div><div class="seam-shade"></div><div class="seam-ui"><div class="seam-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="seam-fill"></div></div><div class="seam-pct">0%</div></div></div>
+<div id="seam" aria-hidden="true"><div class="seam-snap"></div><div class="seam-shade"></div><div class="seam-ui"><div class="seam-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="seam-fill"></div></div><div class="seam-pct">0%</div><div class="seam-note" hidden></div></div></div>
 <script>
-  // A page reached by a seamless hand-off (?ho= in the URL, core/gates.js): paint the veil of the page we came from AT ONCE - its frozen frame (sessionStorage n4spb.seam, written less than a minute ago for THIS area),
-  // blurred, with the progress bar - and keep the splash card away (html.seam-in); without a picture the veil is a plain dark one. src/main.js drives the bar (setProgress), starts the game when the scene is ready and fades
-  // the veil out; a bad ho is not a hand-off and gets its splash back; a fatal error or a stalled load removes the veil. A normal visit (no ho) is untouched.
+  // The veil of a page reached by a hand-off, painted before anything else of the body (html.seam-in was set by the head script): the frozen frame of the page we came from (sessionStorage n4spb.seam, written less than a minute
+  // ago for THIS area), blurred, with the progress bar CONTINUING from the value the origin page left it at (entry.p, data-base: src/core/gates.js createSeam maps the real progress onto base..1). Without a picture
+  // (blocked or full storage) it is the same veil on a plain dark ground. src/main.js drives the bar (setProgress), starts the game when the scene is ready and fades the veil out; a bad ho is not a hand-off and gets
+  // its splash back; a fatal error removes the veil. A normal visit (no ho) is untouched.
   (function () { try {
-    if (!/[?&]ho=/.test(location.search) || /[?&]seam=0/.test(location.search)) return;      // (?seam=0, development: the old arrival with the splash and its Continue button)
-    var root = document.documentElement, el = document.getElementById('seam'), e = null;
-    try { e = JSON.parse(sessionStorage.getItem('n4spb.seam') || 'null'); } catch (x) {}
-    var ok = e && typeof e.img === 'string' && e.img.indexOf('data:image/') === 0 && e.img.length < 6e6 && typeof e.t === 'number' && Date.now() - e.t < 60000 && Date.now() - e.t > -5000 && e.to === (root.dataset.area || 'strip');
-    if (ok) el.firstChild.style.backgroundImage = 'url("' + e.img + '")'; else el.classList.add('plain');
-    el.classList.add('on', 'blur'); root.classList.add('seam-in');      // (no .anim: the end state at once, the same as the origin page's last frame)
+    var root = document.documentElement, el = document.getElementById('seam'), e = null, p = 0;
+    if (!root.classList.contains('seam-in') || !el) return;
+    var z = window.__seam0 || { img: null, p: 0 }; p = z.p;
+    if (z.img) el.firstChild.style.backgroundImage = 'url("' + z.img + '")'; else el.classList.add('plain');
+    el.dataset.base = String(p); el.dataset.p = String(p);
+    el.querySelector('.seam-fill').style.transform = 'scaleX(' + p + ')'; el.querySelector('.seam-pct').textContent = Math.round(p * 100) + '%'; el.querySelector('.seam-track').setAttribute('aria-valuenow', String(Math.round(p * 100)));
+    el.classList.add('on', 'blur'); root.classList.add('seam-live');      // (no .anim: the end state at once, the same as the origin page's last frame)
     window.addEventListener('piter-fatal', function () { el.remove(); root.classList.remove('seam-in'); });
   } catch (x) {} })();
 </script>
+<canvas id="scene" tabindex="0" aria-label="Palace-Liteyny, Saint Petersburg: the Hermitage, Palace Square, Nevsky and Liteyny Prospekts, the Moscow station: 3D scene"></canvas>
 
 <div id="intro">
   <div id="ver" aria-hidden="true"></div>
@@ -318,12 +348,25 @@
   // loading watchdog: if the progress (percent + label) has not moved for 45 s, say so in the intro card instead of leaving "загрузка…" forever (a blocked CDN import, a stalled network, a phone that is too slow).
   // It never kills the load: "keep waiting" re-arms it, "reload" restarts.
   (function () {
-    var last = '', t0 = Date.now(), el = document.getElementById('stall');
+    var last = '', t0 = Date.now(), el = document.getElementById('stall'), veilNoted = false;
     if (!el) return;
     function text(id) { var n = document.getElementById(id); return n ? n.textContent : ''; }
     function show() {
       var started = !!window.__mainStarted;
-      var sm = document.getElementById('seam'); if (sm) sm.remove(); document.documentElement.classList.remove('seam-in');      // a stalled load behind the veil: the splash card (with this message) takes over
+      var sm = document.getElementById('seam');
+      if (sm && document.documentElement.classList.contains('seam-in')) {      // a stalled load behind the veil: the veil stays (the preloader rule, docs/AREAS.md 14); the notice goes under its bar
+        var note = sm.querySelector('.seam-note');
+        if (note) {
+          note.replaceChildren();
+          var np = document.createElement('div');
+          np.textContent = started ? 'Загрузка идёт дольше обычного. Оставьте вкладку открытой. · Still loading, keep this tab open.' : 'Скрипты не загрузились — проверьте сеть. · The scripts did not load: check the connection.';
+          var nr = document.createElement('div');
+          var na = document.createElement('button'); na.type = 'button'; na.textContent = 'Перезагрузить · Reload'; na.onclick = function () { location.reload(); };
+          var nb = document.createElement('button'); nb.type = 'button'; nb.className = 'alt'; nb.textContent = 'Подождать · Keep waiting'; nb.onclick = function () { note.hidden = true; veilNoted = false; t0 = Date.now(); };
+          nr.append(na, nb); note.append(np, nr); note.hidden = false; veilNoted = true;
+        }
+        return;
+      }
       el.replaceChildren();
       var p = document.createElement('div');
       p.textContent = started
@@ -335,10 +378,11 @@
       row.append(a, b); el.append(p, row); el.hidden = false;
     }
     setInterval(function () {
-      if (document.body.classList.contains('loaded')) { el.hidden = true; return; }
+      var vn = document.querySelector('#seam .seam-note');
+      if (document.body.classList.contains('loaded')) { el.hidden = true; if (vn) vn.hidden = true; veilNoted = false; return; }
       var cur = text('loadpct') + '|' + text('loadlabel');
-      if (cur !== last) { last = cur; t0 = Date.now(); if (!el.hidden) el.hidden = true; return; }
-      if (Date.now() - t0 > 45000 && el.hidden) show();
+      if (cur !== last) { last = cur; t0 = Date.now(); if (!el.hidden) el.hidden = true; if (vn && !vn.hidden) { vn.hidden = true; veilNoted = false; } return; }
+      if (Date.now() - t0 > 45000 && el.hidden && !veilNoted) show();
     }, 1500);
   })();
 </script>

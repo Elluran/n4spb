@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { DEFAULTS, depthFor, chipFor, gateCoords, createGateMachine, createGates, planArrival, promptTexts, crossPlaces, isDoor, backLink, inUnion, seamEntryOk, seamWrite, seamRead, seamClear, createSeam, grabFrame } from '../src/core/gates.js';
+import { DEFAULTS, depthFor, chipFor, gateCoords, createGateMachine, createGates, planArrival, promptTexts, crossPlaces, isDoor, backLink, inUnion, seamEntryOk, seamWrite, seamRead, seamClear, createSeam, grabFrame, SEAM_LEAD } from '../src/core/gates.js';
 import { REGISTRY, GATES } from '../src/areas/registry.js';
 import { decodeHo, makeHo, encodeHo, camParam, parseCamParam } from '../src/core/handoff.js';
 
@@ -529,6 +529,34 @@ check('createSeam on a tiny fake DOM: show() sets the picture and the classes on
   s.hide(); assert(!cls.has('on') && !cls.has('blur')); s.show(null); assert(cls.has('plain'));
   s.finish(); assert(cls.has('out')); assert.equal(storage.getItem('n4spb.seam'), null); assert.equal(pct.textContent, '100%'); s.remove(); assert.equal(el.gone, true);
   assert.equal(createSeam({ doc: { getElementById: () => null }, win: {} }).show(SNAP), false);
+});
+check('the preloader rule: the bar continues across pages (lead -> entry.p -> base..1 mapping), fill and label come from ONE value', () => {
+  const cls = new Set(), mk = () => ({ style: {}, setAttribute() {}, textContent: '' });
+  const snap = mk(), fill = mk(), pct = mk(), track = mk(), el = { dataset: {}, classList: { add: (...a) => a.forEach((c) => cls.add(c)), remove: (...a) => a.forEach((c) => cls.delete(c)), contains: (c) => cls.has(c) }, offsetWidth: 0, remove() {}, querySelector: (s) => ({ '.seam-snap': snap, '.seam-fill': fill, '.seam-pct': pct, '.seam-track': track })[s] };
+  const doc = { getElementById: (id) => (id === 'seam' ? el : null), documentElement: { classList: { remove() {} } } };
+  const origin = createSeam({ doc, win: { sessionStorage: fakeStorage() } }); origin.show(SNAP); origin.lead();
+  assert.equal(pct.textContent, Math.round(SEAM_LEAD * 100) + '%'); assert.equal(fill.style.transform, 'scaleX(' + SEAM_LEAD + ')'); assert.equal(el.dataset.p, String(SEAM_LEAD));
+  // the destination page (its inline script writes data-base and the drawn start): real progress 0..1 maps onto base..1, so 0 shows the base and 1 shows 100
+  const el2 = { ...el, dataset: { base: String(SEAM_LEAD), p: String(SEAM_LEAD) } }; fill.style.transform = 'scaleX(' + SEAM_LEAD + ')';
+  const dest = createSeam({ doc: { getElementById: () => el2, documentElement: doc.documentElement }, win: {} });
+  dest.progress(0); assert.equal(pct.textContent, '12%'); dest.progress(0.5); assert.equal(pct.textContent, '56%'); dest.progress(1); assert.equal(pct.textContent, '100%'); assert.equal(fill.style.transform, 'scaleX(1)');
+  // with animation frames the bar eases, and the first call continues from the value drawn by the inline script (never from 0)
+  { const q = []; fill.style.transform = 'scaleX(' + SEAM_LEAD + ')'; pct.textContent = '12%'; const seen = [];
+    const d2 = createSeam({ doc: { getElementById: () => el2, documentElement: doc.documentElement }, win: { requestAnimationFrame: (f) => q.push(f) } });
+    d2.progress(0.3); for (let i = 0; i < 60 && q.length; i++) { q.shift()(); seen.push(parseInt(pct.textContent, 10)); }
+    assert(seen.every((v, i) => v >= 12 && (i === 0 || v >= seen[i - 1])), 'monotonic from the base: ' + seen.join(',')); assert.equal(seen[seen.length - 1], Math.round((0.12 + 0.88 * 0.3) * 100)); }
+  const e = JSON.parse(seamWriteProbe()); assert.equal(e.p, SEAM_LEAD);
+  function seamWriteProbe() { const st = fakeStorage(); seamWrite({ sessionStorage: st }, { img: SNAP.img, t: Date.now(), from: 'a', to: 'b', p: SEAM_LEAD }); return st.getItem('n4spb.seam'); }
+});
+check('the preloader rule: every generated page sets html.seam-in in the HEAD (before the first paint), carries the veil as the FIRST thing in the body (before the canvas and the splash), and the watchdog never removes the veil', () => {
+  for (const f of ['strip.html', 'index.html', 'north.html', 'smolny.html']) {
+    const h = fs.readFileSync(path.join(root, f), 'utf8'), head = h.slice(0, h.indexOf('<body>')), body = h.slice(h.indexOf('<body>'));
+    assert(/classList\.add\('seam-in'\)/.test(head) && /html\.seam-in #intro \{ display: none !important; \}/.test(head) && /html\.seam-in, html\.seam-in body \{ background: #0b1230; \}/.test(head), f + ': the head script + CSS');
+    assert(body.startsWith('<body>\n<div id="seam"'), f + ': the veil is the first element of the body');
+    const iSeam = body.indexOf('<div id="seam"'), iScript = body.indexOf('// The veil of a page reached by a hand-off'), iCanvas = body.indexOf('<canvas id="scene"'), iIntro = body.indexOf('<div id="intro">');
+    assert(iSeam < iScript && iScript < iCanvas && iCanvas < iIntro, f + ': order veil, veil script, canvas, splash');
+    assert(!/sm\.remove\(\)/.test(body), f + ': the loading watchdog must not remove the veil');
+  }
 });
 check('grabFrame: a black or a zero-sized canvas gives null, a drawn one a JPEG data URL scaled to at most maxW (fake 2D canvases)', () => {
   const mkDoc = (sum) => ({ createElement: () => { const c = { width: 0, height: 0, getContext: () => ({ drawImage() {}, getImageData: () => ({ data: new Uint8ClampedArray(8 * 8 * 4).fill(sum) }) }), toDataURL: (t, q) => `data:${t};q=${q};${c.width}x${c.height}` }; return c; } });

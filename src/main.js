@@ -591,4 +591,5 @@ async function main() {
     requestAnimationFrame(() => requestAnimationFrame(() => seam.finish()));
   }
 }
-guard.gate().then(() => main()).catch(guard.fatal);      // (the gate is empty except on a phone's first visit / after a crash loop)
+// a page reached by a hand-off has no pre-start warning card (the player passed it on the page he came from; with storage blocked it would come back as a second preloader): only a real crash loop still asks
+(document.documentElement.classList.contains('seam-in') && !guard.crashLoop ? Promise.resolve() : guard.gate()).then(() => main()).catch(guard.fatal);
