@@ -7,7 +7,7 @@
 // static bridge: Parts + colliders + knockable lamps) leaf.js (the moving group, its floor and dynamic colliders) gates.js (the barrier arms) groups.js (claims).
 // Publishes ctx.services.landmarksTroitsky = { state(), deckY(x, z), deckLift(x, z), setMode(m), mode(), stop, theta, gates, stepBlocked(...), onLeaf(x, z), clock, stats ... } (also in HOOKS.deckServices: the cars and the
 // walkers ask it first) and wraps services.bridges.deckY (traffic / parked cars see the deck too). Dev switch ?troitsky=open|closed|auto (auto = the schedule of schedule.js, the default).
-// NO flags / flagpoles, no alarm sounds (user rules). Objects stay movable and breakable: the one-globe lamps are knockable instances (bridge.js).
+// NO flags / flagpoles, no alarm sounds (user rules). Objects stay movable and breakable: the railings, parapets, barrier kerbs, candelabra, poles and lamps are knockable (bridge.js), the leaf's rail panels and kerb pieces too (leaf.js; obelisks are the only solid).
 export const OWNS_GROUPS = true;
 
 import * as THREE from 'three';
@@ -38,7 +38,7 @@ export async function build(ctx) {
   for (const m of meshes) if (M.decalMats.has(m.material)) ctx.noOutline(m);
   rails.flush(root);
   ctx.addStatic(root);
-  const lamps = B.buildLamps();
+  const lamps = B.buildKnockables();
   P.b.clear();
 
   // ---- the schedule and the published service
@@ -47,7 +47,9 @@ export async function build(ctx) {
   leaf.colliders(); leaf.set(0);
   const gv = buildGates({ ctx, M, gates: svc.gates });
   svc.leaf = leaf; svc.frame = { toWorld, toUV, FR, TROITSKY };
-  svc.stats = { tris: P.tris + leaf.tris, staticTris: P.tris, leafTris: leaf.tris, rails: B.info.rails + leaf.info.rails, colliders: B.info.colliders, lamps: lamps.records.filter(Boolean).length, arms: gv.arms };
+  svc.stats = { tris: P.tris + leaf.tris, staticTris: P.tris, leafTris: leaf.tris, rails: B.info.rails + leaf.info.rails, colliders: B.info.colliders, lamps: lamps.records.filter(Boolean).length, arms: gv.arms,
+    candelabra: B.candelabra.reduce((n, r) => n + r.records.filter(Boolean).length, 0), poles: B.poles ? B.poles.records.filter(Boolean).length : 0, kerbBays: B.kerbs ? B.kerbs.records.filter(Boolean).length : 0,
+    leafBays: leaf.bays.filter((b) => b.rec).length };
   svc.deckAt = svc.deckY;
   Object.defineProperty(svc.stats, 'swept', { get: () => swept, enumerable: true });      // NPC people set down off a steep leaf (see the frame loop)
   ctx.services.landmarksTroitsky = svc;

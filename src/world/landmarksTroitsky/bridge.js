@@ -1,7 +1,7 @@
 // landmarksTroitsky/bridge.js - the STATIC part of the Troitsky (Trinity) Bridge (Троицкий мост, 1897-1903, Batignolles; south end rebuilt 1965-67) over the Neva, COMPLETE from the Mars Field bank to Troitskaya Square:
 // a port of bridges/troitsky.js of the source project (102_3d_piter at 0568f7af; docs/research/petro-bridges.md section 1 + mars-bridges-canals.md section 5 for the south end, photos refs/petro-bridges 01 02 03 07 09 12 15 17,
 // refs/mars-bridges 79 86 89 90), with the BASCULE SPAN CUT OUT: the leaf (u 15.2 .. 58.2: deck, kerbs, pavements, girders, soffit, rails, the lamp and the contact pole on it) is drawn by leaf.js as a moving group and
-// its colliders are dynamic; everything else (the piers, the five steel spans, the granite viaduct, the abutments, the candelabra, the lamps, the obelisks) stays as the source drew it, in ONE Parts (merged static meshes).
+// its colliders are dynamic; everything else (the piers, the five steel spans, the granite viaduct, the abutments, the obelisks) stays as the source drew it, in ONE Parts (merged static meshes); the railings, parapets, barrier kerbs, candelabra, poles and lamps are BREAKABLE (rail batch + knock instances: B.buildKnockables, docs/AREAS.md 13.8).
 // 582 m with the land parts, 554.0 m bank to bank on the OSM axis, 10 spans from the south (u from the Mars Field bank line): 11.4 fixed (granite false arch) | pier 3.8 | 43.2 single-leaf bascule
 // (deep girder with a curved bottom chord) | pier 12.1 (granite) | 53.3 | 76.4 | 96.4 | 76.4 | 53.3 steel spans (straight top chord under a plate fascia with a rosette band,
 // flat arched lower chord, verticals + crossed diagonals) on four river piers (grey granite drum with round ends 2.3 m above the water + a green cast portal up to the deck) | junction pylon |
@@ -23,6 +23,7 @@ import { candelabraT, pedestalT, lampT, contactPoleT } from '../bridges/sculpt4.
 import { closeBank } from '../bridges/deck.js';
 import { Parts } from '../bridges/kit.js';
 import { knockInstances } from '../lib/knock-inst.js';
+import { knockBays, unitBox } from '../lib/fence-bays.js';
 import { TROITSKY, LEN, HW, ROAD, KERB, PAVE, HV, STEEL0, STEEL1, yDeck, slopeOf, U_HINGE, U_TIP } from './frame.js';
 
 export { TROITSKY, LEN, HW, ROAD, yDeck };
@@ -236,8 +237,9 @@ export function buildTroitsky(env) {
 
   // ------------------------------------------------------------------ deck: asphalt roadway, barrier kerbs, granite pavements, the median, lane marks, tram rails
   const U0 = -1.6, U1 = LEN + 0.8;
+  const KRUNS = [];                                                 // the u ranges of the BREAKABLE barrier kerb (docs/AREAS.md 13.8): the chunks that draw the 0.5 m kerb (not the pavement-high step at the two bank ends)
   for (const [qa, qb] of [[U0, U_HINGE], [U_TIP, U1]]) {            // (the leaf's own deck is leaf.js)
-  const nD = Math.ceil((qb - qa) / 3.2);
+  const nD = Math.ceil((qb - qa) / 3.2); let ka = null, kb = null;
   for (let i = 0; i < nD; i++) {
     const u0 = qa + (qb - qa) * i / nD, u1 = qa + (qb - qa) * (i + 1) / nD, y0 = yDeck(u0), y1 = yDeck(u1), um = (u0 + u1) / 2;
     P.quad(M.asphalt, [u0, y0, -ROAD], [u1, y1, -ROAD], [u1, y1, ROAD], [u0, y0, ROAD], [0, 1, 0], [[u0 / 4, -ROAD / 4], [u1 / 4, -ROAD / 4], [u1 / 4, ROAD / 4], [u0 / 4, ROAD / 4]]);
@@ -245,9 +247,13 @@ export function buildTroitsky(env) {
     for (const sg of [-1, 1]) {
       const va = sg * ROAD, vk = sg * (ROAD + KERB), vb = sg * (HW + 0.1);
       P.quad(M.pave, [u0, y0 + PAVE, vk], [u1, y1 + PAVE, vk], [u1, y1 + PAVE, vb], [u0, y0 + PAVE, vb], [0, 1, 0], [[u0 / 2.4, vk / 2.4], [u1 / 2.4, vk / 2.4], [u1 / 2.4, vb / 2.4], [u0 / 2.4, vb / 2.4]]);
+      if (kh > PAVE) {                                               // the 0.5 m kerb is a row of breakable bays (B.buildKnockables below): here only the deck strip under it, which stays when a bay is gone
+        P.quad(km, [u0, y0, va], [u1, y1, va], [u1, y1, vk], [u0, y0, vk], [0, 1, 0], [[u0, 0], [u1, 0], [u1, KERB], [u0, KERB]]);
+        if (ka === null) ka = u0; kb = u1;
+        continue;
+      }
       P.quad(km, [u0, y0, va], [u1, y1, va], [u1, y1 + kh, va], [u0, y0 + kh, va], [0, 0, -sg], [[u0, 0], [u1, 0], [u1, kh], [u0, kh]]);
       P.quad(km, [u0, y0 + kh, va], [u1, y1 + kh, va], [u1, y1 + kh, vk], [u0, y0 + kh, vk], [0, 1, 0], [[u0, 0], [u1, 0], [u1, KERB], [u0, KERB]]);
-      if (kh > PAVE) P.quad(km, [u0, y0 + PAVE, vk], [u1, y1 + PAVE, vk], [u1, y1 + kh, vk], [u0, y0 + kh, vk], [0, 0, sg], [[u0, 0], [u1, 0], [u1, kh], [u0, kh]]);
     }
     if (um > 8 && um < LEN - 8) {                                    // the narrow raised median that carries the contact-wire poles
       for (const sg of [-1, 1]) P.quad(M.kerb, [u0, y0, sg * 0.32], [u1, y1, sg * 0.32], [u1, y1 + 0.14, sg * 0.32], [u0, y0 + 0.14, sg * 0.32], [0, 0, sg]);
@@ -261,65 +267,107 @@ export function buildTroitsky(env) {
     const ra = Math.max(u0, 0), rb = Math.min(u1, LEN);              // the rails stop at the bank lines (the street rails run on from there)
     if (rb > ra + 0.05) for (let k = 0; k < 2; k++) { const vc0 = trackV(k, ra), vc1 = trackV(k, rb), ya = yDeck(ra), yc = yDeck(rb); for (const dv of [-0.76, 0.76]) P.quad(M.tramRail, [ra, ya + 0.035, vc0 + dv - 0.035], [rb, yc + 0.035, vc1 + dv - 0.035], [rb, yc + 0.035, vc1 + dv + 0.035], [ra, ya + 0.035, vc0 + dv + 0.035], [0, 1, 0]); }
   }
+  if (ka !== null) KRUNS.push([ka, kb]);
   }                                                                 // (the two ranges of the deck)
   // ------------------------------------------------------------------ railings: `whip` panels between square posts with pyramid caps on the steel part; solid granite parapets on the south span and the viaduct
   const gaps = CANDELABRA.filter((c) => c[0] > STEEL0 && c[0] < STEEL1).map((c) => (c[1] === 'steel' ? [c[0] - 1.42, c[0] + 1.42] : [c[0] - 1.06, c[0] + 1.06]));
-  const inGap = (ua, ub) => gaps.some((g) => ub > g[0] + 0.02 && ua < g[1] - 0.02);
-  const RA = U_TIP, nb = Math.round((STEEL1 - RA) / 2.5), bw = (STEEL1 - RA) / nb, postMat = M.railSage;      // (from the landing pier on: the leaf has its own railing)
+  // WATER IS REACHABLE (docs/AREAS.md 13.7, 13.8): every railing panel and every granite parapet section is a BREAKABLE bay with its own collider (bridges/rails.js: the batch the module flushes); no static box stands
+  // under them any more. The panels are cut to the candelabra pedestals (the pedestal is a knockable item with its own collider: B.buildKnockables), so no invisible wall stands in a gap either.
+  const RA = U_TIP, postMat = M.railSage;                            // (from the landing pier on: the leaf has its own railing)
+  const segs = []; { let a = RA; for (const g of gaps.slice().sort((p, q) => p[0] - q[0])) { if (g[0] > a + 0.05) segs.push([a, g[0]]); a = Math.max(a, g[1]); } if (STEEL1 > a + 0.05) segs.push([a, STEEL1]); }
   for (const sg of [-1, 1]) {
     const v = sg * (HW - 0.14);
-    for (let i = 0; i < nb; i++) {
-      const ua = RA + bw * i, ub = ua + bw; if (inGap(ua, ub)) continue;
-      const w = world(ua + 0.04, v);
-      rails.add({ kind: 'whip', hex: railHex, x: w.x, y: yDeck(ua) + PAVE, z: w.z, rotY: -T, roll: Math.atan(slopeOf(ua + bw / 2)), len: bw - 0.08 }); B.info.rails++;
-      P.quad(postMat, [ua, yDeck(ua) + PAVE + 1.2, v - 0.06], [ub, yDeck(ub) + PAVE + 1.2, v - 0.06], [ub, yDeck(ub) + PAVE + 1.2, v + 0.06], [ua, yDeck(ua) + PAVE + 1.2, v + 0.06], [0, 1, 0]);
+    for (const [sa, sb] of segs) {
+      const nb = Math.max(1, Math.round((sb - sa) / 2.5)), bw = (sb - sa) / nb;
+      for (let i = 0; i < nb; i++) {
+        const ua = sa + bw * i, ub = ua + bw, w = world(ua + 0.04, v);
+        rails.add({ kind: 'whip', hex: railHex, x: w.x, y: yDeck(ua) + PAVE, z: w.z, rotY: -T, roll: Math.atan(slopeOf(ua + bw / 2)), len: bw - 0.08 }); B.info.rails++;
+        P.quad(postMat, [ua, yDeck(ua) + PAVE + 1.2, v - 0.06], [ub, yDeck(ub) + PAVE + 1.2, v - 0.06], [ub, yDeck(ub) + PAVE + 1.2, v + 0.06], [ua, yDeck(ua) + PAVE + 1.2, v + 0.06], [0, 1, 0]);
+      }
+      for (let i = 0; i <= nb; i++) {
+        const u = sa + bw * i, y = yDeck(u) + PAVE;
+        P.box(postMat, u - 0.11, u + 0.11, y, y + 1.25, v - 0.11, v + 0.11, 'b', 1);
+        P.push(u, y + 1.25, v, Math.PI / 4); P.cyl(postMat, [0, 0, 0], [0, 0.07, 0], 0.2, 0.2, 4, true); P.cyl(postMat, [0, 0.07, 0], [0, 0.24, 0], 0.17, 0.01, 4, false); P.pop();
+      }
     }
-    for (let i = 0; i <= nb; i++) {
-      const u = RA + bw * i, y = yDeck(u) + PAVE; if (gaps.some((g) => u > g[0] + 0.3 && u < g[1] - 0.3)) continue;
-      P.box(postMat, u - 0.11, u + 0.11, y, y + 1.25, v - 0.11, v + 0.11, 'b', 1);
-      P.push(u, y + 1.25, v, Math.PI / 4); P.cyl(postMat, [0, 0, 0], [0, 0.07, 0], 0.2, 0.2, 4, true); P.cyl(postMat, [0, 0.07, 0], [0, 0.24, 0], 0.17, 0.01, 4, false); P.pop();
-    }
-    for (const [pa, pb] of [[U0, STEEL0], [STEEL1, LEN + 2.6]]) {     // granite parapets: 1.1 m above the pavement, 0.4 m thick, blocks ~2.4 m
+    for (const [pa, pb] of [[U0, STEEL0], [STEEL1, LEN + 2.6]]) {     // granite parapets: 1.1 m above the pavement, 0.4 m thick, sections ~2.4 m (bridges/rails.js parapet(): a swept box, instanced, one knock record and one collider per section)
       const n = Math.ceil((pb - pa) / 2.4);
       for (let i = 0; i < n; i++) {
-        const u0 = pa + (pb - pa) * i / n, u1 = pa + (pb - pa) * (i + 1) / n, y0 = yDeck(u0) + PAVE, y1 = yDeck(u1) + PAVE, h = 1.1, va = v - 0.2, vb2 = v + 0.2;
-        for (const [vv, nz] of [[va, -1], [vb2, 1]]) P.quad(M.parapetPeach, [u0, y0 - 0.05, vv], [u1, y1 - 0.05, vv], [u1, y1 + h, vv], [u0, y0 + h, vv], [0, 0, nz], [[0, 0], [0.5, 0], [0.5, 1], [0, 1]]);
-        P.quad(M.coping, [u0, y0 + h, va - 0.03], [u1, y1 + h, va - 0.03], [u1, y1 + h, vb2 + 0.03], [u0, y0 + h, vb2 + 0.03], [0, 1, 0]);
+        const u0 = pa + (pb - pa) * i / n, u1 = pa + (pb - pa) * (i + 1) / n, p = world(u0, v), q = world(u1, v);
+        rails.parapet({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, y: yDeck(u0) + PAVE - 0.05, ye: yDeck(u1) + PAVE - 0.05, h: 1.15, th: 0.4, mat: M.parapetPeach, box: true, center: true }); B.info.rails++;
       }
-      for (const [uu, nx] of [[pa, -1], [pb, 1]]) P.quad(M.parapetPeach, [uu, yDeck(uu) + PAVE, v - 0.2], [uu, yDeck(uu) + PAVE, v + 0.2], [uu, yDeck(uu) + PAVE + 1.1, v + 0.2], [uu, yDeck(uu) + PAVE + 1.1, v - 0.2], [nx, 0, 0], [[0, 0], [0.1, 0], [0.1, 1], [0, 1]]);
     }
   }
   // ------------------------------------------------------------------ furniture: candelabra pairs over the piers, one-globe lamps at the kerb, contact-wire poles on the median, obelisks
   B.masts = [];
+  const candSpots = [], poleSpots = [];   // the candelabra (pedestal + three-globe candelabrum) and the contact-wire poles are KNOCKABLE instances too (B.buildKnockables below)
   for (const sg of [-1, 1]) for (const [u, kind] of CANDELABRA) {
-    const v = sg * candV(u), y = yDeck(u) + PAVE - 0.02;
-    const h = pedestalT(P, M, u, y, v, 0, kind);
-    candelabraT(P, M, u, y + h, v, 0);
-    B.masts.push({ ...world(u, v), y: y + h, h: 4.6, kind: 'candelabra' });
+    const v = sg * candV(u), y = yDeck(u) + PAVE - 0.02, w = world(u, v), h = kind === 'steel' ? 1.4 : 1.7;      // (h = pedestalT's height)
+    candSpots.push({ x: w.x, y, z: w.z, rotY: -T, u, v, kind });
+    B.masts.push({ ...w, y: y + h, h: 4.6, kind: 'candelabra' });
   }
   for (const sg of [-1, 1]) for (const u of [13.3, 64.25]) P.box(M.pierPink, u - 1.05, u + 1.05, waterY + 1.5, yDeck(u) + PAVE - 0.02, Math.min(sg * (HV - 0.02), sg * (HV + 0.82)), Math.max(sg * (HV - 0.02), sg * (HV + 0.82)), 'bt', 2.2);   // corbel blocks under the granite pedestals of piers 1, 2
   const lampSpots = [];      // the one-globe lamps are KNOCKABLE instances (built after the Parts below); the pair on the leaf (u 36.7) belongs to leaf.js
   for (const sg of [-1, 1]) for (const u of LAMPS) { if (inLeaf(u)) continue; const v = sg * (ROAD + KERB + 0.28), w = world(u, v); lampSpots.push({ x: w.x, y: yDeck(u) + PAVE, z: w.z, rotY: -T, u, v }); B.masts.push({ ...w, y: yDeck(u) + PAVE, h: 5.3, kind: 'lamp' }); }
-  for (const u of POLES) { if (inLeaf(u)) continue; contactPoleT(P, M, u, yDeck(u) + 0.14, 0, Math.PI / 2, 3.4); B.masts.push({ ...world(u, 0), y: yDeck(u), h: 10.2, kind: 'contact' }); }      // (the pole on the leaf: leaf.js)
-  // south entrance: two obelisks with rostra, standing on the embankment beside the roadway
+  for (const u of POLES) { if (inLeaf(u)) continue; const w = world(u, 0); poleSpots.push({ x: w.x, y: yDeck(u) + 0.14, z: w.z, rotY: -T + Math.PI / 2, u }); B.masts.push({ ...w, y: yDeck(u), h: 10.2, kind: 'contact' }); }      // (the pole on the leaf: leaf.js)
+  // south entrance: two obelisks with rostra, standing on the embankment beside the roadway (granite monument blocks 2 x 2 m: STRUCTURE, they stay solid: tools/water-reachable-test.mjs ALLOW list)
   for (const sg of [-1, 1]) obeliskTroitsky(P, M, -9, 0.05, sg * 13.2, Math.PI / 2);
-  // the south landing: wing walls with a parapet from the deck edge along the bank line to the quay of the environment (its zone is wider than the deck)
-  for (const sg of [-1, 1]) closeBank({ site: TROITSKY, P, M, L: ctx.L, u: 0, dir: 1, sg, v0: HV, len: 3.0, yTop: 0.05, mat: M.pierPink, parapet: M.parapetPeach, collide: false });
+  // the south landing: wing walls with a parapet from the deck edge along the bank line to the quay of the environment (its zone is wider than the deck); the parapet of a wing is a breakable section (rails), no static run follows it
+  for (const sg of [-1, 1]) closeBank({ site: TROITSKY, P, M, L: ctx.L, u: 0, dir: 1, sg, v0: HV, len: 3.0, yTop: 0.05, mat: M.pierPink, parapet: M.parapetPeach, collide: false, rails });
   P.pop();
 
   // ------------------------------------------------------------------ the one-globe lamps: KNOCKABLE instances (core/knock.js through lib/knock-inst.js): a car that hits one at 28 km/h breaks it off at the foot
   // (anchored: the break speed), the collider is the cylinder of the source
-  B.lamps = null;
-  B.buildLamps = () => {
-    const tpl = new Parts(), g = new THREE.Group(); lampT(tpl, M, 0, 0, 0, 0);
-    const parts = tpl.build(g, {}).map((m, i) => ({ geo: m.geometry, mat: m.material, name: 'p' + i }));
-    const ph = ctx.physics;
+  // WATER IS REACHABLE / EVERYTHING BREAKS (docs/AREAS.md 13.7, 13.8): besides the lamps the candelabra (a pedestal with its three-globe candelabrum, one rigid item: 2.4 t, breaks at 45 km/h), the contact-wire poles of the median,
+  // and the 0.5 m barrier kerb (bays of ~4 m, breaks at 30 km/h) are knockable too. The railing panels and the granite parapets are bays of the rail batch (bridges/rails.js); the only solids left are the obelisks (structure).
+  B.lamps = null; B.candelabra = []; B.poles = null; B.kerbs = null;
+  B.buildKnockables = () => {
+    const ph = ctx.physics, templ = (draw) => { const tpl = new Parts(), g = new THREE.Group(); const h = draw(tpl); return { h, parts: tpl.build(g, {}).map((m, i) => ({ geo: m.geometry, mat: m.material, name: 'p' + i })) }; };
+    const lamp = templ((t) => lampT(t, M, 0, 0, 0, 0));
     B.lamps = knockInstances(ctx, {
-      name: 'troitsky-lamps', parts, spots: lampSpots, far: 320,
+      name: 'troitsky-lamps', parts: lamp.parts, spots: lampSpots, far: 320,
       items: (i, s) => ph.addCylinder(s.x, s.z, 0.16, s.y - 1.2, s.y + 5),
       rec: { kind: 'lamp', mass: 380, h: 5.3, r: 0.16, anchored: 28, hitK: 0.5, metal: true },
     });
     B.info.colliders += lampSpots.length;
+    for (const kind of ['steel', 'granite']) {                      // the candelabra: pedestal + candelabrum as ONE item, the collider is the footprint of the pedestal (2.84 x 1.44 steel, 2.1 x 2.1 granite)
+      const spots = candSpots.filter((s) => s.kind === kind); if (!spots.length) continue;
+      const c = templ((t) => { const h = pedestalT(t, M, 0, 0, 0, 0, kind); candelabraT(t, M, 0, h, 0, 0); return h; }), steel = kind === 'steel';
+      B.candelabra.push(knockInstances(ctx, {
+        name: 'troitsky-candelabra-' + kind, parts: c.parts, spots, far: 520,
+        items: (i, s) => ph.addBox(s.x, s.z, steel ? 2.84 : 2.1, steel ? 1.44 : 2.1, -T, s.y - 1.0, s.y + c.h + 3.2),
+        rec: { kind: 'lamp', mass: 2400, h: c.h + 4.6, r: 0.45, anchored: 45, hitK: 0.7, metal: true },
+      }));
+      B.info.colliders += spots.length;
+    }
+    if (poleSpots.length) {                                         // the contact-wire poles of the tram median (the pole on the leaf is part of the leaf)
+      const pole = templ((t) => contactPoleT(t, M, 0, 0, 0, 0, 3.4));
+      B.poles = knockInstances(ctx, {
+        name: 'troitsky-poles', parts: pole.parts, spots: poleSpots, far: 420,
+        items: (i, s) => ph.addCylinder(s.x, s.z, 0.26, s.y - 1.14, s.y + 9),
+        rec: { kind: 'lamp', mass: 520, h: 10.2, r: 0.26, anchored: 30, hitK: 0.5, metal: true },
+      });
+      B.info.colliders += poleSpots.length;
+    }
+    // the barrier kerb between the roadway and each pavement: bays of ~4 m along the chunks that draw the 0.5 m kerb; the collider starts 3 m from the bank lines (open there), y1 = deck + 0.8: a walker on the pavement
+    // (feet at +PAVE) still meets a wall. Not `fence` for the pedestrian nav (as before: an ordinary box). The deck strip under it stays when a bay is gone.
+    const kb = [];
+    for (const [a, b] of KRUNS) {
+      const n = Math.max(1, Math.ceil((b - a) / 4));
+      for (const sg of [-1, 1]) for (let i = 0; i < n; i++) {
+        const ua = a + (b - a) * i / n, ub = a + (b - a) * (i + 1) / n, um = (ua + ub) / 2, p = world(ua, sg * (ROAD + KERB / 2)), q = world(ub, sg * (ROAD + KERB / 2));
+        kb.push({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, y: yDeck(ua), ye: yDeck(ub), solid: um >= 3 && um <= LEN - 3 });
+      }
+    }
+    if (kb.length) {
+      B.kerbs = knockBays(ctx, {
+        name: 'troitsky-kerb', bays: kb, far: 450,
+        parts: [{ geo: unitBox(0, 0.5, -KERB / 2, KERB / 2, { uLen: 4 }), mat: M.kerb, name: 'kerb', stretch: true, far: 450 }],
+        collider: (b) => (b.solid ? { y0: Math.min(b.y, b.ye) - 1, y1: Math.max(b.y, b.ye) + 0.8, thick: KERB, e0: 0.02, e1: 0.02, fence: false } : null),
+        rec: (b) => (b.solid ? { kind: 'fence', mass: 900, h: 0.5, r: 0.2, anchored: 30, hitK: 0.4, metal: false, minDv: 0 } : null),
+      });
+      B.info.colliders += kb.filter((b) => b.solid).length;
+    }
     return B.lamps;
   };
 
@@ -337,19 +385,8 @@ export function buildTroitsky(env) {
         for (const sg of [-1, 1]) { const wp = world((u0 + u1) / 2, sg * vPm); ph.addWalkRamp(wp.x, wp.z, vP1 - vP0, u1 - u0 + 0.04, rampRot, yDeck(u0) + PAVE, yDeck(u1) + PAVE, 2.5); B.info.colliders++; }
       }
     }
-    for (const [qa, qb0] of RANGES) {
-      const qb = qb0 === U1 ? LEN + 3.6 : qb0, nR = Math.ceil((qb - qa) / 8);
-      for (const sg of [-1, 1]) for (let i = 0; i < nR; i++) { const u0 = qa + (qb - qa) * i / nR, u1 = qa + (qb - qa) * (i + 1) / nR, w = world((u0 + u1) / 2, sg * (HW - 0.14)); ph.addBox(w.x, w.z, u1 - u0, 0.4, -T, -8, Math.max(yDeck(u0), yDeck(u1)) + PAVE + 1.25); B.info.colliders++; }
-    }
-    // the barrier kerbs keep the cars on the roadway and the walkers on the pavements (open for 3 m at both ends); y1 = deck + 0.8: a walker on the pavement (feet at +PAVE) still meets a wall
-    for (const [qa0, qb0] of RANGES) {
-      const qa = Math.max(qa0, 3), qb = Math.min(qb0, LEN - 3), nK = Math.ceil((qb - qa) / 8);
-      for (const sg of [-1, 1]) for (let i = 0; i < nK; i++) { const u0 = qa + (qb - qa) * i / nK, u1 = qa + (qb - qa) * (i + 1) / nK, w = world((u0 + u1) / 2, sg * (ROAD + KERB / 2)); ph.addBox(w.x, w.z, u1 - u0, KERB, -T, Math.min(yDeck(u0), yDeck(u1)) - 1, Math.max(yDeck(u0), yDeck(u1)) + 0.8); B.info.colliders++; }
-    }
-    for (const sg of [-1, 1]) for (const [u, kind] of CANDELABRA) { const steel = kind === 'steel', v = sg * candV(u), w = world(u, v); ph.addBox(w.x, w.z, steel ? 2.84 : 2.1, steel ? 1.44 : 2.1, -T, -8, yDeck(u) + 4); B.info.colliders++; }
-    for (const u of POLES) { if (inLeaf(u)) continue; const w = world(u, 0); ph.addCylinder(w.x, w.z, 0.26, yDeck(u) - 1, yDeck(u) + 9); B.info.colliders++; }
-    for (const sg of [-1, 1]) { const wo = world(-9, sg * 13.2); ph.addBox(wo.x, wo.z, 2.0, 2.0, -T, -1, 8); B.info.colliders++; }
-    for (const sg of [-1, 1]) B.info.colliders += closeBank({ site: TROITSKY, L: ctx.L, ph, u: 0, dir: 1, sg, v0: HW - 0.3, len: 3.0, yTop: 0.05, draw: false });
+    // (the railings, the granite parapets, the wing parapets of the south landing, the barrier kerbs, the candelabra and the poles are BREAKABLE: the rail batch and B.buildKnockables; no static run is left)
+    for (const sg of [-1, 1]) { const wo = world(-9, sg * 13.2); ph.addBox(wo.x, wo.z, 2.0, 2.0, -T, -1, 8); B.info.colliders++; }      // the two obelisks of the south entrance: granite monument blocks, STRUCTURE (they stay solid)
   };
   return B;
 }
