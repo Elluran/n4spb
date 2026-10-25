@@ -125,7 +125,7 @@ export function slopeReport(S, heightAt, BANK = 3) {
   const stat = (a) => { const s2 = a.slice().sort((x, y) => x - y); return { n: s2.length, max: s2.length ? +s2[s2.length - 1].toFixed(4) : 0, p95: s2.length ? +s2[Math.floor(s2.length * 0.95)].toFixed(4) : 0 }; };
   return { land: stat(grid), bank: stat(bank), ways: stat(ways), waysBank: stat(waysBank) };
 }
-/** flight landing over the water: the share of water cells where the real predicate (groundHeight < -1, or the page's HOOKS.noLanding when given) refuses ('water'); `byEngine` = refused by the engine's own test alone */
+/** flight landing over the water: the share of water cells where the real predicate (a refusal rule no longer exists: water is reachable, the answer must be 0; the old groundHeight < -1 test was removed from core/player.js) refuses ('water'); `byEngine` = refused by the engine's own test alone */
 export function landingReport(world, S, noLanding = null) {
   let n = 0, refused = 0, bad = 0, byEngine = 0;
   for (const p of S.U) { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < p.o.length; i += 2) { x0 = Math.min(x0, p.o[i]); x1 = Math.max(x1, p.o[i]); z0 = Math.min(z0, p.o[i + 1]); z1 = Math.max(z1, p.o[i + 1]); }
