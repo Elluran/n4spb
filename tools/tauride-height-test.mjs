@@ -75,7 +75,7 @@ async function evaluate(model, { engine, world, wet, ring, bounds = BOUNDS, labe
   say(`  slope  : land max ${sl.land.max} (p95 ${sl.land.p95}, ${sl.land.n} cells), ways max ${sl.ways.max} per metre (${sl.ways.n} steps), banks max ${sl.bank.max} (${sl.bank.n} cells within 3 m of the shore), ways in the bank zone max ${sl.waysBank.max} (${sl.waysBank.n}); limit ${MAX_SLOPE} (= 1:${(1 / MAX_SLOPE).toFixed(0)}) on land and ways away from the water -> ${mark(slopeOk)}${Math.max(sl.bank.max, sl.waysBank.max) > MAX_SLOPE ? ` (banks ${Math.max(sl.bank.max, sl.waysBank.max)} exceed ${MAX_SLOPE}: the plan's 1:3 banks contradict its 1:4 rule; reported, not asserted)` : ''}`);
   res.verdict.slope = slopeOk;
   const carBlocked = realCar || model.carBlocked || ((x, z) => model.heightAt(x, z) < -1 || engine.L.insideBuilding(x, z));
-  const cb = carBreach(S, carBlocked); res.cars = cb;
+  const cb = carBreach(S, carBlocked, model.inWater || null); res.cars = cb;
   const carsOk = cb.breachM === 0;
   say(`  cars   : ${cb.breachM} m of the ${cb.perimeterM} m garden outline can be driven across (${cb.stretches.length} stretches${realCar ? ', the real drive/handling.js blocked()' : ''})  -> ${assertCars ? mark(carsOk) : 'not asserted (the engine of today has no keep-out; --assert-cars to require it)'}`);
   if (assertCars) res.verdict.cars = carsOk;
@@ -126,7 +126,7 @@ async function reliefSection(ctx, ph, engine) {
   rel('the terrain meshes are noBatch (the garden ground material of T3, no vertex colour, one draw per chunk), carry normals and are inside the garden box', meshes.every((m) => m.userData.noBatch && !m.geometry.attributes.color && m.geometry.attributes.normal && m.material.userData.tauride === 'ground') && meshes.every((m) => { const b = m.geometry.boundingBox; return b.min.x >= GH.RELIEF_BOX[0] - 1 && b.max.x <= GH.RELIEF_BOX[1] + 1 && b.min.z >= GH.RELIEF_BOX[2] - 1 && b.max.z <= GH.RELIEF_BOX[3] + 1 && b.min.y >= GH.PONDS.BED_BIG - 0.01; }), '');
   { const c2 = makeContext(engine, []), n0 = c2.ctx.physics.count; TM.buildTerrain(c2.ctx, new engine.THREE.Group(), TM.planTerrain()); rel('the terrain builder adds no collider (the player follows heightAt)', c2.ctx.physics.count === n0, `${n0} -> ${c2.ctx.physics.count}`); }
   const t6 = (svc.fence?.colliders || 0) + (svc.furniture?.colliders || 0) + (svc.monuments?.colliders || 0) + (svc.nursery?.colliders || 0);      // T8b: + the 12 of the nursery
-  rel('the module has the colliders of T1 (Paradny and palace: 1,270), the shore colliders of the ponds (T4a), the walk ramps and rails of the bridges (T4b), the trunks of the trees (T5) and the fence, the furniture and the monuments (T6), nothing else', ph.count === 1270 + svc.ponds.colliders + (svc.bridges?.colliders || 0) + (svc.trees?.colliders || 0) + t6 && svc.ponds.colliders > 100, `${ph.count} = 1270 + ${svc.ponds.colliders} + ${svc.bridges?.colliders} + ${svc.trees?.colliders} + ${t6} (T6)`);
+  rel('the module has the colliders of T1 (Paradny and palace: 1,270), NO shore colliders of the ponds (T4a reversed: water is reachable, docs/AREAS.md 13.7), the walk ramps and rail bays of the bridges (T4b), the trunks of the trees (T5) and the fence bays, the furniture and the monuments (T6), nothing else', ph.count === 1270 + svc.ponds.colliders + (svc.bridges?.colliders || 0) + (svc.trees?.colliders || 0) + t6 && svc.ponds.colliders === 0, `${ph.count} = 1270 + ${svc.ponds.colliders} + ${svc.bridges?.colliders} + ${svc.trees?.colliders} + ${t6} (T6)`);
   // ---- the mesh against the height function
   const plan = TM.planTerrain(), M = TM.measurePlan(plan);
   rel(`the planned mesh is within ${TM.TERRAIN.tol * 100} cm of gardenHeight (rasterised on a 0.5 m lattice)`, M.maxErr <= TM.TERRAIN.tol, `max ${(M.maxErr * 100).toFixed(2)} cm at ${JSON.stringify(M.at)}, ${M.samples} samples`);
@@ -217,8 +217,9 @@ async function reliefSection(ctx, ph, engine) {
     rel('the relief heights are within the plan: hills <= 6 m, the north hill 3-6 m, mounds 1.2-3 m, island mound ~1.5 m', Math.max(...feats.map((f) => f.h)) <= 6 && feats.find((f) => f.id === 'north-hill').h >= 3 && feats.find((f) => f.id === 'island-south-mound').h >= 1 && feats.filter((f) => /mound|knoll|gorka/.test(f.id)).every((f) => f.h >= 1.2 || f.id === 'island-south-mound'), ''); }
   // ---- the cars: the real handling, with and without the hook
   { const mk = (hookless) => { const keep = AT.HOOKS.carKeepOut; if (hookless) delete AT.HOOKS.carKeepOut; try { return createHandling({ L, physics: ph, services: ctx.services }); } finally { if (hookless) AT.HOOKS.carKeepOut = keep; } };
-    const withHook = mk(false), without = mk(true), a = carBreach(S, (x, z) => withHook.blocked(x, z)), b = carBreach(S, (x, z) => without.blocked(x, z));
-    rel('cars: with the hook 0 m of the garden outline can be driven across (the real createHandling().blocked, no exception for the service lane)', typeof AT.HOOKS.carKeepOut === 'function' && a.breachM === 0, `${a.breachM} of ${a.perimeterM} m`);
+    const wat = (x, z) => GH.GARDEN_SHORE.dist(x, z) < 0;
+    const withHook = mk(false), without = mk(true), a = carBreach(S, (x, z) => withHook.blocked(x, z), wat), b = carBreach(S, (x, z) => without.blocked(x, z)), a0 = carBreach(S, (x, z) => withHook.blocked(x, z));
+    rel('cars: with the hook 0 m of the garden outline can be driven across onto the LAND of the garden (the real createHandling().blocked, no exception for the service lane); the stretches where the outline is the shore of the lake lead into the WATER, and water is reachable (' + a0.breachM + ' m)', typeof AT.HOOKS.carKeepOut === 'function' && a.breachM === 0 && a0.breachM < 400, `${a.breachM} m onto land, ${a0.breachM} m into the water, of ${a.perimeterM} m`);
     rel('cars: without the hook the same harness finds the outline open (the check can fail)', b.breachM > 1000, `${b.breachM} of ${b.perimeterM} m (the generic North of today: 2,018 of 2,158 m)`);
     let inside = 0, tested = 0; for (const w of S.Fu.SERVICE_LANE.ways) for (let i = 0; i + 3 < w.pts.length; i += 2) { const l = Math.hypot(w.pts[i + 2] - w.pts[i], w.pts[i + 3] - w.pts[i + 1]), n = Math.max(1, Math.ceil(l)); for (let k = 0; k <= n; k++) { const x = w.pts[i] + (w.pts[i + 2] - w.pts[i]) * k / n, z = w.pts[i + 1] + (w.pts[i + 3] - w.pts[i + 1]) * k / n; if (S.inGarden(x, z)) { tested++; if (!withHook.blocked(x, z)) inside++; } } }
     rel('cars: no point of the service lane inside the garden is drivable (the lane is not an exception)', tested > 0 && inside === 0, `${tested} lane points inside the outline, ${inside} drivable`);
@@ -249,59 +250,38 @@ async function reliefSection(ctx, ph, engine) {
   return bad;
 }
 
-// ---------------------------------------------------------------- T4a: the ponds are impassable (the wading acceptance on the REAL built module)
-/** PONDS section: a dense ring of shore probes (<= 3 m apart) approached from land at several angles and speeds including a jump, on the real Physics of the built module (the shore colliders, the Paradny colliders, the engine's heightAt
- *  with the garden patch); the mutants (no shore colliders; the old module's 0.22 m box) must let walkers into the water; the datum numbers the harness relies on. Returns the number of failed checks. */
+// ---------------------------------------------------------------- T4a reversed: the ponds are REACHABLE (the owner's rule of 2026-10-25, CLAUDE.md "World rules", docs/AREAS.md 13.7)
+/** PONDS section: the ring of shore probes now ENTERS the water (the shore colliders of T4a are not built any more), the water is registered for the wading / the tint / the car drag (physics.waterLevel), a flyer may land on the water
+ *  (nothing refuses it), the harness still sees a wall (the old ring built into a bare Physics keeps every probe out). Returns the number of failed checks. */
 async function pondSection(ctx, ph, engine) {
   const GH = await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/height.js')).href);
   const PM = await import(pathToFileURL(path.join(ROOT, 'src/world/landmarksTauride/ponds.js')).href);
-  const { STEP_HEIGHT } = engine;
-  const svc = ctx.services.landmarksTauride, L = engine.L, P = GH.PONDS, C = P.COLLIDER;
+  const svc = ctx.services.landmarksTauride, L = engine.L, P = GH.PONDS;
   let bad = 0;
   const rel = (name, ok, detail = '') => { say(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? '  ' + detail : ''}`); out.sections.push({ role: 'ponds', name, ok, detail }); if (!ok) bad++; };
-  say('PONDS (T4a): impassable shores on the real built module');
+  say('PONDS (water is reachable): the shore is open on the real built module');
   const segs = GH.shoreSegments(S.U), shore = GH.GARDEN_SHORE, { camera } = makeContext(engine, []);
   const world = (physics, hAt) => ({ engine, L, ph: physics, model: { waterLevel: P.WATER_Y, inWater: (x, z) => shore.dist(x, z) < 0 }, camera, bounds: BOUNDS, heightAt: hAt, player: () => makePlayer(engine, camera, physics, BOUNDS) });
   const real = world(ph, (x, z) => L.heightAt(x, z));
-  rel(`the contour collider stands above any feet that can reach it: top ${C.top} m > contour ${C.contourY} + STEP_HEIGHT ${STEP_HEIGHT} + a jump 0.73 m + the crest ${P.BANK_TOP} m, bottom ${C.y0} m below the deepest bed ${Math.min(P.BED_BIG, P.BED_SMALL)} m`, C.top > C.contourY + STEP_HEIGHT && C.top > P.BANK_TOP + 0.73 + STEP_HEIGHT && C.y0 < Math.min(P.BED_BIG, P.BED_SMALL), '');
-  rel('the module published its pond service: level, triangles, colliders, build time', svc.ponds && svc.ponds.y === P.WATER_Y && svc.ponds.colliders === svc.ponds.stats.colliders && svc.ponds.colliders > 100, svc.ponds ? `${svc.ponds.colliders} colliders, ${svc.ponds.triangles} water triangles, built in ${svc.ponds.buildMs.toFixed(1)} ms` : 'no service');
+  rel('the module published its pond service: level, triangles; it built NO shore colliders (the plan still lists them for the mutant below)', svc.ponds && svc.ponds.y === P.WATER_Y && svc.ponds.colliders === 0 && svc.ponds.stats.colliders > 150, svc.ponds ? `${svc.ponds.colliders} colliders built, ${svc.ponds.stats.colliders} in the plan, ${svc.ponds.triangles} water triangles` : 'no service');
+  { let n = 0, ok = 0; for (let x = 1000; x < 1500; x += 7) for (let z = -1750; z < -1280; z += 7) { const w = shore.dist(x, z) < -0.3; if (!w) continue; n++; if (ph.waterLevel(x, z) === P.WATER_Y) ok++; }
+    let dry = 0, dryOk = 0; for (let x = 1000; x < 1500; x += 11) for (let z = -1750; z < -1280; z += 11) { if (!(shore.dist(x, z) > 0.5)) continue; dry++; if (ph.waterLevel(x, z) === null) dryOk++; }
+    rel('physics.waterLevel answers the pond level on every water cell and null on every land cell (the wading speed, the underwater tint and the car drag read it)', n > 500 && ok === n && dry > 500 && dryOk === dry, `${ok} of ${n} water cells, ${dryOk} of ${dry} land cells`); }
   const deckY = svc.bridges ? svc.bridges.deckY : null;        // T4b: a walker who went onto a bridge deck has not entered the water
   const t0 = Date.now(), ring = wadeRing(real, shore, segs, { spacing: 3, deckY }), sec = ((Date.now() - t0) / 1000).toFixed(0);
-  rel(`RING: ${ring.runs} runs from ${ring.runs / 21 | 0} starts every 3 m along the 2,666 m of shore (${ring.skipped} starts skipped), 7 angles (0, +-30, +-60, +-80 degrees from the perpendicular) x walk / sprint / jump: 0 entered the water (closest feet to the waterline ${ring.minD.toFixed(2)} m, p1 ${ring.p01.toFixed(2)}, median ${ring.p50.toFixed(2)}; T4b: the shore ring is open at the bridge heads, ${ring.onDeck} ticks were spent on a deck over the water)`, ring.entered === 0 && ring.trapped === 0 && ring.runs > 12000 && ring.minD > 0, `${ring.entered} entered, ${ring.trapped} trapped, by mode ${JSON.stringify(ring.byMode)}, ${sec} s`);
+  rel(`RING: ${ring.runs} runs from ${ring.runs / 21 | 0} starts every 3 m along the shore, 7 angles x walk / sprint / jump: MORE THAN HALF entered the water (${ring.entered}: the rest met a tree, a bench or the garden fence), closest feet to the waterline ${ring.minD.toFixed(2)} m (negative = in the water); ${ring.trapped} could not climb out in 10 s (the north quay is a 0.45 m wall over a 1.2 m bed: the respawn key R is the way back), ${sec} s`, ring.entered > ring.runs * 0.5 && ring.minD < -3, `${ring.entered} entered, ${ring.trapped} trapped, by mode ${JSON.stringify(ring.byMode)}`);
   const walkOnly = wadeRing(real, shore, segs, { spacing: 3, angles: [0], modes: ['walk'], limit: 400, offset: 0.1, deckY });
-  rel('RING (a second lattice of starts, straight walk): 0 entered', walkOnly.entered === 0 && walkOnly.runs > 300, `${walkOnly.runs} runs, closest ${walkOnly.minD.toFixed(2)} m`);
-  // the mutants: the harness must be able to see a trap
-  { const bareH = (x, z) => L.heightAt(x, z), bare = new engine.Physics(bareH), n = wadeRing(world(bare, bareH), shore, segs, { spacing: 3, angles: [0], modes: ['walk'], limit: 120, offset: 0.2 });
-    rel('mutant: no shore colliders -> walkers wade into the water (the ring can fail)', n.entered > n.runs * 0.5, `${n.entered} of ${n.runs} entered, closest ${n.minD.toFixed(2)} m`); }
-  { const old = new engine.Physics((x, z) => L.heightAt(x, z)), pl = PM.planPonds({ ponds: { ...P, COLLIDER: { ...C, top: 0.22, y0: -1.5, contourY: 0.05 } } });
-    for (const c of pl.colliders) old.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1);
-    const n = wadeRing(world(old, (x, z) => L.heightAt(x, z)), shore, segs, { spacing: 3, angles: [0], modes: ['walk', 'sprint'], limit: 150, offset: 0.3 });
-    rel("mutant: the old module's shore box (top 0.22 m, bottom -1.5 m, on the ground at the crest: a walker at feet 0.05 steps over it) -> walkers get into the water and cannot get out (the old trap)", n.entered > n.runs * 0.3 && n.trapped > 0, `${n.entered} of ${n.runs} entered, ${n.trapped} trapped`); }
-  { const low = new engine.Physics((x, z) => L.heightAt(x, z)), pl = PM.planPonds({ ponds: { ...P, COLLIDER: { ...C, top: C.contourY + 0.3 } } });
-    for (const c of pl.colliders) low.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1);
-    const n = wadeRing(world(low, (x, z) => L.heightAt(x, z)), shore, segs, { spacing: 3, angles: [0], modes: ['walk'], limit: 120, offset: 0.4 });
-    rel('mutant: a top below contour + STEP_HEIGHT (a box that a walker steps over) -> entries (the top is a real parameter)', n.entered > 0, `${n.entered} of ${n.runs} entered`); }
-  // FLIGHT LANDING (T4a fix round 1). The engine refuses a landing only where the ground is below -1 m (the Big Pond deeper than 0.55 m); in the shallows and the whole Small Pond (-0.5 m) a flyer landed INSIDE the ring of the
-  // shore colliders and could not walk out (QA: 9 of 9). HOOKS.noLanding (hooks/water.js, handed to the Player by main.js) refuses the ponds.
-  const AT = await import(pathToFileURL(path.join(ROOT, 'src/world/lib/area-tables.js')).href), HW = await import(pathToFileURL(path.join(ROOT, 'src/areas/north/hooks/water.js')).href), hook = AT.HOOKS.noLanding;
-  rel('the page has HOOKS.noLanding (a function: the ponds refuse a flight landing); a module list without the garden has none (the strip is untouched)', typeof hook === 'function' && HW.makeNoLanding(['environment']) === undefined && HW.makeNoLanding(undefined) === undefined, '');
-  const ld0 = landingReport(real, S), ld = landingReport(real, S, hook);
-  rel("flight landing over the water, the lattice of 4 m: the hook refuses EVERY water cell (the engine's own test refused " + ld0.refused + ' of ' + ld0.cells + ')', ld.cells > 1000 && ld.refused === ld.cells && ld0.refused < ld0.cells && ld.landableDeep === 0, `${ld.cells} water cells, ${ld.refused} refused with the hook, ${ld0.refused} without (the engine's ground < -1), ${ld.landableDeep} landable deeper than ${real.model.wadeDepth ?? 0.3} m`);
-  // the real Player at spots over the water: shallows of the Big Pond, the Small Pond, the middle depths, the deep
+  rel('RING (a second lattice of starts, straight walk): more than half entered', walkOnly.entered > walkOnly.runs * 0.5 && walkOnly.runs > 300, `${walkOnly.entered} of ${walkOnly.runs}, closest ${walkOnly.minD.toFixed(2)} m`);
+  { const bareH = (x, z) => L.heightAt(x, z), wall = new engine.Physics(bareH), pl = PM.planPonds(); for (const c of pl.colliders) wall.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1);
+    const n = wadeRing(world(wall, bareH), shore, segs, { spacing: 3, angles: [0], modes: ['walk'], limit: 200, offset: 0.2 });
+    rel('mutant: the old T4a ring of shore colliders built into a bare Physics keeps the probes out (the harness can see a wall: a wall of colliders round water is what the rule forbids)', n.entered < n.runs * 0.05, `${n.entered} of ${n.runs} entered`); }
+  // FLIGHT LANDING: nothing refuses a landing on the water any more (no groundHeight < -1 test, no HOOKS.noLanding); the real Player at spots over the shallows, the Small Pond, the middle and the deep lands
   const lat = []; for (const p of S.U) { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < p.o.length; i += 2) { x0 = Math.min(x0, p.o[i]); x1 = Math.max(x1, p.o[i]); z0 = Math.min(z0, p.o[i + 1]); z1 = Math.max(z1, p.o[i + 1]); }
     for (let x = x0; x <= x1; x += 3) for (let z = z0; z <= z1; z += 3) { const d = shore.dist(x, z); if (d > -1.5) continue; lat.push({ x, z, g: real.ph.groundHeight(x, z, 60), d }); } }
-  const pick = (fn, n) => { const a = lat.filter(fn), out = []; for (let i = 0; i < n && a.length; i++) out.push(a[Math.floor((i + 0.5) * a.length / n)]); return out; };
+  const pick = (fn, n) => { const a = lat.filter(fn), o = []; for (let i = 0; i < n && a.length; i++) o.push(a[Math.floor((i + 0.5) * a.length / n)]); return o; };
   const spots = [...pick((c) => c.g > -0.6 && c.x > 1250, 6), ...pick((c) => c.x <= 1250, 5), ...pick((c) => c.g <= -0.6 && c.g > -1.0, 4), ...pick((c) => c.g <= -1.0, 3)];
-  const shallowIn = spots.filter((c) => c.g > -1.0);
-  const withHook = flightLanding(real, shore, segs, spots, { noLanding: hook });
-  rel(`the real Player at ${spots.length} spots over the water (the shallows of the Big Pond, the Small Pond, the middle, the deep) presses F with the hook: every landing is refused as 'water'`, withHook.n === spots.length && withHook.refused === spots.length && withHook.landed === 0, `${withHook.refused} of ${withHook.n} refused`);
-  const noHook = flightLanding(real, shore, segs, shallowIn, { noLanding: null });
-  rel("mutant: WITHOUT the hook the landings in the shallows and the Small Pond are accepted and the flyer cannot walk out of the shore ring (the QA finding is reproduced: the check can fail)", noHook.landed > 0 && noHook.trapped > 0, `${noHook.landed} of ${noHook.n} accepted, ${noHook.trapped} trapped (walking toward the nearest shore ends on the wet slope, shore distance ${noHook.rows.filter((r) => r.end).slice(0, 3).map((r) => r.end[3]).join(' / ')} m)`);
-  const trunks = ctx.services.landmarksTauride?.trees?.list || [], nearTrunk = (x, z) => trunks.some((t) => Math.hypot(t.x - x, t.z - z) < t.tr + 2.5);      // T5: a flyer that comes down on a trunk collider is no landing probe
-  const dry = []; for (let x = 1040; x < 1470; x += 5) for (let z = -1730; z < -1270; z += 5) { const d = shore.dist(x, z); if (d >= 4 && d <= 14 && S.inGarden(x, z) && !L.insideBuilding(x, z, 4) && !nearTrunk(x, z)) dry.push({ x, z }); }
-  const dryPts = []; for (let i = 0; i < 10; i++) dryPts.push(dry[Math.floor((i + 0.5) * dry.length / 10)]);
-  const dryLand = flightLanding(real, shore, segs, dryPts, { noLanding: hook });
-  rel('the hook does not over-refuse: 10 spots on the lawn 4 .. 14 m from the shore (inside the garden) are landable, the flyer ends on land', dryLand.refused === 0 && dryLand.landed === dryPts.length, `${dryLand.landed} of ${dryPts.length} landed`);
+  const land = flightLanding(real, shore, segs, spots, {});
+  rel(`the real Player at ${spots.length} spots over the water (the shallows of the Big Pond, the Small Pond, the middle, the deep) presses F: every landing is accepted (water is no reason to refuse)`, land.n === spots.length && land.refused === 0 && land.landed === spots.length, `${land.landed} of ${land.n} landed, ${land.refused} refused`);
   return bad;
 }
 
@@ -327,7 +307,8 @@ async function bridgeSection(ctx, ph, engine) {
     rel(`the south gate -> memorial route crosses the water on the decks only (${[...decks].join(' + ') || 'none'}): ${onDeck} samples of 0.5 m on a deck, 0 in the water; the decks and ramps at most 1:4 per metre, no step over STEP_HEIGHT anywhere on the route`, !!r && wading === 0 && onDeck > 20 && maxSlope <= 0.25 && maxStep <= STEP_HEIGHT_OF(engine), `deck slope max ${maxSlope.toFixed(3)}, largest step ${maxStep.toFixed(3)} m`); }
   // the deck ring on the built physics
   { const t0 = Date.now(), ring = deckRing(world(ph), shore, sites, deckY), sec = ((Date.now() - t0) / 1000).toFixed(0);
-    rel(`DECK RING: ${ring.runs} runs from starts ON every deck (every 1 m, three lateral offsets, pushed sideways / at 45 / at 135 degrees) and AT every head (beside the rails, pushed toward the water at 0 / 30 / 60 degrees), walk / sprint / jump: 0 entered the water, 0 trapped`, ring.entered === 0 && ring.trapped === 0 && ring.runs > 3000 && ring.heads > 100, `${ring.entered} entered, ${ring.trapped} trapped, closest ${ring.minD === Infinity ? '-' : ring.minD.toFixed(2)} m, by mode ${JSON.stringify(ring.byMode)}, ${ring.decks} deck + ${ring.heads} head starts, ${sec} s`); }
+    if (ring.enteredDeck) say('    entries from the decks, the first of them: ' + JSON.stringify(ring.worstDeck));
+    rel(`DECK RING: ${ring.runs} runs from starts ON every deck (every 1 m, three lateral offsets, pushed sideways / at 45 / at 135 degrees), walk / sprint / jump: 0 entered the water (the rails hold: a rail is breakable by a car, not by a walker); the ${ring.heads} runs AT the heads (beside the rails, on the open shore) may enter the water: water is reachable (${ring.enteredHead} did)`, ring.enteredDeck === 0 && ring.runs > 3000 && ring.heads > 100, `${ring.enteredDeck} from the decks, ${ring.enteredHead} from the heads entered, closest ${ring.minD === Infinity ? '-' : ring.minD.toFixed(2)} m, by mode ${JSON.stringify(ring.byMode)}, ${ring.decks} deck + ${ring.heads} head starts, ${sec} s`); }
   // the mutants: the same plan without the rail boxes; the T4a ring without the deck cuts
   { const bp = BR.planBridges({ gh: (x, z) => svc.terrain.meshHeight(x, z) ?? GH.gardenHeight(x, z) }), mk = (rails, cut) => { const p2 = new engine.Physics((x, z) => L.heightAt(x, z)); for (const c of bp.colliders) { if (c.kind === 'ramp') p2.addWalkRamp(c.cx, c.cz, c.w, c.d, c.rot, c.yA, c.yB, c.thick); else if (rails) p2.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1); } for (const c of PM.planPonds(cut ? { decks: bp.decks } : {}).colliders) p2.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1); return p2; };
     let n = 0; for (const s of sites) for (let u = 0; u <= s.L; u += 0.5) { const q = s.at(u); if (Math.abs(bp.deckY(q.x, q.z) - deckY(q.x, q.z)) > 1e-9) n++; }

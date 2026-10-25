@@ -112,7 +112,7 @@ export function buildPalace(env) {
     }
   }
   for (const [uu, nx] of [[BANK0, 1], [BANK1, -1]]) P.quad(gran, [uu + nx * 0.1, yb, -HVP], [uu + nx * 0.1, yb, HVP], [uu + nx * 0.1, yDeck(uu) - 0.3, HVP], [uu + nx * 0.1, yDeck(uu) - 0.3, -HVP], [nx, 0, 0], [[-HVP / 2.2, yb / 2.2], [HVP / 2.2, yb / 2.2], [HVP / 2.2, 0], [-HVP / 2.2, 0]]);
-  for (const [uu, dir] of [[BANK0, 1], [BANK1, -1]]) for (const sg of [-1, 1]) closeBank({ site: PALACE, P, M, L: ctx.L, u: uu, dir, sg, v0: HVP, len: 2.4, yTop: 0.05, mat: gran, parapet: par, collide: false });
+  for (const [uu, dir] of [[BANK0, 1], [BANK1, -1]]) for (const sg of [-1, 1]) closeBank({ site: PALACE, P, M, L: ctx.L, u: uu, dir, sg, v0: HVP, len: 2.4, yTop: 0.05, mat: gran, parapet: par, collide: false, rails });
   // ------------------------------------------------------------------ deck: asphalt, kerbs, granite pavements, markings
   const n = Math.ceil(LEN / 3.2);
   for (let i = 0; i < n; i++) {
@@ -141,11 +141,12 @@ export function buildPalace(env) {
     }
     for (let i = 0; i <= nb; i++) { const u = bw * i, y = yDeck(u); if (blocks.some((q) => u > q[0] + 0.2 && u < q[1] - 0.2)) continue; P.box(ironMat, u - 0.12, u + 0.12, y, y + 1.3, v - 0.12, v + 0.12, 'b', 1); P.box(ironMat, u - 0.16, u + 0.16, y + 1.25, y + 1.34, v - 0.16, v + 0.16, 'b', 1); }
     for (let i = 0; i < nb; i++) { const ua = bw * i, ub = ua + bw, ya = yDeck(ua) + 1.2, yb2 = yDeck(ub) + 1.2; if (inBlock(ua, ub)) continue; P.quad(ironMat, [ua, ya, v - 0.05], [ub, yb2, v - 0.05], [ub, yb2, v + 0.05], [ua, ya, v + 0.05], [0, 1, 0]); }
-    for (const [pa, pb, kind] of PIERS) if (kind === 'tower') {        // solid granite parapet over a bascule pier
-      const u0 = pa - 0.2, u1 = pb + 0.2, y0 = yDeck(u0) + PAVE, y1 = yDeck(u1) + PAVE, h = 1.1;
-      for (const [vv, nz] of [[v - 0.22, -1], [v + 0.22, 1]]) P.quad(par, [u0, y0 - 0.05, vv], [u1, y1 - 0.05, vv], [u1, y1 + h, vv], [u0, y0 + h, vv], [0, 0, nz], [[0, 0], [2.2, 0], [2.2, 1], [0, 1]]);
-      P.quad(M.coping, [u0, y0 + h, v - 0.25], [u1, y1 + h, v - 0.25], [u1, y1 + h, v + 0.25], [u0, y0 + h, v + 0.25], [0, 1, 0]);
-      for (const [uu, nx] of [[u0, -1], [u1, 1]]) P.quad(par, [uu, yDeck(uu) + PAVE, v - 0.22], [uu, yDeck(uu) + PAVE, v + 0.22], [uu, yDeck(uu) + PAVE + h, v + 0.22], [uu, yDeck(uu) + PAVE + h, v - 0.22], [nx, 0, 0], [[0, 0], [0.1, 0], [0.1, 1], [0, 1]]);
+    for (const [pa, pb, kind] of PIERS) if (kind === 'tower') {        // solid granite parapet over a bascule pier: breakable sections of 2.8 m (bridges/rails.js; docs/AREAS.md 13.7)
+      const u0 = pa - 0.2, u1 = pb + 0.2, h = 1.1, nS = Math.max(1, Math.ceil((u1 - u0) / 2.8));
+      for (let k = 0; k < nS; k++) {
+        const ua = u0 + (u1 - u0) * k / nS, ub = u0 + (u1 - u0) * (k + 1) / nS, p = world(ua, v), q = world(ub, v);
+        rails.parapet({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, y: yDeck(ua) + PAVE - 0.05, ye: yDeck(ub) + PAVE - 0.05, h: h + 0.05, th: 0.5, mat: par, box: true, center: true });
+      }
     }
     // lamp standards: dark green poles with two hexagonal lanterns, 8 per side
     for (const u of [4, 36.2, 83.6, 111, 137.5, 166.8, 214.2, 248.5]) {
@@ -169,11 +170,16 @@ export function buildPalace(env) {
     const ph = ctx.physics, rampRot = Math.atan2(f.c, f.s);
     const m = Math.ceil(LEN / 6);
     for (let i = 0; i < m; i++) { const u0 = LEN * i / m, u1 = LEN * (i + 1) / m, w = world((u0 + u1) / 2, 0); ph.addWalkRamp(w.x, w.z, 2 * HW + 0.2, u1 - u0 + 0.04, rampRot, yDeck(u0), yDeck(u1), 2.5); B.info.colliders++; }
-    for (const sg of [-1, 1]) for (let i = 0; i < 8; i++) { const u0 = LEN * i / 8, u1 = LEN * (i + 1) / 8, w = world((u0 + u1) / 2, sg * (HW - 0.14)); ph.addBox(w.x, w.z, u1 - u0, 0.4, -T, -8, Math.max(yDeck(u0), yDeck(u1), yDeck((u0 + u1) / 2)) + 1.45); B.info.colliders++; }
+    // the railings along both sides: every panel is a breakable bay with its own collider (rails.js); the solid granite blocks of the pier heads are structure and keep a solid box; the rest of the old long boxes is a request
+    // (rails.wall) that becomes a ghost bay only where nothing drawn covers it (docs/AREAS.md 13.7)
+    for (const sg of [-1, 1]) {
+      for (const [q0, q1] of blocks) { const um = (q0 + q1) / 2, w = world(um, sg * (HW - 0.14)); ph.addBox(w.x, w.z, q1 - q0, 0.5, -T, -8, Math.max(yDeck(q0), yDeck(q1)) + 1.45); B.info.colliders++; }
+      for (let i = 0; i < 8; i++) { const u0 = LEN * i / 8, u1 = LEN * (i + 1) / 8, p = world(u0, sg * (HW - 0.14)), q = world(u1, sg * (HW - 0.14)); rails.wall({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, th: 0.4, y0: Math.min(yDeck(u0), yDeck(u1)) - 0.8, y1: Math.max(yDeck(u0), yDeck(u1), yDeck((u0 + u1) / 2)) + 1.45, y: Math.min(yDeck(u0), yDeck(u1)) }); B.info.colliders++; }
+    }
     const K0 = BANK0 + 3.5, K1 = BANK1 - 3.5, nK = Math.ceil((K1 - K0) / 8);                                             // the barrier kerbs
     for (const sg of [-1, 1]) for (let i = 0; i < nK; i++) { const u0 = K0 + (K1 - K0) * i / nK, u1 = K0 + (K1 - K0) * (i + 1) / nK, w = world((u0 + u1) / 2, sg * (ROAD + KERB / 2)); ph.addBox(w.x, w.z, u1 - u0, KERB, -T, Math.min(yDeck(u0), yDeck(u1)) - 1, Math.max(yDeck(u0), yDeck(u1)) + 0.55); B.info.colliders++; }
     for (const sg of [-1, 1]) for (const u of [4, 36.2, 83.6, 111, 137.5, 166.8, 214.2, 248.5]) { const w = world(u, sg * (HW - 0.7)); ph.addCylinder(w.x, w.z, 0.28, yDeck(u) - 1, yDeck(u) + 8); B.info.colliders++; }
-    for (const [uu, dir] of [[BANK0, 1], [BANK1, -1]]) for (const sg of [-1, 1]) B.info.colliders += closeBank({ site: PALACE, L: ctx.L, ph, u: uu, dir, sg, v0: HW - 0.3, len: 2.4, yTop: 0.05, draw: false });
+    for (const [uu, dir] of [[BANK0, 1], [BANK1, -1]]) for (const sg of [-1, 1]) B.info.colliders += closeBank({ site: PALACE, L: ctx.L, ph, u: uu, dir, sg, v0: HW - 0.3, len: 2.4, yTop: 0.05, draw: false, collide: false });      // (the wing's parapet is a breakable section with its own collider: closeBank above)
   };
   return B;
 }

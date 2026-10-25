@@ -5,34 +5,39 @@
 import { ROADS, BARRIERS } from '../data/city.js';
 import * as L from '../layout.js';
 import { pointIn } from './geo.js';
+import * as THREE from 'three';
+import { Parts } from './kit.js';
+import { knockBays } from '../lib/fence-bays.js';
 
 const DECKS = ['w568786528', 'w568786525', 'w568786527'];
 const FENCES = ['w459074435', 'w459074437', 'w459074433', 'w459074434', 'w568786516'];
 export const TERRACE = [[-743.7, -832.3], [-746.9, -826.2], [-741.1, -824.3], [-731.2, -827.5], [-728.5, -833.6], [-733.6, -835.8]];
 
-export function railPosts(P, M, a, b, o = {}) {
+/** WATER IS REACHABLE (docs/AREAS.md 13.7): a railing (granite posts + two iron tubes + pickets) along a -> b is a row of BREAKABLE BAYS (one per post-to-post span, lib/fence-bays.js), pushed to `out`; build() makes them at the end.
+ *  o: { h, gap, y0 | yb(t) (the foot along the way: the humped decks), cy1, cth (the collider: top, thickness) } */
+export function railBays(out, a, b, o = {}) {
   const dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz); if (len < 0.3) return;
-  const rot = Math.atan2(dx, dz), h = o.h ?? 1.05, gap = o.gap ?? 2.8, y0 = o.y0 ?? 0, yb = o.yb;
-  P.push(a[0], 0, a[1], rot);
-  try {
-    const n = Math.max(1, Math.round(len / gap));
-    for (let k = 0; k <= n; k++) {
-      const z = len * k / n, y = yb ? yb(z / len) : y0;
-      P.box(M.graniteWarm, -0.17, 0.17, y, y + h, z - 0.17, z + 0.17, 'b'); P.box(M.granite, -0.21, 0.21, y + h, y + h + 0.1, z - 0.21, z + 0.21, 'b');
-    }
-    const m = Math.max(2, Math.round(len / 0.9));
-    const ya = (z) => (yb ? yb(z / len) : y0);
-    for (let k = 0; k < m; k++) { const z0 = len * k / m, z1 = len * (k + 1) / m;
-      P.cyl(M.iron, [0, ya(z0) + h - 0.12, z0], [0, ya(z1) + h - 0.12, z1], 0.028, 0.028, 5, false);
-      P.cyl(M.iron, [0, ya(z0) + 0.3, z0], [0, ya(z1) + 0.3, z1], 0.025, 0.025, 5, false);
-    }
-    const pk = Math.max(2, Math.round(len / 0.22));
-    for (let k = 1; k < pk; k++) { const z = len * k / pk, y = ya(z); P.box(M.iron, -0.012, 0.012, y + 0.3, y + h - 0.12, z - 0.012, z + 0.012, 'tb'); }
-  } finally { P.pop(); }
+  const h = o.h ?? 1.05, gap = o.gap ?? 2.8, y0 = o.y0 ?? 0, yb = o.yb, n = Math.max(1, Math.round(len / gap));
+  for (let k = 0; k < n; k++) {
+    const t0 = k / n, t1 = (k + 1) / n, l = len / n, pk = Math.max(2, Math.round(l / 0.22));
+    out.push({ x0: a[0] + dx * t0, z0: a[1] + dz * t0, x1: a[0] + dx * t1, z1: a[1] + dz * t1, y: yb ? yb(t0) : y0, ye: yb ? yb(t1) : y0, h, first: k === 0, cy1: o.cy1 ?? 1.3, cth: o.cth ?? 0.3, pickets: Array.from({ length: pk - 1 }, (_, i) => (i + 1) / pk) });
+  }
+}
+function railParts(M, bays) {
+  const out = [], templ = (P) => { const g = new THREE.Group(); P.build(g, { name: 'lmCastle-rail' }); return g.children.map((m) => ({ geo: m.geometry, mat: m.material })); };
+  for (const h of [...new Set(bays.map((q) => q.h))]) {
+    const post = new Parts(); post.box(M.graniteWarm, -0.17, 0.17, 0, h, -0.17, 0.17, 'b'); post.box(M.granite, -0.21, 0.21, h, h + 0.1, -0.21, 0.21, 'b');
+    templ(post).forEach((t, i) => out.push({ geo: t.geo, mat: t.mat, name: 'post' + h + '-' + i, far: 320, ats: (q) => (q.first ? ['start', 'end'] : ['end']), when: (q) => q.h === h }));
+    const tube = new Parts(); tube.cyl(M.iron, [0, h - 0.12, 0], [1, h - 0.12, 0], 0.028, 0.028, 5, false); tube.cyl(M.iron, [0, 0.3, 0], [1, 0.3, 0], 0.025, 0.025, 5, false);
+    templ(tube).forEach((t, i) => out.push({ geo: t.geo, mat: t.mat, name: 'tube' + h + '-' + i, far: 320, stretch: true, when: (q) => q.h === h }));
+    const pick = new Parts(); pick.box(M.iron, -0.012, 0.012, 0.3, h - 0.12, -0.012, 0.012, 'tb');
+    templ(pick).forEach((t, i) => out.push({ geo: t.geo, mat: t.mat, name: 'pick' + h + '-' + i, far: 240, ats: (q) => q.pickets, when: (q) => q.h === h }));
+  }
+  return out;
 }
 
 export function build(K, M, D, svc) {
-  const P = K.P, ph = K.ctx.physics;
+  const P = K.P, ph = K.ctx.physics, rbays = [];
   const hump = (t) => 0.14 + 0.22 * (1 - (2 * t - 1) ** 2);
   for (const id of DECKS) {
     const r = ROADS.find((q) => q.id === id); if (!r) continue;
@@ -53,9 +58,7 @@ export function build(K, M, D, svc) {
       const ox = Math.cos(rot) * s * (hw - 0.05) * -1, oz = Math.sin(rot) * s * (hw - 0.05);
       // lateral offset vector of the local +x axis: (cos rot, -sin rot)
       const lx = Math.cos(rot) * s * (hw - 0.17), lz = -Math.sin(rot) * s * (hw - 0.17);
-      railPosts(P, M, [a[0] + lx, a[1] + lz], [b[0] + lx, b[1] + lz], { h: 1.05, gap: 2.6, yb: (t) => hump(t) });
-      const mid = [(a[0] + b[0]) / 2 + lx, (a[1] + b[1]) / 2 + lz];
-      ph.addBox(mid[0], mid[1], len, 0.35, Math.atan2(-dz, dx), 0, 1.3);
+      railBays(rbays, [a[0] + lx, a[1] + lz], [b[0] + lx, b[1] + lz], { h: 1.05, gap: 2.6, yb: (t) => hump(t), cy1: 1.3, cth: 0.35 });
       void ox; void oz;
     }
   }
@@ -76,9 +79,15 @@ export function build(K, M, D, svc) {
     const f = BARRIERS.find((q) => q.id === id); if (!f) continue;
     for (let i = 0; i + 3 < f.pts.length; i += 2) {
       const a = [f.pts[i], f.pts[i + 1]], b = [f.pts[i + 2], f.pts[i + 3]], len = Math.hypot(b[0] - a[0], b[1] - a[1]); if (len < 0.5) continue;
-      railPosts(P, M, a, b, { h: 1.0, gap: 2.7, y0: 0.1 });
-      ph.addBox((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, len + 0.2, 0.3, Math.atan2(-(b[1] - a[1]), b[0] - a[0]), 0, 1.2); n++;
+      railBays(rbays, a, b, { h: 1.0, gap: 2.7, y0: 0.1, cy1: 1.2, cth: 0.3 }); n++;
     }
   }
-  svc.bridge = { terrace: tc, decks: DECKS, fenceSegments: n };
+  if (rbays.length) {
+    const r = knockBays(K.ctx, { name: 'lmCastle-rail', bays: rbays, parts: railParts(M, rbays), far: 320,
+      collider: (q) => ({ y0: 0, y1: q.cy1, thick: q.cth, e0: 0.05, e1: 0.05 }),
+      rec: (q) => ({ kind: 'fence', mass: 160, h: q.h, r: 0.08, anchored: 14, hitK: 0.3, metal: true, minDv: 0 }) });
+    void r;
+  }
+  void ph;
+  svc.bridge = { terrace: tc, decks: DECKS, fenceSegments: n, railBays: rbays.length };
 }

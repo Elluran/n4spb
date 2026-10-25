@@ -18,12 +18,18 @@ export const STEP_HEIGHT = 0.45;
 export const DROP_MAX = 1.2;
 export const Y_MIN = -300, Y_MAX = 400;     // default vertical range of the solids
 
+/** point in a flat ring [x, z, x, z, ...] (even-odd) */
+const ringIn = (o, x, z) => { let ins = false; for (let i = 0, j = o.length - 2; i < o.length; j = i, i += 2) { const xi = o[i], zi = o[i + 1], xj = o[j], zj = o[j + 1]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) ins = !ins; } return ins; };
+
 const _S = { y: -Infinity, kind: null, item: null };   // scratch result of surfaceAt (callers that keep it pass their own)
 const NO_SURFACES = [];
 
 export class Physics {
-  constructor(heightAt) {
+  /** heightAt(x, z) = the terrain; waterway(x, z) = the surface y of a waterway at (x, z) or null (layout.waterLevelAt: the trench of a river / canal; the ponds and basins of an area come with addWater) */
+  constructor(heightAt, waterway = null) {
     this.heightAt = heightAt;
+    this.waterway = waterway;
+    this.waters = [];       // ponds / fountain basins: { box, fn, ring, holes, level } (addWater)
     this.grid = new Map();
     this.items = [];
     this.dynamic = [];
@@ -31,6 +37,25 @@ export class Physics {
     this.roof = null;       // height map of the building roofs (roofmap.js), set once the scene is drawn
   }
   setRoofMap(m) { this.roof = m; }
+  /** WATER IS REACHABLE (docs/AREAS.md 13.7): water is terrain, never a wall: the river / canal bed is `heightAt` below the water level, a walker or a car goes in and wades on the bed. This registry only answers
+   *  "how deep" (wading speed, the car's drag, the underwater tint, the knock floor). A pond or fountain basin of a module: addWater({ ring: [x, z, ...], holes?: [[x, z, ...]], level }) (a polygon) or addWater({ fn: (x, z) => y | null }). */
+  addWater(w) {
+    const o = { fn: w.fn || null, ring: w.ring || null, holes: w.holes || [], level: w.level ?? 0, box: null };
+    if (o.ring) { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < o.ring.length; i += 2) { x0 = Math.min(x0, o.ring[i]); x1 = Math.max(x1, o.ring[i]); z0 = Math.min(z0, o.ring[i + 1]); z1 = Math.max(z1, o.ring[i + 1]); } o.box = [x0, x1, z0, z1]; }
+    this.waters.push(o); return o;
+  }
+  /** y of the water surface at (x, z): a waterway, a pond or a basin; null on dry ground */
+  waterLevel(x, z) {
+    const k = this.waterway ? this.waterway(x, z) : null; if (k !== null && k !== undefined) return k;
+    for (let i = 0; i < this.waters.length; i++) {
+      const w = this.waters[i];
+      if (w.fn) { const y = w.fn(x, z); if (y !== null && y !== undefined) return y; continue; }
+      const b = w.box; if (x < b[0] || x > b[1] || z < b[2] || z > b[3] || !ringIn(w.ring, x, z)) continue;
+      let hole = false; for (const h of w.holes) if (ringIn(h, x, z)) { hole = true; break; }
+      if (!hole) return w.level;
+    }
+    return null;
+  }
   /** Roof surface height at (x,z) in metres; NaN where there is no roof. */
   roofTop(x, z) {
     const m = this.roof; if (!m) return NaN;

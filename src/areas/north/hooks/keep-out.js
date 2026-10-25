@@ -23,6 +23,7 @@
 // ============================================================================
 import { inParadny } from './paradny.js';
 import { inGarden } from './people.js';
+import { GARDEN_SHORE } from '../../../world/landmarksTauride/height.js';        // the signed distance to the ponds (water < 0): water is never a wall for a car (docs/AREAS.md 13.7)
 import { inNursery } from '../../../world/landmarksTauride/data/nursery.js';        // T8b: the nursery lot (pure data, no imports): the module plants its own trees, draws its own earth and stamps no prop there
 
 const built = (ctx, name) => !!(ctx && ctx.buildList && ctx.buildList.includes(name));
@@ -100,5 +101,5 @@ export function makeParkingReject(MODULES) {
 
 /** T2a: the Tauride Garden is closed to cars. A plain function like parkingReject (the handling reads it once per car, no ctx needed), gated by the page's module list: the polygon is the garden outline (inGarden: strict bbox first, then the ring), the same as the people cap; the service lane through the west gate is NOT an exception. 11 gate bollards would leave 13 openings, 4 unfenced stretches and the service lane open (docs/TAURIDE-REMAKE.md 6.5). */
 export function makeCarKeepOut(MODULES) {
-  return Array.isArray(MODULES) && MODULES.includes('landmarksTauride') ? (x, z) => inGarden(x, z) : undefined;
+  return Array.isArray(MODULES) && MODULES.includes('landmarksTauride') ? (x, z) => inGarden(x, z) && !(GARDEN_SHORE.dist(x, z) < 0) : undefined;      // (the closed ground is the LAND of the garden: a pond cell is water, and water is reachable)
 }

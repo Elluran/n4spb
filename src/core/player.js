@@ -6,6 +6,8 @@
 // is brought back to its last safe spot if it ever finds itself falling through nothing; flight is refused underground and on board
 // a train; player.board({ frame, local, bounds }) rides a moving frame (a train car), player.alight(pose) steps off; inputLock pauses the input
 // (modal panels, core/ui.js).
+// WATER IS REACHABLE (docs/AREAS.md 13.7): a river, canal, pond or basin is terrain: the walker steps off a quay edge (where no fence stands) or through a broken fence, falls into the trench and WADES on the bed
+// (physics.waterLevel: the feet depth slows him down, `player.depth` / `player.under` feed the underwater tint of core/water-view.js); a flight landing over water is allowed like anywhere else.
 import * as THREE from 'three';
 import { STEP_HEIGHT, DROP_MAX } from './physics.js';
 
@@ -22,6 +24,8 @@ const STICK_DOWN = 0.75;                    // m: going down a ramp / stairs the
 const RESCUE_DROP = 6;                      // m: falling this far below the last safe spot with no surface under the feet -> back to the safe spot
 const RIDE_WALK = 0.7;                      // walking inside a train car is slower than in the street
 const UNDER_EPS = 0.05;                     // m below the terrain that counts as underground
+const WADE_MIN = 0.45;                      // wading: the speed factor never drops below this (deep water: chest height and more)
+const WADE_DEEP = 1.7;                      // m of water over the feet at which the slowdown is full
 
 const _P = { y: -Infinity, kind: null, item: null };   // scratch surface query
 const _cv = { x: 0, z: 0 };
@@ -43,7 +47,6 @@ export class Player {
     this.onRescue = null;   // () => void: the walker fell through nothing and was put back on its last safe spot
     this.solidAt = null;    // (x, z, r) => boolean: is the terrain there covered by a building (colliders are hollow wall boxes)? Set by the world.
     this.clampXZ = null;    // (x, z, margin) => [x, z]: the nearest point of the walkable area, which is a UNION of rectangles with empty notches (layout.clampToPlay); null = the `bounds` rectangle. Set by the world.
-    this.noLanding = null;  // (x, z) => boolean: water that a landing refuses although it is shallower than 1 m (the ponds of an area module: HOOKS.noLanding, docs/AREAS.md section 9); null = only the ground < -1 test. Set by the world.
     this.keys = new Set();
     this.bob = 0; this.smoothY = null;
     this.look = { dx: 0, dy: 0 };          // raw mouse / touch movement since the last frame (pixels)
@@ -58,6 +61,9 @@ export class Player {
     this.stick = false;                    // grounded on a ramp / stairs: the feet follow the surface downhill
     this.noclipUnder = false;              // free camera put underground by setPose (debug / screenshots): flies without the terrain floor
     this.safe = { x: 0, y: 0, z: 0 };      // last grounded spot (rescue target)
+    this.depth = 0;                        // m of water over the feet (0 on dry ground; walking only), set every frame from physics.waterLevel
+    this.under = false;                    // the eyes are below the water surface (the underwater tint of core/water-view.js)
+    this.wade = 1;                         // the speed factor of wading (1 on dry ground)
     this._bind();
   }
 
@@ -68,7 +74,7 @@ export class Player {
       this.keys.add(e.code);
       if (this.inputLock > 0) return;
       if (e.code === 'KeyF' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) this.toggleFly();   // not on key auto-repeat, not Ctrl+F (browser find)
-      if (e.code === 'Space' && this.enabled && !this.ride && (this.onGround || this.fly)) { if (!this.fly) this.vy = 4.2; e.preventDefault(); }
+      if (e.code === 'Space' && this.enabled && !this.ride && (this.onGround || this.fly)) { if (!this.fly) this.vy = this.depth > 0.3 ? 3.0 : 4.2; e.preventDefault(); }      // (a push off the bed is weaker)
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
@@ -129,13 +135,11 @@ export class Player {
     return r;
   }
 
-  /** null when the player may land here, else why not: 'water' (only the river bed below) or 'blocked' (solid in the way / no level spot / outside the walkable area / over a shaft). */
+  /** null when the player may land here, else why not: 'blocked' (solid in the way / no level spot / outside the walkable area / over a shaft). Water is NOT a reason (the world rule: the bed of a river or a pond is a floor like another). */
   landingBlocked() {
     const { x, z } = this.pos, b = this.bounds, ph = this.physics;
     if (ph.inHole(x, z, this.radius + 0.3)) return 'blocked';           // never touch down on the mouth of an escalator shaft: the drop would end 60 m below
     const g = ph.groundHeight(x, z, this.pos.y);
-    if (g < -1 && !this.noclipUnder) return 'water';
-    if (this.noLanding && !this.noclipUnder && this.noLanding(x, z)) return 'water';      // a pond: the shore colliders keep a walker in, so a flyer must not touch down inside them
     if (this.clampXZ) { const c = this.clampXZ(x, z, 0); if (c[0] !== x || c[1] !== z) return 'blocked'; }
     else if (x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) return 'blocked';
     const clear = () => !ph.columnBlocked(x, z, this.radius, g + STEP_HEIGHT, this.pos.y + this.height);
@@ -277,12 +281,17 @@ export class Player {
     if (this.ride) { this._rideStep(dt, f, s, running); return; }
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw); // forward
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);  // right
-    if (this.fly) { this._fly(dt, f, s, u, running, fx, fz, rx, rz); this.applyCamera(dt); return; }
+    if (this.fly) { this.depth = 0; this.wade = 1; this._fly(dt, f, s, u, running, fx, fz, rx, rz); this.applyCamera(dt); const wf = this.physics.waterLevel ? this.physics.waterLevel(this.pos.x, this.pos.z) : null; this.under = wf !== null && this.pos.y + this.eye < wf; return; }
 
     const ph = this.physics;
     // standing on a roof: remember its height (kept while airborne, so a jump cannot carry the player over the edge)
     if (this.onGround) { const rt = ph.roofTop(this.pos.x, this.pos.z); this.roof = Math.abs(rt - this.pos.y) < 0.2 ? rt : null; }
-    const speed = running ? this.run : this.walk;
+    // wading: the water over the feet slows the walker (the camera stays at the eye height above the bed)
+    const wl = ph.waterLevel ? ph.waterLevel(this.pos.x, this.pos.z) : null;
+    this.depth = wl !== null ? Math.max(0, wl - this.pos.y) : 0;
+    this.wade = this.depth > 0.05 ? Math.max(WADE_MIN, 1 - (1 - WADE_MIN) * Math.min(1, this.depth / WADE_DEEP)) : 1;
+    this.under = wl !== null && this.pos.y + this.eye < wl;
+    const speed = (running ? this.run : this.walk) * this.wade;
     let mx = fx * f + rx * s, mz = fz * f + rz * s;
     if (this.descent) mx = mz = 0;                                     // dropping from a flight: no steering, it lands where it was checked
     const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }

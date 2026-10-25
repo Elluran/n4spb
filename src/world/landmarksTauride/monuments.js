@@ -18,6 +18,7 @@ import { GB, mergeGeos } from './fence.js';
 import { nearestOn, hashXZ } from './furniture.js';
 import { gardenHeight, GARDEN_SHORE } from './height.js';
 import { MONUMENTS, FOUNTAINS } from './data/furniture.js';
+import { knockBays, unitProfile, faceLeft } from '../lib/fence-bays.js';
 import { PATHS } from './data/paths.js';
 import { GARDEN_GREEN } from './data/footprints.js';
 import { MEMORIAL, CHAIKOVSKY, YESENIN, FOUNTAIN, ORANGERY, PLAY, PITCH_FENCE } from './data/furniture-design.js';
@@ -88,7 +89,8 @@ export function planMonuments(o = {}) {
   yes.plate = plateSpec(yes, YESENIN);
   // ---- the fountain
   const fn = node(FOUNTAINS, FOUNTAIN.id), fountain = { id: fn.id, x: fn.x, z: fn.z, y: H(fn.x, fn.z), name: FOUNTAIN.name };
-  colliders.push({ cyl: true, x: fn.x, z: fn.z, r: FOUNTAIN.R + FOUNTAIN.rimW + 0.1, y0: fountain.y - 0.5, y1: fountain.y + FOUNTAIN.rimH + 0.2, id: 'fountain' });
+  // WATER IS REACHABLE (docs/AREAS.md 13.7): the basin is no solid disc any more (a walker steps over the rim, or through a broken one, and wades in the 0.38 m of water); the collider is the PEDESTAL, the rim is 20 breakable bays (buildFountain)
+  colliders.push({ cyl: true, x: fn.x, z: fn.z, r: FOUNTAIN.pedestal.r * 1.2 + 0.3, y0: fountain.y - 0.5, y1: fountain.y + FOUNTAIN.pedestal.h + 0.9, id: 'fountain' });
   fountain.photo = spot(fn.id, FOUNTAIN.name, fn.x, fn.z, 2.4, FOUNTAIN.photoR, 6);
   // ---- the orangery (the mapped footprint of the building)
   const orangery = o.orangeryRing ? planOrangery(o.orangeryRing, H) : null;
@@ -323,12 +325,21 @@ function buildFountain(ctx, parent, f, out, add) {
   for (let k = 0; k < 3; k++) { const r0 = D.plazaR * k / 3 + (k ? 0 : R + W), r1 = D.plazaR * (k + 1) / 3 + (k ? 0 : 0); for (let i = 0; i < D.plazaSeg; i++) { const a0 = i / D.plazaSeg * TAU, a1 = (i + 1) / D.plazaSeg * TAU; if (r1 - r0 < 0.05) continue; hq(g, at(r0, a0), at(r1, a0), at(r1, a1), at(r0, a1), (i + k) % 2 ? D.paving : D.pavingD); } }
   for (let i = 0; i < D.plazaSeg; i++) { const a0 = i / D.plazaSeg * TAU, a1 = (i + 1) / D.plazaSeg * TAU, A = at(D.plazaR, a0), B = at(D.plazaR, a1), A2 = at(D.plazaR + 0.25, a0), B2 = at(D.plazaR + 0.25, a1), up = (p, h) => [p[0], p[1] + h, p[2]]; hq(g, up(A, D.plazaKerb), up(B, D.plazaKerb), up(B2, D.plazaKerb), up(A2, D.plazaKerb), D.graniteL); vwall(g, A2, B2, D.plazaKerb, [f.x, f.z], D.granite); }
   // the basin: an outer wall, the rim, the inner wall down to the water
-  const ro = R + W, rt = D.rimH;
-  for (let i = 0; i < seg; i++) {
-    const a0 = i / seg * TAU, a1 = (i + 1) / seg * TAU, c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1), P = (r, h, c, s) => [f.x + c * r, y + h, f.z + s * r];
-    g.quad(P(ro, 0, c0, s0), P(ro, 0, c1, s1), P(ro, rt, c1, s1), P(ro, rt, c0, s0), D.granite);                                   // outer wall (faces out: counter-clockwise from outside)
-    g.quad(P(ro, rt, c0, s0), P(ro, rt, c1, s1), P(R, rt, c1, s1), P(R, rt, c0, s0), D.graniteL);                                     // the rim
-    g.quad(P(R, rt, c0, s0), P(R, rt, c1, s1), P(R, rt - D.waterDrop, c1, s1), P(R, rt - D.waterDrop, c0, s0), D.granite);             // inner wall above the water
+  const ro = R + W, rt = D.rimH, rimBays = [];
+  for (let i = 0; i < seg; i++) {                                                                                                   // the rim: 20 BREAKABLE bays (an outer wall, the rim, the inner wall above the water; lib/fence-bays.js, a car at 12 km/h breaks one off)
+    const a0 = i / seg * TAU, a1 = (i + 1) / seg * TAU, am = (a0 + a1) / 2, p0 = [f.x + Math.cos(a0) * ro, f.z + Math.sin(a0) * ro], p1 = [f.x + Math.cos(a1) * ro, f.z + Math.sin(a1) * ro];
+    rimBays.push(faceLeft(p0[0], p0[1], p1[0], p1[1], -Math.cos(am), -Math.sin(am), { y }));      // (local +z = toward the middle of the basin)
+  }
+  {
+    const wallG = unitProfile([[0, 0], [0, rt]], { caps: false }), topG = unitProfile([[0, rt], [W, rt]], { caps: false }), inG = unitProfile([[W, rt], [W, rt - D.waterDrop]], { caps: false });
+    const mg = ctx.mat.toon(D.granite, { paint: 0.04, name: 'tauride-fountain-rim' }), ml = ctx.mat.toon(D.graniteL, { paint: 0.04, name: 'tauride-fountain-rim-top' });
+    const r = knockBays(ctx, { name: 'tauride-fountain-rim', bays: rimBays, far: 250,
+      parts: [{ geo: wallG, mat: mg, name: 'wall', far: 250, stretch: true }, { geo: topG, mat: ml, name: 'top', far: 250, stretch: true }, { geo: inG, mat: mg, name: 'inner', far: 250, stretch: true }],
+      collider: () => ({ y0: y - 0.5, y1: y + rt + 0.2, thick: W + 0.1, off: W / 2, e0: 0.05, e1: 0.05 }),
+      rec: () => ({ kind: 'fence', mass: 350, h: rt, r: 0.17, anchored: 12, hitK: 0.3, metal: false, minDv: 0 }) });
+    for (const it of r.items) if (it) out.items.push(it);      // (the census: out.colliders = out.items.length below)
+    out.triangles += seg * 3 * 2;
+    if (ctx.physics.addWater) ctx.physics.addWater({ ring: Array.from({ length: 24 }, (_, i) => [f.x + Math.cos(i / 24 * TAU) * R, f.z + Math.sin(i / 24 * TAU) * R]).flat(), level: y + rt - D.waterDrop });      // (the basin is shallow water to wade in)
   }
   // the pedestal in the middle: a lathe of three rings; on it the bronze boy with the duck (VB spheres and rods)
   const pr = D.pedestal.r, ph0 = y + 0.05;

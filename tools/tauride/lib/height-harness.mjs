@@ -125,7 +125,7 @@ export function slopeReport(S, heightAt, BANK = 3) {
   const stat = (a) => { const s2 = a.slice().sort((x, y) => x - y); return { n: s2.length, max: s2.length ? +s2[s2.length - 1].toFixed(4) : 0, p95: s2.length ? +s2[Math.floor(s2.length * 0.95)].toFixed(4) : 0 }; };
   return { land: stat(grid), bank: stat(bank), ways: stat(ways), waysBank: stat(waysBank) };
 }
-/** flight landing over the water: the share of water cells where the real predicate (groundHeight < -1, or the page's HOOKS.noLanding when given) refuses ('water'); `byEngine` = refused by the engine's own test alone */
+/** flight landing over the water: the share of water cells where the real predicate (a refusal rule no longer exists: water is reachable, the answer must be 0; the old groundHeight < -1 test was removed from core/player.js) refuses ('water'); `byEngine` = refused by the engine's own test alone */
 export function landingReport(world, S, noLanding = null) {
   let n = 0, refused = 0, bad = 0, byEngine = 0;
   for (const p of S.U) { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < p.o.length; i += 2) { x0 = Math.min(x0, p.o[i]); x1 = Math.max(x1, p.o[i]); z0 = Math.min(z0, p.o[i + 1]); z1 = Math.max(z1, p.o[i + 1]); }
@@ -133,7 +133,7 @@ export function landingReport(world, S, noLanding = null) {
   return { cells: n, refused, byEngine, landableDeep: bad };
 }
 /** The car keep-out: sample the garden outline every metre; a breach = a straight line from 3 m outside to 3 m inside that no car-blocked point interrupts. Returns { samples, breachM, stretches } */
-export function carBreach(S, carBlocked) {
+export function carBreach(S, carBlocked, isWater = null) {
   const o = S.GARDEN.o, ccw = ((() => { let a = 0; for (let i = 0; i < o.length; i += 2) { const j = (i + 2) % o.length; a += o[i] * o[j + 1] - o[j] * o[i + 1]; } return a; })()) > 0;
   let samples = 0, breachM = 0; const stretches = []; let cur = null;
   for (let i = 0; i < o.length; i += 2) {
@@ -142,6 +142,7 @@ export function carBreach(S, carBlocked) {
     for (let k = 0; k < n; k++) {
       const x = ax + (bx - ax) * (k + 0.5) / n, z = az + (bz - az) * (k + 0.5) / n; samples++;
       let blocked = false; for (let d = -3; d <= 3 && !blocked; d += 0.5) if (carBlocked(x + nx * d, z + nz * d)) blocked = true;
+      if (!blocked && isWater && isWater(x - nx * 1.5, z - nz * 1.5)) blocked = true;      // WATER IS REACHABLE: a way across the outline that leads into the water is no breach of the closed ground (the keep-out is the LAND of the garden)
       if (!blocked) { breachM += len / n; if (!cur) { cur = { x: Math.round(x), z: Math.round(z), lenM: 0 }; stretches.push(cur); } cur.lenM += len / n; } else cur = null;
     }
   }
@@ -211,26 +212,27 @@ export function wadeRing(world, shore, segs, { spacing = 3, inland = 4, angles =
  * not on a deck (deckY null there, or the feet 10 cm below it); `left` = the feet ended more than hw + 0.7 m from the axis while over the water. Returns { runs, entered, left, trapped, minD, byMode, worst }.
  */
 export function deckRing(world, shore, sites, deckY, { spacing = 1, angles = [90, -90, 45, -45, 135, -135], modes = ['walk', 'sprint', 'jump'], ticks = 180, headOut = 0.8 } = {}) {
-  const res = { runs: 0, entered: 0, left: 0, trapped: 0, minD: Infinity, byMode: {}, worst: [], heads: 0, decks: 0 };
+  const res = { runs: 0, entered: 0, enteredDeck: 0, enteredHead: 0, left: 0, trapped: 0, minD: Infinity, byMode: {}, worst: [], heads: 0, decks: 0 };
   for (const m of modes) res.byMode[m] = { runs: 0, entered: 0 };
   const onDeck = (x, z, y) => { const d = deckY(x, z); return d !== null && y >= d - 0.1; };
-  const run = (sx, sz, dx, dz, mode, s, label) => {
+  const run = (sx, sz, dx, dz, mode, s, label, kind = 'deck') => {
     const p = world.player(); p.setPose(sx, sz, 0, 0, null, { stand: true });
-    let minD = Infinity, entered = false;
+    let minD = Infinity, entered = false, pastEnd = false;
+    const a0 = s.at(0), a1 = s.at(s.L);                                          // a walker that slides along a rail and steps off the END of the deck into the water went around the rails (the head is open by the water rule): it counts as a head entry
     for (let tk = 0; tk < ticks; tk++) {
       p.yaw = Math.atan2(-dx, -dz); p.keys.add('KeyW'); if (mode === 'sprint') p.keys.add('ShiftLeft'); if (mode === 'jump' && p.onGround) p.vy = 4.2;
       p.update(1 / 60);
       const d = shore.dist(p.pos.x, p.pos.z);
       if (d < 0 && onDeck(p.pos.x, p.pos.z, p.pos.y)) continue;
       if (d < minD) minD = d;
-      if (d < -0.02 || (d < 0 && p.pos.y < world.model.waterLevel - 0.02)) entered = true;
+      if (d < -0.02 || (d < 0 && p.pos.y < world.model.waterLevel - 0.02)) { if (!entered) pastEnd = (p.pos.x - a0.x) * a0.dx + (p.pos.z - a0.z) * a0.dz < 0 || (p.pos.x - a1.x) * a1.dx + (p.pos.z - a1.z) * a1.dz > 0; entered = true; }
     }
     p.keys.clear(); res.runs++; res.byMode[mode].runs++; if (minD < res.minD) res.minD = minD;
     if (entered) {
-      res.entered++; res.byMode[mode].entered++;
+      res.entered++; res.byMode[mode].entered++; if (kind === 'deck' && !pastEnd) res.enteredDeck++; else res.enteredHead++;
       for (let tk = 0; tk < 600; tk++) { p.yaw = Math.atan2(dx, dz); p.keys.add('KeyW'); p.update(1 / 60); } p.keys.delete('KeyW');
       if (!(shore.dist(p.pos.x, p.pos.z) > 0 || onDeck(p.pos.x, p.pos.z, p.pos.y))) res.trapped++;
-      if (res.worst.length < 8) res.worst.push({ site: s.site, at: label, mode, minD: +minD.toFixed(2) });
+      if (res.worst.length < 8) res.worst.push({ site: s.site, at: label, mode, minD: +minD.toFixed(2) }); if (kind === 'deck' && !pastEnd && (res.worstDeck || (res.worstDeck = [])).length < 8) res.worstDeck.push({ site: s.site, at: label, mode, minD: +minD.toFixed(2) });
     }
   };
   for (const s of sites) {
@@ -248,7 +250,7 @@ export function deckRing(world, shore, sites, deckY, { spacing = 1, angles = [90
         while (shore.dist(sx, sz) < 2.0 && back < 5) { sx -= q.dx * inward * 0.5; sz -= q.dz * inward * 0.5; back += 0.5; }       // a head that stands close to the water: start farther inland along the axis
         if (shore.dist(sx, sz) < 2.0 || world.L.insideBuilding(sx, sz, 1)) continue;
         const c = Math.cos(a * Math.PI / 180), si = Math.sin(a * Math.PI / 180), bx = q.dx * inward, bz = q.dz * inward, dx = bx * c - bz * si, dz = bx * si + bz * c;
-        run(sx, sz, dx, dz, mode, s, `head${u === 0 ? 'A' : 'B'} side${side} a${a}`); res.heads++;
+        run(sx, sz, dx, dz, mode, s, `head${u === 0 ? 'A' : 'B'} side${side} a${a}`, 'head'); res.heads++;
       }
     }
   }

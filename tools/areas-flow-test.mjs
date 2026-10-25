@@ -219,7 +219,7 @@ try {
     await bad.close();
     const inside = await open(ARRIVE_URL('536,155,77,0', Buffer.from(JSON.stringify({ v: 1, from: 'strip', to: 'strip', via: 'gate', gate: 'g0', car: null, mute: true, noui: false, ret: { x: 536, z: 155, yaw: 77, pitch: 0 }, n: 3 })).toString('base64url')), { start: false });
     const r2 = await inside.evaluate(() => ({ how: window.__ctx.handoff.how, x: window.__ctx.playerObj.pos.x, z: window.__ctx.playerObj.pos.z, n: window.__ctx.handoff.ho.n }));
-    check('an arrival point is validated on the destination map (moved out of a building/the river if needed)', ['direct', 'ring'].includes(r2.how), r2);
+    check('an arrival point is validated on the destination map (moved out of a building if needed; water is walkable, CLAUDE.md "World rules")', ['direct', 'ring'].includes(r2.how), r2);
     await inside.click('#go'); await sleep(500);
     check('ho.mute is applied at Start', await inside.evaluate(() => window.__ctx.audio ? window.__ctx.audio.muted : document.getElementById('mute').getAttribute('aria-pressed') === 'true'));
     await inside.close();

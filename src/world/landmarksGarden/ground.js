@@ -7,6 +7,7 @@ import { GREEN, ROADS, AREAS, WATER, BARRIERS, FOUNTAINS } from '../data/city.js
 import { RING, inRing, rotOf } from './frame.js';
 import { GROUPS_LIST } from './groups.js';
 import { ribbon, fillPoly, fillPolyFine, inflate, pairs, coverFn, wall3D } from './surfaces.js';
+import { knockBays, unitBox, faceLeft } from '../lib/fence-bays.js';
 
 const OSM = new Set(GROUPS_LIST.find((g) => g.key === 'summer-garden').osm);
 export const MAIN_ALLEY = new Set(['w159079282', 'w197658096', 'w197658097', 'w159079329', 'w311015871', 'w311015894']);
@@ -55,6 +56,7 @@ export function build(K) {
     const menagerie = pd.id === 'r4162603' || pd.id === 'r4162600' || /Менажер/.test(pd.name || '');
     P.cap(menagerie ? M.pond : M.water, pd.ring, 0.05, true, 4, pd.holes);
     const bank = inflate(pd.ring, 1.2); P.cap(M.lawn, bank, 0.024, true, 6, [pd.ring]);
+    ph.addWater({ ring: pd.ring.flat(), holes: pd.holes.map((h) => h.flat()), level: 0.05 });      // (water is reachable, docs/AREAS.md 13.7: a pond is a place to wade in: 5 cm of film over the lawn level, no bowl)
     svc.ponds = (svc.ponds || []).concat([{ id: pd.id, name: pd.name, x: pd.ring.reduce((s, p) => s + p[0], 0) / pd.ring.length, z: pd.ring.reduce((s, p) => s + p[1], 0) / pd.ring.length }]);
   }
   // the two fountains that OSM maps as nodes only (the Crown fountain in the parterre, the Nereid): round basins
@@ -64,18 +66,16 @@ export function build(K) {
     basins.push({ id: f.id, ring, name: f.name });
   }
   const jet = ctx.mat.toon('#eef6fa', { name: 'lmGd-jet', transparent: true, opacity: 0.6, depthWrite: false });
+  const rimBays = [], railBays = [];
   for (const b of basins) {
-    const outer = inflate(b.ring, 0.45), n = b.ring.length;
+    const n = b.ring.length;
     let cx = 0, cz = 0; for (const p of b.ring) { cx += p[0]; cz += p[1]; } cx /= n; cz /= n;
     P.cap(M.water, b.ring, 0.42, true, 3);
-    for (let i = 0; i < n; i++) {
-      const a = b.ring[i], c = b.ring[(i + 1) % n], oa = outer[i], oc = outer[(i + 1) % n];
-      const dx = c[0] - a[0], dz = c[1] - a[1], l = Math.hypot(dx, dz) || 1;
-      let nx = dz / l, nz = -dx / l; if ((cx - a[0]) * nx + (cz - a[1]) * nz > 0) { nx = -nx; nz = -nz; }                      // outward
-      P.quad(M.marbleCoping, [oa[0], 0.0, oa[1]], [oc[0], 0.0, oc[1]], [oc[0], 0.55, oc[1]], [oa[0], 0.55, oa[1]], [nx, 0, nz], [[0, 0], [l / 2, 0], [l / 2, 0.3], [0, 0.3]]);
-      P.quad(M.marbleCoping, [oa[0], 0.55, oa[1]], [oc[0], 0.55, oc[1]], [c[0], 0.55, c[1]], [a[0], 0.55, a[1]], [0, 1, 0], [[0, 0], [l / 2, 0], [l / 2, 0.2], [0, 0.2]]);
-      P.quad(M.marbleShade ?? M.marbleCoping, [a[0], 0.55, a[1]], [c[0], 0.55, c[1]], [c[0], 0.42, c[1]], [a[0], 0.42, a[1]], [-nx, 0, -nz], [[0, 0], [1, 0], [1, 1], [0, 1]]);
-      if (i % 3 === 0) ph.addBox((oa[0] + oc[0]) / 2, (oa[1] + oc[1]) / 2, l + 0.5, 0.5, rotOf(dx, dz), 0, 0.9);
+    ph.addWater({ ring: b.ring.flat(), level: 0.42 });                                                                  // (water is reachable: a basin is shallow water to wade in; the rim is a breakable wall)
+    for (let i = 0; i < n; i++) {                                                                                       // the marble rim: one breakable bay per ring segment (0.45 m wide, 0.55 m high, outward of the water edge)
+      const a = b.ring[i], c = b.ring[(i + 1) % n], dx = c[0] - a[0], dz = c[1] - a[1], l = Math.hypot(dx, dz) || 1;
+      let nx = dz / l, nz = -dx / l; if ((cx - a[0]) * nx + (cz - a[1]) * nz > 0) { nx = -nx; nz = -nz; }                // outward
+      rimBays.push(faceLeft(a[0], a[1], c[0], c[1], nx, nz, { y: 0 }));
     }
     let rad = 0; for (const p of b.ring) rad += Math.hypot(p[0] - cx, p[1] - cz); rad /= n;
     const big = rad > 4;
@@ -86,18 +86,28 @@ export function build(K) {
     (svc.fountains ||= []).push({ id: b.id, name: b.name, x: cx, z: cz, r: rad });
     svc.crowd.push({ x: cx, z: cz, r: rad + 4, n: 5, kind: 'fountain' });
   }
-  // ---- the rail round the two ponds: a green lattice, 1 m high (OSM w311015862 Carp pond, w589930444 Menagerie pond)
+  // ---- the rail round the two ponds: a green lattice, 1 m high (OSM w311015862 Carp pond, w589930444 Menagerie pond): breakable bays, one per segment (lattice panel, top rail, a post at its end)
   for (const bar of BARRIERS) {
     if (!POND_RAIL.has(bar.id)) continue;
-    const pts = pairs(bar.pts);
-    const n = pts.length, m = bar.closed ? n : n - 1;
+    const pts = pairs(bar.pts), n = pts.length, m = bar.closed ? n : n - 1;
     for (let i = 0; i < m; i++) {
-      const a = pts[i], c = pts[(i + 1) % n], dx = c[0] - a[0], dz = c[1] - a[1], l = Math.hypot(dx, dz); if (l < 0.2) continue;
-      P.quad(M.lattice, [a[0], 0.1, a[1]], [c[0], 0.1, c[1]], [c[0], 1.0, c[1]], [a[0], 1.0, a[1]], [-dz / l, 0, dx / l], [[0, 0], [l / 0.9, 0], [l / 0.9, 1.1], [0, 1.1]]);
-      P.cyl(M.green, [a[0], 1.0, a[1]], [c[0], 1.0, c[1]], 0.035, 0.035, 4, false);                              // the top rail
-      ph.addBox((a[0] + c[0]) / 2, (a[1] + c[1]) / 2, l, 0.3, rotOf(dx, dz), 0, 1.2);
+      const a = pts[i], c = pts[(i + 1) % n], l = Math.hypot(c[0] - a[0], c[1] - a[1]); if (l < 0.2) continue;
+      railBays.push({ x0: a[0], z0: a[1], x1: c[0], z1: c[1], y: 0, first: !bar.closed && i === 0 });
     }
-    for (let i = 0; i < n; i++) { const p = pts[i]; P.box(M.green, p[0] - 0.06, p[0] + 0.06, 0, 1.1, p[1] - 0.06, p[1] + 0.06, 'b'); }
+  }
+  // the marble rims and the lattice rails: lib/fence-bays.js (the rim: 400 kg a bay, breaks at 10 km/h; the rail: a light lattice, 8 km/h)
+  if (rimBays.length) knockBays(ctx, { name: 'lmGd-rim', bays: rimBays, far: 260,
+    parts: [{ geo: unitBox(0, 0.55, 0, 0.45, { uLen: 2, uvs: 2 }), mat: M.marbleCoping, name: 'rim', far: 260, stretch: true }],
+    collider: () => ({ y0: 0, y1: 0.6, thick: 0.45, off: 0.225, e0: 0.1, e1: 0.1 }),
+    rec: () => ({ kind: 'fence', mass: 400, h: 0.55, r: 0.2, anchored: 10, hitK: 0.3, metal: false, minDv: 0 }) });
+  if (railBays.length) {
+    const lat = new THREE.PlaneGeometry(1, 0.9).translate(0.5, 0.55, 0), uv = lat.attributes.uv; for (let i = 0; i < uv.count; i++) { uv.setXY(i, uv.getX(i) * 3.3, uv.getY(i) * 1.1); }
+    knockBays(ctx, { name: 'lmGd-pondrail', bays: railBays, far: 240,
+      parts: [{ geo: lat, mat: M.lattice, name: 'lattice', far: 240, stretch: true, noOutline: true },
+        { geo: new THREE.CylinderGeometry(0.035, 0.035, 1, 4, 1).rotateZ(Math.PI / 2).translate(0.5, 1.0, 0), mat: M.green, name: 'top', far: 240, stretch: true },
+        { geo: new THREE.BoxGeometry(0.12, 1.1, 0.12).translate(0, 0.55, 0), mat: M.green, name: 'post', far: 240, ats: (bb) => (bb.first ? ['start', 'end'] : ['end']) }],
+      collider: () => ({ y0: 0, y1: 1.2, thick: 0.3, e0: 0.05, e1: 0.05 }),
+      rec: () => ({ kind: 'fence', mass: 50, h: 1.0, r: 0.05, anchored: 8, hitK: 0.12, metal: true, minDv: 0 }) });
   }
   svc.groundStats = { paths: paths.length, woods: woodN, basins: basins.length, ponds: ponds.length };
   void fillPoly; void THREE;

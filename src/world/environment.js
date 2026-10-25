@@ -9,7 +9,7 @@
 //              tile, and the placement queries (free, clear, categoryAt ...)
 //   ground.js  ONE tessellated ground plane (16 m cells over the data, growing to +-7.6 km) with a painterly world-space shader (worn courtyard asphalt, setts and red block pavers, trimmed lawn, ballast gravel, dust at
 //              the road edges); the mesh has HOLES: every water body and layout.GROUND_HOLES (metro shafts); beyond the data the shader paints the street grid, the rail ballast band and the suburb colour
-//   quay.js    the granite quay walls (water line -2.8 ... -3.4, coping +0.17), posts + black railing panels, mooring rings, anchor plates, stair flights (descents), and the colliders that make the trenches impassable
+//   quay.js    the granite quay walls (water line -2.8 ... -3.4, coping +0.17), posts + black railing panels, mooring rings, anchor plates, stair flights (descents), and the BREAKABLE bays (fence-bays.js) that keep people from the trench: water is reachable (docs/AREAS.md 13.7)
 //              except in the gaps of the bridge crossings; the plain granite wall of the Neva scenery beyond the data
 //   boats.js   piers (floating pontoons) and tourist boats of the canals and the Neva; lions.js the two copper lions of the Palace Pier descent (the quay builds the pedestals)
 //   water.js   the toon water of every waterway (wall shadow from the sun direction, foam at the bridge cutwaters, dark under the decks) and the Neva to the horizon

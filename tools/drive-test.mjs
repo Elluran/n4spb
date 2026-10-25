@@ -96,7 +96,7 @@ try {
   if (s.active || pl.driving || pl.lock !== 0) problems.push('E did not get the player out of the car');
   await shot('8_out');
 
-  // ---- fuzz: scripted random driving from road points all over the map (headless physics, 1/60 s frames): never in the river / a building, no NaN, no tunnelling
+  // ---- fuzz: scripted random driving from road points all over the map (headless physics, 1/60 s frames): never in a building (water is reachable: the river is no failure), no NaN, no tunnelling
   const fz = args.nofuzz ? { runs: 0, bad: [] } : await page.evaluate(() => {
     const d = window.__drive, L = window.__ctx.L, car = d.car, res = { runs: 0, bad: [], maxKmh: 0, hits: 0, stuck: 0 };
     const roads = []; const seen = new Set();

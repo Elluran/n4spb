@@ -6,6 +6,12 @@ import * as THREE from 'three';
 import { BARRIERS, BARRIER_NODES } from '../data/city.js';
 import { Parts } from './kit.js';
 import * as G from './geo.js';
+import { knockBays } from '../lib/fence-bays.js';
+import { knockInstances } from '../lib/knock-inst.js';
+
+/** the parts of a Parts collector as [{ geo, mat }] (one per material), built once (a template at the origin, instanced by lib/fence-bays.js / knock-inst.js) */
+function templ(P, name) { const grp = new THREE.Group(); P.build(grp, { name }); return grp.children.map((m) => ({ geo: m.geometry, mat: m.material })); }
+const meshTris = (meshes) => meshes.reduce((t, m) => t + (m.geometry.index ? m.geometry.index.count / 3 : m.geometry.attributes.position.count / 3) * m.count, 0);
 
 const polyline = (id) => { const b = BARRIERS.find((q) => q.id === id); if (!b) return null; const r = []; for (let i = 0; i < b.pts.length; i += 2) r.push([b.pts[i], b.pts[i + 1]]); return r; };
 const PIER_H = 4.8, PANEL_Y0 = 0.9, PANEL_H = 3.5, PLINTH_H = 0.9;
@@ -72,38 +78,50 @@ function winklerRun(K, pts, o, piers, gatePiers) {
     const ux = dx / len, uz = dz / len, rot = Math.atan2(-dz, dx);
     if (e.open) { addPier(gatePiers, a[0], a[1], rot); addPier(gatePiers, b[0], b[1], rot); continue; }
     const n = Math.max(1, Math.round(len / step)), s = len / n;
-    P.push(a[0], 0, a[1], rot);
-    G.tbox(P, M.pink, 0, len, 0, PLINTH_H, -0.35, 0.35, 3.2, 1.4, 'b');                                   // the granite plinth wall
-    for (let k = 0; k < n; k++) P.quad(mat, [k * s + 0.3, PANEL_Y0, 0], [(k + 1) * s - 0.3, PANEL_Y0, 0], [(k + 1) * s - 0.3, PANEL_Y0 + PANEL_H, 0], [k * s + 0.3, PANEL_Y0 + PANEL_H, 0], [0, 0, 1], [[0.04, 0], [0.96, 0], [0.96, 1], [0.04, 1]]);
-    P.box(M.gun, 0, len, PANEL_Y0 + PANEL_H, PANEL_Y0 + PANEL_H + 0.1, -0.03, 0.03, 'b');                    // top rail
-    P.pop();
-    ph.addBox(a[0] + dx / 2, a[1] + dz / 2, len, 0.6, rot, 0, 2.2);
+    // WATER IS REACHABLE (docs/AREAS.md 13.7): the plinth wall + panels + top rail of an edge are ONE breakable bay (lib/fence-bays.js; drawn by winklerBays below, the collider is its own)
+    o.bays.push({ x0: a[0], z0: a[1], x1: b[0], z1: b[1], y: 0, len, n, s, mat, panelAts: Array.from({ length: n }, (_, k) => (k * s + 0.3) / len) });
+    void ph; void rot; void P;
     for (let k = 0; k <= n; k++) addPier(piers, a[0] + ux * k * s, a[1] + uz * k * s);
   }
 }
 
 /** a spear fence along pts: kerb, posts every 3 m, one alpha-cut spear panel per bay */
-function spearRun(K, pts, o = {}) {
+function spearRun(K, pts, o = { bays: [] }) {
   const P = K.P, M = K.M, ph = K.ctx.physics, h = o.h ?? 1.3, step = o.step ?? 2.6, mat = o.mat || M.spears;
   for (let i = 0; i + 1 < pts.length; i++) {
     const a = pts[i], b = pts[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz); if (len < 0.3) continue;
     const ux = dx / len, uz = dz / len, rot = Math.atan2(-dz, dx), n = Math.max(1, Math.round(len / step)), s = len / n;
-    P.push(a[0], 0, a[1], rot);
-    G.tbox(P, M.granite, 0, len, 0, 0.22, -0.14, 0.14, 2, 2, 'b');
-    for (let k = 0; k < n; k++) P.quad(mat, [k * s + 0.08, 0.22, 0], [(k + 1) * s - 0.08, 0.22, 0], [(k + 1) * s - 0.08, 0.22 + h, 0], [k * s + 0.08, 0.22 + h, 0], [0, 0, 1], [[0, 0], [1, 0], [1, 1], [0, 1]]);
-    for (let k = 0; k <= n; k++) { const x = k * s; P.box(M.gun, x - 0.05, x + 0.05, 0.22, 0.22 + h + 0.08, -0.05, 0.05, 'b'); P.cyl(M.goldFlat, [x, 0.22 + h + 0.08, 0], [x, 0.22 + h + 0.28, 0], 0.045, 0.0, 6, false); }
-    P.pop();
-    ph.addBox(a[0] + dx / 2, a[1] + dz / 2, len, 0.3, rot, 0, 1.4);
-    void ux; void uz;
+    o.bays.push({ x0: a[0], z0: a[1], x1: b[0], z1: b[1], y: 0, len, n, s, h, mat, panelAts: Array.from({ length: n }, (_, k) => (k * s + 0.08) / len), postAts: Array.from({ length: n + 1 }, (_, k) => k * s / len) });
+    void ph; void rot; void P; void M; void ux; void uz;
   }
 }
 
 export function fences(K) {
   const M = K.M, P = K.P;
   const piers = [], gatePiers = [], gates = BARRIER_NODES.filter((n) => n.id === 'n1412259318').map((n) => [n.x, n.z]);
-  for (const id of ['w127645397', 'w127645395', 'w127645399']) { const pts = polyline(id); if (pts) winklerRun(K, pts, { gates }, piers, gatePiers); }
-  const sac = polyline('w588807856'); if (sac) winklerRun(K, sac, { mat: M.winklerBronze, gates: [] }, piers, gatePiers);
-  instanceParts(K, pierModel(M), piers, 'lmK-winkler-piers');
+  const wb = [];
+  for (const id of ['w127645397', 'w127645395', 'w127645399']) { const pts = polyline(id); if (pts) winklerRun(K, pts, { gates, bays: wb }, piers, gatePiers); }
+  const sac = polyline('w588807856'); if (sac) winklerRun(K, sac, { mat: M.winklerBronze, gates: [], bays: wb }, piers, gatePiers);
+  // the Winkler bays: the granite plinth wall with its top rail and the alpha-cut iron panels of each edge (a car at 20 km/h breaks the bay off)
+  if (wb.length) {
+    const wall = new Parts(); G.tbox(wall, M.pink, 0, 1, 0, PLINTH_H, -0.35, 0.35, 3.2, 1.4, 'b'); wall.box(M.gun, 0, 1, PANEL_Y0 + PANEL_H, PANEL_Y0 + PANEL_H + 0.1, -0.03, 0.03, 'b');
+    const parts = templ(wall, 'lmK-winkler-wall').map((t, i) => ({ geo: t.geo, mat: t.mat, name: 'wall' + i, far: 380, stretch: true }));
+    for (const pm of [...new Set(wb.map((q) => q.mat))]) {
+      const pq = new Parts(); pq.quad(pm, [0, PANEL_Y0, 0], [1, PANEL_Y0, 0], [1, PANEL_Y0 + PANEL_H, 0], [0, PANEL_Y0 + PANEL_H, 0], [0, 0, 1], [[0.04, 0], [0.96, 0], [0.96, 1], [0.04, 1]]);
+      for (const t of templ(pq, 'lmK-winkler-panel')) parts.push({ geo: t.geo, mat: t.mat, name: 'panel-' + (pm.name || 'm'), far: 380, stretch: true, sx: (q) => (q.s - 0.6) / q.len, ats: (q) => q.panelAts, when: (q) => q.mat === pm, noOutline: true });
+    }
+    const r = knockBays(K.ctx, { name: 'lmK-winkler', bays: wb, parts, far: 380,
+      collider: () => ({ y0: 0, y1: 2.2, thick: 0.6, e0: 0, e1: 0 }),
+      rec: () => ({ kind: 'fence', mass: 1100, h: 3.0, r: 0.3, anchored: 20, hitK: 0.6, metal: true, minDv: 0 }) });
+    K.extraTris += meshTris(r.meshes);
+  }
+  // the piers (a brick drum on a pink pedestal, ~100): a knock record each (a heavy column, 40 km/h) with its cylinder collider
+  if (piers.length) {
+    const pm = templ(pierModel(M), 'lmK-winkler-piers'), ph = K.ctx.physics, items = piers.map((p) => ph.addCylinder(p.x, p.z, 0.55, 0, 4.9));
+    const r = knockInstances(K.ctx, { name: 'lmK-winkler-piers', parts: pm.map((t, i) => ({ geo: t.geo, mat: t.mat, name: 'pier' + i, far: 380 })), spots: piers.map((p) => ({ x: p.x, y: 0, z: p.z, rotY: p.rot || 0 })), items: (i) => items[i], far: 380,
+      rec: { kind: 'column', mass: 1400, h: 4.8, r: 0.55, anchored: 40, hitK: 0.9, metal: false } });
+    K.extraTris += meshTris(r.meshes);
+  }
   // ---- the gate on the church axis: two big square piers with majolica tiles, a cornice, a green copper cap and a trident lamp each
   const gp = new Parts();
   gp.box(M.pink, -0.75, 0.75, 0, 1.3, -0.75, 0.75, 'b'); gp.box(M.white, -0.72, 0.72, 1.3, 1.45, -0.72, 0.72, 'b');
@@ -113,11 +131,31 @@ export function fences(K) {
   gp.cyl(M.iron, [0, 4.95, 0], [0, 6.0, 0], 0.07, 0.05, 6, false);
   for (const s of [-1, 1]) { gp.cyl(M.iron, [0, 5.6, 0], [s * 0.55, 5.95, 0], 0.035, 0.035, 5, false); G.ball(gp, M.lampGlobe, s * 0.55, 6.1, 0, 0.2, 8); }
   G.ball(gp, M.lampGlobe, 0, 6.35, 0, 0.23, 8);
-  instanceParts(K, gp, gatePiers, 'lmK-winkler-gate');
-  for (const p of gatePiers) K.ctx.physics.addBox(p.x, p.z, 1.5, 1.5, p.rot, 0, 5);
+  {                                                                                                 // the two gate piers: a record each (a box collider, 45 km/h)
+    const items = gatePiers.map((p) => K.ctx.physics.addBox(p.x, p.z, 1.5, 1.5, p.rot, 0, 5));
+    const r = knockInstances(K.ctx, { name: 'lmK-winkler-gate', parts: templ(gp, 'lmK-winkler-gate').map((t, i) => ({ geo: t.geo, mat: t.mat, name: 'gate' + i, far: 380 })), spots: gatePiers.map((p) => ({ x: p.x, y: 0, z: p.z, rotY: p.rot || 0 })), items: (i) => items[i], far: 380,
+      rec: { kind: 'column', mass: 2200, h: 5.0, r: 0.9, anchored: 45, hitK: 1.0, metal: false } });
+    K.extraTris += meshTris(r.meshes);
+  }
   if (gates[0]) { K.svc.entrances.push({ id: 'saviour-gate', x: gates[0][0], z: gates[0][1], rotY: 1.5708, kind: 'gate', label: 'Ворота Михайловского сада' }); }
   // ---- inner spear fence round the forecourts + the queue corridor of the N porch
-  for (const id of ['w102265046', 'w1164101336', 'w1164101337']) { const pts = polyline(id); if (pts) spearRun(K, pts, { h: id === 'w102265046' ? 1.3 : 1.1 }); }
+  const sb = [];
+  for (const id of ['w102265046', 'w1164101336', 'w1164101337']) { const pts = polyline(id); if (pts) spearRun(K, pts, { h: id === 'w102265046' ? 1.3 : 1.1, bays: sb }); }
+  if (sb.length) {                                                                                  // the spear fences: kerb + panels + posts per segment, breakable bays (a car at 10 km/h)
+    const hs = [...new Set(sb.map((q) => q.h))], parts = [];
+    const kerb = new Parts(); G.tbox(kerb, M.granite, 0, 1, 0, 0.22, -0.14, 0.14, 2, 2, 'b');
+    templ(kerb, 'lmK-spear-kerb').forEach((t, i) => parts.push({ geo: t.geo, mat: t.mat, name: 'kerb' + i, far: 300, stretch: true }));
+    for (const h of hs) {
+      const pq = new Parts(); pq.quad(M.spears, [0, 0.22, 0], [1, 0.22, 0], [1, 0.22 + h, 0], [0, 0.22 + h, 0], [0, 0, 1], [[0, 0], [1, 0], [1, 1], [0, 1]]);
+      for (const t of templ(pq, 'lmK-spear-panel')) parts.push({ geo: t.geo, mat: t.mat, name: 'sp' + h, far: 300, stretch: true, sx: (q) => (q.s - 0.16) / q.len, ats: (q) => q.panelAts, when: (q) => q.h === h, noOutline: true });
+      const po = new Parts(); po.box(M.gun, -0.05, 0.05, 0.22, 0.22 + h + 0.08, -0.05, 0.05, 'b'); po.cyl(M.goldFlat, [0, 0.22 + h + 0.08, 0], [0, 0.22 + h + 0.28, 0], 0.045, 0.0, 6, false);
+      templ(po, 'lmK-spear-post').forEach((t, i) => parts.push({ geo: t.geo, mat: t.mat, name: 'sq' + h + '-' + i, far: 300, ats: (q) => q.postAts, when: (q) => q.h === h }));
+    }
+    const r = knockBays(K.ctx, { name: 'lmK-spear', bays: sb, parts, far: 300,
+      collider: () => ({ y0: 0, y1: 1.4, thick: 0.3, e0: 0, e1: 0 }),
+      rec: () => ({ kind: 'fence', mass: 90, h: 1.3, r: 0.1, anchored: 10, hitK: 0.2, metal: true, minDv: 0 }) });
+    K.extraTris += meshTris(r.meshes);
+  }
   K.svc.fenceTris = P.tris;
 }
 export const build = fences;

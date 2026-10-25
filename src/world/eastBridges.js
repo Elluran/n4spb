@@ -6,11 +6,12 @@ export const OWNS_GROUPS = true;
 import * as THREE from 'three';
 import { EAST_BRIDGE_ROADS } from './eastBridges/groups.js';
 import { Parts } from './landmarksD/kit.js';
-import * as L from './layout.js';      // n4spb: inExtent (the clip of the 907 m main span to the data of the area, below)
+import * as L from './layout.js';
+import { knockBays } from './lib/fence-bays.js';      // n4spb: inExtent (the clip of the 907 m main span to the data of the area, below)
 
 export function build(ctx) {
   const root = new THREE.Group(); root.name = 'east-bridges';
-  const P = new Parts(), surf = [];
+  const P = new Parts(), surf = [], rbays = [];      // rbays: the breakable railing bays (docs/AREAS.md 13.7)
   const concrete = ctx.mat.toon('#9a9e98', { paint: 0.04 }), asphalt = ctx.mat.toon('#535a63', { paint: 0.025 });
   const paving = ctx.mat.toon('#afa99f'), iron = ctx.mat.toon('#4e625e'), line = ctx.mat.toon('#d4d1bb');
   const ax = 2193, az = 864, dx = 840, dz = -341, length = Math.hypot(dx, dz), tx = dx / length, tz = dz / length, rot = Math.atan2(tx, tz);
@@ -28,15 +29,12 @@ export function build(ctx) {
     for (const side of [-1, 1]) {
       const outer = side * w, inner = side * (w - Math.min(2.3, width * 0.18));
       P.quad(paving, [inner, ya + 0.12, -half], [outer, ya + 0.12, -half], [outer, yb + 0.12, half], [inner, yb + 0.12, half], [0, 1, 0]);
-      if (rails) {
-        for (const y of [0.38, 1.15]) P.cyl(iron, [outer, ya + y, -half], [outer, yb + y, half], 0.055, 0.055, 4);
-        const n = Math.ceil(len / 2.3);
+      if (rails) {                                                                   // the railing: a BAY per post (two tubes, a post, a thin collider: lib/fence-bays.js, docs/AREAS.md 13.7)
+        const n = Math.ceil(len / 2.3), c = Math.cos(rotY), s = Math.sin(rotY);
         for (let i = 0; i < n; i++) {
-          const t = (i + 0.5) / n, zz = -half + len * t, yy = ya + (yb - ya) * t;
-          P.box(iron, outer - 0.04, outer + 0.04, yy + 0.16, yy + 1.15, zz - 0.04, zz + 0.04, 'b');
+          const z0 = -half + len * i / n, z1 = -half + len * (i + 1) / n;
+          rbays.push({ x0: x + outer * c + z0 * s, z0: z + -outer * s + z0 * c, x1: x + outer * c + z1 * s, z1: z + -outer * s + z1 * c, y: ya + (yb - ya) * i / n, ye: ya + (yb - ya) * (i + 1) / n });
         }
-        const c = Math.cos(rotY), s = Math.sin(rotY);
-        ctx.physics.addBox(x + outer * c, z - outer * s, 0.18, len, rotY, Math.min(ya, yb), Math.max(ya, yb) + 1.2);
       }
     }
     if (markings) for (const u of [-10.5, -7, -3.5, 3.5, 7, 10.5]) P.quad(line, [u - 0.07, ya + 0.025, -half + 2], [u + 0.07, ya + 0.025, -half + 2], [u + 0.07, yb + 0.025, half - 2], [u - 0.07, yb + 0.025, half - 2], [0, 1, 0]);
@@ -91,6 +89,13 @@ export function build(ctx) {
       const foot = ['footway', 'path', 'pedestrian'].includes(r.hw), width = (r.w || 4) + (foot ? 0.4 : 0);
       slab((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(x1 - x0, z1 - z0), len, width, 0.035, 0.035, foot);
     }
+  }
+  if (rbays.length) {
+    const tube = new THREE.CylinderGeometry(0.055, 0.055, 1, 4, 1).rotateZ(Math.PI / 2).translate(0.5, 0, 0), post = new THREE.BoxGeometry(0.08, 0.99, 0.08).translate(0, 0.495, 0);
+    knockBays(ctx, { name: 'east-bridges-rail', bays: rbays, far: 420,
+      parts: [{ geo: tube, mat: iron, name: 'tube-lo', far: 420, stretch: true, y: 0.38 }, { geo: tube, mat: iron, name: 'tube-hi', far: 420, stretch: true, y: 1.15 }, { geo: post, mat: iron, name: 'post', far: 420, at: 'mid', y: 0.16 }],
+      collider: (q) => ({ y0: Math.min(q.y, q.ye), y1: Math.max(q.y, q.ye) + 1.2, thick: 0.18, e0: 0.02, e1: 0.02 }),
+      rec: () => ({ kind: 'fence', mass: 100, h: 1.15, r: 0.06, anchored: 12, hitK: 0.25, metal: true, minDv: 0 }) });
   }
   P.build(root, { name: 'east-bridges' }); ctx.addStatic(root);
   const deckY = (x, z) => {

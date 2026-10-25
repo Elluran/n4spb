@@ -16,11 +16,12 @@
 //   far,                          registerLOD range (m) of the parts (a part `far` overrides it)
 //   cell = 384,
 //   extraParts: (i, spot) => [{ mesh, index, hide } | { obj }]   parts that live elsewhere (a shared light-pool mesh, a detached panel)
+//   part.color(spot, i, k) -> THREE.Color | hex | null   (optional) the instance colour of the k-th matrix of the part (the posts of the quay fence: a tone per post); a part without it has no instanceColor
 // }) -> { records, meshes }
 import * as THREE from 'three';
 import { registerLOD } from '../../core/spatial.js';
 
-const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), NO_MATRICES = [];
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), NO_MATRICES = [], WHITE = new THREE.Color(1, 1, 1);
 
 /** the world matrix of a placement: translate (x, y, z), turn rotY about the vertical, scale s */
 function spotMatrix(spot, out = new THREE.Matrix4()) {
@@ -38,10 +39,13 @@ export function knockInstances(ctx, { name = 'knock', parts, spots, items = null
     if (part.place) { const m = part.place(spot, i); return !m ? NO_MATRICES : Array.isArray(m) ? m : [m]; }
     return [spotMatrix(spot)];
   };
-  const make = (pi, list, key) => {
+  /** the instance colour of the k-th matrix of part `pi` for placement `i` (a part with `color(spot, i, k)`: a THREE.Color or a hex, null = white) */
+  const colorOf = (pi, i, k) => { const c = parts[pi].color(spots[i], i, k); return c ? (c.isColor ? c : new THREE.Color(c)) : WHITE; };
+  const make = (pi, list, key, cols = null) => {
     const part = parts[pi], mesh = new THREE.InstancedMesh(part.geo, part.mat, list.length);
     for (let k = 0; k < list.length; k++) mesh.setMatrixAt(k, list[k]);
     mesh.instanceMatrix.needsUpdate = true;
+    if (cols) { for (let k = 0; k < cols.length; k++) mesh.setColorAt(k, cols[k]); mesh.instanceColor.needsUpdate = true; }
     mesh.castShadow = part.shadow !== false; mesh.receiveShadow = part.receive !== false;
     mesh.name = (part.name ? `${name}-${part.name}` : parts.length > 1 ? `${name}-${pi}` : name) + (key ? `|${key}` : '');
     mesh.computeBoundingSphere();
@@ -52,8 +56,9 @@ export function knockInstances(ctx, { name = 'knock', parts, spots, items = null
 
   if (!knock) {                                                                            // headless / no knock: today's structure, one Static mesh per part
     for (let pi = 0; pi < parts.length; pi++) {
-      const list = []; for (let i = 0; i < spots.length; i++) for (const m of matricesOf(pi, i)) list.push(m);
-      if (list.length) make(pi, list, '');
+      const list = [], cols = parts[pi].color ? [] : null;
+      for (let i = 0; i < spots.length; i++) matricesOf(pi, i).forEach((m, k) => { list.push(m); if (cols) cols.push(colorOf(pi, i, k)); });
+      if (list.length) make(pi, list, '', cols);
     }
     return { records, meshes };
   }
@@ -67,10 +72,10 @@ export function knockInstances(ctx, { name = 'knock', parts, spots, items = null
   for (const key of keys) {
     const idx = cells.get(key), mine = idx.map(() => []), cellMeshes = [];                  // mine[n] = the parts of the n-th placement of this cell
     for (let pi = 0; pi < parts.length; pi++) {
-      const list = [], owner = [];
-      for (let n = 0; n < idx.length; n++) for (const m of matricesOf(pi, idx[n])) { list.push(m); owner.push(n); }
+      const list = [], owner = [], cols = parts[pi].color ? [] : null;
+      for (let n = 0; n < idx.length; n++) matricesOf(pi, idx[n]).forEach((m, k) => { list.push(m); owner.push(n); if (cols) cols.push(colorOf(pi, idx[n], k)); });
       if (!list.length) continue;
-      const mesh = make(pi, list, key);
+      const mesh = make(pi, list, key, cols);
       for (let k = 0; k < list.length; k++) mine[owner[k]].push({ mesh, index: k, hide: !!parts[pi].hide });
       cellMeshes.push([mesh, parts[pi].far ?? far]);
     }

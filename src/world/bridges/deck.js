@@ -40,11 +40,17 @@ export function closeBank(o) {
       const a = pts[k], b = pts[k + 1], ua = a[0] + dir * 0.12, ub = b[0] + dir * 0.12;                              // the face stands 0.12 m in front of the bank line (no sliver of water behind it)
       P.quad(mat, [ua, yb, a[1]], [ub, yb, b[1]], [ub, yTop, b[1]], [ua, yTop, a[1]], [dir, 0, 0], [[a[1] / 2.2, yb / 2.2], [b[1] / 2.2, yb / 2.2], [b[1] / 2.2, yTop / 2.2], [a[1] / 2.2, yTop / 2.2]]);
       P.quad(M.coping, [ua, yTop, a[1]], [ub, yTop, b[1]], [ub - dir * th, yTop, b[1]], [ua - dir * th, yTop, a[1]], [0, 1, 0]);
+      if (o.rails) continue;                                                                                          // (with o.rails the parapet of the wing is ONE breakable section, below)
       for (const [du, nx] of [[0, dir], [-dir * th, -dir]]) P.quad(par, [ua + du, yTop, a[1]], [ub + du, yTop, b[1]], [ub + du, yTop + 1.0, b[1]], [ua + du, yTop + 1.0, a[1]], [nx, 0, 0], [[0, 0], [0.2, 0], [0.2, 1], [0, 1]]);
       P.quad(M.coping, [ua + dir * 0.03, yTop + 1.0, a[1]], [ub + dir * 0.03, yTop + 1.0, b[1]], [ub - dir * (th + 0.03), yTop + 1.0, b[1]], [ua - dir * (th + 0.03), yTop + 1.0, a[1]], [0, 1, 0]);
     }
-    const e = pts[nDraw], ue = e[0] + dir * 0.12;                                                                    // the end face of the wing
-    P.quad(par, [ue, yTop, e[1]], [ue - dir * th, yTop, e[1]], [ue - dir * th, yTop + 1.0, e[1]], [ue, yTop + 1.0, e[1]], [0, 0, sg], [[0, 0], [0.2, 0], [0.2, 1], [0, 1]]);
+    if (o.rails) {                                                                                                    // WATER IS REACHABLE (docs/AREAS.md 13.7): the wing's parapet is a breakable box section along the middle line of the wall (bridges/rails.js)
+      const a = pts[0], e2 = pts[nDraw], ua = a[0] + dir * 0.12 - dir * th / 2, ue2 = e2[0] + dir * 0.12 - dir * th / 2, p = world(ua, a[1]), q = world(ue2, e2[1]);
+      o.rails.parapet({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, y: yTop, ye: yTop, h: 1.0, th, mat: par, box: true, center: true });
+    } else {
+      const e = pts[nDraw], ue = e[0] + dir * 0.12;                                                                    // the end face of the wing
+      P.quad(par, [ue, yTop, e[1]], [ue - dir * th, yTop, e[1]], [ue - dir * th, yTop + 1.0, e[1]], [ue, yTop + 1.0, e[1]], [0, 0, sg], [[0, 0], [0.2, 0], [0.2, 1], [0, 1]]);
+    }
   }
   let n = 0;
   if (o.ph && o.collide !== false) {

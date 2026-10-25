@@ -8,6 +8,9 @@ import { EXTENT } from '../data/city.js';
 import { riverBanks, deckPoly } from '../environment/river.js';
 import { pointInRing, distToRing } from '../environment/util.js';
 import { toUV, FACE, EDGE } from './frame.js';
+import * as THREE from 'three';
+import { Parts } from './kit.js';
+import { knockBays } from '../lib/fence-bays.js';
 
 const Y_TOP = 0.17, COP_BOT = -0.34, COP_OUT = 0.10, COP_IN = 0.62;
 const NEAR_M = 150;
@@ -69,6 +72,7 @@ export function buildClosure(K, M, ctx) {
   const rail = T('#ffffff', { map: lattice, alphaTest: 0.5, side: 'double', paint: 0.02, name: 'lmC-quay-lattice' });
   K.decalMats.add(rail);
 
+  const bays = [];      // WATER IS REACHABLE (docs/AREAS.md 13.7): the closing railing is a row of BREAKABLE bays (post at the end + lattice panel + a thin collider, lib/fence-bays.js), no longer merged geometry + a 1.6 m box
   for (const bank of riverBanks()) {
     const { pts, seg } = frames(bank);
     const flag = seg.map((sg, i) => inDeck((pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2) || (inDeck(pts[i][0], pts[i][1]) && inDeck(pts[i + 1][0], pts[i + 1][1])));
@@ -89,21 +93,29 @@ export function buildClosure(K, M, ctx) {
         const len = Math.hypot(B[0] - A[0], B[1] - A[1]); if (len < 0.4) continue;
         // frame: local +x along the tangent (flipped on the right-hand bank so that +z is always landward), the wall plane at z = 0
         const ls = bank.landSide, tx = sg.tx * ls, tz = sg.tz * ls, mx = (A[0] + B[0]) / 2, mz = (A[1] + B[1]) / 2, rot = Math.atan2(-tz, tx);
-        ctx.physics.addBox(mx - sg.nx * 0.4, mz - sg.nz * 0.4, len + 0.9, 1.6, Math.atan2(-sg.tz, sg.tx), -6, 1.25); info.colliders++;
         P.push(mx, 0, mz, rot);
         P.box(coping, -len / 2 - 0.05, len / 2 + 0.05, COP_BOT, Y_TOP, -COP_OUT, COP_IN, 'b', 1);
         const n = Math.max(1, Math.ceil(len / 3.2));
-        for (let k = 0; k <= n; k++) {
-          const x = -len / 2 + len * k / n;
-          P.box(post, x - 0.225, x + 0.225, Y_TOP - 0.03, Y_TOP + 0.97, 0.26 - 0.225, 0.26 + 0.225, 'b', 1);
-          P.box(postCap, x - 0.26, x + 0.26, Y_TOP + 0.97, Y_TOP + 1.04, 0.26 - 0.26, 0.26 + 0.26, 'b', 1);
-          P.cyl(postCap, [x, Y_TOP + 1.04, 0.26], [x, Y_TOP + 1.17, 0.26], 0.3, 0.12, 4, true);
-          info.posts++;
-          if (k < n) { const x1 = -len / 2 + len * (k + 1) / n; P.quad(rail, [x + 0.25, Y_TOP + 0.12, 0.26], [x1 - 0.25, Y_TOP + 0.12, 0.26], [x1 - 0.25, Y_TOP + 1.0, 0.26], [x + 0.25, Y_TOP + 1.0, 0.26], [0, 0, 1], [[0, 0], [1, 0], [1, 1], [0, 1]]); info.panels++; }
+        // the bays of this piece: from post k to post k + 1 along the tangent, on the post line 0.26 m landward of the wall plane (local z = landward)
+        for (let k = 0; k < n; k++) {
+          const u0 = -len / 2 + len * k / n, u1 = -len / 2 + len * (k + 1) / n;
+          bays.push({ x0: mx + tx * u0 - tz * 0.26, z0: mz + tz * u0 + tx * 0.26, x1: mx + tx * u1 - tz * 0.26, z1: mz + tz * u1 + tx * 0.26, y: Y_TOP, first: k === 0 });
+          info.posts++; info.panels++; info.colliders++;
         }
+        info.posts++;                                                                    // (the last post of the piece)
         P.pop(); info.pieces++;
       }
     }
+  }
+  if (bays.length) {
+    const tmpl = (fn) => { const Q = new Parts(), g = new THREE.Group(); fn(Q); Q.build(g, { name: 'lmC-quay-post' }); return g.children.map((m) => ({ geo: m.geometry, mat: m.material })); };
+    const parts = [];
+    tmpl((Q) => { Q.box(post, -0.225, 0.225, -0.03, 0.97, -0.225, 0.225, 'b', 1); Q.box(postCap, -0.26, 0.26, 0.97, 1.04, -0.26, 0.26, 'b', 1); Q.cyl(postCap, [0, 1.04, 0], [0, 1.17, 0], 0.3, 0.12, 4, true); })
+      .forEach((t, i) => parts.push({ geo: t.geo, mat: t.mat, name: 'post' + i, far: 420, ats: (b) => (b.first ? ['start', 'end'] : ['end']) }));
+    parts.push({ geo: new THREE.PlaneGeometry(1, 0.88).translate(0.5, 0.56, 0), mat: rail, name: 'panel', far: 520, noOutline: true, stretch: true, inset: 0.25 });
+    knockBays(ctx, { name: 'lmC-quay-fence', bays, parts, far: 520,
+      collider: () => ({ y0: -8, y1: 1.25, thick: 0.45, off: -0.085, e0: 0.05, e1: 0.05 }),
+      rec: () => ({ kind: 'fence', mass: 450, h: 1.0, r: 0.05, anchored: 20, hitK: 0.55, metal: false, minDv: 0 }) });
   }
   return info;
 }

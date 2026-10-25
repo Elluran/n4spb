@@ -4,6 +4,8 @@ The document of the garden team (Track B of the areas plan, `docs/AREAS.md`). It
 source repository and the North data found, the facts and tables the garden starts from, the commands that verify it, the open questions, and (section 12) an empty log for the agents that follow.
 Numbers marked **DESIGN** are design values of the plan, not surveyed. Engine line numbers are at `feat/areas` 7deb152; the M6 hook set (branch `m6-hooks`) moves some of them.
 
+> **Update 2026-10-25 (the water rule, `docs/AREAS.md` 13.7):** the ponds are NOT impassable any more: the ring of shore colliders of T4a is not built (`ponds.js`, `opts.colliders` only for the tests of the old rule), a walker wades into the ponds, a car drives in, a flight landing is never refused, `HOOKS.noLanding` is removed (fifteen HOOKS keys), the tall fence panels and the bridge rails are breakable bays. The T4a / fix-round passages below that speak of impassable shores and `noLanding` are history.
+
 ## 1. Goal
 
 The North page shows the Tauride Garden today as what the generic North makes of it: a 19.8 ha park polygon of lawn with procedural trees at full density, maroon street ribbons for the 118 mapped alleys, benches and bins drawn

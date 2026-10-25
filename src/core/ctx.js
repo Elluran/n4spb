@@ -39,7 +39,7 @@ export function createContext({ scene, camera, renderer = null, audio, quality, 
   const mat = createMaterials(shared);
   const tex = createTextures();
   const wires = geo.createWireSystem();
-  const physics = new Physics(L.heightAt);
+  const physics = new Physics(L.heightAt, L.waterLevelAt);
 
   const ctx = {
     THREE, scene, camera, renderer, audio, quality,

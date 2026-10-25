@@ -10,7 +10,7 @@
 // A pattern is drawn at 400 px / m, white (#fff) with grey (#8c8c8c) shadow lines offset by 1.5 px: the material colour tints it (cast iron #202428, green, blue, red ...).
 import * as THREE from 'three';
 import { PATTERNS2, paint2 } from './rails2.js';
-import { splitInstanced } from '../../core/spatial.js';
+import { knockBays, unitProfile } from '../lib/fence-bays.js';
 
 const PX = 400;
 /** pattern table: bay width W (m), height H (m), draw(g, W, H) in px with 0,0 top left */
@@ -140,35 +140,88 @@ export function railWorld(batch, x0, z0, x1, z1, y, kind, hex, o = {}) {
 }
 
 /**
- * Collector for instanced panels: add({ kind, hex, x, y, z, rotY, roll, len }) = one bay of width len (scaled) with its bottom at (x, y, z) and its length along the local direction rotY.
- * flush(ctx, root) builds one InstancedMesh per (pattern, colour).
+ * Collector of the FENCES of every bridge (docs/AREAS.md 13.7: every fence must break). add({ kind, hex, x, y, z, rotY, roll, len, h, over }) = one bay of a railing panel of width len (scaled) with its bottom at (x, y, z)
+ * and its length along the local direction rotY (`over`: an overlay of the previous panel, the gilded details, drawn 1.2 cm in front on both sides); parapet({ x0, z0, x1, z1, y, ye, h, th, mat, mirror, box })
+ * = a section of a solid granite parapet (a rounded cap, or a plain box, centred on the line when `center`); wall({ x0, z0, x1, z1, th, y0, y1, y }) = a collider along a bridge face (the old solid box of the face): it stands only where no panel / parapet
+ * covers its line (those bays have their own colliders) and is then a GHOST bay (breakable, nothing drawn).
+ * flush(root) builds them all through lib/fence-bays.js: per 384 m cell and per (pattern, colour) a dynamic InstancedMesh, one knock record and one thin collider per bay.
  */
 export const RAIL_FAR = 1500;
+const _pg = new Map();
+/** the cross-section of a granite parapet swept along x 0..1: z 0 = the outer face, z th = the inner face (mirror: the inner face on the other side); a rounded cap of radius th / 2 over a wall of h - 0.26 + ... or a box */
+function parapetGeo(h, th, mirror, box, center) {
+  const key = [h, th, mirror ? 1 : 0, box ? 1 : 0, center ? 1 : 0].join('|'); let g = _pg.get(key); if (g) return g;
+  let prof;
+  if (box) prof = center ? [[-th / 2, 0], [-th / 2, h], [th / 2, h], [th / 2, 0]] : [[0, 0], [0, h], [th, h], [th, 0]];
+  else { const hh = h - 0.26; prof = [[0, 0], [0, hh]]; for (let k = 1; k <= 6; k++) { const a = Math.PI * k / 7; prof.push([th / 2 - Math.cos(a) * th / 2, hh + Math.sin(a) * th / 2]); } prof.push([th, hh], [th, 0]); }
+  if (mirror) prof = prof.map(([z, y]) => [-z, y]).reverse();
+  g = unitProfile(prof, { uLen: 2.8, uvs: 2.8, vFn: (y) => y / 1.2 }); _pg.set(key, g); return g;
+}
 export function makeRailBatch(ctx) {
-  const T = ctx.THREE || THREE, list = new Map();
-  const up = new T.Vector3(0, 1, 0), zz = new T.Vector3(0, 0, 1), qa = new T.Quaternion(), qb = new T.Quaternion(), m4 = new T.Matrix4(), sc = new T.Vector3(), pos = new T.Vector3();
-  const geo = new T.PlaneGeometry(1, 1).translate(0, 0.5, 0);
+  const T = ctx.THREE || THREE, panels = [], parapets = [], walls = [];
+  const stats = { panels: 0, parapets: 0, ghosts: 0 };
+  let last = null;
   return {
-    add(o) { const k = o.kind + o.hex; let a = list.get(k); if (!a) list.set(k, (a = { kind: o.kind, hex: o.hex, items: [] })); a.items.push(o); },
-    count() { let n = 0; for (const a of list.values()) n += a.items.length; return n; },
+    stats,
+    add(o) { if (o.over && last) { (last.over || (last.over = [])).push(o); return; } last = o; panels.push(o); },
+    parapet(b) { parapets.push(b); },
+    wall(w) { walls.push(w); },
+    count() { return panels.length; },
     flush(root) {
-      const railRoot = new T.Group(); railRoot.name = 'bridge-rail-cells'; root.add(railRoot);
-      for (const a of list.values()) {
-        const spec = PATTERNS[a.kind], im = new T.InstancedMesh(geo, railMat(ctx, a.kind, a.hex), a.items.length);
-        a.items.forEach((o, i) => {
-          qa.setFromAxisAngle(up, o.rotY); qb.setFromAxisAngle(zz, o.roll || 0); qa.multiply(qb);
-          m4.compose(pos.set(o.x, o.y, o.z), qa, sc.set(o.len, (o.h || spec.H), 1)); im.setMatrixAt(i, m4);
-        });
-        im.instanceMatrix.needsUpdate = true; im.castShadow = true; im.receiveShadow = false; im.name = 'brg-rail-' + a.kind;
-        im.computeBoundingBox(); im.computeBoundingSphere();
-        ctx.noOutline(im); railRoot.add(im);
+      void root;
+      const bays = [];
+      // ---- the railing panels: one bay each (the overlays travel with their panel)
+      const pb = panels.map((o) => {
+        const tx = Math.cos(o.rotY), tz = -Math.sin(o.rotY), spec = PATTERNS[o.kind];
+        return { x0: o.x, z0: o.z, x1: o.x + tx * o.len, z1: o.z + tz * o.len, y: o.y, ye: o.y + Math.tan(o.roll || 0) * o.len, h: o.h || spec.H, kind: o.kind, hex: o.hex, over: o.over || null };
+      });
+      const geo = new T.PlaneGeometry(1, 1).translate(0.5, 0.5, 0), parts = [], seen = new Set();
+      const panelPart = (kind, hex, v, when) => parts.push({ geo, mat: railMat(ctx, kind, hex), name: 'rail-' + kind, noOutline: true, shadow: true, receive: false, far: RAIL_FAR, stretch: true, v, sy: (b) => b.h, when });
+      for (const b of pb) {
+        const k0 = b.kind + b.hex; if (!seen.has(k0)) { seen.add(k0); panelPart(b.kind, b.hex, 0, (q) => q.kind === b.kind && q.hex === b.hex); }
+        (b.over || []).forEach((q, k) => { const k1 = 'o' + k + q.kind + q.hex; if (!seen.has(k1)) { seen.add(k1); panelPart(q.kind, q.hex, k === 0 ? 0.012 : -0.012, (c) => c.over && c.over[k] && c.over[k].kind === q.kind && c.over[k].hex === q.hex); } });
       }
-      // One collector covers every bridge in the city. Split before registering
-      // bounds, retaining the existing infinite range: this unit plane's per-bay
-      // scale must not assign the full bridge a furniture LOD. The engine's later
-      // pass preserves these authored ranges and finds already spatial pieces.
-      // (round 3, 2026-10-15: a rail bay is a 1 x 1 m alpha-cut plane, sub-pixel beyond 1.5 km; the infinite range drew ~80 rail cells beyond 1.5 km at street level. RAIL_FAR before the quality scale.)
-      splitInstanced(railRoot, { lodFar: () => RAIL_FAR });
+      if (pb.length) {
+        const r = knockBays(ctx, { name: 'brg-rails', bays: pb, parts, far: RAIL_FAR,
+          collider: (b) => ({ y0: Math.min(b.y, b.ye) - 0.6, y1: Math.max(b.y, b.ye) + 1.3, thick: 0.3, e0: 0.04, e1: 0.04 }),
+          rec: (b) => ({ kind: 'fence', mass: 60, h: b.h, r: 0.04, anchored: 12, hitK: 0.2, metal: true, minDv: 0 }) });
+        stats.panels = pb.length; bays.push(...pb);
+      }
+      // ---- the granite parapets: sections (bays) of a swept cross-section
+      if (parapets.length) {
+        const keys = new Map(), pparts = [];
+        for (const b of parapets) {
+          const k = [b.h, b.th, b.mirror ? 1 : 0, b.box ? 1 : 0, b.center ? 1 : 0, b.mat && b.mat.uuid].join('|'); b.pk = k;
+          if (!keys.has(k)) { keys.set(k, 1); pparts.push({ geo: parapetGeo(b.h, b.th, b.mirror, b.box, b.center), mat: b.mat, name: 'parapet', receive: true, far: RAIL_FAR, stretch: true, when: (q) => q.pk === k }); }
+        }
+        knockBays(ctx, { name: 'brg-parapets', bays: parapets, parts: pparts, far: RAIL_FAR,
+          collider: (b) => ({ y0: Math.min(b.y, b.ye ?? b.y) - 0.6, y1: Math.max(b.y, b.ye ?? b.y) + Math.max(1.3, b.h + 0.25), thick: Math.max(0.3, b.th), off: b.center ? 0 : (b.mirror ? -1 : 1) * b.th / 2, e0: 0.03, e1: 0.03 }),
+          rec: (b) => ({ kind: 'fence', mass: 700, h: b.h, r: Math.max(0.1, b.th / 2), anchored: 18, hitK: 0.6, metal: false, minDv: 0 }) });
+        stats.parapets = parapets.length; bays.push(...parapets);
+      }
+      // ---- the old solid boxes along the faces: only where nothing is drawn (a ghost bay, breakable, invisible)
+      if (walls.length) {
+        const G = 6, grid = new Map(), cellOf = (x, z) => Math.floor(x / G) * 65536 + Math.floor(z / G);
+        for (const b of bays) { const mx = (b.x0 + b.x1) / 2, mz = (b.z0 + b.z1) / 2; for (const [dx, dz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) { const k = cellOf(mx + dx * G, mz + dz * G); let a = grid.get(k); if (!a) grid.set(k, (a = [])); a.push(b); } }
+        const covered = (x, z) => {
+          const a = grid.get(cellOf(x, z)); if (!a) return false;
+          for (const b of a) { const dx = b.x1 - b.x0, dz = b.z1 - b.z0, l2 = dx * dx + dz * dz || 1e-6, t = Math.max(0, Math.min(1, ((x - b.x0) * dx + (z - b.z0) * dz) / l2)); if (Math.hypot(b.x0 + dx * t - x, b.z0 + dz * t - z) < 0.75) return true; }
+          return false;
+        };
+        const ghosts = [];
+        for (const w of walls) {
+          const len = Math.hypot(w.x1 - w.x0, w.z1 - w.z0), n = Math.max(1, Math.ceil(len / 2.4));
+          for (let i = 0; i < n; i++) {
+            const a = i / n, b2 = (i + 1) / n, mx = w.x0 + (w.x1 - w.x0) * (a + b2) / 2, mz = w.z0 + (w.z1 - w.z0) * (a + b2) / 2;
+            if (covered(mx, mz)) continue;
+            ghosts.push({ x0: w.x0 + (w.x1 - w.x0) * a, z0: w.z0 + (w.z1 - w.z0) * a, x1: w.x0 + (w.x1 - w.x0) * b2, z1: w.z0 + (w.z1 - w.z0) * b2, y: w.y ?? w.y0, y0: w.y0, y1: w.y1, th: w.th, ghost: true });
+          }
+        }
+        if (ghosts.length) knockBays(ctx, { name: 'brg-ghost', bays: ghosts, parts: [], far: RAIL_FAR,
+          collider: (b) => ({ y0: b.y0, y1: b.y1, thick: b.th, e0: 0.03, e1: 0.03 }),
+          rec: (b) => ({ kind: 'fence', mass: 200, h: 1.0, r: 0.1, anchored: 14, hitK: 0.3, metal: false, minDv: 0 }) });
+        stats.ghosts = ghosts.length;
+      }
     },
   };
 }

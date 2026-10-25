@@ -11,6 +11,7 @@ import { figureMats } from '../lib/figures.js';
 import { kutuzov, barclay, trophies } from './statues.js';
 import { templateOf } from './util.js';
 import { knockInstances } from '../lib/knock-inst.js';
+import { knockBays, unitProfile, faceLeft } from '../lib/fence-bays.js';
 const TAU = Math.PI * 2;
 
 const AREA_ID = 'w638329474', PARK = 'w115318448';
@@ -80,7 +81,19 @@ export function build(K) {
   const fo = fountainAt();
   function fountainAt() { const f = FOUNTAINS.find((q) => q.id === 'w101292107'); const m = Mdl(f.x, f.z); return { x: m.mx, z: m.mz }; }
   fountain(P, M, fo.x, fo.z);
-  cylAt(ph, fo.x, fo.z, 8.4, 0, 0.55);
+  {                                                                                    // WATER IS REACHABLE (docs/AREAS.md 13.7): no solid disc any more: the basin is 0.34 m of shallow water to wade in, the rim 40 breakable bays, the middle pillar solid
+    const R = 8.2, r0 = 7.4, h = 0.5, seg = 40, bays = [], at = (t, r) => W(fo.x + Math.sin(t) * r, fo.z + Math.cos(t) * r);
+    for (let i = 0; i < seg; i++) {
+      const t0 = i / seg * TAU, t1 = (i + 1) / seg * TAU, tm = (t0 + t1) / 2, p = at(t0, R), q = at(t1, R), c = at(tm, R - 1);       // (local +z = toward the middle of the basin)
+      bays.push(faceLeft(p.x, p.z, q.x, q.z, c.x - (p.x + q.x) / 2, c.z - (p.z + q.z) / 2, { y: 0 }));
+    }
+    knockBays(K.ctx, { name: 'lmF-fountain-rim', bays, far: 300,
+      parts: [{ geo: unitProfile([[0, 0], [0, h], [R - r0, h], [R - r0, h - 0.16]], { caps: false, uLen: 1.3, uvs: 1.3, vFn: (y) => y }), mat: M.rim, name: 'rim', far: 300, stretch: true }],
+      collider: () => ({ y0: 0, y1: 0.6, thick: R - r0 + 0.1, off: (R - r0) / 2, e0: 0.1, e1: 0.1 }),
+      rec: () => ({ kind: 'fence', mass: 500, h, r: 0.4, anchored: 10, hitK: 0.3, metal: false, minDv: 0 }) });
+    ph.addWater({ ring: Array.from({ length: 40 }, (_, k) => { const p = at(k / 40 * TAU, r0); return [p.x, p.z]; }).flat(), level: h - 0.16 });
+    cylAt(ph, fo.x, fo.z, 0.5, 0, 1.0);
+  }
   { const ring = []; for (let k = 0; k < 40; k++) { const t = k / 40 * Math.PI * 2; ring.push([fo.x + Math.sin(t) * 10.6, fo.z + Math.cos(t) * 10.6]); } fenceRun(P, M, ring, 0.55, true, 0.16); }
 
   // ------------------------------------------------------------------------------------------------ monuments
@@ -137,9 +150,7 @@ function pointIn(r, x, z) { let c = false; for (let i = 0, j = r.length - 1; i <
 function fountain(P, M, x, z) {
   const R = 8.2, r0 = 7.4, h = 0.5;
   P.push(x, 0, z, 0);
-  arcWall(P, M.rim, R, 0, TAU, 0, h, false, { step: 1.3 });                      // outer wall
-  arcFlat(P, M.rim, r0, R, 0, TAU, h, true, { step: 1.3 });                      // top ring
-  arcWall(P, M.rim, r0, 0, TAU, h - 0.16, h, true, { step: 1.3 });               // inner wall above the water
+  // (the rim - the outer wall, the top ring, the inner wall above the water - is a row of 40 BREAKABLE bays now: fountainRim() below, docs/AREAS.md 13.7)
   const wp = []; for (let k = 0; k < 40; k++) { const t = k / 40 * TAU; wp.push([Math.sin(t) * r0, h - 0.16, Math.cos(t) * r0]); }
   P.fan(M.water, wp, [0, 1, 0], (q) => [q[0] / 4, q[2] / 4]);                    // water
   P.pop();

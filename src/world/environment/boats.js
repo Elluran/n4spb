@@ -146,8 +146,10 @@ export function buildBoats(ctx, root, quay) {
     for (let u = -len / 2 + 1; u < len / 2; u += 3) for (const sg of [-1, 1]) place(u, sg * (wid / 2 + 0.1), p.y + 0.16, 0.34, 0.32, 0.2, TYRE);
     // railing along the water side (the side away from the wall = the side with more water around)
     const wallSide = bankSide(p), rs = -wallSide, rail = '#e6e8e6';
+    if (!p.attached) {      // (the railing of a pier at a descent is a row of breakable bays built by quay.js: docs/AREAS.md 13.7)
     place(0, rs * (wid / 2 - 0.08), top + 0.95, len - 0.2, 0.05, 0.05, rail); place(0, rs * (wid / 2 - 0.08), top + 0.5, len - 0.2, 0.04, 0.04, rail);
     for (let u = -len / 2 + 0.2; u <= len / 2; u += 2.4) place(u, rs * (wid / 2 - 0.08), top + 0.5, 0.06, 1.0, 0.06, rail);
+    }
     if (len > 14) {                                                                  // the ticket kiosk: a booth with a green tarpaulin roof
       place(-len / 2 + 3, -rs * 0.0, top + 1.25, 3.0, 2.5, Math.min(2.4, wid - 0.5), '#e4e6e2'); place(-len / 2 + 3, 0, top + 1.55, 3.08, 0.9, Math.min(2.48, wid - 0.42), GLASS);
       place(-len / 2 + 3, 0, top + 2.62, 3.5, 0.16, Math.min(2.9, wid - 0.2), '#3d6f46');

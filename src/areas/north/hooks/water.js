@@ -2,7 +2,8 @@
 //  hooks/water.js - the WATER hooks of the North (docs/AREAS.md section 9, phase T4a of the Tauride remake): the water bodies that a landmark module draws itself, for the field's water mask, and the refusal of a flight landing on them.
 //  PURE DATA + PURE FUNCTIONS: no three.js, no layout.js, no data facade (the area module loads this file without the import-map remap). The imports outside the hooks folder are pure data and the pure terrain function:
 //  landmarksTauride/data/water.js (the union outline of the two ponds and the canals), data/ponds.js (the datum table) and height.js (gardenHeight, like hooks/height.js).
-//    makeNoLanding(MODULES) -> ((x, z) => boolean) | undefined         T4a fix 1  core/player.js landingBlocked(): true where a flyer must not touch down: the ground of the garden terrain is below the contour of the shore colliders (the water and the wet foot of the bank).
+//    (makeNoLanding is GONE: the owner's world rule "water is reachable", docs/AREAS.md 13.7, removed the refusal of a flight landing on the ponds, with the shore colliders it served.)
+//    [removed text of T4a fix 1] core/player.js landingBlocked(): true where a flyer must not touch down: the ground of the garden terrain is below the contour of the shore colliders (the water and the wet foot of the bank).
 //                                  The engine refuses a landing only where the ground is below -1 m (the Big Pond deeper than 0.55 m); in the shallows and the Small Pond (-0.5 m) the flyer would stand INSIDE the ring of shore colliders and could not
 //                                  walk out (9 of 9 landings of the QA). undefined unless MODULES has 'landmarksTauride'; main.js hands it to the Player (player.noLanding); the strip has none.
 //
@@ -20,20 +21,13 @@
 // ============================================================================
 import { WATER_UNION } from '../../../world/landmarksTauride/data/water.js';
 import { gardenHeight, GARDEN_SHORE } from '../../../world/landmarksTauride/height.js';
-import { COLLIDER, WATER_Y } from '../../../world/landmarksTauride/data/ponds.js';
+import { WATER_Y } from '../../../world/landmarksTauride/data/ponds.js';
 import { BRIDGE_SITES, BRIDGE_DECK_WIDTH } from '../../../world/landmarksTauride/data/bridges.js';
 
 /** T4a: the ponds as water bodies of the field's mask (a plain function, read once by environment/field.js; gated by the page's module list like parkingReject) */
 export function makeWaterBodies(MODULES) {
   if (!(Array.isArray(MODULES) && MODULES.includes('landmarksTauride'))) return undefined;
   return () => WATER_UNION.map((p, i) => ({ id: 'tauride-pond-' + i, o: p.o.slice(), h: (p.h || []).map((r) => r.slice()) }));
-}
-
-/** T4a fix round 1: where a flight landing is refused as 'water': the terrain is at or below the contour of the shore colliders (COLLIDER.contourY, -0.3 m: the water-side face of the boxes stands on it), i.e. in the ponds and on the wet foot of the bank that is on the water side of the boxes. A plain function, gated by the page's module list like parkingReject. */
-export function makeNoLanding(MODULES) {
-  if (!(Array.isArray(MODULES) && MODULES.includes('landmarksTauride'))) return undefined;
-  const y = COLLIDER.contourY;
-  return (x, z) => { const g = gardenHeight(x, z); return g !== null && g <= y; };
 }
 
 /** the lanes of the pond ducks: `offset` m into the water from the shore line, `margin` m from any shore for every lane sample (and 2.5 m of free water beyond, as on the canals) */

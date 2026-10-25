@@ -95,13 +95,13 @@ console.log('3. the colliders: walk ramps along the whole axis, rail boxes along
     for (const r of ramps) { if (Math.abs(r.yA - s.h(r.u0)) > 1e-9 || Math.abs(r.yB - s.h(r.u1)) > 1e-9) mism++; for (let k = 0; k <= 4; k++) { const u = r.u0 + (r.u1 - r.u0) * k / 4, lin = r.yA + (r.yB - r.yA) * k / 4; if (Math.abs(lin - s.h(u)) > 0.006) off++; } } }
   ok('the walk ramps tile every axis without a gap, their ends are the profile and the linear ramp stays within 6 mm of deckY between them', gaps === 0 && mism === 0 && off === 0, `${plan.stats.ramps} ramps, ${gaps} gaps, ${mism} end mismatches, ${off} samples off`); }
 { const R = D.RAIL; let bad = 0, low = 0, rows = [];
-  for (const s of plan.sites) { const rails = plan.colliders.filter((c) => c.kind === 'rail' && c.site === s.site); if (rails.length !== 2 * (s.axis.length - 1)) bad++;
-    for (const r of rails) { let hi = -Infinity, lo = Infinity; for (let u = r.u0; u <= r.u1 + 1e-9; u += 0.1) { hi = Math.max(hi, s.h(u)); lo = Math.min(lo, s.h(u)); }
-      if (!(r.y1 - hi >= 0.73 + STEP + 1e-9)) low++; if (!(r.y0 <= lo - 0.5)) bad++; if (Math.abs(r.w - R.colliderThick) > 1e-9) bad++; }
+  for (const s of plan.sites) { const rails = plan.railBays.filter((c) => c.site === s.site); if (rails.length < 2 * (s.axis.length - 1) || rails.some((r) => !(r.side === 1 || r.side === -1))) bad++;
+    for (const r of rails) { const hi = Math.max(r.y, r.ye), lo = Math.min(r.y, r.ye);      // the collider of a bay: from the lower foot - colliderBelow to the higher foot + colliderAbove, colliderThick m thick (buildBridges)
+      if (!(hi + R.colliderAbove - hi >= 0.73 + STEP + 1e-9)) low++; if (!(lo - R.colliderBelow <= lo - 0.5)) bad++; }
     rows.push(`${s.site}:${rails.length}`); }
-  ok(`two rail boxes per axis segment, ${R.colliderThick} m thick, their top more than a hop (0.73) + STEP_HEIGHT (${STEP}) above the deck under them, their bottom below it`, bad === 0 && low === 0, rows.join(' ') + `, ${low} too low`); }
-{ const R = D.RAIL; let bad = 0; for (const s of plan.sites) for (const r of plan.colliders.filter((c) => c.kind === 'rail' && c.site === s.site)) { let best = Infinity; for (let u = 0; u <= s.L; u += 0.1) { const q = s.at(u); best = Math.min(best, Math.hypot(q.x - r.cx, q.z - r.cz)); } if (Math.abs(best - (s.hw + R.colliderIn + R.colliderThick / 2)) > 0.05) bad++; }
-  ok('the rail boxes stand on the deck edge (their inner face at the half width): the deck between them is the whole walkway', bad === 0, `${bad} rails off the edge`); }
+  ok(`the rails are breakable bays, at least two per axis segment (a bay per post-to-post span and per bend), ${R.colliderThick} m thick colliders, their top more than a hop (0.73) + STEP_HEIGHT (${STEP}) above the deck under them, their bottom below it`, bad === 0 && low === 0, rows.join(' ') + `, ${low} too low`); }
+{ const R = D.RAIL; let bad = 0; for (const s of plan.sites) for (const r of plan.railBays.filter((c) => c.site === s.site)) { let best = Infinity; for (let u = 0; u <= s.L; u += 0.1) { const q = s.at(u); best = Math.min(best, Math.hypot(q.x - (r.x0 + r.x1) / 2, q.z - (r.z0 + r.z1) / 2)); } if (Math.abs(best - (s.hw - R.railW / 2 - 0.02)) > 0.05) bad++; }      // (the rail line; the collider box is offset outward so that its inner face is the deck edge + colliderIn)
+  ok('the rail bays stand on the deck edge (their inner face at the half width): the deck between them is the whole walkway', bad === 0, `${bad} rails off the edge`); }
 
 // =============================================================== 4. the shore ring with the decks: cut exactly under the decks
 console.log('4. the shore colliders of ponds.js with the deck cuts');
@@ -117,6 +117,9 @@ console.log('5. the real Player (core/player.js + physics.js) on the plan collid
 function world(design = D, decksOf = plan) {
   const bp = design === D ? decksOf : BR.planBridges({ design, gh }), ph = new eng.Physics((x, z) => L.heightAt(x, z));
   for (const c of bp.colliders) { if (c.kind === 'ramp') ph.addWalkRamp(c.cx, c.cz, c.w, c.d, c.rot, c.yA, c.yB, c.thick); else ph.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1); }
+  // the rails are bays (lib/fence-bays.js; buildBridges gives each the collider of its design): the same boxes here, from the plan's railBays
+  { const RR = design.RAIL; for (const q of bp.railBays) { const dx = q.x1 - q.x0, dz = q.z1 - q.z0, len = Math.hypot(dx, dz), tx = dx / len, tz = dz / len, off = q.side * (RR.colliderIn + RR.colliderThick / 2 + RR.railW / 2 + 0.02), e = 0.3, sh = 0;
+      ph.addBox((q.x0 + q.x1) / 2 - tz * off + tx * sh, (q.z0 + q.z1) / 2 + tx * off + tz * sh, len + 2 * e, RR.colliderThick, Math.atan2(-tz, tx), Math.min(q.y, q.ye) - RR.colliderBelow, Math.max(q.y, q.ye) + RR.colliderAbove); } }
   for (const c of PM.planPonds({ decks: bp.decks }).colliders) ph.addBox(c.cx, c.cz, c.w, c.d, c.rot, c.y0, c.y1);
   const { camera } = SE.makeContext(eng, []);
   return { bp, ph, player: () => SE.makePlayer(eng, camera, ph, { x0: 900, x1: 1520, z0: -1800, z1: -1250 }) };

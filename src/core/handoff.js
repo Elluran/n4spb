@@ -113,7 +113,7 @@ export const forwardOf = (yawDeg) => [-Math.sin(yawDeg * DEG), -Math.cos(yawDeg 
 export function makeProbe(L, { inset = 25 } = {}) {
   return {
     inside: (x, z) => L.inPlay(x, z, inset),
-    blocked: (x, z) => L.insideBuilding(x, z, 1.5) || L.inRiver(x, z),
+    blocked: (x, z) => L.insideBuilding(x, z, 1.5),      // (water is reachable, docs/AREAS.md 13.7: a player in the river arrives in the river; a car still needs a lane, so it is put on the nearest road)
     /** the carriageway under (x,z): { tx, tz } unit tangent, or null when it is not on a vehicle road */
     lane: (x, z) => { const r = L.roadsNear(x, z, 0, { drivable: true }); const h = r.find((q) => q.gap <= 0); return h ? { tx: h.tx, tz: h.tz } : null; },
     hero: L.HERO,

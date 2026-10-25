@@ -7,6 +7,9 @@
 // Colliders: the deck is a chain of walk ramps (the feet follow the hump), the railing a solid box along each side, the pedestals boxes (horses.js), and closure.js closes the quay gaps.
 import * as THREE from 'three';
 import { bankU } from './closure.js';
+import { Parts } from './kit.js';
+import { knockBays } from '../lib/fence-bays.js';
+import { knockInstances } from '../lib/knock-inst.js';
 import { TH, CU, SU, CX, CZ, HALF, EXT, FACE, EDGE, ROAD, SPRING, CROWN, WATER, FOOT, STAIN_TOP, ARCHES, STATIONS, yDeck, slope, archY, archU, toWorld, BOX_ROT, RAMP_ROT } from './frame.js';
 
 const COR = 0.35;                                    // cornice drop below the deck, projection
@@ -114,12 +117,7 @@ export function buildBridge(K, M) {
       P.quad(M.railPost, [u0, y0 - 0.1, vc + w], [u1, y1 - 0.1, vc + w], [u1, y1 + 0.03, vc + w], [u0, y0 + 0.03, vc + w], [0, 0, 1]);
       P.quad(M.railPost, [u1, y1 - 0.1, vc - w], [u0, y0 - 0.1, vc - w], [u0, y0 + 0.03, vc - w], [u1, y1 + 0.03, vc - w], [0, 0, -1]);
     }
-    for (const [a, b] of PIERS) {                                  // tumbas over the pier lines: pink granite box 0.8 x 0.8 x 1.25, dark pyramid cap
-      const uc = (a + b) / 2, vcT = sg * (EDGE - 0.35), yb = yDeck(uc) + 0.1;
-      P.box(M.granite, uc - 0.4, uc + 0.4, yb, yb + 1.25, vcT - 0.4, vcT + 0.4, 'b', 1.1);
-      P.push(uc, 0, vcT, Math.PI / 4); P.cyl(M.cap, [0, yb + 1.25, 0], [0, yb + 1.55, 0], 0.62, 0.14, 4, true); P.pop();
-      P.box(M.coping, uc - 0.46, uc + 0.46, yb + 1.18, yb + 1.25, vcT - 0.46, vcT + 0.46, 'b', 1);
-    }
+    // (the tumbas over the pier lines are breakable instances now: buildRailing below)
   }
 
   // ------------------------------------------------------------------ plates under the cornice: "3.4" clearance (red frame) and the boat pictogram, on both faces
@@ -156,39 +154,47 @@ export function buildMarkings(K, M) {
   P.pop();
 }
 
-/** the 1.75 x 1.0 m cast-iron panels of both railings (3 relief types alternating) - instanced, alpha cut-out, no outline */
+/** the 1.75 x 1.0 m cast-iron panels of both railings (3 relief types alternating) and the four pink granite tumbas over the pier lines: WATER IS REACHABLE (docs/AREAS.md 13.7), so every panel is a BREAKABLE BAY
+ *  (an instance, one knock record and one thin collider, lib/fence-bays.js: a car at 14 km/h breaks it off) and every tumba a knock record (a granite box 0.8 x 0.8 x 1.25 with its cap, 35 km/h). Returns the panel count. */
 export function buildRailing(ctx, M, root) {
-  const T = ctx.THREE || THREE;
-  const runs = [[-22.9, -8.45], [-7.65, 7.65], [8.45, 22.9]];
-  const buckets = [[], [], []];
-  let n = 0;
+  const T = ctx.THREE || THREE, runs = [[-22.9, -8.45], [-7.65, 7.65], [8.45, 22.9]], bays = [];
   for (const sg of [-1, 1]) {
     for (const [a, b] of runs) {
-      const count = Math.max(1, Math.round((b - a) / 1.75)), pw = (b - a) / count;
+      const count = Math.max(1, Math.round((b - a) / 1.75)), pw = (b - a) / count, v = sg * (EDGE - 0.175);
       for (let i = 0; i < count; i++) {
-        const u = a + pw * (i + 0.5), kind = (Math.abs(i + (sg > 0 ? 1 : 0) + Math.round(a)) % 3);
-        buckets[kind].push({ u, v: sg * (EDGE - 0.175), len: pw }); n++;
+        const u0 = a + pw * i, u1 = u0 + pw, u = a + pw * (i + 0.5), kind = (Math.abs(i + (sg > 0 ? 1 : 0) + Math.round(a)) % 3), p = toWorld(u0, v), q = toWorld(u1, v);
+        bays.push({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, y: yDeck(u0) + 0.14, ye: yDeck(u1) + 0.14, kind });
+        void u;
       }
     }
   }
-  const geo = new T.PlaneGeometry(1, 1).translate(0, 0.5, 0);
-  const up = new T.Vector3(0, 1, 0), zz = new T.Vector3(0, 0, 1), qa = new T.Quaternion(), qb = new T.Quaternion(), m4 = new T.Matrix4(), sc = new T.Vector3(), pos = new T.Vector3();
-  buckets.forEach((list, k) => {
-    if (!list.length) return;
-    const im = new T.InstancedMesh(geo, M.rail[k], list.length);
-    list.forEach((p, i) => {
-      const w = toWorld(p.u, p.v);
-      qa.setFromAxisAngle(up, -TH); qb.setFromAxisAngle(zz, Math.atan(slope(p.u))); qa.multiply(qb);
-      m4.compose(pos.set(w.x, yDeck(p.u) + 0.14, w.z), qa, sc.set(p.len, 1.0, 1)); im.setMatrixAt(i, m4);
-    });
-    im.instanceMatrix.needsUpdate = true; im.castShadow = true; im.receiveShadow = false; im.name = 'lmC-bridge-rail-' + k;
-    im.computeBoundingBox(); im.computeBoundingSphere();
-    // Keep the bridge railing's authored range: the unit plane is scaled per bay,
-    // so geometry-only LOD would hide the complete rail beyond a bench's range.
-    im.userData.noSplit = true;
-    ctx.noOutline(im); root.add(im);
-  });
-  return n;
+  // the abutment stretches between the end of the drawn railing (|u| 22.9) and the bank line: nothing is drawn there, the old invisible wall stays as GHOST bays (breakable too)
+  for (const sg of [-1, 1]) {
+    const v = sg * (EDGE - 0.175), uw = bankU(-1, v) - 0.2, ue = bankU(1, v) + 0.2;
+    for (const [ua, ub] of [[uw, -22.9], [22.9, ue]]) {
+      if (ub - ua < 0.4) continue;
+      const n = Math.max(1, Math.ceil((ub - ua) / 2.4));
+      for (let i = 0; i < n; i++) { const u0 = ua + (ub - ua) * i / n, u1 = ua + (ub - ua) * (i + 1) / n, p = toWorld(u0, v), q = toWorld(u1, v); bays.push({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, y: yDeck(u0) + 0.14, ye: yDeck(u1) + 0.14, ghost: true, kind: -1 }); }
+    }
+  }
+  const nPanels = bays.filter((q) => !q.ghost).length, geo = new T.PlaneGeometry(1, 1).translate(0.5, 0, 0).translate(0, 0.5, 0);
+  knockBays(ctx, { name: 'lmC-bridge-rail', bays, far: 1500,
+    parts: [0, 1, 2].map((k) => ({ geo, mat: M.rail[k], name: 'rail-' + k, noOutline: true, shadow: true, receive: false, far: 1500, stretch: true, when: (bb) => bb.kind === k })),
+    collider: (bb) => ({ y0: Math.min(bb.y, bb.ye) - 0.7, y1: 3.2, thick: 0.5, e0: 0.05, e1: 0.05 }),
+    rec: () => ({ kind: 'fence', mass: 90, h: 1.0, r: 0.05, anchored: 14, hitK: 0.25, metal: true, minDv: 0 }) });
+  // the tumbas: pink granite box 0.8 x 0.8 x 1.25, dark pyramid cap, coping; a record each with a box collider
+  const Q = new Parts(), grp = new T.Group();
+  Q.box(M.granite, -0.4, 0.4, 0, 1.25, -0.4, 0.4, 'b', 1.1);
+  Q.push(0, 0, 0, Math.PI / 4); Q.cyl(M.cap, [0, 1.25, 0], [0, 1.55, 0], 0.62, 0.14, 4, true); Q.pop();
+  Q.box(M.coping, -0.46, 0.46, 1.18, 1.25, -0.46, 0.46, 'b', 1);
+  Q.build(grp, { name: 'lmC-tumba' });
+  const spots = [];
+  for (const sg of [-1, 1]) for (const [a, b] of PIERS) { const uc = (a + b) / 2, w = toWorld(uc, sg * (EDGE - 0.35)); spots.push({ x: w.x, y: yDeck(uc) + 0.1, z: w.z, rotY: -TH }); }
+  const items = spots.map((sp) => ctx.physics.addBox(sp.x, sp.z, 0.8, 0.8, BOX_ROT, sp.y - 0.8, sp.y + 1.6));
+  knockInstances(ctx, { name: 'lmC-tumba', parts: grp.children.map((m, i) => ({ geo: m.geometry, mat: m.material, name: 'tumba' + i, far: 400 })), spots, items: (i) => items[i], far: 400,
+    rec: { kind: 'column', mass: 700, h: 1.55, r: 0.4, anchored: 35, hitK: 0.7, metal: false } });
+  void root;
+  return nPanels;
 }
 
 /** colliders: the deck as walk ramps (the hump), the railing line, nothing else (pedestals: horses.js; quay gaps: closure.js) */
@@ -199,9 +205,7 @@ export function bridgeColliders(ctx) {
     const w = toWorld((u0 + u1) / 2, 0);
     ph.addWalkRamp(w.x, w.z, 2 * EDGE, len, RAMP_ROT, yDeck(u0), yDeck(u1), 2.5); n++;
   }
-  for (const sg of [-1, 1]) {                                       // railing + pedestals: a solid column along both sides from bank to bank (feet may rise to +1.5 on the crown, the rail stays above)
-    const v = sg * (EDGE - 0.175), uw = bankU(-1, v) - 0.2, ue = bankU(1, v) + 0.2, w = toWorld((uw + ue) / 2, v);
-    ph.addBox(w.x, w.z, ue - uw, 0.5, BOX_ROT, -6, 3.2); n++;
-  }
+  // (the solid column along both sides of the railing is gone: every panel of buildRailing is a breakable bay with its own collider; bankU stays exported for closure.js / boats.js)
+  void bankU;
   return n;
 }
