@@ -21,6 +21,8 @@ GPU time (`EXT_disjoint_timer_query_webgl2`, median of 4 interleaved rounds x 40
 The frame stays CPU (draw submission) bound: GPU 1-3 ms against 4-5 ms of JS, so the AO does not move the frame time on this GPU. A GPU 10-20x slower (integrated
 graphics) would pay roughly 1-2 ms at 1080p; touch devices have it off. Driving (`drive-bench.mjs --seconds 20 --start "498.2286,135.1625,76.0322"`, headless frames are vsync-capped,
 two runs each, AO off vs on): performance mean 19.5 / 19.8 vs 19.0 / 19.3 ms, medium 23.4 / 23.6 vs 23.3 / 23.4 ms; p50 16.7, p95 33.4 ms in every run: no measurable difference.
+Shipping bake `0356f22b7318376dfd76`, normal loading (no `baked=force`), same drive: performance intro 24.0 s, mean 18.6 ms (54 fps), 964 draws; with `?ao=0` 23.6 s, 18.4 ms
+(54 fps), 959 draws; medium 23.9 s, 21.9 ms (46 fps). Loading is unchanged by the AO (two small shader programs).
 Not checked: the metro underground (same pass on the same target; only the background and the sun change there).
 
 ## 2026-10-15/16: walking and driving rounds 2 and 3 (far field, outline proxies, people scheduling, instanced ranges)
