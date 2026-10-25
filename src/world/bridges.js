@@ -66,8 +66,9 @@ export async function build(ctx) {
       list.push({ id: site.id, name: site.name, nameEn: site.nameEn, x: site.cx, z: site.cz, at: site.at, site, B });
     } catch (err) { console.error(`[bridges] ${site.id} failed:`, err); failed.push(`${site.id}: ${err && err.stack || err}`); }
   }
+  // the bascule span of the Palace Bridge is built by module landmarksPalaceBridge when the page lists it (`leaves`, docs/AREAS.md 13.10); the strip keeps the closed bridge
   try {
-    const P = new Parts(); const info = buildPalace({ ctx, P, M, rails, waterY: waterY('neva') }); info.colliders(); flush(P, 'palace'); stats.colliders += info.info.colliders; list.push({ id: 'palace', name: 'Дворцовый мост', nameEn: 'Palace Bridge', x: info.x, z: info.z, at: info.at ? [info.at.x, info.at.z] : [info.x, info.z], B: info });
+    const P = new Parts(); const info = buildPalace({ ctx, P, M, rails, waterY: waterY('neva'), leaves: Array.isArray(ctx.buildList) && ctx.buildList.includes('landmarksPalaceBridge') }); info.colliders(); flush(P, 'palace'); stats.colliders += info.info.colliders; list.push({ id: 'palace', name: 'Дворцовый мост', nameEn: 'Palace Bridge', x: info.x, z: info.z, at: info.at ? [info.at.x, info.at.z] : [info.x, info.z], B: info });
   } catch (err) { console.error('[bridges] palace failed:', err); failed.push('palace: ' + (err && err.stack || err)); }
   // The environment lays an invisible fallback deck (a walk box at y 0 + two parapet boxes y -2 .. 1.3) into a BRIDGE_ZONES row it believes unbuilt: the parapet boxes fence the pavements of the real deck.
   // Remove a fallback whose walk box centre lies on the Palace Bridge deck (colliders only).

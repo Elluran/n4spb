@@ -56,6 +56,7 @@ export const MODULES = [
   'landmarksCastle', // Engineering (Mikhailovsky) Castle and the Peter I monument
   'bridges',      // the bridges of the area: Kazansky, Green, Palace, Hermitage, the Winter Canal and the Swan Canal bridges ...
   'landmarksTroitsky', // the Troitsky Bridge over the Neva (554 m) with its opening bascule leaf; after streets (the NPC stop lines) and bridges (its deckY wraps theirs), before traffic / people (they read it)
+  'landmarksPalaceBridge', // the Palace Bridge's two opening bascule leaves (docs/AREAS.md 13.10): `bridges` leaves the central span to it; after streets (the NPC stop lines) and bridges, before traffic / people
   'props',        // benches, bins, kiosks, bus shelters, tourist stalls, billboards, flower baskets
   'traffic',      // moving cars, buses, trolleybuses + parked cars
   'people',       // pedestrians, tourists, groups with guides, station crowd, cyclists, scooters
@@ -68,6 +69,7 @@ export const LABELS = {
   landmarksBelinskyNorth: 'церковь Симеона и Анны',
   northBridges: 'Литейный мост',
   landmarksTroitsky: 'Троицкий мост · разводной пролёт',
+  landmarksPalaceBridge: 'Дворцовый мост · разводные пролёты',
   landmarksD: 'Национальная библиотека',
   landmarksGarden: 'Летний сад · ограда',
   landmarksMars: 'Марсово поле, Мраморный дворец, памятник Суворову',

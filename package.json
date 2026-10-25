@@ -58,6 +58,7 @@
     "partywalls": "node tools/party-wall-test.mjs",
     "belinsky": "node tools/belinsky-test.mjs",
     "troitsky": "node tools/area.mjs palace tools/troitsky-test.mjs",
+    "palacebridge": "node tools/area.mjs palace tools/palacebridge-test.mjs",
     "wires": "node tools/wires-test.mjs",
     "paving": "node tools/street-paving-test.mjs",
     "roads": "node tools/roads.mjs",

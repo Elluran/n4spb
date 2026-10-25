@@ -41,9 +41,9 @@ import { makeDeckUnderside } from './hooks/decks.js';
 
 /** The services whose own deckY(x, z) (a podium, stairs, garden bridges) is consulted before the bridge decks by the drive handling and the pedestrian navigation (H09). An absent service is skipped. */
 const DECK_SERVICES = Object.freeze(['landmarksTauride']);
-/** the deck services of the page whose module list is MODULES: DECK_SERVICES, plus 'eastBridges' (the raised Alexander Nevsky Bridge deck and the street-level slabs of the Lavra crossings), 'northBridges' (the raised Bolsheokhtinsky / Liteyny Neva decks, ported from the source) and 'landmarksTroitsky' (the Troitsky Bridge with its MOVING bascule leaf, docs/AREAS.md 13.8) when those modules are built; asked after the garden / podium (the decks never overlap). The North and the strip keep the default list. */
+/** the deck services of the page whose module list is MODULES: DECK_SERVICES, plus 'eastBridges' (the raised Alexander Nevsky Bridge deck and the street-level slabs of the Lavra crossings), 'northBridges' (the raised Bolsheokhtinsky / Liteyny Neva decks, ported from the source) and 'landmarksTroitsky' (the Troitsky Bridge with its MOVING bascule leaf, docs/AREAS.md 13.8) and 'landmarksPalaceBridge' (the two MOVING leaves of the Palace Bridge, 13.10) when those modules are built; asked after the garden / podium (the decks never overlap). The North and the strip keep the default list. */
 const makeDeckServices = (MODULES) => {
-  const extra = ['eastBridges', 'northBridges', 'landmarksTroitsky'].filter((m) => Array.isArray(MODULES) && MODULES.includes(m));
+  const extra = ['eastBridges', 'northBridges', 'landmarksTroitsky', 'landmarksPalaceBridge'].filter((m) => Array.isArray(MODULES) && MODULES.includes(m));
   return extra.length ? Object.freeze([...DECK_SERVICES, ...extra]) : DECK_SERVICES;
 };
 

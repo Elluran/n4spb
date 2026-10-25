@@ -7,10 +7,13 @@
 // docs/research/west-canals-bridges.md 4.8, palace-square-hermitage.md section 10, petro-bridges.md section 2; photos refs/canals 55-63 106, refs/petro-bridges 19 20 23 24.  The bascule is shown
 // closed (summer day).  Frame: origin = the middle of the Admiralty-end abutment, +u along the bridge toward Vasilyevsky Island (bearing 323.5), +v to the NE (upstream); the bank lines are at
 // u 1.5 and 251.0.  Deck profile: +0.05 at both bank lines, +2.4 at the bascule [E]; girder depths [E].
+// THE BASCULE SPAN: with `env.leaves` (the page builds module landmarksPalaceBridge, docs/AREAS.md 13.10) everything between the two bascule pier faces (u 96.5 .. 153.9: the deck, girders, railings, kerbs, two lamps and their
+// colliders) is NOT drawn here: the module draws the two moving leaves, and deckAt asks its service. Without it (the strip, the parked area) nothing changes.
 import * as THREE from 'three';
 import { frameOf, toUV, frameBounds } from './sites.js';
 import { lampBlack } from './sculpt.js';
 import { profile, closeBank } from './deck.js';
+import { DECK_KEYS, U0 as LEAF_U0, U1 as LEAF_U1 } from '../landmarksPalaceBridge/frame.js';      // the deck profile keys and the hinge lines of the two bascule leaves (pure data)
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const PALACE = { id: 'palace', cx: -2339.5, cz: -875.0, b: 323.5 };
@@ -21,15 +24,21 @@ const BANK0 = 1.5, BANK1 = 251.0, KERB = 0.3, PAVE = 0.12;            // the ban
 const DEPTH = [[1.2, 2.1], [1.2, 3.1], [1.2, 2.9], [1.2, 3.1], [1.2, 2.1]];   // girder depth at the supports / at mid-span
 
 export function buildPalace(env) {
-  const { ctx, P, M, rails } = env, f = frameOf(PALACE), T = f.T, waterY = env.waterY, FI = M.fasPalace || M.fasIron;
+  const { ctx, P, M, rails } = env, leaves = !!env.leaves, f = frameOf(PALACE), T = f.T, waterY = env.waterY, FI = M.fasPalace || M.fasIron;
   // +0.05 at both bank lines (no step against the street), +2.4 at the bascule (until 2026-10-06 a parabola that began 0.25 m above the street)
-  const yDeck = profile([[BANK0 - 1, 0.05], [26, 0.78], [72, 1.95], [LEN / 2, 2.4], [182.5, 1.95], [228.5, 0.78], [BANK1 + 1, 0.05]]);
+  const yDeck = profile(DECK_KEYS);      // [[BANK0 - 1, 0.05], [26, 0.78], [72, 1.95], [LEN / 2, 2.4], [182.5, 1.95], [228.5, 0.78], [BANK1 + 1, 0.05]]
+  const cut = leaves ? [[0, LEAF_U0], [LEAF_U1, LEN]] : [[0, LEN]];      // the stretches of the bridge this builder draws and collides (the bascule span lies between them when the module draws the leaves)
+  const LAMPS = leaves ? [4, 36.2, 83.6, 166.8, 214.2, 248.5] : [4, 36.2, 83.6, 111, 137.5, 166.8, 214.2, 248.5];      // (111 and 137.5 stand on the leaves)
   const slope = (u) => yDeck(u + 0.5) - yDeck(u - 0.5);
   const world = (u, v) => ({ x: f.cx + u * f.c - v * f.s, z: f.cz + u * f.s + v * f.c });
   const B = { id: 'palace', x: f.cx + LEN / 2 * f.c, z: f.cz + LEN / 2 * f.s, yDeck, info: { rails: 0, colliders: 0 }, masts: [], span: { a: world(0, 0), b: world(LEN, 0), hw: HW } };
   B.at = world(LEN / 2, 12.6);                                        // photo spot: the upstream pavement at the bascule (the fortress ahead)
   B.bounds = frameBounds(PALACE, -1, LEN + 1, -HW - 0.3, HW + 0.3, 1.5);
-  B.deckAt = (x, z) => { const q = toUV(PALACE, x, z); return Math.abs(q.v) <= HW + 0.3 && q.u >= -1 && q.u <= LEN + 1 ? yDeck(clamp(q.u, 0, LEN)) : null; };
+  B.deckAt = leaves ? (x, z) => {
+    const q = toUV(PALACE, x, z); if (!(Math.abs(q.v) <= HW + 0.3 && q.u >= -1 && q.u <= LEN + 1)) return null;
+    if (q.u > LEAF_U0 && q.u < LEAF_U1) { const sv = ctx.services && ctx.services.landmarksPalaceBridge; return sv ? sv.deckY(x, z) : null; }      // the bascule span: the live surface of a leaf, null in the gap an open bridge leaves
+    return yDeck(clamp(q.u, 0, LEN));
+  } : (x, z) => { const q = toUV(PALACE, x, z); return Math.abs(q.v) <= HW + 0.3 && q.u >= -1 && q.u <= LEN + 1 ? yDeck(clamp(q.u, 0, LEN)) : null; };
   const spanOf = (u) => { for (let k = 0; k < EDGES.length - 1; k++) if (u <= EDGES[k + 1] + 1e-6) return k; return EDGES.length - 2; };
   const girderBottom = (u) => {                                         // y of the lower chord
     const k = spanOf(u), a = EDGES[k], b = EDGES[k + 1], t = (u - (a + b) / 2) / ((b - a) / 2), [d0, d1] = DEPTH[k];
@@ -46,8 +55,11 @@ export function buildPalace(env) {
 
   P.push(f.cx, 0, f.cz, -T);
   // ------------------------------------------------------------------ girders: per span a fascia face on both sides, the soffit and the flange line
-  for (let k = 0; k < EDGES.length - 1; k++) {
-    const a = EDGES[k], b = EDGES[k + 1], n = Math.max(6, Math.round((b - a) / 3));
+  const pieces = [];      // [span, from u, to u]: the whole span, except span 2 (the bascule) where the leaves are drawn by their module
+  for (let k = 0; k < EDGES.length - 1; k++) { if (leaves && k === 2) pieces.push([k, EDGES[k], LEAF_U0], [k, LEAF_U1, EDGES[k + 1]]); else pieces.push([k, EDGES[k], EDGES[k + 1]]); }
+  for (const [k, a, b] of pieces) {
+    const n = Math.max(6, Math.round((b - a) / 3));
+    void k;
     for (const sg of [-1, 1]) {
       const v = sg * (HW + 0.12), pts = [];
       for (let i = 0; i <= n; i++) { const u = a + (b - a) * i / n; pts.push([u, girderBottom(u)]); }
@@ -114,9 +126,8 @@ export function buildPalace(env) {
   for (const [uu, nx] of [[BANK0, 1], [BANK1, -1]]) P.quad(gran, [uu + nx * 0.1, yb, -HVP], [uu + nx * 0.1, yb, HVP], [uu + nx * 0.1, yDeck(uu) - 0.3, HVP], [uu + nx * 0.1, yDeck(uu) - 0.3, -HVP], [nx, 0, 0], [[-HVP / 2.2, yb / 2.2], [HVP / 2.2, yb / 2.2], [HVP / 2.2, 0], [-HVP / 2.2, 0]]);
   for (const [uu, dir] of [[BANK0, 1], [BANK1, -1]]) for (const sg of [-1, 1]) closeBank({ site: PALACE, P, M, L: ctx.L, u: uu, dir, sg, v0: HVP, len: 2.4, yTop: 0.05, mat: gran, parapet: par, collide: false, rails });
   // ------------------------------------------------------------------ deck: asphalt, kerbs, granite pavements, markings
-  const n = Math.ceil(LEN / 3.2);
-  for (let i = 0; i < n; i++) {
-    const u0 = LEN * i / n, u1 = LEN * (i + 1) / n, y0 = yDeck(u0), y1 = yDeck(u1);
+  for (const [ua0, ub0] of cut) for (let n = Math.ceil((ub0 - ua0) / 3.2), i = 0; i < n; i++) {
+    const u0 = ua0 + (ub0 - ua0) * i / n, u1 = ua0 + (ub0 - ua0) * (i + 1) / n, y0 = yDeck(u0), y1 = yDeck(u1);
     P.quad(M.asphalt, [u0, y0, -ROAD], [u1, y1, -ROAD], [u1, y1, ROAD], [u0, y0, ROAD], [0, 1, 0], [[u0 / 4, -ROAD / 4], [u1 / 4, -ROAD / 4], [u1 / 4, ROAD / 4], [u0 / 4, ROAD / 4]]);
     for (const sg of [-1, 1]) {
       const va = sg * ROAD, vb = sg * (HW + 0.1);
@@ -134,12 +145,12 @@ export function buildPalace(env) {
   const nb = Math.round(LEN / 2.0), bw = LEN / nb;
   for (const sg of [-1, 1]) {
     const v = sg * (HW - 0.14);
-    const inBlock = (ua, ub) => blocks.some((q) => ub > q[0] + 0.05 && ua < q[1] - 0.05);
+    const inBlock = (ua, ub) => blocks.some((q) => ub > q[0] + 0.05 && ua < q[1] - 0.05) || (leaves && ub > LEAF_U0 + 0.05 && ua < LEAF_U1 - 0.05);      // (the bascule span's railing belongs to the leaves)
     for (let i = 0; i < nb; i++) {
       const ua = bw * i, w = world(ua + 0.04, v); if (inBlock(ua, ua + bw)) continue;
       rails.add({ kind: 'palace', hex: ironHex, x: w.x, y: yDeck(ua) + 0.1, z: w.z, rotY: -T, roll: Math.atan(slope(ua + bw / 2)), len: bw - 0.08 }); B.info.rails++;
     }
-    for (let i = 0; i <= nb; i++) { const u = bw * i, y = yDeck(u); if (blocks.some((q) => u > q[0] + 0.2 && u < q[1] - 0.2)) continue; P.box(ironMat, u - 0.12, u + 0.12, y, y + 1.3, v - 0.12, v + 0.12, 'b', 1); P.box(ironMat, u - 0.16, u + 0.16, y + 1.25, y + 1.34, v - 0.16, v + 0.16, 'b', 1); }
+    for (let i = 0; i <= nb; i++) { const u = bw * i, y = yDeck(u); if (blocks.some((q) => u > q[0] + 0.2 && u < q[1] - 0.2) || (leaves && u > LEAF_U0 - 0.02 && u < LEAF_U1 + 0.02)) continue; P.box(ironMat, u - 0.12, u + 0.12, y, y + 1.3, v - 0.12, v + 0.12, 'b', 1); P.box(ironMat, u - 0.16, u + 0.16, y + 1.25, y + 1.34, v - 0.16, v + 0.16, 'b', 1); }
     for (let i = 0; i < nb; i++) { const ua = bw * i, ub = ua + bw, ya = yDeck(ua) + 1.2, yb2 = yDeck(ub) + 1.2; if (inBlock(ua, ub)) continue; P.quad(ironMat, [ua, ya, v - 0.05], [ub, yb2, v - 0.05], [ub, yb2, v + 0.05], [ua, ya, v + 0.05], [0, 1, 0]); }
     for (const [pa, pb, kind] of PIERS) if (kind === 'tower') {        // solid granite parapet over a bascule pier: breakable sections of 2.8 m (bridges/rails.js; docs/AREAS.md 13.7)
       const u0 = pa - 0.2, u1 = pb + 0.2, h = 1.1, nS = Math.max(1, Math.ceil((u1 - u0) / 2.8));
@@ -149,7 +160,7 @@ export function buildPalace(env) {
       }
     }
     // lamp standards: dark green poles with two hexagonal lanterns, 8 per side
-    for (const u of [4, 36.2, 83.6, 111, 137.5, 166.8, 214.2, 248.5]) {
+    for (const u of LAMPS) {
       const y = yDeck(u) + 0.12, x = u, z = sg * (HW - 0.7); B.masts.push({ ...world(x, z), y, h: 7.6, kind: 'lamp' });
       P.cyl(FI, [x, y, z], [x, y + 0.7, z], 0.26, 0.17, 8, true);
       P.cyl(FI, [x, y + 0.7, z], [x, y + 7.6, z], 0.12, 0.07, 8, false);
@@ -168,17 +179,16 @@ export function buildPalace(env) {
   // ------------------------------------------------------------------ colliders
   B.colliders = () => {
     const ph = ctx.physics, rampRot = Math.atan2(f.c, f.s);
-    const m = Math.ceil(LEN / 6);
-    for (let i = 0; i < m; i++) { const u0 = LEN * i / m, u1 = LEN * (i + 1) / m, w = world((u0 + u1) / 2, 0); ph.addWalkRamp(w.x, w.z, 2 * HW + 0.2, u1 - u0 + 0.04, rampRot, yDeck(u0), yDeck(u1), 2.5); B.info.colliders++; }
+    for (const [ua0, ub0] of cut) for (let m = Math.ceil((ub0 - ua0) / 6), i = 0; i < m; i++) { const u0 = ua0 + (ub0 - ua0) * i / m, u1 = ua0 + (ub0 - ua0) * (i + 1) / m, w = world((u0 + u1) / 2, 0); ph.addWalkRamp(w.x, w.z, 2 * HW + 0.2, u1 - u0 + 0.04, rampRot, yDeck(u0), yDeck(u1), 2.5); B.info.colliders++; }
     // the railings along both sides: every panel is a breakable bay with its own collider (rails.js); the solid granite blocks of the pier heads are structure and keep a solid box; the rest of the old long boxes is a request
     // (rails.wall) that becomes a ghost bay only where nothing drawn covers it (docs/AREAS.md 13.7)
     for (const sg of [-1, 1]) {
       for (const [q0, q1] of blocks) { const um = (q0 + q1) / 2, w = world(um, sg * (HW - 0.14)); ph.addBox(w.x, w.z, q1 - q0, 0.5, -T, -8, Math.max(yDeck(q0), yDeck(q1)) + 1.45); B.info.colliders++; }
-      for (let i = 0; i < 8; i++) { const u0 = LEN * i / 8, u1 = LEN * (i + 1) / 8, p = world(u0, sg * (HW - 0.14)), q = world(u1, sg * (HW - 0.14)); rails.wall({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, th: 0.4, y0: Math.min(yDeck(u0), yDeck(u1)) - 0.8, y1: Math.max(yDeck(u0), yDeck(u1), yDeck((u0 + u1) / 2)) + 1.45, y: Math.min(yDeck(u0), yDeck(u1)) }); B.info.colliders++; }
+      for (const [ua0, ub0] of cut) for (let nw = Math.max(1, Math.round(8 * (ub0 - ua0) / LEN)), i = 0; i < nw; i++) { const u0 = ua0 + (ub0 - ua0) * i / nw, u1 = ua0 + (ub0 - ua0) * (i + 1) / nw, p = world(u0, sg * (HW - 0.14)), q = world(u1, sg * (HW - 0.14)); rails.wall({ x0: p.x, z0: p.z, x1: q.x, z1: q.z, th: 0.4, y0: Math.min(yDeck(u0), yDeck(u1)) - 0.8, y1: Math.max(yDeck(u0), yDeck(u1), yDeck((u0 + u1) / 2)) + 1.45, y: Math.min(yDeck(u0), yDeck(u1)) }); B.info.colliders++; }
     }
-    const K0 = BANK0 + 3.5, K1 = BANK1 - 3.5, nK = Math.ceil((K1 - K0) / 8);                                             // the barrier kerbs
-    for (const sg of [-1, 1]) for (let i = 0; i < nK; i++) { const u0 = K0 + (K1 - K0) * i / nK, u1 = K0 + (K1 - K0) * (i + 1) / nK, w = world((u0 + u1) / 2, sg * (ROAD + KERB / 2)); ph.addBox(w.x, w.z, u1 - u0, KERB, -T, Math.min(yDeck(u0), yDeck(u1)) - 1, Math.max(yDeck(u0), yDeck(u1)) + 0.55); B.info.colliders++; }
-    for (const sg of [-1, 1]) for (const u of [4, 36.2, 83.6, 111, 137.5, 166.8, 214.2, 248.5]) { const w = world(u, sg * (HW - 0.7)); ph.addCylinder(w.x, w.z, 0.28, yDeck(u) - 1, yDeck(u) + 8); B.info.colliders++; }
+    const K0 = BANK0 + 3.5, K1 = BANK1 - 3.5, kcut = leaves ? [[K0, LEAF_U0], [LEAF_U1, K1]] : [[K0, K1]];             // the barrier kerbs (the bascule span's kerbs belong to the leaves)
+    for (const sg of [-1, 1]) for (const [ka, kb] of kcut) for (let nK = Math.ceil((kb - ka) / 8), i = 0; i < nK; i++) { const u0 = ka + (kb - ka) * i / nK, u1 = ka + (kb - ka) * (i + 1) / nK, w = world((u0 + u1) / 2, sg * (ROAD + KERB / 2)); ph.addBox(w.x, w.z, u1 - u0, KERB, -T, Math.min(yDeck(u0), yDeck(u1)) - 1, Math.max(yDeck(u0), yDeck(u1)) + 0.55); B.info.colliders++; }
+    for (const sg of [-1, 1]) for (const u of LAMPS) { const w = world(u, sg * (HW - 0.7)); ph.addCylinder(w.x, w.z, 0.28, yDeck(u) - 1, yDeck(u) + 8); B.info.colliders++; }
     for (const [uu, dir] of [[BANK0, 1], [BANK1, -1]]) for (const sg of [-1, 1]) B.info.colliders += closeBank({ site: PALACE, L: ctx.L, ph, u: uu, dir, sg, v0: HW - 0.3, len: 2.4, yTop: 0.05, draw: false, collide: false });      // (the wing's parapet is a breakable section with its own collider: closeBank above)
   };
   return B;
