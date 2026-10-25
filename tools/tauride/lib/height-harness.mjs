@@ -217,21 +217,22 @@ export function deckRing(world, shore, sites, deckY, { spacing = 1, angles = [90
   const onDeck = (x, z, y) => { const d = deckY(x, z); return d !== null && y >= d - 0.1; };
   const run = (sx, sz, dx, dz, mode, s, label, kind = 'deck') => {
     const p = world.player(); p.setPose(sx, sz, 0, 0, null, { stand: true });
-    let minD = Infinity, entered = false;
+    let minD = Infinity, entered = false, pastEnd = false;
+    const a0 = s.at(0), a1 = s.at(s.L);                                          // a walker that slides along a rail and steps off the END of the deck into the water went around the rails (the head is open by the water rule): it counts as a head entry
     for (let tk = 0; tk < ticks; tk++) {
       p.yaw = Math.atan2(-dx, -dz); p.keys.add('KeyW'); if (mode === 'sprint') p.keys.add('ShiftLeft'); if (mode === 'jump' && p.onGround) p.vy = 4.2;
       p.update(1 / 60);
       const d = shore.dist(p.pos.x, p.pos.z);
       if (d < 0 && onDeck(p.pos.x, p.pos.z, p.pos.y)) continue;
       if (d < minD) minD = d;
-      if (d < -0.02 || (d < 0 && p.pos.y < world.model.waterLevel - 0.02)) entered = true;
+      if (d < -0.02 || (d < 0 && p.pos.y < world.model.waterLevel - 0.02)) { if (!entered) pastEnd = (p.pos.x - a0.x) * a0.dx + (p.pos.z - a0.z) * a0.dz < 0 || (p.pos.x - a1.x) * a1.dx + (p.pos.z - a1.z) * a1.dz > 0; entered = true; }
     }
     p.keys.clear(); res.runs++; res.byMode[mode].runs++; if (minD < res.minD) res.minD = minD;
     if (entered) {
-      res.entered++; res.byMode[mode].entered++; if (kind === 'deck') res.enteredDeck++; else res.enteredHead++;
+      res.entered++; res.byMode[mode].entered++; if (kind === 'deck' && !pastEnd) res.enteredDeck++; else res.enteredHead++;
       for (let tk = 0; tk < 600; tk++) { p.yaw = Math.atan2(dx, dz); p.keys.add('KeyW'); p.update(1 / 60); } p.keys.delete('KeyW');
       if (!(shore.dist(p.pos.x, p.pos.z) > 0 || onDeck(p.pos.x, p.pos.z, p.pos.y))) res.trapped++;
-      if (res.worst.length < 8) res.worst.push({ site: s.site, at: label, mode, minD: +minD.toFixed(2) }); if (kind === 'deck' && (res.worstDeck || (res.worstDeck = [])).length < 8) res.worstDeck.push({ site: s.site, at: label, mode, minD: +minD.toFixed(2) });
+      if (res.worst.length < 8) res.worst.push({ site: s.site, at: label, mode, minD: +minD.toFixed(2) }); if (kind === 'deck' && !pastEnd && (res.worstDeck || (res.worstDeck = [])).length < 8) res.worstDeck.push({ site: s.site, at: label, mode, minD: +minD.toFixed(2) });
     }
   };
   for (const s of sites) {
