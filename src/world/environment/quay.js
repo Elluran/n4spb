@@ -26,7 +26,7 @@
 // GRASS-SLOPE BANKS (Mars Field extension, docs/research/mars-bridges-canals.md 2.1 / 2.2; waterways.js SLOPE_REACHES / slopeRuns): the Swan Canal (everywhere) and the Moika along the Mikhailovsky Garden are NOT granite walls: a low
 //   granite banquette 0.45 m above the water, a lip, a grass slope (4.2-4.7 m run) up to street level (the ground plane is cut away over it: river.js waterCuts kind 'slope'), granite end caps at the bridge zones, a collider on the
 //   slope top, ball-post rail + two tubes (Mars Field side) / green trellis (garden side) on the Swan Canal; the Fontanka north of the Moika source has the stadium-loop rail (east) / pointed-arch band rail with big pink posts (garden bank);
-//   the Moika bank along the Mikhailovsky Garden has the slope but no rail. Service: quay.slopes.
+//   the Moika bank along the Mikhailovsky Garden has the slope but no rail; the Moika bank at the Summer Garden keeps wall + collider but no railing (the garden fence stands there). Service: quay.slopes.
 // SERVICE (ctx.services.environment.quay): { pierOverride: { pierId: { cx, cz, ax, az, len, wid } }, water (Fontanka), top, segments: [{ax,az,bx,bz,nx,nz,bank,key}], gaps, bridges: [zones], stairs: [Fontanka flights (landmarksC pontoons)], allStairs: [every flight (descents: walk, endX/endZ, topY, pier)
 //   { x,z,tx,tz,nx,nz,bank,key,length,landingY,w }], rings, signs, posts, panels, colliders, banks: [{name,key,len}] }
 import * as THREE from 'three';
@@ -414,6 +414,7 @@ function culledInstances(ctx, T, root, geometry, material, mats, cols, R, name, 
 function railStyle(key, bank, x, z, nx, s, nz = 0) {
   if (key === 'neva') return null;      // the Neva has the monolithic granite parapet roll, no iron railing
   if (key === 'fontanka' && z < -1075) return nx > 0 ? 'loops' : 'arcade';   // north of the Moika source (docs/research/mars-bridges-canals.md section 3): east / Kutuzov bank = stadium loops, garden bank = pointed-arch band
+  if (key === 'moika' && z < -900 && x > -1075 && x < -870 && nz < -0.5) return null;   // north bank at the Summer Garden: the garden's own Charlemagne fence (landmarksGarden) stands here; the wall keeps its collider
   if (key === 'fontanka') { const h = hash2(Math.floor(s / 60), bank.idx, 17); return h < 0.6 ? 'lattice' : h < 0.85 ? 'clover' : 'bars'; }
   if (key === 'griboedov') {
     const west = nx < -0.3, east = nx > 0.3;

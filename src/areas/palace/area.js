@@ -19,6 +19,7 @@ import { GROUPS_LIST as G_BELINSKY } from '../../world/landmarksBelinsky/groups.
 import { GROUPS_LIST as G_BR } from '../../world/bridges/groups.js';
 import { GROUPS_LIST as G_CASTLE } from '../../world/landmarksCastle/groups.js';
 import { LIBRARY_GROUP } from '../../world/landmarksD/groups.js';
+import { GROUPS_LIST as G_GARDEN, GARDEN_RING } from '../../world/landmarksGarden/groups.js';
 
 /** Area id: <html data-area> must equal it (main.js refuses to run a page whose area module is another one) and the registry (src/areas/registry.js) lists it. */
 export const ID = 'palace';
@@ -46,6 +47,7 @@ export const MODULES = [
   'landmarksI',   // Winter Palace + Hermitage
   'landmarksBelinsky', // Ciniselli Circus
   'landmarksK',   // Church of the Saviour on Blood, Mikhailovsky Garden, Russian Museum
+  'landmarksGarden', // Summer Garden: the Neva and Moika fences, alleys, ponds, statues, the Summer Palace of Peter I, the Coffee and Tea Houses
   'landmarksCastle', // Engineering (Mikhailovsky) Castle and the Peter I monument
   'bridges',      // the bridges of the area: Kazansky, Green, Palace, Hermitage, the Winter Canal and the Swan Canal bridges ...
   'props',        // benches, bins, kiosks, bus shelters, tourist stalls, billboards, flower baskets
@@ -59,6 +61,7 @@ export const LABELS = {
   landmarksNorthFull: 'Чернышевская, Спасо-Преображенский собор, дом Мурузи',
   landmarksBelinskyNorth: 'церковь Симеона и Анны',
   landmarksD: 'Национальная библиотека',
+  landmarksGarden: 'Летний сад · ограда',
   drive: 'машины у Московского вокзала',
 };
 
@@ -135,6 +138,10 @@ GROUPS.landmarksE = G_E; GROUPS.landmarksF = G_F; GROUPS.landmarksG = G_G; GROUP
 GROUPS.bridges = G_BR.filter((b) => !['blue', 'red', 'pochtamtsky', 'fonarny', 'kamenny', 'mucny'].includes(b.key));
 // Liteyny: the Chernyshevskaya vestibule, the Transfiguration Cathedral, Dom Muruzi, the Podpisnye Izdaniya bookstore and the corridor houses (they replace the strip's landmarksNorth, same ids), the church of Simeon and Anna
 GROUPS.landmarksNorthFull = G_NORTHFULL; GROUPS.landmarksBelinskyNorth = G_BELINSKY_NORTH;
+// the Summer Garden (landmarksGarden, OWNS_GROUPS = true: the module draws all five sub-groups from its own pure-data lists, it is not group-aware): the Neva fence, the Moika fence, the garden (359 OSM ids), the Summer
+// Palace of Peter I with the gate booths, the Coffee / Tea Houses and the pavilions. Every id is in this area's data and every vertex of the garden relation r2653740 lies inside the data extent (the garden ring x -1059 .. -751,
+// z -1695 .. -1015; 94 % of it is in the play rectangles, the rest is the 80 m cell notch round the Moika gate (x -880 .. -800, z -1120 .. -1040) and the strip x -790 .. -770, z -1490 .. -1370).
+GROUPS.landmarksGarden = G_GARDEN;
 
 /**
  * The HUD location table (first match wins), built with the layout helpers `h` ({ NAMES, SUBGROUPS, _sqPolys, _groupPolys, _named, _areaPolys, _shoreOf, _deck, inRiver, shoreDist }).
@@ -170,6 +177,8 @@ export function makeAreas(h) {
   ..._named(/Михайловский замок|Инженерный замок/i, 10, null).map((r) => ({ name: 'Михайловский замок · Mikhailovsky (Engineers) Castle', ...r })),
   ..._named(/(?<![\p{L}-])Михайловский дворец|Русский музей/iu, 10, null).map((r) => ({ name: 'Михайловский дворец · Mikhailovsky Palace (Russian Museum)', ...r })),
   { name: 'Михайловский сад · Mikhailovsky Garden', c: [-1020, -830], r: 130 },       // after the Saviour church, the castle and the museum above (those outlines win where they overlap)
+  ..._named(/Летний дворец/i, 10, { c: [-849, -1650], r: 30 }).map((r) => ({ name: 'Летний дворец Петра I · Summer Palace of Peter I', ...r })),
+  { name: 'Летний сад · Summer Garden', poly: GARDEN_RING.flat(), margin: 6 },     // the Summer Garden: the palace first, then the outline of the garden relation (before the water rows below: the Moika and the Neva fences stand on its edge)
   ..._named(/Адмиралтейство|Главное адмиралтейство/i, 12, { c: [-2433, -622], r: 150 }).map((r) => ({ name: 'Адмиралтейство · Admiralty', ...r })),
   { name: 'Александровский сад · Alexander Garden', c: [-2400, -490], r: 105 },       // the view Shift + 7 stands in the garden (the Admiralty circle above is only the fallback when OSM has no outline, so the garden comes second)
   ..._named(/Зимний дворец/i, 10, { c: [-2096, -896], r: 110 }).map((r) => ({ name: 'Зимний дворец · Winter Palace', ...r })),
