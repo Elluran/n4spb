@@ -29,7 +29,8 @@ const SHOTS = [
   ['palace', 'palace-summer-garden', [-905, -1180, 0, 8], '', 2.0],
   ['palace', 'palace-mars-field', [-1180, -1180, -30, 8], '', 2.0],
   ['palace', 'palace-troitsky-open', null, 'troitsky=open', 2.0],
-  ['palace', 'palace-palacebridge', [-2337, -848, -150, 6], '', 2.0],
+  ['palace', 'palace-palacebridge', [-2352, -872, 35, 8], '', 2.0],
+  ['palace', 'palace-palacebridge-open', [-2352, -872, 35, 8], '', 2.0],
   ['smolny', 'smolny-station', [560, 192, -138.5, 8], '', 2.0],
   ['smolny', 'smolny-tauride', [1368, -1471, -4, 2], '', 2.0],
   ['smolny', 'smolny-cathedral', [2335, -1833, -90, 21], '', 2.0],
@@ -68,9 +69,9 @@ try {
       await page.click('#go'); await page.waitForFunction("document.body.classList.contains('playing')", { timeout: 20000 });
     }
     try {
-      if (cam) await page.evaluate((c, t) => { window.__setCam(c[0], null, c[1], c[2], c[3]); if (t !== null) window.__tod.set(t, true); }, cam, tod);
+      if (cam) await page.evaluate((c, t, open) => { window.__setCam(c[0], null, c[1], c[2], c[3]); if (t !== null) window.__tod.set(t, true); if (open) { const B = window.__ctx.services.landmarksPalaceBridge; if (B && B.setMode) B.setMode('open'); } }, cam, tod, /-open$/.test(name));
       else if (name === 'palace-troitsky-open') await page.evaluate((t) => { const T = window.__ctx.services.landmarksTroitsky; const p = T && T.frame ? T.frame.toWorld(8, 8) : null; if (p) window.__setCam(p.x, null, p.z, 0, 4); window.__tod.set(t, true); if (T && T.setMode) T.setMode('open'); }, tod);
-      await sleep(cam ? 6000 : 95000);      // the regions around the pose stream in; the Troitsky leaf needs about 90 s to rise
+      await sleep(cam && !/-open$/.test(name) ? 6000 : 95000);      // the regions around the pose stream in; the Troitsky leaf needs about 90 s to rise
       const info = await page.evaluate(() => { const p = window.__ctx.playerObj; return { x: +p.pos.x.toFixed(1), z: +p.pos.z.toFixed(1), y: +p.pos.y.toFixed(2) }; });
       await page.screenshot({ path: path.join(OUT, `${name}.png`) });
       console.log(`  shot ${name} at ${JSON.stringify(info)}`);
