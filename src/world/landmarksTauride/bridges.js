@@ -213,8 +213,11 @@ function buildSiteSolids(K, KW, rec, D, P, G, shore) {
     const v = hw - R.railW / 2 - 0.02, list = rec.railBays || (rec.railBays = []);
     for (const s of [-1, 1]) {
       const nPost = Math.max(2, Math.round((u1 - u0) / R.postSpacing));
-      for (let k = 0; k < nPost; k++) {
-        const a = u0 + (u1 - u0) * k / nPost, b = u0 + (u1 - u0) * (k + 1) / nPost, pa = P3(a, s * v, 0), pb = P3(b, s * v, 0);
+      const us = []; for (let k = 0; k <= nPost; k++) us.push(u0 + (u1 - u0) * k / nPost);
+      for (let i = 1; i + 1 < cum.length; i++) if (cum[i] > u0 + 0.05 && cum[i] < u1 - 0.05) us.push(cum[i]);      // a bend of the axis is a bay boundary too: a straight bay must not cut the corner and leave a wedge to slip through
+      us.sort((p, q) => p - q);
+      for (let k = 0; k + 1 < us.length; k++) {
+        const a = us[k], b = us[k + 1]; if (b - a < 0.05) continue; const pa = P3(a, s * v, 0), pb = P3(b, s * v, 0);
         list.push({ x0: pa[0], z0: pa[2], x1: pb[0], z1: pb[2], y: h(a), ye: h(b), first: k === 0, iron, railH: DS.railH, color: C.rail, site: rec.site });
       }
     }

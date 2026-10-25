@@ -337,7 +337,8 @@ function buildFountain(ctx, parent, f, out, add) {
       parts: [{ geo: wallG, mat: mg, name: 'wall', far: 250, stretch: true }, { geo: topG, mat: ml, name: 'top', far: 250, stretch: true }, { geo: inG, mat: mg, name: 'inner', far: 250, stretch: true }],
       collider: () => ({ y0: y - 0.5, y1: y + rt + 0.2, thick: W + 0.1, off: W / 2, e0: 0.05, e1: 0.05 }),
       rec: () => ({ kind: 'fence', mass: 350, h: rt, r: 0.17, anchored: 12, hitK: 0.3, metal: false, minDv: 0 }) });
-    out.colliders += r.items.length; out.triangles += seg * 3 * 2;
+    for (const it of r.items) if (it) out.items.push(it);      // (the census: out.colliders = out.items.length below)
+    out.triangles += seg * 3 * 2;
     if (ctx.physics.addWater) ctx.physics.addWater({ ring: Array.from({ length: 24 }, (_, i) => [f.x + Math.cos(i / 24 * TAU) * R, f.z + Math.sin(i / 24 * TAU) * R]).flat(), level: y + rt - D.waterDrop });      // (the basin is shallow water to wade in)
   }
   // the pedestal in the middle: a lathe of three rings; on it the bronze boy with the duck (VB spheres and rods)

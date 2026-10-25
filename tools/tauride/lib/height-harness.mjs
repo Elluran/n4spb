@@ -133,7 +133,7 @@ export function landingReport(world, S, noLanding = null) {
   return { cells: n, refused, byEngine, landableDeep: bad };
 }
 /** The car keep-out: sample the garden outline every metre; a breach = a straight line from 3 m outside to 3 m inside that no car-blocked point interrupts. Returns { samples, breachM, stretches } */
-export function carBreach(S, carBlocked) {
+export function carBreach(S, carBlocked, isWater = null) {
   const o = S.GARDEN.o, ccw = ((() => { let a = 0; for (let i = 0; i < o.length; i += 2) { const j = (i + 2) % o.length; a += o[i] * o[j + 1] - o[j] * o[i + 1]; } return a; })()) > 0;
   let samples = 0, breachM = 0; const stretches = []; let cur = null;
   for (let i = 0; i < o.length; i += 2) {
@@ -142,6 +142,7 @@ export function carBreach(S, carBlocked) {
     for (let k = 0; k < n; k++) {
       const x = ax + (bx - ax) * (k + 0.5) / n, z = az + (bz - az) * (k + 0.5) / n; samples++;
       let blocked = false; for (let d = -3; d <= 3 && !blocked; d += 0.5) if (carBlocked(x + nx * d, z + nz * d)) blocked = true;
+      if (!blocked && isWater && isWater(x - nx * 1.5, z - nz * 1.5)) blocked = true;      // WATER IS REACHABLE: a way across the outline that leads into the water is no breach of the closed ground (the keep-out is the LAND of the garden)
       if (!blocked) { breachM += len / n; if (!cur) { cur = { x: Math.round(x), z: Math.round(z), lenM: 0 }; stretches.push(cur); } cur.lenM += len / n; } else cur = null;
     }
   }
@@ -211,10 +212,10 @@ export function wadeRing(world, shore, segs, { spacing = 3, inland = 4, angles =
  * not on a deck (deckY null there, or the feet 10 cm below it); `left` = the feet ended more than hw + 0.7 m from the axis while over the water. Returns { runs, entered, left, trapped, minD, byMode, worst }.
  */
 export function deckRing(world, shore, sites, deckY, { spacing = 1, angles = [90, -90, 45, -45, 135, -135], modes = ['walk', 'sprint', 'jump'], ticks = 180, headOut = 0.8 } = {}) {
-  const res = { runs: 0, entered: 0, left: 0, trapped: 0, minD: Infinity, byMode: {}, worst: [], heads: 0, decks: 0 };
+  const res = { runs: 0, entered: 0, enteredDeck: 0, enteredHead: 0, left: 0, trapped: 0, minD: Infinity, byMode: {}, worst: [], heads: 0, decks: 0 };
   for (const m of modes) res.byMode[m] = { runs: 0, entered: 0 };
   const onDeck = (x, z, y) => { const d = deckY(x, z); return d !== null && y >= d - 0.1; };
-  const run = (sx, sz, dx, dz, mode, s, label) => {
+  const run = (sx, sz, dx, dz, mode, s, label, kind = 'deck') => {
     const p = world.player(); p.setPose(sx, sz, 0, 0, null, { stand: true });
     let minD = Infinity, entered = false;
     for (let tk = 0; tk < ticks; tk++) {
@@ -227,10 +228,10 @@ export function deckRing(world, shore, sites, deckY, { spacing = 1, angles = [90
     }
     p.keys.clear(); res.runs++; res.byMode[mode].runs++; if (minD < res.minD) res.minD = minD;
     if (entered) {
-      res.entered++; res.byMode[mode].entered++;
+      res.entered++; res.byMode[mode].entered++; if (kind === 'deck') res.enteredDeck++; else res.enteredHead++;
       for (let tk = 0; tk < 600; tk++) { p.yaw = Math.atan2(dx, dz); p.keys.add('KeyW'); p.update(1 / 60); } p.keys.delete('KeyW');
       if (!(shore.dist(p.pos.x, p.pos.z) > 0 || onDeck(p.pos.x, p.pos.z, p.pos.y))) res.trapped++;
-      if (res.worst.length < 8) res.worst.push({ site: s.site, at: label, mode, minD: +minD.toFixed(2) });
+      if (res.worst.length < 8) res.worst.push({ site: s.site, at: label, mode, minD: +minD.toFixed(2) }); if (kind === 'deck' && (res.worstDeck || (res.worstDeck = [])).length < 8) res.worstDeck.push({ site: s.site, at: label, mode, minD: +minD.toFixed(2) });
     }
   };
   for (const s of sites) {
@@ -248,7 +249,7 @@ export function deckRing(world, shore, sites, deckY, { spacing = 1, angles = [90
         while (shore.dist(sx, sz) < 2.0 && back < 5) { sx -= q.dx * inward * 0.5; sz -= q.dz * inward * 0.5; back += 0.5; }       // a head that stands close to the water: start farther inland along the axis
         if (shore.dist(sx, sz) < 2.0 || world.L.insideBuilding(sx, sz, 1)) continue;
         const c = Math.cos(a * Math.PI / 180), si = Math.sin(a * Math.PI / 180), bx = q.dx * inward, bz = q.dz * inward, dx = bx * c - bz * si, dz = bx * si + bz * c;
-        run(sx, sz, dx, dz, mode, s, `head${u === 0 ? 'A' : 'B'} side${side} a${a}`); res.heads++;
+        run(sx, sz, dx, dz, mode, s, `head${u === 0 ? 'A' : 'B'} side${side} a${a}`, 'head'); res.heads++;
       }
     }
   }

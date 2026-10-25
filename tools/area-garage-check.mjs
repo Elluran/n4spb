@@ -105,7 +105,7 @@ for (const c of cars) {
   let blockedAhead = 0; for (let f = 0.5; f <= 14; f += 0.5) for (const b of [-S.W / 2 - 0.2, 0, S.W / 2 + 0.2]) { const x = p.x + sy * (S.front + f) + lx * b, z = p.z + cy * (S.front + f) + lz * b; if (ph.columnBlocked(x, z, 0.25, y + 0.3, y + 1.2) || L.insideBuilding(x, z)) blockedAhead++; }
   const r = { id: c.id, x: +p.x.toFixed(1), z: +p.z.toFixed(1), yawDeg: +(p.yaw * 180 / Math.PI).toFixed(1), ground: gy === undefined || gy === null ? null : +gy.toFixed(2), building, outside, water, trafficLane, minGapToLane: minGap > 1e8 ? null : +minGap.toFixed(1), onRoadPts: onRoad, parkedNear: parked, freeLeft: side(1), freeRight: side(-1), blockedAhead, solidCentre: c.id === 'spawn' ? null : solid(cx, cz, y) };
   res.push(r);
-  if (building || outside || water) fail(`${c.id}: the footprint touches a building (${building}), the map edge (${outside}) or the water (${water})`);
+  if (building || outside) fail(`${c.id}: the footprint touches a building (${building}) or the map edge (${outside})`);      // (water is reachable, CLAUDE.md: a car standing at the water is no failure; `water` stays in the report)
   if (trafficLane) fail(`${c.id}: the footprint is on a traffic lane (${trafficLane} points; gap to the nearest driven lane ${r.minGapToLane} m)`);
   if (!Number.isFinite(gy) || Math.abs(gy) > 0.35) fail(`${c.id}: the ground under the car is ${gy} (street level expected)`);
   if (c.id !== 'spawn' && !r.solidCentre) fail(`${c.id}: the parked car is no solid for the walkers`);

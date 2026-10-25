@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { GREEN, ROADS, FURNITURE, LAMPS, WATER, BARRIERS } from '../data/city.js';
 import * as G from './geo.js';
+import { knockBays } from '../lib/fence-bays.js';
 import { plantTrees } from './trees.js';
 
 const WOODS = ['r1740860', 'w145815121', 'w145816613', 'w128976800', 'w691424548', 'w691424549', 'w691424550'];
@@ -70,7 +71,8 @@ export function grove(K) {
     const rim = ctx.mat.toon('#8a8478', { name: 'lmK-pondRim', paint: 0.05 });
     const post = ctx.mat.toon('#2f4a34', { name: 'lmK-pondPost' });
     P.cap(water, pondRing, 0.05, true, 6);
-    const n = pondRing.length, bridge = [[-874, -708], [-875, -725]];
+    ph.addWater({ ring: pondRing.flat(), level: 0.05 });                                       // (water is reachable, docs/AREAS.md 13.7: a pond to wade in; its mesh fence is a row of breakable bays)
+    const fbays = [], n = pondRing.length, bridge = [[-874, -708], [-875, -725]];
     let area = 0; for (let i = 0, j = n - 1; i < n; j = i++) area += pondRing[j][0] * pondRing[i][1] - pondRing[i][0] * pondRing[j][1];
     for (let i = 0; i < n; i++) {
       const a = pondRing[i], b = pondRing[(i + 1) % n], dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz); if (l < 0.4) continue;
@@ -81,9 +83,15 @@ export function grove(K) {
       if (bridge.some((q) => Math.hypot(q[0] - mx, q[1] - mz) < 9)) continue;
       const fx = (p) => [p[0] + nx * 1.4, p[1] + nz * 1.4];
       const fa = fx(a), fb = fx(b), k = Math.max(1, Math.round(l / 3));
-      for (let q = 0; q <= k; q++) { const px = fa[0] + (fb[0] - fa[0]) * q / k, pz = fa[1] + (fb[1] - fa[1]) * q / k; P.box(post, px - 0.04, px + 0.04, 0, 1.0, pz - 0.04, pz + 0.04, 'b'); }
-      P.cyl(post, [fa[0], 0.95, fa[1]], [fb[0], 0.95, fb[1]], 0.02, 0.02, 4, false); P.cyl(post, [fa[0], 0.5, fa[1]], [fb[0], 0.5, fb[1]], 0.015, 0.015, 4, false);
-      ph.addBox((fa[0] + fb[0]) / 2, (fa[1] + fb[1]) / 2, l, 0.2, Math.atan2(-dz, dx), 0, 1.2);
+      fbays.push({ x0: fa[0], z0: fa[1], x1: fb[0], z1: fb[1], y: 0, postAts: Array.from({ length: k + 1 }, (_, q) => q / k) });
+    }
+    if (fbays.length) {                                                                                  // the low mesh fence: a BAY per segment (two tubes, posts every ~3 m, a thin collider): lib/fence-bays.js, a car at 8 km/h breaks it
+      const tube = (r) => new THREE.CylinderGeometry(r, r, 1, 4, 1).rotateZ(Math.PI / 2).translate(0.5, 0, 0);
+      knockBays(ctx, { name: 'lmK-pondfence', bays: fbays, far: 260,
+        parts: [{ geo: tube(0.02), mat: post, name: 'top', far: 260, stretch: true, y: 0.95 }, { geo: tube(0.015), mat: post, name: 'mid', far: 260, stretch: true, y: 0.5 },
+          { geo: new THREE.BoxGeometry(0.08, 1.0, 0.08).translate(0, 0.5, 0), mat: post, name: 'post', far: 260, ats: (q) => q.postAts }],
+        collider: () => ({ y0: 0, y1: 1.2, thick: 0.2, e0: 0, e1: 0 }),
+        rec: () => ({ kind: 'fence', mass: 40, h: 1.0, r: 0.05, anchored: 8, hitK: 0.1, metal: false, minDv: 0 }) });
     }
   }
   void THREE; void G;
