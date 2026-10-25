@@ -347,6 +347,47 @@ check('6 AUDIT: every thin tall collider within 12 m of water is a knock record 
   assert.equal(bad.size, 0, 'not breakable: ' + [...bad.entries()].map(([k, e]) => k + ' x' + e.n).join(', '));
 });
 
+// ---------------------------------------------------------------- 8 the car and the floors over water: decks (placement), pier decks and landings
+{
+  const chain = (x, z) => { for (const n of HOOKS.deckServices || []) { const d = ctx.services[n]?.deckY?.(x, z); if (Number.isFinite(d)) return d; } return ctx.services.landmarksC?.bridge?.deckY?.(x, z) ?? ctx.services.bridges?.deckY(x, z) ?? null; };      // (the order of drive/handling.js)
+  const R = L.WORLD.play, high = [];
+  for (let x = R.x0; x < R.x1; x += 8) for (let z = R.z0; z < R.z1; z += 8) { const d = chain(x, z); if (d !== null && d > 1.3 && L.inPlay(x, z, 8) && [[3.5, 0], [-3.5, 0], [0, 3.5], [0, -3.5], [2.5, 2.5], [-2.5, 2.5], [2.5, -2.5], [-2.5, -2.5]].every(([a, b]) => chain(x + a, z + b) !== null)) high.push([x, z, d]); }      // (not at a deck edge: a rail collider there pushes the car off the deck)
+  const spread = (a, n) => a.filter((_, i) => i % Math.max(1, Math.floor(a.length / n)) === 0).slice(0, n);
+  const idle = { thr: 0, brk: 0, steer: 0, hand: false, nitro: false };
+  check('8 a car PLACED on a bridge deck higher than 1.2 m (the raised Liteyny / Bolsheokhtinsky decks, the Troitsky approach and leaf: drive.place / arrive / respawn = car.reset) stands on the deck and stays on it, also after a stay on a trench bed', () => {
+    if (high.length < 20) { console.log('  (this area has no raised decks)'); return; }
+    const car = createHandling(ctx, null), bad = []; let n = 0;
+    for (const [x, z, d] of [...spread(high.filter((q) => q[2] > 2.5), 100), ...spread(high.filter((q) => q[2] <= 2.5), 100)]) {      // (the Liteyny and Troitsky decks are 2.5 .. 4 m high, the low ones 1.3 .. 2.5 m)
+      car.reset(x, z, 0.7); car.y = -5.9; car.fall = false;      // (it stood on a trench bed before the placement)
+      car.reset(x, z, 0.7); n++;
+      if (Math.abs(car.y - (d + 0.03)) > 1e-6) { if (bad.length < 4) bad.push(['reset', +x.toFixed(0), +z.toFixed(0), +d.toFixed(2), +car.y.toFixed(2)]); continue; }
+      for (let t = 0; t < 0.5; t += 1 / 60) car.step(1 / 60, idle);
+      const d2 = chain(car.x, car.z); if (car.fall || d2 === null || Math.abs(car.y - (d2 + 0.03)) > 0.3) { if (bad.length < 4) bad.push(['stay', +x.toFixed(0), +z.toFixed(0), +d.toFixed(2), +car.y.toFixed(2), car.fall]); }
+    }
+    assert(n >= 20 && bad.length === 0, `${bad.length} of ${n} placements read the river bed: ${JSON.stringify(bad)}`);
+  });
+  // the pier decks and the lower landings of the quay descents: walkable floors at y below the road over the trench; the walker stands on them, so the car does too (placed, or DROPPED onto them from the quay)
+  const floors = ph.items.filter((it) => it.type === 'walk' && chain(it.cx, it.cz) === null && !it.sticky && it.top < 0.03 && L.heightAt(it.cx, it.cz) < -0.2 && it.top > L.heightAt(it.cx, it.cz) + 0.05 && !L.insideBuilding(it.cx, it.cz, 0));
+  check(`8 a car placed on a pier deck / a lower landing (${floors.length} such floors) stands on it like the walker, and a car that DROPS onto it from the road lands on it (a fall: the 'land' event) instead of falling through to the bed`, () => {
+    if (floors.length < 3) { console.log('  (this area has no such floors)'); return; }
+    const car = createHandling(ctx, null), bad = []; let n = 0, landed = 0;
+    for (const f of [...spread(floors.filter((q) => Math.min(q.hw, q.hd) < 3.5), 15), ...floors.filter((q) => Math.min(q.hw, q.hd) >= 3.5)]) {      // (the 3 m wide landings of the stairs hold the car's centre but not its body: placement and walker only; the pier decks carry the car: stay and drop too)
+      const th = L.heightAt(f.cx, f.cz), big = Math.min(f.hw, f.hd) >= 3.5; n++;
+      car.reset(f.cx, f.cz, 0); if (Math.abs(car.y - (f.top + 0.03)) > 1e-6) { bad.push(['place', +f.cx.toFixed(0), +f.cz.toFixed(0), +f.top.toFixed(2), +car.y.toFixed(2)]); continue; }
+      if (big) for (let t = 0; t < 1; t += 1 / 60) car.step(1 / 60, idle);
+      if (big && car.y < f.top - 0.3) bad.push(['stay', +f.cx.toFixed(0), +f.cz.toFixed(0), +f.top.toFixed(2), +car.y.toFixed(2)]);
+      if (big) {
+        car.reset(f.cx, f.cz, 0); car.y = 0.03; let ev = false;      // dropped from the road level
+        for (let t = 0; t < 3; t += 1 / 60) { car.step(1 / 60, idle); if (car.events.some((e) => e.type === 'land')) ev = true; }
+        if (car.y < f.top - 0.3 || car.fall) bad.push(['drop', +f.cx.toFixed(0), +f.cz.toFixed(0), +f.top.toFixed(2), +car.y.toFixed(2), th]); else if (ev) landed++;
+      }
+      const p = walker(f.cx, f.cz); p.pos.y = f.top + 0.3; for (let t = 0; t < 1; t += 1 / 60) { p.time += 1 / 60; p.update(1 / 60); }
+      if (Math.abs(p.pos.y - f.top) > 0.1) bad.push(['walker', +f.cx.toFixed(0), +f.cz.toFixed(0), +f.top.toFixed(2), +p.pos.y.toFixed(2)]);
+    }
+    assert(n >= 3 && bad.length === 0 && (landed >= 1 || !floors.some((q) => Math.min(q.hw, q.hd) >= 3.5)), `${bad.length} of ${n} floors failed (${landed} landings with the event): ${JSON.stringify(bad.slice(0, 5))}`);
+  });
+}
+
 // ---------------------------------------------------------------- 7 ponds (the Tauride Garden of the North)
 if (built.includes('landmarksTauride')) {
   const { WATER_UNION } = await import('../src/world/landmarksTauride/data/water.js');

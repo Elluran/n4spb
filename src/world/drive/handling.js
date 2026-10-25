@@ -53,13 +53,22 @@ export function createHandling(ctx, tuning = null) {
   } : oldDeckY);
   const deck = deckY();
 
-  /** road surface height at (x, z): the humped Anichkov deck (for a car that is on or above it: under a bridge the car is on the bed), a low (<= 0.3 m) pavement / kerb slab, the bed of a trench or a pond (the terrain below
-   *  -0.2 m: water is terrain), else the asphalt (0.03) */
-  function groundAt(x, z) {
-    const d = deck ? deck(x, z) : null; if (d !== null && car.y > d - 1.2) return d + 0.03;
-    const S = ph.surfaceAt(x, z, 0.5, false, _s);
-    if (S.kind === 'walk' && S.item && !S.item.sticky && S.y > 0.03 && S.y <= 0.3) return S.y;
-    const th = L.heightAt(x, z);
+  /** the height a deck service gives a car at height ref at (x, z): d + 0.03 when a deck is there AND the car is on or above it (under a bridge the car is on the bed), else null */
+  function deckAt(x, z, ref) {
+    const d = deck ? deck(x, z) : null;
+    return d !== null && ref > d - 1.2 ? d + 0.03 : null;
+  }
+  /** road surface height at (x, z) for a car at height ref (default: its own): the humped Anichkov deck / the Troitsky leaf (for a car that is on or above it: under a bridge the car is on the bed; deckRef = the height the deck
+   *  rule is asked with, a PLACEMENT passes the sky because a point of the plan is placed on the deck above it, whatever the height the car had before), a low (<= 0.3 m) pavement / kerb slab, a walkable floor over the
+   *  bed of a trench (a pier deck, the lower landing of a quay descent: the floor the walker stands on, reached from above, never from the bed below it), the bed of a trench or a pond (the terrain below -0.2 m: water is
+   *  terrain), else the asphalt (0.03) */
+  function groundAt(x, z, ref = car.y, deckRef = ref) {
+    const dk = deckAt(x, z, deckRef); if (dk !== null) return dk;
+    const S = ph.surfaceAt(x, z, Math.min(ref, 0.5), false, _s), th = L.heightAt(x, z);
+    if (S.kind === 'walk' && S.item && !S.item.sticky && S.y <= 0.3) {
+      if (S.y > 0.03) return S.y;                                          // a kerb / pavement slab
+      if (th < -0.2 && S.y > th + 0.05) return S.y + 0.03;                 // a floor over the trench: a pier deck, a landing
+    }
     return th < -0.2 ? th + 0.03 : 0.03;
   }
   /** the surface y of the water at (x, z) (a waterway, a pond, a basin) or null */
@@ -137,9 +146,9 @@ export function createHandling(ctx, tuning = null) {
   car.reset = (x, z, yaw) => {
     car.nitroLock = false; car.impactSpin = 0; car.events.length = 0;
     car.h = car.vy = car.jet = car.surge = car.hopCd = car.jetT = 0; car.air = car.jumpHeld = car.flipHeld = car.cushion = false;
-    car.fall = false; car.vyF = car.depth = 0; car.y = 0.03;      // (the ground below is asked from the neutral height: a car that stood on a bed must not read a bridge deck as a ceiling)
+    car.fall = false; car.vyF = car.depth = 0; car.y = 0.03;
     car.flipOn = car.flipDone = car.barrel = false; car.flip = car.flipT = car.pulse0 = car.pulse1 = 0; car.jetK = 1;
-    car.x = x; car.z = z; car.yaw = yaw; car.vx = car.vz = 0; car.steer = 0; car.pitch = car.roll = 0; car.y = groundAt(x, z);
+    car.x = x; car.z = z; car.yaw = yaw; car.vx = car.vz = 0; car.steer = 0; car.pitch = car.roll = 0; car.y = groundAt(x, z, 0.03, 1e9);      // (asked from the neutral height and the sky: a car that stood on a bed must not read a bridge deck as a ceiling, and a deck of any height is the floor of a point placed on it)
     car.speed = car.vF = car.vL = car.aLong = car.aLat = 0; car.gear = 1; car.rpm = 0.15; car.boosting = car.drifting = car.braking = false;
   };
 
@@ -308,7 +317,10 @@ export function createHandling(ctx, tuning = null) {
     const sy = Math.sin(car.yaw), cy = Math.cos(car.yaw), w = SPEC.wb / 2;
     const g0 = groundAt(car.x, car.z);
     let yF = groundAt(car.x + sy * w, car.z + cy * w), yR = groundAt(car.x - sy * w, car.z - cy * w);
-    if (Math.abs(yF - g0) > DROP_MAX) yF = g0; if (Math.abs(yR - g0) > DROP_MAX) yR = g0;      // an axle over an edge (a quay, a trench wall) does not tilt the car: it holds on its middle until it falls
+    // an axle over an edge (a quay, a trench wall) does not tilt the car: it holds on its middle until it falls; a DECK under both the axle and the middle is no edge (a leaf raised by 25 degrees steps 0.6 m over the wheelbase)
+    const onDeck = (x, z) => deckAt(x, z, car.y) !== null, dm = onDeck(car.x, car.z);
+    if (Math.abs(yF - g0) > DROP_MAX && !(dm && onDeck(car.x + sy * w, car.z + cy * w))) yF = g0;
+    if (Math.abs(yR - g0) > DROP_MAX && !(dm && onDeck(car.x - sy * w, car.z - cy * w))) yR = g0;
     const yT = (yF + yR) / 2, slope = Math.atan2(yF - yR, SPEC.wb);
     const k = Math.min(1, 16 * dt);
     if (!car.air && !car.fall) {                                                               // (airborne, car.y is the flight itself: only the road part of the height is eased)

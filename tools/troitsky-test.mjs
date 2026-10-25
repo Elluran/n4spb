@@ -358,7 +358,7 @@ const floorAt = (u, v, feet = 60) => { const w = W(u, v); return ph.surfaceAt(w.
     ok(uEnd < F.U_HINGE + 1.5, `the slipping car ends at the hinge side (u ${uEnd.toFixed(1)})`);
     ok(air === 0, 'the car is never airborne');
   }
-  // (b) drive onto the leaf while it CLOSES: from the first pier at 6 m/s once the slope is below 25 degrees
+  // (b) drive onto the leaf while it CLOSES: from the first pier at 3 m/s once the slope is below 6 degrees (the river is no wall: a car that reaches the free tip before the leaf lies drops into the gap, section (c); the driver waits for the leaf)
   {
     T.setMode('open'); for (let i = 0; i < 100000 && T.state().stage !== 'hold'; i++) T.advance(0.1, 0); leaf.set(T.theta);
     const car = createHandling(cctx, null), w = W(8, -5.7); car.reset(w.x, w.z, yawN); ctx.player.position.set(w.x, 0, w.z);
@@ -368,8 +368,8 @@ const floorAt = (u, v, feet = 60) => { const w = W(u, v); return ph.surfaceAt(w.
       t += dt; ph.refreshDynamic();
       const r = T.advance(dt, 0); if (r.th1 !== r.th0) leaf.set(r.th1);
       const how = S.stepCar(car, r.th0, r.th1, dt, st);
-      const go = F.leafSlope(r.th1) < (F.CAR_SLIP_DEG - 3) * DEG;                                         // the driver waits (handbrake) at the pier until the leaf is low enough
-      car.step(dt, { ...NONE, thr: go ? 1 : 0, hand: !go });
+      const go = F.leafSlope(r.th1) < 6 * DEG;                                                            // the driver waits (handbrake) at the pier until the leaf is nearly down, then creeps at 3 m/s (it reaches the free tip after the leaf lies)
+      car.step(dt, { ...NONE, thr: go && Math.hypot(car.vx, car.vz) < 3 ? 1 : 0, hand: !go });
       const q = F.toUV(car.x, car.z, {}), y = T.deckY(car.x, car.z); maxU = Math.max(maxU, q.u);
       if (how === 'carry' && y !== null && q.u > F.U_HINGE + 3) { onLeafFrames++; worst = Math.max(worst, Math.abs(car.y - (y + 0.03))); pitchErr = Math.max(pitchErr, Math.abs(car.pitch - Math.atan(Math.tan(F.phiOf(r.th1))))); const er = car.y - (y + 0.03); vmaxC = Math.max(vmaxC, Math.abs(er - prevY) / dt); prevY = er; }      // (the rate of the contact error: the car's own climb up the slope is not the leaf's)
       if (q.u > F.U_HINGE + 6) climbed = true;
@@ -378,6 +378,20 @@ const floorAt = (u, v, feet = 60) => { const w = W(u, v); return ph.surfaceAt(w.
     say(`  car driving onto the closing leaf: ${onLeafFrames} frames on it, contact <= ${worst.toFixed(3)} m, pitch error <= ${(pitchErr / DEG).toFixed(2)} deg, vertical <= ${vmaxC.toFixed(2)} m/s, reached u ${maxU.toFixed(1)}`);
     ok(climbed && onLeafFrames > 60, `the car drives onto the leaf while it is closing (reached u ${maxU.toFixed(1)}, ${onLeafFrames} frames on it)`);
     ok(worst < 0.1 && pitchErr < 0.08 && vmaxC <= 1.6, `on the closing leaf the car keeps contact (${worst.toFixed(3)} m), pitch (${(pitchErr / DEG).toFixed(2)} deg) and vertical speed (${vmaxC.toFixed(2)} m/s)`);
+  }
+  // (c) the river is no wall (docs/AREAS.md 13.7): a car that drives from the far pier (the Petrograd side, u 58) toward the raised leaf, into the open span beyond the tip, falls into the trench and the fall costs damage (the 'hit' event of the damage model)
+  {
+    T.setMode('open'); for (let i = 0; i < 100000 && T.state().stage !== 'hold'; i++) T.advance(0.1, 0); leaf.set(T.theta);
+    const car = createHandling(cctx, null), w = W(70, -5.7); car.reset(w.x, w.z, yawN + Math.PI);
+    const st = S.bodyState(), dt = 1 / 60; let fell = false, hit = 0, land = false, uMin = 1e9;
+    for (let i = 0; i < 60 * 8; i++) {
+      ph.refreshDynamic(); const r = T.advance(dt, 0); if (r.th1 !== r.th0) leaf.set(r.th1);
+      S.stepCar(car, r.th0, r.th1, dt, st); car.step(dt, { ...NONE, thr: 1 });
+      if (car.fall) fell = true; for (const e of car.events) { if (e.type === 'hit') hit = Math.max(hit, e.v); if (e.type === 'land') land = true; }
+      uMin = Math.min(uMin, F.toUV(car.x, car.z, {}).u);
+    }
+    say(`  car driving into the open span: fell ${fell}, landing ${land}, hit ${hit.toFixed(1)}, ends at y ${car.y.toFixed(2)} (the deck of the pier is ${F.yDeck(70).toFixed(2)}), reached u ${uMin.toFixed(1)}`);
+    ok(fell && land && hit > 3 && car.y < F.yDeck(70) - 3 && Number.isFinite(car.y), `a car driving off the far pier into the open span falls into the trench (hit ${hit.toFixed(1)}, y ${car.y.toFixed(2)})`);
   }
 }
 
