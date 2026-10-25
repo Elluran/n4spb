@@ -44,7 +44,7 @@ export const MODULES = [
   'city',         // every OSM building that no landmark module claims: Petersburg facade grammar, roofs, courtyards, entrances
   'rail',         // Moscow Railway Station tracks, platforms, canopies, catenary, signals, trains
   'landmarksA',   // Moscow Railway Station building + clock tower + Vosstaniya Square (obelisk, hotel Oktyabrskaya)
-  'landmarksB',   // the Nevsky Centre and the Nevsky Atrium (the other sub-groups of the module lie in Palace-Liteyny)
+  'landmarksB',   // the Nevsky Centre (the Nevsky Atrium lies outside the territory and the other sub-groups lie in Palace-Liteyny: only 'nevsky-centre' is claimed here)
   'landmarksOktyabrsky', // Bolshoy Concert Hall Oktyabrsky on Ligovsky Prospekt and the Kapodistrias monument at the mouth of the Nekrasov Garden
   'props',        // benches, bins, kiosks, bus shelters, billboards, flower baskets
   'traffic',      // moving cars, buses, trolleybuses + parked cars
@@ -84,25 +84,31 @@ export const NAMES = {
     tsaritsynsky: 'Царицынский проезд', yakubovicha: 'улица Якубовича', galernaya: 'Галерная улица',
     dvortsovayaSq: 'Дворцовая площадь', isaakievskayaSq: 'Исаакиевская площадь', senatskayaSq: 'Сенатская площадь', ostrovskogoSq: 'площадь Островского', konyushennayaSq: 'Конюшенная площадь',
     iskusstvSq: 'площадь Искусств', birzhevayaSq: 'Биржевая площадь', kazanskayaSq: 'Казанская площадь',
-    // ---- the North (names exactly as in OSM, ROADS[].name of src/areas/north/data; the main roads of the facade by length inside the play rectangles, m: Shpalernaya 4948, Liteyny 3622, Kirochnaya 3341,
+    // ---- the old North's streets (names exactly as in OSM, ROADS[].name; the main roads by length inside the play rectangles of the OLD North, m: Shpalernaya 4948, Liteyny 3622 (Palace-Liteyny: no HUD row here), Kirochnaya 3341,
     //      Voskresenskaya embankment 2272, Furshtatskaya 2135, Vosstaniya 1998, Nekrasova 1906, Zhukovskogo 1817, Zakharyevskaya 1663, Potemkinskaya 1436, Chaikovskogo 1381, Tavricheskaya 1345, Chernyshevskogo 1306 ...)
     shpalernaya: 'Шпалерная улица', kirochnaya: 'Кирочная улица', voskresenskayaNab: 'Воскресенская набережная', furshtatskaya: 'Фурштатская улица', nekrasova: 'улица Некрасова',
     zakharyevskaya: 'Захарьевская улица', potemkinskaya: 'Потёмкинская улица', chaikovskogo: 'улица Чайковского', tavricheskaya: 'Таврическая улица', chernyshevskogo: 'проспект Чернышевского',
     tverskaya: 'Тверская улица', lafonskaya: 'Лафонская улица', mokhovaya: 'Моховая улица', baskov: 'Басков переулок', radishcheva: 'улица Радищева', kavalergardskaya: 'Кавалергардская улица',
     kutuzovaNab: 'набережная Кутузова', smolnogo: 'улица Смольного', smolnyProspekt: 'Смольный проспект', ryleeva: 'улица Рылеева', paradnaya: 'Парадная улица', pestelya: 'улица Пестеля',
     korolenko: 'улица Короленко', chekhova: 'улица Чехова', tavricheskyPereulok: 'Таврический переулок', preobrazhenskayaSq: 'Преображенская площадь', proletarskoyDiktatury: 'площадь Пролетарской Диктатуры',
+    // ---- the east and south-east of the territory (names exactly as in OSM, ROADS[].name of src/areas/smolny/data; the long streets by length inside the play rectangles, m: Sinopskaya embankment 6040, Novgorodskaya 3021,
+    //      Mytninskaya 2002, 8th Sovetskaya 1959, Bakunina 1927, Khersonskaya 1831, Moiseenko 1758, Degtyarny pereulok 1466, Tulskaya 1378, Grecheskiy 1317, Degtyarnaya 1057, Ispolkomskaya 921 ...)
+    sinopskayaNab: 'Синопская набережная', novgorodskaya: 'Новгородская улица', mytninskaya: 'Мытнинская улица', bakunina: 'проспект Бакунина', khersonskaya: 'Херсонская улица', moiseenko: 'улица Моисеенко',
+    degtyarnyPereulok: 'Дегтярный переулок', tulskaya: 'Тульская улица', grecheskiy: 'Греческий проспект', degtyarnaya: 'Дегтярная улица', ispolkomskaya: 'Исполкомская улица',
+    maloohtinskayaNab: 'Малоохтинская набережная', kirillovskaya: 'Кирилловская улица', krasnogoTekstilshchika: 'улица Красного Текстильщика', ambarnaya: 'Амбарная улица', poltavskaya: 'Полтавская улица',
+    konnaya: 'Конная улица', obukhovskoyOborony: 'проспект Обуховской Обороны',
   },
 };
 
 // ---------------------------------------------------------------- the local frames: the anchors are the strip's (see the header: the band stays identical on both pages)
-/** Vosstaniya Square (589, 173): the origin of the street grid (toGrid / fromGrid) and the centre of the far scenery; 1.2 km south of the North's south edge. */
+/** Vosstaniya Square (589, 173): the origin of the street grid (toGrid / fromGrid) and the centre of the far scenery; 1.2 km south of the old North's south edge. */
 export const SQUARE = { x: 589, z: 173, name: NAMES.square, nameEn: NAMES.squareEn };
 export const OBELISK = { x: 592.2, z: 164.9, h: 36 };
 export const STATION = { x: 612, z: 300, facadeBearing: 348, trackBearing: 167, tower: { x: 602.1, z: 246.4 } };
 
 // ---------------------------------------------------------------- landmark groups
-/** The landmark claims of the North (M5, docs/AREAS.md section 8): module name -> sub-groups { key, name, nameEn, ids, osm, at }. `city` / `environment` / `streets` skip what a group claims (src/world/lib/claims.js).
- *  T1 of the Tauride remake added landmarksTauride: the Palace and the Paradny quarter; T2 added its third sub-group, the garden (the park, 23 woods, the 120 ways, 132 benches, 167 bins: the generic North stops drawing them). */
+/** The landmark claims of Smolninskoye (the old North's M5 tables, docs/AREAS.md section 8, plus the station end): module name -> sub-groups { key, name, nameEn, ids, osm, at }. `city` / `environment` / `streets` skip what a group claims (src/world/lib/claims.js).
+ *  T1 of the Tauride remake added landmarksTauride: the Palace and the Paradny quarter; T2 added its third sub-group, the garden (the park, 23 woods, the 120 ways, 132 benches, 167 bins: the generic city stops drawing them). */
 export const GROUPS = {
   landmarksA: [
     { key: 'station', name: 'Московский вокзал', nameEn: 'Moscow Railway Station (Thon, 1851)', ids: ['r2404499', 'r2404500', 'r2404501', 'w662697923', 'w662697920', 'w433164092', 'w595741909'], osm: ['n21596808'], at: [612, 300],
@@ -114,10 +120,9 @@ export const GROUPS = {
     { key: 'oktyabrskaya', name: 'Гостиница «Октябрьская» и угловые дома площади', nameEn: 'Hotel Oktyabrskaya and the corner buildings of the square', ids: ['r1598177', 'r1588277', 'w507867255'], osm: [], at: [648, -1],
       note: 'Ligovsky 10/118 (6 levels, 7976 m2) at the Nevsky / Ligovsky corner opposite the station, the Ligovsky wing (Best Western) and the Cosmos hotel (Goncharnaya 4)' },
   ],
-  // ---- landmarksB: Nevsky Prospekt landmarks between Vosstaniya Square and the Liteyny crossroads ----------------------------------
+  // ---- landmarksB: only the Nevsky Centre; the Nevsky Atrium (r15081493, Nevsky 71) lies wholly outside this territory (x 159..222, z 86..157, west of S27) and is built by Palace-Liteyny; the other sub-groups lie in Palace-Liteyny ----------
   landmarksB: [
     { key: 'nevsky-centre', name: 'ТЦ «Невский Центр»', nameEn: 'Nevsky Centre (Nevsky 114-116)', ids: ['r1784115'], osm: [], at: [443, 39], note: 'shopping centre at Ligovsky, 6 levels' },
-    { key: 'atrium', name: 'Невский Атриум · вход в метро «Маяковская»', nameEn: 'Nevsky Atrium (house 71, Mayakovskaya entrance)', ids: ['r15081493'], osm: [], at: [194, 122], note: 'Marata 1/71; the metro entrances n4060185664 / n1109163128 lie inside it: the arched openings at Nevsky 71 (docs/research/nevsky.md)' },
   ],
 };
 GROUPS.landmarksNorthFull = G_NORTHFULL.filter((g) => g.key === 'north-chernyshevskaya');      // the vestibule only; Dom Muruzi, the cathedral, the bookstore and the corridor houses lie in Palace-Liteyny
@@ -135,10 +140,10 @@ GROUPS.landmarksOktyabrsky = [...G_OKTYABRSKY, KAPODISTRIAS_GROUP];      // the 
  * shapes: { poly: [x,z,...], margin? (m around the polygon) } | { c: [x,z], r } | { x0, x1, z0, z1 } | { road: 'Невский проспект' } (nearest road of that name within 22 m)
  */
 export function makeAreas(h) {
-  const { SUBGROUPS, _sqPolys, _groupPolys, _shoreOf, inRiver, shoreDist } = h;
+  const { SUBGROUPS, _sqPolys, _groupPolys, _shoreOf, inRiver } = h;
   const S = NAMES.streets;
   return [
-  // ---- the sights of the North (centres and radii from the source layout, docs/research/north-*.md) ----------------------------------------------------------------------------------------------------
+  // ---- the sights of the old North that lie in this territory (centres and radii from the source layout, docs/research/north-*.md) ----------------------------------------------------------------------------------------------------
   { name: 'Смольный собор · Smolny Cathedral', c: [2469, -1833], r: 140 },
   { name: 'Смольный институт · Smolny Institute', c: [2518, -1544], r: 115 },
   { name: 'Таврический дворец · Tauride Palace', c: [1379, -1734], r: 95 },
@@ -154,18 +159,17 @@ export function makeAreas(h) {
   ..._sqPolys.map((o) => ({ name: 'Площадь Восстания · Vosstaniya Square', poly: o })),
   ..._groupPolys(SUBGROUPS.oktyabrskaya, 8).map((r) => ({ name: 'Гостиница «Октябрьская» · Hotel Oktyabrskaya', ...r })),
   ..._groupPolys(SUBGROUPS['nevsky-centre'], 6).map((r) => ({ name: 'Невский Центр · Nevsky Centre', ...r })),
-  // ---- the strip's own sights in the 200 m band of the old North (z -405 .. -205) -----------------------------------------------------------------------------------------------------------------------------
+  // ---- the Oktyabrsky Concert Hall (the strip's row in the old 200 m band, z -405 .. -205) -----------------------------------------------------------------------------------------------------------------------------
   { name: 'БКЗ «Октябрьский» · Oktyabrsky Concert Hall', c: [797, -347], r: 55 },
   // ---- the east: Alexander Nevsky Square with the Lavra gate church and the monument, Hotel Moscow, the bridge (rows of the source layout)
   ..._groupPolys(SUBGROUPS['east-hotel-moscow'], 8).map((r) => ({ name: 'Гостиница «Москва» · Hotel Moscow', ...r })),
   { name: 'Площадь Александра Невского · Alexander Nevsky Square', c: [1940, 978], r: 95 },
   { name: 'Александро-Невская лавра · Alexander Nevsky Lavra', x0: 1870, x1: 2195, z0: 1100, z1: 1440 },
   { name: 'Мост Александра Невского · Alexander Nevsky Bridge', road: 'мост Александра Невского' },
-  // ---- the waterways: the Neva along the north edge (the play edge is partly in the water), the Fontanka along the west edge and through the band
+  { name: 'Большеохтинский мост · Bolsheokhtinsky Bridge', road: 'Большеохтинский мост' },
+  // ---- the waterways: the Neva along the north edge (the play edge is partly in the water; the Fontanka lies in Palace-Liteyny, west of this territory)
   { name: 'Нева · Neva River', x0: -600, x1: 3100, z0: -2800, z1: -1750, test: (x, z) => _shoreOf(['neva'], x, z) < 8 || inRiver(x, z) },
-  { name: 'Фонтанка · Fontanka River', x0: -900, x1: -330, z0: -2000, z1: -85, test: (x, z) => shoreDist(x, z) < 14 },
   // ---- the streets (names exactly as in OSM) ---------------------------------------------------------------------------------------------------------------------------------------------------------
-  { name: 'Литейный проспект · Liteyny Prospekt', road: S.liteyny },
   { name: 'Шпалерная улица · Shpalernaya ulitsa', road: S.shpalernaya },
   { name: 'Кирочная улица · Kirochnaya ulitsa', road: S.kirochnaya },
   { name: 'Воскресенская набережная · Voskresenskaya embankment', road: S.voskresenskayaNab },
@@ -182,30 +186,47 @@ export function makeAreas(h) {
   { name: 'Тверская улица · Tverskaya ulitsa', road: S.tverskaya },
   { name: 'Улица Маяковского · Ulitsa Mayakovskogo', road: S.mayakovskogo },
   { name: 'Лафонская улица · Lafonskaya ulitsa', road: S.lafonskaya },
-  { name: 'Моховая улица · Mokhovaya ulitsa', road: S.mokhovaya },
   { name: 'Басков переулок · Baskov pereulok', road: S.baskov },
   { name: 'Улица Радищева · Ulitsa Radishcheva', road: S.radishcheva },
   { name: 'Лиговский проспект · Ligovsky Prospekt', road: S.ligovsky },
   { name: 'Кавалергардская улица · Kavalergardskaya ulitsa', road: S.kavalergardskaya },
-  { name: 'Набережная Кутузова · Kutuzov embankment', road: S.kutuzovaNab },
   { name: 'Площадь Пролетарской Диктатуры · Proletarskoy Diktatury Square', road: S.proletarskoyDiktatury },
   { name: 'Улица Смольного · Ulitsa Smolnogo', road: S.smolnogo },
   { name: 'Смольный проспект · Smolny Prospekt', road: S.smolnyProspekt },
   { name: 'Улица Рылеева · Ulitsa Ryleeva', road: S.ryleeva },
   { name: 'Таврический переулок · Tavrichesky pereulok', road: S.tavricheskyPereulok },
-  { name: 'Преображенская площадь · Preobrazhenskaya Square', road: S.preobrazhenskayaSq },
   { name: 'Парадная улица · Paradnaya ulitsa', road: S.paradnaya },
-  { name: 'Улица Пестеля · Ulitsa Pestelya', road: S.pestelya },
-  { name: 'Улица Чехова · Ulitsa Chekhova', road: S.chekhova },
-  { name: 'Набережная реки Фонтанки · Fontanka embankment', road: S.fontanka },
+  // ---- Nevsky and the streets of the station end, the long streets of the east and south-east (the HUD probe: more than half of the road samples of the territory fell to the city row without them)
+  { name: 'Невский проспект · Nevsky Prospekt', road: S.nevsky },
+  { name: 'Улица Марата · Ulitsa Marata', road: S.marata },
+  { name: 'Гончарная улица · Goncharnaya ulitsa', road: S.goncharnaya },
+  { name: 'Синопская набережная · Sinopskaya embankment', road: S.sinopskayaNab },
+  { name: 'Новгородская улица · Novgorodskaya ulitsa', road: S.novgorodskaya },
+  { name: 'Мытнинская улица · Mytninskaya ulitsa', road: S.mytninskaya },
+  { name: 'Проспект Бакунина · Prospekt Bakunina', road: S.bakunina },
+  { name: 'Херсонская улица · Khersonskaya ulitsa', road: S.khersonskaya },
+  { name: 'Улица Моисеенко · Ulitsa Moiseenko', road: S.moiseenko },
+  { name: 'Дегтярный переулок · Degtyarny pereulok', road: S.degtyarnyPereulok },
+  { name: 'Дегтярная улица · Degtyarnaya ulitsa', road: S.degtyarnaya },
+  { name: 'Тульская улица · Tulskaya ulitsa', road: S.tulskaya },
+  { name: 'Греческий проспект · Grecheskiy Prospekt', road: S.grecheskiy },
+  { name: 'Исполкомская улица · Ispolkomskaya ulitsa', road: S.ispolkomskaya },
+  { name: 'Малоохтинская набережная · Maloohtinskaya embankment', road: S.maloohtinskayaNab },
+  { name: 'Кирилловская улица · Kirillovskaya ulitsa', road: S.kirillovskaya },
+  { name: 'Улица Красного Текстильщика · Ulitsa Krasnogo Tekstilshchika', road: S.krasnogoTekstilshchika },
+  { name: 'Амбарная улица · Ambarnaya ulitsa', road: S.ambarnaya },
+  { name: 'Полтавская улица · Poltavskaya ulitsa', road: S.poltavskaya },
+  { name: 'Конная улица · Konnaya ulitsa', road: S.konnaya },
+  { name: 'Проспект Обуховской Обороны · Prospekt Obukhovskoy Oborony', road: S.obukhovskoyOborony },
+  ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({ name: `${n}-я Советская улица · ${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'} Sovetskaya ulitsa`, road: `${n}-я Советская улица` })),
   { name: 'Санкт-Петербург · Saint Petersburg', x0: -9999, x1: 9999, z0: -9999, z1: 9999 },
   ];
 }
 
 /** HERO (the start pose) and VIEWS (keys 1..0 and the Places list), built with the layout helper yawToward. */
 export function makeViews({ yawToward }) {
-  // Every pose is a free, walkable spot (tools/layout-test.mjs checks insideBuilding / isOnRoad / line of sight; tools/views-check.mjs adds the colliders: node tools/area.mjs north tools/views-check.mjs).
-  // x, z, yaw (deg, 0 = north, 90 = west), pitch (deg). The North from the south-west to the north-east: 1 Chernyshevskaya (the start), 2 Vosstaniya Square and the Moscow station, 3 the station platforms, 4 the Paradny Quarter,
+  // Every pose is a free, walkable spot (tools/layout-test.mjs checks insideBuilding / isOnRoad / line of sight; tools/views-check.mjs adds the colliders: node tools/area.mjs smolny tools/views-check.mjs).
+  // x, z, yaw (deg, 0 = north, 90 = west), pitch (deg). Smolninskoye from the south-west to the north-east: 1 Chernyshevskaya (the start), 2 Vosstaniya Square and the Moscow station, 3 the station platforms, 4 the Paradny Quarter,
   // 5 the Tauride Garden, 6 the Tauride Palace, 7 / 8 Smolny, 9 the Suvorov Museum, 0 Kirochnaya Street; the Places list only: the Oktyabrsky hall on Ligovsky Prospekt. (Dom Muruzi and the Transfiguration Cathedral lie in Palace-Liteyny: CROSS_PLACES.)
   const HERO = { x: 444, z: -1351, yaw: -90, pitch: 10 };      // Chernyshevskaya: the vestibule of the metro station, looking east
   const VIEWS = [
@@ -225,6 +246,35 @@ export function makeViews({ yawToward }) {
   return { HERO, VIEWS };
 }
 
+/** The expectations of the CPU tests (tools/layout-test.mjs, tools/landmarks-groups-check.mjs, tools/areas-test.mjs; shape: tools/lib/area-test-data.mjs): the rows of the old North's TEST that lie in this territory, plus the station end and the east. */
+export const TEST = {
+  claimed: [
+    { id: 'w22999175', by: 'landmarksNorthFull', group: 'north-chernyshevskaya' },      // the Chernyshevskaya vestibule
+    { id: 'r2864743', by: 'landmarksSmolny', group: 'north-smolny-cathedral' },
+    { id: 'r2133719', by: 'landmarksSmolny', group: 'north-smolny-ensemble' },
+    { id: 'w30198549', by: 'landmarksSuvorov', group: 'north-suvorov-museum' },          // the Suvorov Museum (the museum record)
+    { id: 'w232918746', by: 'landmarksSuvorov', group: 'north-suvorov-museum' },         // the Suvorov Museum (the main block, Digit9 looks at it)
+    { id: 'r3127704', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
+    { id: 'w30324355', by: 'landmarksKirochnaya', group: 'kirochnaya-clinical-institute' },
+    { id: 'w30324279', by: 'landmarksOktyabrsky', group: 'oktyabrsky-hall' },
+    { id: 'n1372027612', by: 'landmarksOktyabrsky', group: 'kapodistrias' },      // the Kapodistrias monument
+    { id: 'r3801092', by: 'landmarksTauride', group: 'tauride-palace' },                  // the Tauride Palace
+    { id: 'w102153008', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w102153013', by: 'landmarksTauride', group: 'paradny-quarter' }, { id: 'w145419644', by: 'landmarksTauride', group: 'paradny-quarter' },
+    { id: 'r1582734', by: 'landmarksTauride', group: 'tauride-garden' }, { id: 'w1458068121', by: 'landmarksTauride', group: 'tauride-garden' }, { id: 'w425188838', by: 'landmarksTauride', group: 'tauride-garden' },
+    { id: 'r2404499', by: 'landmarksA', group: 'station' }, { id: 'w1214651508', by: 'landmarksA', group: 'square' },      // the station end of Nevsky: the Moscow station, the obelisk
+    { id: 'r1784115', by: 'landmarksB', group: 'nevsky-centre' },
+    { id: 'r5677834', by: 'landmarksEast', group: 'east-lavra-gate' }, { id: 'r3132622', by: 'landmarksEast', group: 'east-hotel-moscow' },      // the east: the Lavra gate church, Hotel Moscow
+  ],
+  viewKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'Place.oktyabrsky'],
+  mustHaveAreas: [
+    { x: 467, z: -1351, has: 'чернышевская' }, { x: 2469, z: -1833, has: 'смольный собор' }, { x: 1379, z: -1734, has: 'таврический дворец' }, { x: 1000, z: -1000, has: 'парадный' },
+    { x: 592, z: 165, has: 'обелиск' }, { x: 612, z: 300, has: 'вокзал' }, { x: 1940, z: 978, has: 'александра невского' },
+    { x: 178, z: 69, has: 'невский проспект' }, { x: 2613, z: -1307, has: 'синопская' }, { x: 1043, z: -713, has: 'греческий' },      // the street rows of the east, the south-east and Nevsky (each fell to the city row before)
+  ],
+  // `kept` is left out on purpose: the default is every key of GROUPS, so tools/landmarks-groups-check.mjs verifies all the landmark modules against the data of this area
+  roadsNear: { at: [461, -1350], r: 75, min: 3 },
+};
+
 // ============================================================================================================================================
 //  ENGINE TABLES (docs/AREAS.md section 3.1): what the strip's engine modules used to hard-code. Same names as src/world/area.js; the modules read them through src/world/lib/area-tables.js.
 // ============================================================================================================================================
@@ -235,7 +285,7 @@ export function makeViews({ yawToward }) {
  * water: its underside (5.9 m) clears the granite wall and the parapet of the Neva quay (top 1.25 m) at both banks (x 2635 and 2957), so it needs no BRIDGE_ZONES row (a non-auto row would also lay an invisible
  * fallback deck at y 0 over the river: quay.js). The source has no row for it either (its east / north bridges got automatic zones from river.js, which this engine does not have). So no plugs, bridge zones,
  * shades or clip lines. The Neva runs beyond the north edge ('neva-up' = the river upstream of the Palace Bridge, the scenery ring the data does not reach).
- * The far window is centred on the middle of the North's extent.
+ * The far window is centred on the middle of this territory's extent.
  */
 export const WATER = {
   plugs: [],
@@ -299,7 +349,7 @@ export const ZONES = {
 // ---------------------------------------------------------------- GARAGE (drive/cars/index.js PARKING, drive.js SPAWN)
 const DEG = Math.PI / 180;
 /**
- * GARAGE (docs/AREAS.md 13.4): the four cars stand ONLY at the central station, the Moscow station, which this territory contains (the strip's poses, verified free of lanes / buildings by tools/drive-garage-test.mjs);
+ * GARAGE (docs/AREAS.md 13.4): the four cars stand ONLY at the central station, the Moscow station, which this territory contains (the strip's poses, verified free of lanes / buildings by tools/area-garage-check.mjs: node tools/area.mjs smolny tools/area-garage-check.mjs);
  * an area without the station holds one car, the purple Zhiguli, at its spawn.
  */
 export const GARAGE = {
@@ -316,7 +366,7 @@ export const GARAGE = {
 /** environment.js: the services whose `entrances` clear the trees from the doors of the buildings they list: the generic `city` and every landmark service of this page that publishes an `entrances`
  *  array (landmarksSmolny, landmarksSuvorov, landmarksKirochnaya; landmarksD publishes an array that is empty in the North, as in the strip's list; since M7 (docs/AREAS.md section 10) landmarksNorthFull
  *  publishes the door points of its 17 claimed buildings (landmarksNorthFull/doors.js: the vestibule's door of the G3 gate among them, which must stay clear) and landmarksOktyabrsky the hall's 9
- *  (in the North only; in the strip its list is empty, so the strip's table need not list it). landmarksBelinskyNorth and landmarksTauride publish none. */
+ *  (in Smolninskoye and the parked North only; in the strip its list is empty, so the strip's table need not list it). landmarksBelinskyNorth and landmarksTauride publish none. */
 export const PRUNE_SERVICES = ['city', 'landmarksNorthFull', 'landmarksSmolny', 'landmarksSuvorov', 'landmarksKirochnaya', 'landmarksOktyabrsky', 'landmarksA', 'landmarksB', 'landmarksEast'];
 // The hook set (milestone M6, docs/AREAS.md section 9): hooks.js builds it from the module list above (a hook that serves a landmark module is dormant until the module is in MODULES).
 import { makeHooks, makeHeightPatches } from '../north/hooks.js';      // shared with the parked North: the hook bodies are gated by the module list
@@ -327,7 +377,7 @@ export const HEIGHT_PATCHES = makeHeightPatches(MODULES);
 
 // ---------------------------------------------------------------- the places of the OTHER areas (milestone M7, docs/AREAS.md: core/gates.js, the HUD list "Места · Places")
 /**
- * CROSS_PLACES: places of Palace-Liteyny that the HUD list offers under that area's name; a pick travels through the edge gate e2 and lands at this pose (core/gates.js offerPlace, via 'place'). { key, label (Russian),
+ * CROSS_PLACES: places of Palace-Liteyny that the HUD Places list offers under that area's name (the list itself exists only with ?teleports=1: the place teleports are off by default, docs/AREAS.md 13.5); a pick travels through the edge gate e2 and lands at this pose (core/gates.js offerPlace, via 'place'). { key, label (Russian),
  * area (the registry id), gate (a gate FROM this area TO that area), view (the VIEWS key of that area whose pose this copies: tools/cross-places-test.mjs pins x, z, yaw, pitch to it), x, z, yaw (deg, 0 = north,
  * 90 = west), pitch }. Not read by any world module.
  */

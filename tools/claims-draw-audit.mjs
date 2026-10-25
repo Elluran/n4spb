@@ -90,10 +90,14 @@ const DISC_R = 2.5, MIN_AREA = 5;      // m2: a claimed building part smaller th
 /** claimed records an owner skips on purpose (never graded as "owner draws nothing"); keyed by area then id, the value is the reason (docs/AREAS.md) */
 const OWNER_SKIPS = {
   north: { w30198549: 'landmarksSuvorov skips the folly on purpose (docs/AREAS.md 8.3)' },
+  smolny: { w30198549: 'landmarksSuvorov skips the folly on purpose (docs/AREAS.md 8.3; the same module as the North)' },
   strip: {},
 };
 /** unclaimed buildings a landmark module is known to cover (printed, not red); keyed by area then id: { module, why } */
 const KNOWN_UNCLAIMED = {
+  smolny: {
+    w102153010: { module: 'landmarksTauride', why: 'the raised court deck of the Paradny quarter (paradny-courts) covers Kirochnaya 35, drawn by city: the same documented source behaviour as in the North (docs/AREAS.md 8.9)' },
+  },
   north: {
     w102153010: { module: 'landmarksTauride', why: 'the raised court deck of the Paradny quarter (paradny-courts, y 3.3) covers Kirochnaya 35 (h 6.6, not one of the 11 claimed buildings of T1, drawn by city): the verbatim source behaviour, docs/AREAS.md 8.9' },
   },

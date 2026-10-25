@@ -19,6 +19,7 @@ const CORNER = [222.5, 93.9];
 export function build(K) {
   const L = K.L, P = K.P, M = K.mats;
   const recs = L.groupMembers('atrium').filter((r) => !r.skip);
+  if (!recs.length) return;      // the area does not claim the atrium (Smolninskoye: the building lies outside its territory)
   const r87 = recs.find((r) => r.id === 'r15081487'), r88 = recs.find((r) => r.id === 'r15081488');
   if (!r87 || !r88) throw new Error('atrium records missing');
   const mine = [r87, r88];
